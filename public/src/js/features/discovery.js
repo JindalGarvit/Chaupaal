@@ -1042,8 +1042,10 @@ function openPeepalAskSheet(editPost = null){
     }).join('');
     host.querySelectorAll('[data-rm]').forEach((btn) => btn.addEventListener('click', () => removeAttachment(btn.dataset.rm)));
   }
-  function toastSoon(kind){
-    if (typeof showToast === 'function') showToast(`${kind} — Coming soon`);
+  function toastUnavailable(kind, reason){
+    if (typeof showToast === 'function') {
+      showToast(reason || `${kind} isn’t available here`);
+    }
   }
   function renderAttachGrid(){
     const host = document.getElementById('peepalAttachGridHost');
@@ -1077,7 +1079,7 @@ function openPeepalAskSheet(editPost = null){
           : typeof openGifPicker === 'function'
             ? openGifPicker
             : null;
-      if (!openPicker) return toastSoon('GIF');
+      if (!openPicker) return toastUnavailable('GIF', 'GIF picker isn’t available right now');
       return openPicker({
         onSelect: (gif) => {
           if (!gif) return;
@@ -1108,7 +1110,7 @@ function openPeepalAskSheet(editPost = null){
           : typeof openKlipyMediaPicker === 'function'
             ? (opts) => openKlipyMediaPicker(Object.assign({ kind: 'sticker' }, opts || {}))
             : null;
-      if (!openStickers) return toastSoon('Sticker');
+      if (!openStickers) return toastUnavailable('Sticker', 'Stickers aren’t available right now');
       return openStickers({
         onSelect: (sticker) => {
           if (!sticker) return;
@@ -1133,7 +1135,9 @@ function openPeepalAskSheet(editPost = null){
       });
     }
     if (type === 'voice') {
-      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return toastSoon('Voice');
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        return toastUnavailable('Voice', 'Voice recording isn’t supported on this device');
+      }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const rec = new MediaRecorder(stream);
@@ -1153,7 +1157,9 @@ function openPeepalAskSheet(editPost = null){
       return;
     }
     if (type === 'location') {
-      if (!navigator.geolocation) return toastSoon('Location');
+      if (!navigator.geolocation) {
+        return toastUnavailable('Location', 'Location isn’t supported on this device');
+      }
       navigator.geolocation.getCurrentPosition((pos) => {
         const lat = Number(pos.coords?.latitude || 0).toFixed(4);
         const lng = Number(pos.coords?.longitude || 0).toFixed(4);
@@ -1189,7 +1195,7 @@ function openPeepalAskSheet(editPost = null){
       if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none';
       return;
     }
-    toastSoon(type);
+    toastUnavailable(type, `${type} isn’t available here`);
   }
 
   // Wire format chips

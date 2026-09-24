@@ -75,6 +75,8 @@ Implementation lives primarily in:
 
 **Baithak B4 (Mehfil entry + arc dogfood):** Inbox live-row tap → **open chat only**; Join is explicit (`#mehfilLiveJoin` / header Mehfil). `requestMehfilAutoJoin` only for `/mehfil` deeplink, `?mehfil=1`, ring Accept, mehfil notification — never list click. Live badge: ≥2 fresh = Live; solo = Waiting. Arc B0–B4 static tests in `scripts/test-baithak-b*.js`.
 
+**Trust T0 (honesty sweep):** `PEEPAL_SEED_CONTENT_ENABLED=false` — signed-in Peepal never seeds/shows `isSeedContent`; guest SAMPLE_PEEPAL labeled Demo. `toastSoon` → honest “isn’t available” (no Coming soon spam). Challenge AI chip disabled when AI off. Onboarding duel no longer writes SAMPLE_STORIES/CHATS while signed-in.
+
 **One layer = one history entry:** Each real overlay gets exactly one `{ chaupaalLayer: true }` push. Overlays that call `pushNavLayer` / `openLayer` manually must set `data-nav-managed="1"` so the MutationObserver does not double-register (`openLayer` does this for you).
 
 **Dismissal:** Tap-outside and system/gesture back must close exactly one layer via `removeNavLayer` / `popstate` / `openLayer().close()`. Parent views (e.g. chat) use `beginOverlayScope` / `endOverlayScope` so nested overlays clean up when the parent closes.

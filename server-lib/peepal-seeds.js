@@ -6,8 +6,9 @@
  * `seed_peepal_` id prefix so it is trivially identifiable and removable.
  * Before real users arrive, either delete these docs or flip
  * `PEEPAL_SEED_CONTENT_ENABLED` to false in
- * `public/src/js/features/categories.js` (the client already filters seed
- * docs out of the feed when that flag is off).
+ * `public/src/js/features/categories.js` (Trust T0: default is **false**;
+ * the client filters seed docs out of the feed when that flag is off).
+ * Flip true only for local pre-launch seed testing.
  *
  * The shapes here mirror a real Peepal post written from
  * `public/src/js/features/discovery.js` and a real comment written from

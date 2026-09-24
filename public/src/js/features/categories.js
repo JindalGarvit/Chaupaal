@@ -800,15 +800,14 @@ const SAMPLE_COMMENTS=[
   {id:'pc5',parentId:'pc4',user:{name:'Vikram',avatar:'🧑',profileType:'personal'},text:'Night crew checking in 🌙',time:'2h'},
 ];
 
-// ⚠️ PRE-LAUNCH TODO: turn this OFF (and delete the seed_peepal_* docs) before
-// real users arrive so they never see placeholder content. While true, the
-// client seeds dummy Peepal posts via /api/peepal-reactions {action:'seed'}
-// and shows them in the feed; while false, any leftover isSeedContent docs are
-// filtered out. Seed definitions live in server-lib/peepal-seeds.js.
-const PEEPAL_SEED_CONTENT_ENABLED=true;
+// Trust T0: seeds OFF for signed-in live feel. Guest SAMPLE_PEEPAL still labeled Demo.
+// Leftover Firestore isSeedContent docs are filtered out while this is false.
+// Flip true only for local pre-launch seed testing (server-lib/peepal-seeds.js).
+const PEEPAL_SEED_CONTENT_ENABLED=false;
 let peepalSeedEnsured=false;
 
-let peepalQuestions=[...SAMPLE_PEEPAL];
+// Start empty — guest path fills labeled SAMPLE; signed-in loads live (never pad fake graph).
+let peepalQuestions=[];
 let weeklyQuestionCount=0;
 let peepalPageCursor=null;
 let peepalHasMore=true;
@@ -909,9 +908,7 @@ async function loadPeepalPage({reset=false}={}){
       cursor: reset?null:peepalPageCursor,
       excludeDeleted:true,
     });
-    // Seed docs are shown for pre-launch testing while PEEPAL_SEED_CONTENT_ENABLED
-    // is on; once it is turned off, any leftover seed docs are filtered out so
-    // real users never see placeholder content.
+    // Seed docs filtered while PEEPAL_SEED_CONTENT_ENABLED is false (Trust T0).
     const mapped=page.items.map(mapPeepalDoc).filter(q=>(PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)&&!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted)&&!(q.archived===true||q.saveOnly===true));
     if(typeof enrichUsersWithProfileType==='function'){
       await enrichUsersWithProfileType(mapped.map(q=>q.user).filter(Boolean));
@@ -937,7 +934,7 @@ async function loadPeepalPage({reset=false}={}){
         peepalQuestions=[];
       } else {
         peepalLiveMode=false;
-        peepalQuestions=SAMPLE_PEEPAL.map((q)=>({...q,isSample:true}));
+        peepalQuestions=SAMPLE_PEEPAL.map((q)=>({...q,isSample:true,isDemo:true}));
       }
     }
     peepalPageCursor=page.lastDoc;
@@ -1083,6 +1080,10 @@ async function initPeepal(){
       }finally{
         clearTimeout(feedWatch);
       }
+    } else if(!currentUser){
+      // Guest: labeled Demo discussions only (never presented as live)
+      peepalLiveMode=false;
+      peepalQuestions=SAMPLE_PEEPAL.map((q)=>({...q,isSample:true,isDemo:true}));
     }
     renderPeepalFeed();
     renderPeepalNudges();
@@ -1280,6 +1281,7 @@ function renderPeepalFeed(){
   const sorted=[...peepalQuestions]
     .filter(q=>!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted))
     .filter(q=>!(q.archived===true||q.saveOnly===true))
+    .filter(q=>PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)
     .sort((a,b)=>{
       try{
         const lhs = Number(peepalScore(b));

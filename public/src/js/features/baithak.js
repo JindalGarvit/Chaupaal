@@ -306,7 +306,7 @@ function openChallengeCreator(chat){
         <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Content source</div>
         <div class="q-count-row" style="margin-bottom:14px;">
           <button class="q-count-chip ${contentSource==='manual'?'active':''}" data-src="manual" type="button">✍️ Manual</button>
-          <button class="q-count-chip ${contentSource==='ai'?'active':''}" data-src="ai" type="button" ${aiComingSoon?'title="Coming soon"':''}>🤖 AI ${aiComingSoon?'(coming soon)':''}</button>
+          <button class="q-count-chip ${contentSource==='ai'?'active':''}" data-src="ai" type="button" ${aiComingSoon?'disabled aria-disabled="true" title="AI quiz not available yet"':''}>🤖 AI ${aiComingSoon?'(not available)':''}</button>
         </div>
 
         <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Timer per question</div>
@@ -322,7 +322,7 @@ function openChallengeCreator(chat){
         ${contentSource==='ai' ? `
           <div style="margin:14px 0;padding:12px;background:var(--cream);border-radius:12px;font-size:13px;color:var(--muted);line-height:1.45;">
             ${aiComingSoon
-              ? 'AI quiz generation is coming soon. Switch to Manual to write your own questions.'
+              ? 'AI quiz generation isn’t available yet. Use Manual to write your own questions.'
               : (aiBusy ? '🤖 Generating questions…' : 'Generate MCQs with AI, then send — same Muqabala engine as Dangal.')}
           </div>
           ${!aiComingSoon ? `<button class="add-q-btn" id="aiGenBtn" type="button" ${aiBusy?'disabled':''}>🤖 Generate with AI</button>` : ''}
@@ -341,7 +341,7 @@ function openChallengeCreator(chat){
       chip.addEventListener('click',()=>{
         const src = chip.dataset.src;
         if(src === 'ai' && aiComingSoon){
-          showToast('AI quiz generation coming soon');
+          showToast('AI quiz isn’t available yet — use Manual');
           return;
         }
         syncFromDom();
@@ -395,7 +395,7 @@ function openChallengeCreator(chat){
       if(aiBusy) return;
       const on = typeof isAiFeaturesEnabled === 'function' ? await isAiFeaturesEnabled() : aiEnabledSync;
       if(!on){
-        showToast('AI quiz generation coming soon');
+        showToast('AI quiz isn’t available yet — use Manual');
         return;
       }
       aiBusy = true;

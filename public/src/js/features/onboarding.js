@@ -165,12 +165,14 @@ function broadcastDuelResult(friendName,myScore,theirScore,groupIds=[]){
   const won=myScore>theirScore;const userName=userProfile?.name?.split(' ')[0]||'You';
   const friendFirst=friendName.split(' ')[0];
   const text=won?`${userName} beat ${friendFirst} ${myScore}-${theirScore} in Muqabala`:myScore===theirScore?`${userName} and ${friendFirst} tied ${myScore}-${theirScore}`:`${friendFirst} beat ${userName} ${theirScore}-${myScore}`;
-  // Local sample feed (offline / demo)
-  if(typeof SAMPLE_STORIES!=='undefined'&&Array.isArray(SAMPLE_STORIES)){
-    SAMPLE_STORIES.unshift({id:`ds_${Date.now()}`,name:'Duel result',avatar:'🪑',type:'score',score:myScore,total:theirScore,text,seen:false,auto:true,deletable:true,sharedGameId:'quiz'});
-  }
-  if(typeof SAMPLE_CHATS!=='undefined'&&SAMPLE_CHATS.find(c=>c.type==='group')){
-    const grp=SAMPLE_CHATS.find(c=>c.type==='group');grp.preview=text;grp.time='just now';
+  // Guest-only Demo fixtures — never mutate SAMPLE_* while signed in (Trust T0)
+  if(!(typeof currentUser!=='undefined'&&currentUser)){
+    if(typeof SAMPLE_STORIES!=='undefined'&&Array.isArray(SAMPLE_STORIES)){
+      SAMPLE_STORIES.unshift({id:`ds_${Date.now()}`,name:'Duel result',avatar:'🪑',type:'score',score:myScore,total:theirScore,text,seen:false,auto:true,deletable:true,isSample:true,isDemo:true,sharedGameId:'quiz'});
+    }
+    if(typeof SAMPLE_CHATS!=='undefined'&&SAMPLE_CHATS.find(c=>c.type==='group')){
+      const grp=SAMPLE_CHATS.find(c=>c.type==='group');grp.preview=text;grp.time='just now';
+    }
   }
   // Real Baithak story when signed in
   if(typeof postGameScoreStory==='function'){
