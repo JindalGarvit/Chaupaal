@@ -28,7 +28,7 @@ const KEPT = [
   'badminton', 'patangbaazi',
 ];
 /** Party-kit titles added after the cull (G1–G3). */
-const PARTY_ADDED = ['imposter'];
+const PARTY_ADDED = ['imposter', 'rajamantri', 'charades'];
 const ROSTER_EXPECTED = KEPT.concat(PARTY_ADDED);
 
 // ---------- (a) retired ids absent from shipped registries ----------
@@ -55,7 +55,7 @@ for (const [name, src] of Object.entries(scanned)) {
   assert(hits.length === 0, `${name}: no retired ids${hits.length ? ' (found ' + hits.join(',') + ')' : ''}`);
 }
 
-const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-classics', 'engines', 'brick-breaker', 'ank-jod', 'imposter']
+const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-classics', 'engines', 'brick-breaker', 'ank-jod', 'imposter', 'rajamantri', 'charades']
   .concat(['game-registry'])
   .map((f) => read(`public/src/js/games/${f}.js`))
   .join('\n');

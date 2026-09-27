@@ -1,17 +1,22 @@
 /**
- * Party rooms (Dangal party kit) — server-authoritative dealing + round state.
- * Served by POST /api/media-config { action: 'party_room', op, ... } (no extra Vercel function).
+ * Party rooms (Dangal party kit) — server-authoritative dealing + round state for every party title.
+ * Served by POST /api/media-config { action: 'party_room', op, game, ... } (no extra Vercel function).
  *
  * RTDB layout, one node per room so every op is a single transaction:
  *   games/{game}/{code}/pub            members read   — lobby, settings, scores, public round state
  *   games/{game}/{code}/presence/{uid} members read   — { at, online }; each client writes its own
- *   games/{game}/{code}/secrets/{uid}  only that uid  — this player's card for the current round
- *   games/{game}/{code}/server         nobody         — roles, words, full votes (Admin SDK only)
- * Roles never enter `pub` until the result screen; the host reads nothing more than anyone else.
+ *   games/{game}/{code}/secrets/{uid}  only that uid  — this player's card (word / chit / title)
+ *   games/{game}/{code}/server         nobody         — roles, words, decks, full votes (Admin SDK only)
+ * Secrets never enter `pub` until they are revealed; the host reads nothing more than anyone else.
+ *
+ * The room engine (join, leave, settings, start, pause, ticks, host migration, offline skips) is shared;
+ * each game plugs in an adapter (deal, public view, timers, game ops).
  */
 'use strict';
 
 const ImposterCore = require('../public/src/js/games/imposter-core.js');
+const RajaMantriCore = require('../public/src/js/games/rajamantri-core.js');
+const CharadesCore = require('../public/src/js/games/charades-core.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -21,14 +26,375 @@ const STEAL_MS = 45000;
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_NAME = 32;
 
-/** Per-game handlers. G2/G3 party titles add an entry here. */
-const GAMES = {
-  imposter: {
-    core: ImposterCore,
-    min: ImposterCore.MIN_PLAYERS,
-    max: ImposterCore.MAX_PLAYERS,
+function err(code, message) {
+  const e = new Error(message || code);
+  e.code = code;
+  return e;
+}
+
+function coreError(out) {
+  return err(out.error, out.reason || out.error);
+}
+
+/** Everyone present has seen their card → run `action`. Shared by reveal phases. */
+function seenOp(ctx, action) {
+  const { room, uid, now, act, gone } = ctx;
+  const st = room.server.pub;
+  if (st.phase !== 'reveal') return {};
+  room.pub.seen[uid] = true;
+  const waiting = st.players.filter((id) => !room.pub.seen[id] && !gone(id));
+  if (!waiting.length) act({ type: action });
+  return {};
+}
+
+function addRoundPoints(room, points) {
+  Object.keys(points || {}).forEach((id) => {
+    room.pub.scores[id] = (Number(room.pub.scores[id]) || 0) + (Number(points[id]) || 0);
+  });
+}
+
+// ------------------------------------------------------------------ Imposter
+
+const imposterAdapter = {
+  core: ImposterCore,
+  min: ImposterCore.MIN_PLAYERS,
+  max: ImposterCore.MAX_PLAYERS,
+  mergeSettings: (s) => ImposterCore.mergeSettings(s),
+  deal(room, ids, ctx) {
+    const prev = room.server || {};
+    const usedKeys = Array.isArray(prev.usedKeys) ? prev.usedKeys : [];
+    const dealt = ImposterCore.deal(ids, room.pub.settings, { rng: ctx.rng, usedKeys });
+    const starterIndex = (ctx.roundNo - 1) % ids.length;
+    room.server = {
+      settings: dealt.settings,
+      hidden: dealt.hidden,
+      pub: ImposterCore.createRound(ids, dealt.settings, starterIndex),
+      usedKeys: usedKeys.concat(dealt.key).slice(-200),
+      scored: false,
+    };
+    room.secrets = {};
+    ids.forEach((id) => (room.secrets[id] = Object.assign({ roundNo: ctx.roundNo }, dealt.secrets[id])));
+  },
+  view: (s) => ImposterCore.publicView(s.pub),
+  phaseKey: (s) => s.pub.phase + ':' + s.pub.turn + ':' + s.pub.voteRound + ':' + (s.pub.revote ? 1 : 0),
+  deadlineMs(s) {
+    const p = s.pub.phase;
+    const set = s.settings;
+    if (p === 'reveal') return REVEAL_MS;
+    if (p === 'clues') return set.clueSec * 1000;
+    if (p === 'discuss') return set.discussionSec * 1000;
+    if (p === 'vote' || p === 'revote') return set.voteSec * 1000;
+    if (p === 'defence') return set.defenceSec * 1000;
+    if (p === 'steal') return STEAL_MS;
+    return 0;
+  },
+  apply(room, action) {
+    const s = room.server;
+    const out = ImposterCore.applyAction(s.pub, s.hidden, s.settings, action);
+    if (out.error) return out;
+    s.pub = out.pub;
+    // A 0s discussion skips straight to the vote.
+    if (s.pub.phase === 'discuss' && s.settings.discussionSec <= 0) {
+      s.pub = ImposterCore.applyAction(s.pub, s.hidden, s.settings, { type: 'startVote' }).pub;
+    }
+    return out;
+  },
+  afterChange(room) {
+    const s = room.server;
+    if (s.pub.phase === 'result' && !s.scored) {
+      s.scored = true;
+      addRoundPoints(room, s.pub.result.points);
+    }
+  },
+  absent(room, ctx) {
+    const s = room.server;
+    let guard = 0;
+    while (s.pub.phase === 'clues' && guard++ < 40) {
+      const giver = ImposterCore.currentClueGiver(s.pub);
+      if (giver && !ctx.gone(giver)) break;
+      if (!ctx.act({ type: 'skipTurn' }, true)) break;
+    }
+    if ((s.pub.phase === 'vote' || s.pub.phase === 'revote') && s.pub.voters.length) {
+      const present = s.pub.voters.filter((id) => !ctx.gone(id));
+      const pending = present.filter((id) => s.pub.voted.indexOf(id) < 0);
+      if (present.length && !pending.length) ctx.act({ type: 'closeVote' }, true);
+    }
+  },
+  timeout(room, ctx) {
+    const s = room.server;
+    const p = s.pub.phase;
+    if (p === 'reveal') ctx.act({ type: 'startClues' }, true);
+    else if (p === 'clues') ctx.act({ type: 'skipTurn' }, true);
+    else if (p === 'discuss') ctx.act({ type: 'startVote' }, true);
+    else if (p === 'vote' || p === 'revote') ctx.act({ type: 'closeVote' }, true);
+    else if (p === 'defence') ctx.act({ type: 'endDefence' }, true);
+    else if (p === 'steal') ctx.act({ type: 'steal', id: s.pub.stealer, guess: '' }, true);
+  },
+  betweenRounds: (s) => s.pub.phase === 'result',
+  canNext: (s) => s.pub.phase === 'result',
+  newGameOnStart: () => false,
+  onJoinPlaying: () => true,
+  onLeave(room, uid) {
+    const s = room.server;
+    s.pub.voters = s.pub.voters.filter((id) => id !== uid);
+  },
+  ops: {
+    seen: (ctx) => seenOp(ctx, 'startClues'),
+    clue: (ctx) => (ctx.act({ type: 'clue', id: ctx.uid, text: ctx.args.text }), {}),
+    skipDiscussion(ctx) {
+      if (!ctx.isHost) throw err('host_only', 'Only the host can skip');
+      if (ctx.room.server.pub.phase !== 'discuss') throw err('phase', 'Not in discussion');
+      ctx.act({ type: 'startVote' });
+      return {};
+    },
+    vote: (ctx) => (ctx.act({ type: 'vote', id: ctx.uid, target: String(ctx.args.target || '') }), {}),
+    steal: (ctx) => (ctx.act({ type: 'steal', id: ctx.uid, guess: ctx.args.guess }), {}),
+  },
+  hydrate(s) {
+    s.usedKeys = s.usedKeys || [];
+    s.pub = ImposterCore.hydrateState(s.pub);
+    const h = s.hidden || {};
+    h.imposters = h.imposters || [];
+    h.minority = h.minority || null;
+    if (h.majority) h.majority.alts = h.majority.alts || [];
+    s.hidden = h;
   },
 };
+
+// ------------------------------------------------------------------ Raja Mantri Chor Sipahi
+
+const RMCS_MS = { reveal: REVEAL_MS, raja: 30000, call: 30000, guess: 60000 };
+
+const rajamantriAdapter = {
+  core: RajaMantriCore,
+  min: RajaMantriCore.MIN_PLAYERS,
+  max: RajaMantriCore.MAX_PLAYERS,
+  mergeSettings: (s) => RajaMantriCore.mergeSettings(s),
+  deal(room, ids, ctx) {
+    const dealt = RajaMantriCore.deal(ids, room.pub.settings, { rng: ctx.rng });
+    room.server = {
+      settings: dealt.settings,
+      hidden: dealt.hidden,
+      pub: RajaMantriCore.createRound(ids, dealt.settings),
+      scored: false,
+    };
+    room.secrets = {};
+    ids.forEach((id) => (room.secrets[id] = { roundNo: ctx.roundNo, role: dealt.secrets[id].role }));
+  },
+  view: (s) => RajaMantriCore.publicView(s.pub),
+  phaseKey: (s) => s.pub.phase + ':' + s.pub.pickIndex,
+  deadlineMs: (s) => RMCS_MS[s.pub.phase] || 0,
+  apply(room, action) {
+    const s = room.server;
+    const out = RajaMantriCore.applyAction(s.pub, s.hidden, s.settings, action);
+    if (!out.error) s.pub = out.pub;
+    return out;
+  },
+  afterChange(room) {
+    const s = room.server;
+    if (s.pub.phase === 'result' && !s.scored) {
+      s.scored = true;
+      addRoundPoints(room, s.pub.result.points);
+      if ((Number(room.pub.roundNo) || 0) >= s.settings.rounds) room.pub.over = true;
+    }
+  },
+  absent(room, ctx) {
+    const s = room.server;
+    const st = s.pub;
+    const holder = (role) => RajaMantriCore.holderOf(s.hidden, role);
+    if (st.phase === 'reveal') {
+      const waiting = st.players.filter((id) => !room.pub.seen[id] && !ctx.gone(id));
+      if (!waiting.length) ctx.act({ type: 'startRaja' }, true);
+    }
+    if (st.phase === 'raja' && ctx.gone(holder('raja'))) ctx.act({ type: 'revealRaja' }, true);
+    if (st.phase === 'call' && ctx.gone(holder(st.guesserRole))) ctx.act({ type: 'revealGuesser' }, true);
+    let guard = 0;
+    while (st.phase === 'guess' && ctx.gone(st.guesser) && guard++ < 4) this.autoPick(room, ctx);
+  },
+  autoPick(room, ctx) {
+    const st = room.server.pub;
+    const c = RajaMantriCore.candidates(st);
+    if (!c.length) return;
+    ctx.act({ type: 'pick', target: c[Math.floor(ctx.rng() * c.length)] }, true);
+  },
+  timeout(room, ctx) {
+    const p = room.server.pub.phase;
+    if (p === 'reveal') ctx.act({ type: 'startRaja' }, true);
+    else if (p === 'raja') ctx.act({ type: 'revealRaja' }, true);
+    else if (p === 'call') ctx.act({ type: 'revealGuesser' }, true);
+    else if (p === 'guess') this.autoPick(room, ctx);
+  },
+  betweenRounds: (s) => s.pub.phase === 'result',
+  canNext: (s, room) => s.pub.phase === 'result' && !room.pub.over,
+  newGameOnStart: (room) => !!room.pub.over,
+  onJoinPlaying: () => true,
+  onLeave() {},
+  ops: {
+    seen: (ctx) => seenOp(ctx, 'startRaja'),
+    revealRaja: (ctx) => (ctx.act({ type: 'revealRaja', id: ctx.uid }), {}),
+    revealGuesser: (ctx) => (ctx.act({ type: 'revealGuesser', id: ctx.uid }), {}),
+    pick(ctx) {
+      const out = ctx.act({ type: 'pick', id: ctx.uid, target: String(ctx.args.target || '') });
+      return { correct: !!out.correct };
+    },
+  },
+  hydrate(s) {
+    s.pub = RajaMantriCore.hydrateState(s.pub);
+    s.hidden = s.hidden || {};
+    s.hidden.roles = s.hidden.roles || {};
+  },
+};
+
+// ------------------------------------------------------------------ Dumb Charades
+
+const CHARADES_READY_MS = 30000;
+const CHARADES_TURN_END_MS = 12000;
+
+function charadesTeams(room, ids, rng) {
+  const pick = room.pub.teamPick || {};
+  const teams = [[], []];
+  const loose = [];
+  ids.forEach((id) => {
+    if (pick[id] === 0 || pick[id] === 1) teams[pick[id]].push(id);
+    else loose.push(id);
+  });
+  if (!teams[0].length && !teams[1].length) return CharadesCore.balanceTeams(ids, rng);
+  loose.forEach((id) => teams[teams[0].length <= teams[1].length ? 0 : 1].push(id));
+  return teams;
+}
+
+const charadesAdapter = {
+  core: CharadesCore,
+  min: CharadesCore.MIN_PLAYERS,
+  max: CharadesCore.MAX_PLAYERS,
+  mergeSettings: (s) => CharadesCore.mergeSettings(s),
+  deal(room, ids, ctx) {
+    const teams = charadesTeams(room, ids, ctx.rng);
+    if (!CharadesCore.validTeams(teams)) throw err('teams_uneven', 'Each team needs at least 2 players');
+    const g = CharadesCore.createGame(teams, room.pub.settings, { rng: ctx.rng });
+    room.server = { settings: g.settings, pub: g.pub, hidden: g.hidden };
+    room.pub.teamPick = {};
+    teams.forEach((t, i) => t.forEach((id) => (room.pub.teamPick[id] = i)));
+    room.secrets = {};
+    room.pub.roundNo = ctx.roundNo;
+    this.afterChange(room);
+  },
+  view: (s) => CharadesCore.publicView(s.pub),
+  phaseKey: (s) => s.pub.phase + ':' + s.pub.turnNo,
+  deadlineMs(s) {
+    const p = s.pub.phase;
+    if (p === 'ready') return CHARADES_READY_MS;
+    if (p === 'acting') return s.settings.turnSec * 1000;
+    if (p === 'turnEnd') return CHARADES_TURN_END_MS;
+    return 0;
+  },
+  apply(room, action) {
+    const s = room.server;
+    const out = CharadesCore.applyAction(s.pub, s.hidden, s.settings, action);
+    if (!out.error) s.pub = out.pub;
+    return out;
+  },
+  /** Only the actor's secret node holds the title; everyone's points mirror their acting + guessing. */
+  afterChange(room) {
+    const s = room.server;
+    const st = s.pub;
+    const secret = CharadesCore.secretFor(st, s.hidden);
+    room.secrets = {};
+    if (secret && st.actor) room.secrets[st.actor] = Object.assign({ roundNo: room.pub.roundNo }, secret);
+    const scores = {};
+    Object.keys(room.pub.players).forEach((id) => {
+      scores[id] = (Number(st.actorPoints[id]) || 0) + (Number(st.guessHits[id]) || 0);
+    });
+    room.pub.scores = scores;
+    if (st.phase === 'over') room.pub.over = true;
+  },
+  absent(room, ctx) {
+    const st = room.server.pub;
+    let guard = 0;
+    while (st.phase === 'ready' && ctx.gone(st.actor) && guard++ < st.teams[st.team].length) {
+      if (!ctx.act({ type: 'skipActor' }, true)) break;
+    }
+  },
+  timeout(room, ctx) {
+    const p = room.server.pub.phase;
+    if (p === 'ready') ctx.act({ type: 'start' }, true);
+    else if (p === 'acting') ctx.act({ type: 'timeUp' }, true);
+    else if (p === 'turnEnd') ctx.act({ type: 'next' }, true);
+  },
+  betweenRounds: (s) => s.pub.phase === 'over',
+  canNext: () => false,
+  newGameOnStart: () => true,
+  onJoinLobby(room, uid) {
+    room.pub.teamPick = room.pub.teamPick || {};
+    const pick = room.pub.teamPick;
+    const sizes = [0, 0];
+    Object.keys(pick).forEach((id) => {
+      if (room.pub.players[id] && !room.pub.players[id].left && (pick[id] === 0 || pick[id] === 1)) sizes[pick[id]] += 1;
+    });
+    pick[uid] = sizes[0] <= sizes[1] ? 0 : 1;
+  },
+  onJoinPlaying(room, uid) {
+    const s = room.server;
+    if (s.pub.phase === 'over') return true;
+    CharadesCore.addPlayer(s.pub, uid);
+    room.pub.teamPick = room.pub.teamPick || {};
+    room.pub.teamPick[uid] = CharadesCore.teamOf(s.pub, uid);
+    return false;
+  },
+  onLeave(room, uid) {
+    const s = room.server;
+    CharadesCore.removePlayer(s.pub, s.hidden, s.settings, uid);
+    if (room.pub.teamPick) delete room.pub.teamPick[uid];
+  },
+  ops: {
+    go: (ctx) => (ctx.act({ type: 'start', id: ctx.uid }), {}),
+    got: (ctx) => (ctx.act({ type: 'got', id: ctx.uid }), {}),
+    pass: (ctx) => (ctx.act({ type: 'pass', id: ctx.uid }), {}),
+    guess(ctx) {
+      const out = ctx.act({ type: 'guess', id: ctx.uid, text: ctx.args.text });
+      return { matched: !!out.matched };
+    },
+    nextTurn(ctx) {
+      if (ctx.room.server.pub.phase !== 'turnEnd') return {};
+      ctx.act({ type: 'next' });
+      return {};
+    },
+  },
+  lobbyOps: {
+    setTeam(ctx) {
+      const { room, args } = ctx;
+      if (!ctx.isHost) throw err('host_only', 'Only the host can arrange teams');
+      const target = String(args.target || '');
+      const team = Number(args.team);
+      if (!room.pub.players[target] || (team !== 0 && team !== 1)) throw err('bad_target', 'Pick a player and a team');
+      room.pub.teamPick = room.pub.teamPick || {};
+      room.pub.teamPick[target] = team;
+      return {};
+    },
+    shuffleTeams(ctx) {
+      const { room } = ctx;
+      if (!ctx.isHost) throw err('host_only', 'Only the host can arrange teams');
+      const ids = Object.keys(room.pub.players).filter((id) => !room.pub.players[id].left);
+      const teams = CharadesCore.balanceTeams(ids, ctx.rng);
+      room.pub.teamPick = {};
+      teams.forEach((t, i) => t.forEach((id) => (room.pub.teamPick[id] = i)));
+      return {};
+    },
+  },
+  hydrate(s) {
+    s.pub = CharadesCore.hydrateState(s.pub);
+    s.hidden = CharadesCore.hydrateHidden(s.hidden);
+  },
+};
+
+/** Per-game adapters. New party titles add an entry here. */
+const GAMES = {
+  imposter: imposterAdapter,
+  rajamantri: rajamantriAdapter,
+  charades: charadesAdapter,
+};
+
+// ------------------------------------------------------------------ room engine
 
 function makeCode(rng) {
   const r = typeof rng === 'function' ? rng : Math.random;
@@ -47,16 +413,8 @@ function cleanName(name) {
   return n || 'Player';
 }
 
-function err(code, message) {
-  const e = new Error(message || code);
-  e.code = code;
-  return e;
-}
-
 function seatOrder(pub) {
-  return Object.keys(pub.players || {}).sort(
-    (a, b) => (pub.players[a].seat || 0) - (pub.players[b].seat || 0)
-  );
+  return Object.keys(pub.players || {}).sort((a, b) => (pub.players[a].seat || 0) - (pub.players[b].seat || 0));
 }
 
 function activeIds(pub) {
@@ -70,91 +428,49 @@ function isOnline(room, uid, now) {
   return now - (Number(p.at) || 0) < OFFLINE_MS;
 }
 
+function bump(room, now) {
+  room.pub.rev = (Number(room.pub.rev) || 0) + 1;
+  room.pub.updatedAt = now;
+}
+
 /** Publish the public view of the server round state. */
 function publish(room, now) {
+  const g = GAMES[room.pub.game];
   const s = room.server;
-  room.pub.state = s && s.pub ? ImposterCore.publicView(s.pub) : null;
-  room.pub.updatedAt = now;
+  room.pub.state = s && s.pub ? g.view(s) : null;
   room.pub.serverNow = now;
-  room.pub.rev = (Number(room.pub.rev) || 0) + 1;
+  bump(room, now);
 }
 
 function setDeadline(room, now) {
-  const s = room.server;
-  const st = s.pub;
-  const set = s.settings;
-  let ms = 0;
-  if (st.phase === 'reveal') ms = REVEAL_MS;
-  else if (st.phase === 'clues') ms = set.clueSec * 1000;
-  else if (st.phase === 'discuss') ms = set.discussionSec * 1000;
-  else if (st.phase === 'vote' || st.phase === 'revote') ms = set.voteSec * 1000;
-  else if (st.phase === 'defence') ms = set.defenceSec * 1000;
-  else if (st.phase === 'steal') ms = STEAL_MS;
+  const g = GAMES[room.pub.game];
+  const ms = g.deadlineMs(room.server);
   room.pub.paused = null;
   room.pub.deadline = ms > 0 ? now + ms : null;
-  room.pub.phaseKey = st.phase + ':' + st.turn + ':' + st.voteRound + ':' + (st.revote ? 1 : 0);
+  room.pub.phaseKey = g.phaseKey(room.server);
 }
 
-function applyCore(room, action, now) {
-  const s = room.server;
-  const before = s.pub.phase + ':' + s.pub.turn + ':' + s.pub.voteRound + ':' + s.pub.revote;
-  const out = ImposterCore.applyAction(s.pub, s.hidden, s.settings, action);
-  if (out.error) throw err(out.error, out.reason || out.error);
-  s.pub = out.pub;
-  // Discussion of 0s skips straight to the vote.
-  if (s.pub.phase === 'discuss' && s.settings.discussionSec <= 0) {
-    s.pub = ImposterCore.applyAction(s.pub, s.hidden, s.settings, { type: 'startVote' }).pub;
-  }
-  const after = s.pub.phase + ':' + s.pub.turn + ':' + s.pub.voteRound + ':' + s.pub.revote;
-  if (before !== after) setDeadline(room, now);
-  if (s.pub.phase === 'result' && !s.scored) {
-    s.scored = true;
-    const pts = s.pub.result.points || {};
-    Object.keys(pts).forEach((id) => {
-      room.pub.scores[id] = (Number(room.pub.scores[id]) || 0) + pts[id];
-    });
-    room.pub.deadline = null;
-  }
-  skipAbsent(room, now);
+/** Context handed to adapters: act() runs a core action and keeps timers + derived state in step. */
+function context(room, uid, args, now, rng) {
+  const g = GAMES[room.pub.game];
+  const gone = (id) => !id || !room.pub.players[id] || !!room.pub.players[id].left || !isOnline(room, id, now);
+  const act = (action, soft) => {
+    const before = g.phaseKey(room.server);
+    const out = g.apply(room, action);
+    if (out.error) {
+      if (soft) return null;
+      throw coreError(out);
+    }
+    if (g.phaseKey(room.server) !== before) setDeadline(room, now);
+    g.afterChange(room, now);
+    return out;
+  };
+  return { room, uid, args: args || {}, now, rng: typeof rng === 'function' ? rng : Math.random, isHost: room.pub.host === uid, gone, act };
 }
 
-/** Skip clue turns of players who left or dropped offline; close votes once everyone present voted. */
-function skipAbsent(room, now) {
-  const s = room.server;
-  if (!s || !s.pub) return;
-  let guard = 0;
-  while (s.pub.phase === 'clues' && guard++ < 40) {
-    const giver = ImposterCore.currentClueGiver(s.pub);
-    const gone = !giver || (room.pub.players[giver] && room.pub.players[giver].left) || !isOnline(room, giver, now);
-    if (!gone) break;
-    applyCoreRaw(room, { type: 'skipTurn' }, now);
-  }
-  if ((s.pub.phase === 'vote' || s.pub.phase === 'revote') && s.pub.voters.length) {
-    const present = s.pub.voters.filter(
-      (id) => !(room.pub.players[id] && room.pub.players[id].left) && isOnline(room, id, now)
-    );
-    const pending = present.filter((id) => s.pub.voted.indexOf(id) < 0);
-    if (present.length && !pending.length) applyCoreRaw(room, { type: 'closeVote' }, now);
-  }
-}
-
-function applyCoreRaw(room, action, now) {
-  const s = room.server;
-  const out = ImposterCore.applyAction(s.pub, s.hidden, s.settings, action);
-  if (out.error) return;
-  s.pub = out.pub;
-  if (s.pub.phase === 'discuss' && s.settings.discussionSec <= 0) {
-    s.pub = ImposterCore.applyAction(s.pub, s.hidden, s.settings, { type: 'startVote' }).pub;
-  }
-  setDeadline(room, now);
-  if (s.pub.phase === 'result' && !s.scored) {
-    s.scored = true;
-    const pts = s.pub.result.points || {};
-    Object.keys(pts).forEach((id) => {
-      room.pub.scores[id] = (Number(room.pub.scores[id]) || 0) + pts[id];
-    });
-    room.pub.deadline = null;
-  }
+function settle(room, ctx) {
+  const g = GAMES[room.pub.game];
+  if (room.server && room.server.pub && room.pub.status === 'playing') g.absent(room, ctx);
 }
 
 function migrateHost(room, now) {
@@ -177,6 +493,7 @@ function dealRound(room, now, rng) {
       delete pub.players[id];
       delete pub.scores[id];
       if (room.secrets) delete room.secrets[id];
+      if (pub.teamPick) delete pub.teamPick[id];
     } else if (pub.players[id].pending) {
       delete pub.players[id].pending;
     }
@@ -185,34 +502,22 @@ function dealRound(room, now, rng) {
   const game = GAMES[pub.game];
   if (ids.length < game.min) throw err('need_players', 'Need at least ' + game.min + ' players');
   if (ids.length > game.max) throw err('too_many_players', 'Max ' + game.max + ' players');
-  const prev = room.server || {};
-  const usedKeys = Array.isArray(prev.usedKeys) ? prev.usedKeys : [];
   const roundNo = (Number(pub.roundNo) || 0) + 1;
-  const dealt = ImposterCore.deal(ids, pub.settings, { rng, usedKeys });
-  const starterIndex = (roundNo - 1) % ids.length;
-  room.server = {
-    settings: dealt.settings,
-    hidden: dealt.hidden,
-    pub: ImposterCore.createRound(ids, dealt.settings, starterIndex),
-    usedKeys: usedKeys.concat(dealt.key).slice(-200),
-    scored: false,
-  };
-  room.secrets = {};
+  game.deal(room, ids, { rng: typeof rng === 'function' ? rng : Math.random, roundNo, now });
   ids.forEach((id) => {
-    room.secrets[id] = Object.assign({ roundNo }, dealt.secrets[id]);
     if (!(id in pub.scores)) pub.scores[id] = 0;
   });
   pub.roundNo = roundNo;
   pub.status = 'playing';
   pub.seen = {};
-  pub.settings = dealt.settings;
+  pub.settings = room.server.settings;
   setDeadline(room, now);
 }
 
 function newRoom({ game, uid, name, settings, chatId, now }) {
   const g = GAMES[game];
   if (!g) throw err('unknown_game', 'Unknown party game');
-  return {
+  const room = {
     pub: {
       game,
       host: uid,
@@ -220,11 +525,12 @@ function newRoom({ game, uid, name, settings, chatId, now }) {
       createdAt: now,
       updatedAt: now,
       expiresAt: now + ROOM_TTL_MS,
-      settings: g.core.mergeSettings(settings),
+      settings: g.mergeSettings(settings),
       players: { [uid]: { name: cleanName(name), seat: 0, joinedAt: now } },
       scores: { [uid]: 0 },
       roundNo: 0,
       seen: {},
+      over: false,
       chatId: chatId ? String(chatId).slice(0, 128) : null,
       state: null,
       deadline: null,
@@ -236,6 +542,8 @@ function newRoom({ game, uid, name, settings, chatId, now }) {
     secrets: {},
     server: null,
   };
+  if (g.onJoinLobby) g.onJoinLobby(room, uid);
+  return room;
 }
 
 /**
@@ -254,6 +562,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
   const me = pub.players[uid];
   const isHost = pub.host === uid;
   const game = GAMES[pub.game];
+  if (!game) throw err('unknown_game', 'Unknown party game');
 
   if (op === 'join') {
     if (me && !me.left) {
@@ -264,11 +573,20 @@ function reduceRoom(room, uid, op, args, now, rng) {
     if (seats.length >= game.max) throw err('room_full', 'This room is full');
     const seat = seatOrder(pub).reduce((m, id) => Math.max(m, pub.players[id].seat || 0), -1) + 1;
     pub.players[uid] = { name: cleanName(a.name), seat, joinedAt: now };
-    if (pub.status === 'playing') pub.players[uid].pending = true;
     if (!(uid in pub.scores)) pub.scores[uid] = 0;
     room.presence[uid] = { at: now, online: true };
-    pub.updatedAt = now;
-    pub.rev = (Number(pub.rev) || 0) + 1;
+    const playing = pub.status === 'playing' && room.server && room.server.pub;
+    if (!playing && game.onJoinLobby) game.onJoinLobby(room, uid);
+    if (playing) {
+      const pending = game.onJoinPlaying(room, uid, now);
+      if (pending) pub.players[uid].pending = true;
+      else {
+        game.afterChange(room, now);
+        publish(room, now);
+        return { room, result: { joined: true, pending: false } };
+      }
+    }
+    bump(room, now);
     return { room, result: { joined: true, pending: !!pub.players[uid].pending } };
   }
 
@@ -277,9 +595,10 @@ function reduceRoom(room, uid, op, args, now, rng) {
   room.presence[uid] = { at: now, online: true };
 
   const s = room.server;
-  const phase = s && s.pub ? s.pub.phase : null;
+  const inRound = !!(s && s.pub && pub.status === 'playing');
+  const ctx = context(room, uid, a, now, rng);
   const needRound = () => {
-    if (!s || !s.pub || pub.status !== 'playing') throw err('no_round', 'No round in progress');
+    if (!inRound) throw err('no_round', 'No round in progress');
   };
 
   switch (op) {
@@ -287,6 +606,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
       if (pub.status === 'lobby') {
         delete pub.players[uid];
         delete pub.scores[uid];
+        if (pub.teamPick) delete pub.teamPick[uid];
       } else {
         me.left = true;
       }
@@ -294,76 +614,41 @@ function reduceRoom(room, uid, op, args, now, rng) {
       const remaining = seatOrder(pub).filter((id) => !pub.players[id].left);
       if (!remaining.length) pub.status = 'closed';
       else if (pub.host === uid) pub.host = remaining[0];
-      if (s && s.pub && pub.status === 'playing') {
-        s.pub.voters = s.pub.voters.filter((id) => id !== uid);
-        skipAbsent(room, now);
+      if (inRound && pub.status === 'playing') {
+        const before = game.phaseKey(s);
+        game.onLeave(room, uid, now);
+        if (game.phaseKey(room.server) !== before) setDeadline(room, now);
+        game.afterChange(room, now);
+        settle(room, ctx);
         publish(room, now);
       } else {
-        pub.rev = (Number(pub.rev) || 0) + 1;
-        pub.updatedAt = now;
+        bump(room, now);
       }
       return { room, result: { left: true } };
     }
 
     case 'settings': {
       if (!isHost) throw err('host_only', 'Only the host can change settings');
-      if (pub.status === 'playing' && phase !== 'result') throw err('phase', 'Change settings between rounds');
-      pub.settings = game.core.mergeSettings(Object.assign({}, pub.settings, a.settings || {}));
-      pub.rev = (Number(pub.rev) || 0) + 1;
-      pub.updatedAt = now;
+      if (inRound && !game.betweenRounds(s, room)) throw err('phase', 'Change settings between rounds');
+      pub.settings = game.mergeSettings(Object.assign({}, pub.settings, a.settings || {}));
+      bump(room, now);
       return { room, result: { settings: pub.settings } };
     }
 
     case 'start':
     case 'next': {
       if (!isHost) throw err('host_only', 'Only the host can start');
-      if (op === 'next' && phase !== 'result') throw err('phase', 'Finish this round first');
-      if (op === 'start' && pub.status === 'playing' && phase !== 'result') throw err('phase', 'Round in progress');
+      if (op === 'next' && !(inRound && game.canNext(s, room))) throw err('phase', 'Finish this round first');
+      if (op === 'start' && inRound && !game.betweenRounds(s, room)) throw err('phase', 'Round in progress');
+      if (op === 'start' && (pub.status === 'lobby' || game.newGameOnStart(room))) {
+        Object.keys(pub.scores).forEach((id) => (pub.scores[id] = 0));
+        pub.roundNo = 0;
+        pub.over = false;
+      }
       dealRound(room, now, rng);
+      settle(room, context(room, uid, a, now, rng));
       publish(room, now);
       return { room, result: { roundNo: pub.roundNo } };
-    }
-
-    case 'seen': {
-      needRound();
-      if (phase !== 'reveal') return { room, result: {} };
-      pub.seen[uid] = true;
-      const waiting = s.pub.players.filter(
-        (id) => !pub.seen[id] && !(pub.players[id] && pub.players[id].left) && isOnline(room, id, now)
-      );
-      if (!waiting.length) applyCore(room, { type: 'startClues' }, now);
-      publish(room, now);
-      return { room, result: {} };
-    }
-
-    case 'clue': {
-      needRound();
-      applyCore(room, { type: 'clue', id: uid, text: a.text }, now);
-      publish(room, now);
-      return { room, result: {} };
-    }
-
-    case 'skipDiscussion': {
-      needRound();
-      if (!isHost) throw err('host_only', 'Only the host can skip');
-      if (phase !== 'discuss') throw err('phase', 'Not in discussion');
-      applyCore(room, { type: 'startVote' }, now);
-      publish(room, now);
-      return { room, result: {} };
-    }
-
-    case 'vote': {
-      needRound();
-      applyCore(room, { type: 'vote', id: uid, target: String(a.target || '') }, now);
-      publish(room, now);
-      return { room, result: {} };
-    }
-
-    case 'steal': {
-      needRound();
-      applyCore(room, { type: 'steal', id: uid, guess: a.guess }, now);
-      publish(room, now);
-      return { room, result: {} };
     }
 
     case 'pause': {
@@ -389,22 +674,17 @@ function reduceRoom(room, uid, op, args, now, rng) {
     case 'tick': {
       // Any member may nudge the clock; the server decides whether anything is due.
       const migrated = migrateHost(room, now);
-      if (s && s.pub && pub.status === 'playing') {
-        const before = JSON.stringify(s.pub) + '|' + pub.deadline;
-        skipAbsent(room, now);
+      if (inRound) {
+        const before = JSON.stringify(room.server.pub) + '|' + pub.deadline;
+        settle(room, ctx);
         if (!pub.paused && pub.deadline && now >= pub.deadline) {
-          const p = s.pub.phase;
-          if (p === 'reveal') applyCore(room, { type: 'startClues' }, now);
-          else if (p === 'clues') applyCore(room, { type: 'skipTurn' }, now);
-          else if (p === 'discuss') applyCore(room, { type: 'startVote' }, now);
-          else if (p === 'vote' || p === 'revote') applyCore(room, { type: 'closeVote' }, now);
-          else if (p === 'defence') applyCore(room, { type: 'endDefence' }, now);
-          else if (p === 'steal') applyCore(room, { type: 'steal', id: s.pub.stealer, guess: '' }, now);
+          game.timeout(room, ctx);
+          settle(room, ctx);
         }
         const after = JSON.stringify(room.server.pub) + '|' + pub.deadline;
         if (before !== after || migrated) publish(room, now);
       } else if (migrated) {
-        pub.rev = (Number(pub.rev) || 0) + 1;
+        bump(room, now);
       }
       return { room, result: {} };
     }
@@ -413,12 +693,27 @@ function reduceRoom(room, uid, op, args, now, rng) {
       if (!isHost) throw err('host_only', 'Only the host can end the room');
       pub.status = 'closed';
       pub.deadline = null;
-      pub.rev = (Number(pub.rev) || 0) + 1;
+      bump(room, now);
       return { room, result: { closed: true } };
     }
 
-    default:
+    default: {
+      if (game.lobbyOps && game.lobbyOps[op]) {
+        if (inRound && !game.betweenRounds(s, room)) throw err('phase', 'Only between games');
+        const result = game.lobbyOps[op](ctx) || {};
+        bump(room, now);
+        return { room, result };
+      }
+      if (game.ops && game.ops[op]) {
+        needRound();
+        if (pub.players[uid].pending) throw err('pending', 'You join next round');
+        const result = game.ops[op](ctx) || {};
+        settle(room, ctx);
+        publish(room, now);
+        return { room, result };
+      }
       throw err('bad_op', 'Unknown room action');
+    }
   }
 }
 
@@ -455,20 +750,13 @@ function hydrateRoom(room) {
   room.pub.players = room.pub.players || {};
   room.pub.scores = room.pub.scores || {};
   room.pub.seen = room.pub.seen || {};
+  room.pub.over = !!room.pub.over;
+  if (room.pub.teamPick === undefined && room.pub.game === 'charades') room.pub.teamPick = {};
   room.presence = room.presence || {};
   room.secrets = room.secrets || {};
-  if (room.server) {
-    const g = GAMES[room.pub.game];
-    room.server.usedKeys = room.server.usedKeys || [];
-    room.server.pub = g.core.hydrateState(room.server.pub);
-    const h = room.server.hidden || {};
-    h.imposters = h.imposters || [];
-    h.minority = h.minority || null;
-    if (h.majority) h.majority.alts = h.majority.alts || [];
-    room.server.hidden = h;
-  } else {
-    room.server = null;
-  }
+  const g = GAMES[room.pub.game];
+  if (room.server && g) g.hydrate(room.server);
+  else room.server = null;
   return room;
 }
 
@@ -476,7 +764,7 @@ function hydrateRoom(room) {
  * Entry point for the `party_room` action.
  * @param {import('firebase-admin')} adminApp
  * @param {string} uid
- * @param {object} body { op, game, code, name, settings, text, target, guess, chatId }
+ * @param {object} body { op, game, code, name, settings, ...op args }
  */
 async function partyRoom(adminApp, uid, body) {
   const b = body || {};
@@ -504,7 +792,7 @@ async function partyRoom(adminApp, uid, body) {
           },
           { allowEmpty: true }
         );
-        return { code, game, host: true };
+        return { code, game, host: true, serverNow: now };
       } catch (e) {
         if (e.code !== 'code_taken') throw e;
       }
@@ -517,7 +805,7 @@ async function partyRoom(adminApp, uid, body) {
   const result = await transactRoom(rtdb, `games/${game}/${code}`, (current) =>
     reduceRoom(current, uid, op, b, now, Math.random)
   );
-  return Object.assign({ code, game }, result);
+  return Object.assign({ code, game, serverNow: now }, result);
 }
 
 module.exports = {

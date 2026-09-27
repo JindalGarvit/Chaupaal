@@ -270,14 +270,8 @@
       </div>
     </div>`);
     body.querySelector('[data-mode="pass"]').addEventListener('click', () => renderPassSetup(shell));
-    body.querySelector('[data-mode="room"]').addEventListener('click', () => {
-      shell.close();
-      startRoomFlow({});
-    });
-    body.querySelector('[data-mode="join"]').addEventListener('click', () => {
-      shell.close();
-      openJoinByCode();
-    });
+    body.querySelector('[data-mode="room"]').addEventListener('click', () => Kit().closeThen(shell, () => startRoomFlow({})));
+    body.querySelector('[data-mode="join"]').addEventListener('click', () => Kit().closeThen(shell, openJoinByCode));
   }
 
   // ======================= PASS & PLAY =======================

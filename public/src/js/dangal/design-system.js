@@ -51,6 +51,10 @@
       '<rect x="5" y="6" width="9" height="5" rx="1" fill="currentColor"/><rect x="15.5" y="6" width="9" height="5" rx="1" fill="currentColor" opacity=".55"/><rect x="26" y="6" width="9" height="5" rx="1" fill="currentColor"/><rect x="5" y="13" width="9" height="5" rx="1" fill="currentColor" opacity=".55"/><rect x="15.5" y="13" width="9" height="5" rx="1" fill="currentColor"/><rect x="26" y="13" width="9" height="5" rx="1" fill="currentColor" opacity=".55"/><circle cx="20" cy="24" r="2.5" fill="currentColor"/><rect x="12" y="32" width="16" height="3.5" rx="1.5" fill="currentColor"/>',
     imposter:
       '<path fill="currentColor" d="M20 7c-7.5 0-13 4.6-13 11.2C7 26 13 33 20 33s13-7 13-14.8C33 11.6 27.5 7 20 7z" opacity=".22"/><path fill="none" stroke="currentColor" stroke-width="2.2" d="M20 7c-7.5 0-13 4.6-13 11.2C7 26 13 33 20 33s13-7 13-14.8C33 11.6 27.5 7 20 7z"/><path fill="currentColor" d="M11.5 17.5c2.2-1.6 5.3-1.4 6.8.6-1.3 2.6-5 3-6.8-.6zM28.5 17.5c-2.2-1.6-5.3-1.4-6.8.6 1.3 2.6 5 3 6.8-.6z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 26c3 1.6 7 1.6 10 0"/>',
+    rajamantri:
+      '<path fill="currentColor" d="M9 16l4 4 7-9 7 9 4-4-2 12H11z"/><rect x="11" y="29" width="18" height="3" rx="1" fill="currentColor" opacity=".6"/><rect x="6" y="6" width="7" height="9" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-12 9.5 10.5)"/><rect x="27" y="6" width="7" height="9" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(12 30.5 10.5)"/>',
+    charades:
+      '<circle cx="20" cy="9" r="4" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 13v11M20 24l-5 9M20 24l5 9M20 16l-8-5M20 16l8 3 3-6"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6 18c-1.5 2-1.5 4 0 6M34 23c1.5 2 1.5 4 0 6" opacity=".6"/>',
   };
 
   const GAME_IDENTITY = {
@@ -74,6 +78,8 @@
     tiptap: { primary: '#FF6D00', secondary: '#FFD600', surface: '#1A0800', label: 'Tip Tap', icon: '✨', mark: M.tiptap, orientation: 'portrait' },
     brickbreaker: { primary: '#5C6BC0', secondary: '#B39DFF', surface: '#0D0A18', label: 'Brick Breaker', icon: '🧱', mark: M.brickbreaker, orientation: 'landscape' },
     imposter: { primary: '#C2185B', secondary: '#FFC107', surface: '#1A0712', label: 'Imposter', icon: '🕵️', mark: M.imposter, orientation: 'portrait' },
+    rajamantri: { primary: '#B8860B', secondary: '#7B1E2B', surface: '#1A1004', label: 'Raja Mantri Chor Sipahi', icon: '👑', mark: M.rajamantri, orientation: 'portrait' },
+    charades: { primary: '#00897B', secondary: '#FF7043', surface: '#041A18', label: 'Dumb Charades', icon: '🎭', mark: M.charades, orientation: 'portrait' },
   };
 
   const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz'];

@@ -160,6 +160,20 @@
     return shell;
   }
 
+  /**
+   * Close a shell, then run `next` once it is really gone. A history-backed close lands on popstate
+   * later; opening the next layer before that would let the pop dismiss the new layer instead.
+   */
+  function closeThen(shell, next) {
+    shell.close();
+    const started = Date.now();
+    const wait = () => {
+      if (shell.closed || Date.now() - started > 700) next();
+      else setTimeout(wait, 16);
+    };
+    wait();
+  }
+
   // ---------------- bottom sheet ----------------
 
   /** Compact sheet on top of the shell. onMount(sheetEl, close). */
@@ -486,15 +500,19 @@
       e.code = (res && res.error && res.error.code) || 'ERROR';
       throw e;
     }
-    return res.data || {};
+    const data = res.data || {};
+    if (Number(data.serverNow)) callOffset = Number(data.serverNow) - Date.now();
+    return data;
   }
+
+  /** Server-minus-local clock estimate from the latest op response (fallback when .info is unavailable). */
+  let callOffset = null;
 
   const ROOM_ERROR_COPY = {
     ROOM_NOT_FOUND: 'That room doesn’t exist any more — check the code',
     ROOM_FULL: 'That room is full',
     ROOM_CLOSED: 'That room has closed',
     BAD_CODE: 'Room codes are 6 letters and numbers',
-    NEED_PLAYERS: 'Need at least 3 players to start',
     HOST_ONLY: 'Only the host can do that',
     NOT_MEMBER: 'You’re not in this room any more',
     RATE_LIMITED: 'Slow down a little — try again in a moment',
@@ -502,9 +520,13 @@
     AUTH_REQUIRED: 'Sign in to play with friends',
   };
 
+  /** Server messages that are already plain, specific copy ("Need at least 4 players"). */
+  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING'];
+
   function roomErrorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
     if (ROOM_ERROR_COPY[code]) return ROOM_ERROR_COPY[code];
+    if (PASSTHROUGH.indexOf(code) >= 0 && e.message) return e.message;
     if (/^CLUE_/.test(code)) return null;
     return typeof navigator !== 'undefined' && navigator.onLine === false
       ? 'You’re offline — reconnect to keep playing'
@@ -524,23 +546,54 @@
     if (!ref || !uid) return null;
     let pub = null;
     let offset = 0;
+    let infoOffset = null;
+    let pubOffset = null;
     let lastTick = 0;
     let stopped = false;
     const pubRef = ref.child('pub');
     const secretRef = ref.child('secrets/' + uid);
     const presenceRef = ref.child('presence');
     const myPresence = presenceRef.child(uid);
-
-    const onPub = (snap) => {
-      pub = snap.val();
-      if (pub && pub.serverNow) offset = pub.serverNow - Date.now();
-      handlers.onPub(pub);
+    // Cached data can fire listeners synchronously, before the caller has this connection object.
+    let ready = false;
+    const queued = [];
+    const later = (fn) => (arg) => {
+      if (stopped) return;
+      if (ready) fn(arg);
+      else queued.push(() => fn(arg));
     };
-    const onPubErr = () => handlers.onPub(null);
-    const onSecret = (snap) => handlers.onSecret(snap.val());
-    const onPresence = (snap) => handlers.onPresence && handlers.onPresence(snap.val() || {});
+
+    // pub.serverNow is stamped at the last write, so a cached snapshot can be stale; stale values only
+    // under-estimate the offset, so keep the largest. Firebase's own offset wins when available.
+    const syncOffset = () => {
+      if (infoOffset != null) offset = infoOffset;
+      else {
+        const known = [pubOffset, callOffset].filter((v) => v != null);
+        offset = known.length ? Math.max.apply(null, known) : 0;
+      }
+    };
+    const onPub = later((snap) => {
+      pub = snap.val();
+      if (pub && pub.serverNow) {
+        const o = pub.serverNow - Date.now();
+        if (pubOffset == null || o > pubOffset) pubOffset = o;
+      }
+      syncOffset();
+      handlers.onPub(pub);
+    });
+    const infoRef = rtdb.ref('.info/serverTimeOffset');
+    const onInfo = (snap) => {
+      const v = snap && snap.val();
+      if (typeof v === 'number' && isFinite(v)) offset = infoOffset = v;
+    };
+    try {
+      infoRef.on('value', onInfo, () => {});
+    } catch (e) {}
+    const onPubErr = later(() => handlers.onPub(null));
+    const onSecret = later((snap) => handlers.onSecret(snap.val()));
+    const onPresence = later((snap) => handlers.onPresence && handlers.onPresence(snap.val() || {}));
     pubRef.on('value', onPub, onPubErr);
-    secretRef.on('value', onSecret, () => handlers.onSecret(null));
+    secretRef.on('value', onSecret, later(() => handlers.onSecret(null)));
     presenceRef.on('value', onPresence, () => {});
 
     const beat = () => {
@@ -571,6 +624,10 @@
       if (document.visibilityState === 'visible') beat();
     };
     document.addEventListener('visibilitychange', onVis);
+    setTimeout(() => {
+      ready = true;
+      queued.splice(0).forEach((fn) => fn());
+    }, 0);
 
     return {
       code,
@@ -597,6 +654,9 @@
         pubRef.off('value', onPub);
         secretRef.off('value', onSecret);
         presenceRef.off('value', onPresence);
+        try {
+          infoRef.off('value', onInfo);
+        } catch (e) {}
         myPresence.set({ at: Date.now(), online: false }).catch(() => {});
         try {
           myPresence.onDisconnect().cancel();
@@ -721,6 +781,539 @@
     games[game] = spec || {};
   }
 
+  // ---------------- settings controls ----------------
+
+  /** Segmented control HTML. Pair with wireSegs(). */
+  function segHtml(name, value, options) {
+    return `<div class="pk-seg" role="radiogroup" data-seg="${esc(name)}">${options
+      .map(([v, label]) => {
+        const on = String(v) === String(value);
+        return `<button type="button" role="radio" aria-checked="${on}" class="pk-seg-btn${on ? ' is-on' : ''}" data-v="${esc(v)}">${esc(label)}</button>`;
+      })
+      .join('')}</div>`;
+  }
+
+  /** Wire every [data-seg] in root into `state` (numbers stay numbers). onChange(key, value). */
+  function wireSegs(root, state, onChange) {
+    root.querySelectorAll('[data-seg]').forEach((grp) => {
+      grp.querySelectorAll('.pk-seg-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          grp.querySelectorAll('.pk-seg-btn').forEach((b) => {
+            b.classList.toggle('is-on', b === btn);
+            b.setAttribute('aria-checked', String(b === btn));
+          });
+          const key = grp.dataset.seg;
+          const raw = btn.dataset.v;
+          const value = raw === 'true' ? true : raw === 'false' ? false : /^-?\d+$/.test(raw) ? Number(raw) : raw;
+          state[key] = value;
+          if (onChange) onChange(key, value);
+        });
+      });
+    });
+  }
+
+  // ---------------- feedback ----------------
+
+  /** Time-up buzzer + strong haptic (dangal-sound / dangal-haptic, Quiet mode respected). */
+  function buzz() {
+    try {
+      if (window.Sound) Sound.play('ui.lose');
+      if (window.Haptic) Haptic.heavy();
+      else haptic('error');
+    } catch (e) {}
+  }
+
+  /** Short success chime + light haptic. */
+  function ding() {
+    try {
+      if (window.Sound) Sound.play('ui.check');
+      if (window.Haptic) Haptic.medium();
+    } catch (e) {}
+  }
+
+  /** Hold-to-peek on a button: getHtml() is injected below it only while held. */
+  function mountHoldPeek(btn, getHtml, opts) {
+    if (!btn) return;
+    const cls = (opts && opts.className) || 'pk-peek-card';
+    let tip = null;
+    const show = (e) => {
+      if (e && e.cancelable) e.preventDefault();
+      if (tip) return;
+      tip = document.createElement('div');
+      tip.className = cls;
+      tip.innerHTML = getHtml();
+      btn.after(tip);
+    };
+    const hide = () => {
+      if (tip) tip.remove();
+      tip = null;
+    };
+    btn.addEventListener('pointerdown', show);
+    btn.addEventListener('pointerup', hide);
+    btn.addEventListener('pointerleave', hide);
+    btn.addEventListener('pointercancel', hide);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  /**
+   * Big animated announcement over the game (Raja reveal, turn start, time up). Tap or wait to dismiss.
+   * @param {{ icon?: string, title: string, sub?: string, quote?: string, ms?: number, host?: HTMLElement }} o
+   * @returns {Promise<void>}
+   */
+  function bigReveal(o) {
+    return new Promise((resolve) => {
+      const host = o.host || document.querySelector('.pk-shell') || document.body;
+      host.querySelector('.pk-reveal')?.remove();
+      const el = document.createElement('div');
+      el.className = 'pk-reveal';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'assertive');
+      el.innerHTML = `<div class="pk-reveal-inner">
+        ${o.icon ? `<div class="pk-reveal-icon" aria-hidden="true">${esc(o.icon)}</div>` : ''}
+        <div class="pk-reveal-title">${esc(o.title)}</div>
+        ${o.sub ? `<div class="pk-reveal-sub">${esc(o.sub)}</div>` : ''}
+        ${o.quote ? `<div class="pk-reveal-quote">“${esc(o.quote)}”</div>` : ''}
+      </div>`;
+      host.appendChild(el);
+      haptic('select');
+      let done = false;
+      const close = () => {
+        if (done) return;
+        done = true;
+        el.classList.add('is-out');
+        setTimeout(() => el.remove(), 220);
+        resolve();
+      };
+      el.addEventListener('click', close);
+      setTimeout(close, o.ms || 2000);
+    });
+  }
+
+  // ---------------- team editor (Pass & Play) ----------------
+
+  /**
+   * Two editable team columns. Blank names become "Player N"; duplicates get a suffix.
+   * @param {HTMLElement} root
+   * @param {{ teams: string[][], teamNames: string[], minPerTeam: number, max: number, onChange?: Function }} opts
+   */
+  function mountTeamEditor(root, opts) {
+    const o = opts || {};
+    const minPer = o.minPerTeam || 2;
+    const max = o.max || 16;
+    const teams = [(o.teams && o.teams[0]) || [], (o.teams && o.teams[1]) || []].map((t) => t.slice());
+    teams.forEach((t) => {
+      while (t.length < minPer) t.push('');
+    });
+    const total = () => teams[0].length + teams[1].length;
+    const paint = () => {
+      root.innerHTML = `<div class="pk-teams">${teams
+        .map(
+          (t, ti) => `<div class="pk-team pk-team--${ti}">
+            <div class="pk-team-name">${esc((o.teamNames || [])[ti] || (ti ? 'Team B' : 'Team A'))}</div>
+            ${t
+              .map(
+                (n, i) => `<div class="pk-player-row">
+                <input class="pk-player-input" data-pk-t="${ti}" data-pk-i="${i}" maxlength="20" value="${esc(n)}" placeholder="Player" autocomplete="off" aria-label="${ti ? 'Team B' : 'Team A'} player ${i + 1}">
+                ${t.length > minPer ? `<button type="button" class="pk-player-remove" data-pk-rm="${ti}:${i}" aria-label="Remove">✕</button>` : ''}
+              </div>`
+              )
+              .join('')}
+            ${total() < max ? `<button type="button" class="pk-add-player" data-pk-addt="${ti}">+ Add</button>` : ''}
+          </div>`
+        )
+        .join('')}</div>
+        <button type="button" class="pk-chip pk-teams-shuffle" data-pk-shuffle>🔀 Shuffle teams</button>`;
+      root.querySelectorAll('[data-pk-t]').forEach((inp) =>
+        inp.addEventListener('input', () => {
+          teams[Number(inp.dataset.pkT)][Number(inp.dataset.pkI)] = inp.value;
+          if (o.onChange) o.onChange();
+        })
+      );
+      root.querySelectorAll('[data-pk-rm]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          const [ti, i] = btn.dataset.pkRm.split(':').map(Number);
+          teams[ti].splice(i, 1);
+          paint();
+          if (o.onChange) o.onChange();
+        })
+      );
+      root.querySelectorAll('[data-pk-addt]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          const ti = Number(btn.dataset.pkAddt);
+          teams[ti].push('');
+          paint();
+          const inputs = root.querySelectorAll(`[data-pk-t="${ti}"]`);
+          inputs[inputs.length - 1]?.focus();
+          if (o.onChange) o.onChange();
+        })
+      );
+      root.querySelector('[data-pk-shuffle]').addEventListener('click', () => {
+        const all = teams[0].concat(teams[1]);
+        for (let i = all.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [all[i], all[j]] = [all[j], all[i]];
+        }
+        teams[0] = [];
+        teams[1] = [];
+        all.forEach((n, i) => teams[i % 2].push(n));
+        paint();
+        if (o.onChange) o.onChange();
+      });
+    };
+    const list = () => {
+      const seen = {};
+      let n = 0;
+      return teams.map((t) =>
+        t.map((name) => {
+          n += 1;
+          let v = String(name || '').trim().slice(0, 20) || 'Player ' + n;
+          const k = v.toLowerCase();
+          if (seen[k]) v = v + ' ' + (seen[k] + 1);
+          seen[k] = (seen[k] || 0) + 1;
+          return v;
+        })
+      );
+    };
+    paint();
+    return { list, count: total, sizes: () => [teams[0].length, teams[1].length] };
+  }
+
+  // ---------------- Room screen (shared by party titles) ----------------
+
+  function requireSignIn() {
+    if (isSignedIn()) return true;
+    toast('Sign in to play on separate phones — Pass & Play works signed out');
+    if (typeof openAuthSheet === 'function') openAuthSheet('login');
+    return false;
+  }
+
+  /** Create a room (posting a join card into `chat` when started from a group) then open it. */
+  async function createRoom(o) {
+    if (!requireSignIn()) return;
+    if (navigator.onLine === false) {
+      toast('You’re offline — Pass & Play works without internet');
+      return;
+    }
+    try {
+      const chatId = o.chat ? o.chat.firestoreId || o.chat.id : '';
+      const res = await roomCall(o.game, 'create', {
+        name: myName() || 'Host',
+        settings: o.settings || {},
+        chatId: chatId && chatId !== 'ai' ? chatId : '',
+      });
+      if (o.chat && chatId && chatId !== 'ai') {
+        if (await postInviteToChat(o.chat, o.game, res.code, o.label)) toast('Invite posted in the chat');
+      }
+      o.open(res.code, { host: true });
+    } catch (e) {
+      toast(roomErrorText(e) || 'Couldn’t create a room');
+    }
+  }
+
+  function openJoinSheet(onCode) {
+    if (!requireSignIn()) return;
+    openSheet({
+      title: 'Join a room',
+      bodyHtml: `<input class="pk-input pk-input--code" data-code maxlength="6" placeholder="ROOM CODE" autocapitalize="characters" autocomplete="off" enterkeyhint="go" aria-label="Room code">
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-join>Join</button>`,
+      onMount(sheet, close) {
+        const input = sheet.querySelector('[data-code]');
+        setTimeout(() => input.focus(), 50);
+        const go = () => {
+          const code = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (code.length !== 6) return toast('Room codes are 6 letters and numbers');
+          close();
+          onCode(code);
+        };
+        input.addEventListener('input', () => (input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '')));
+        input.addEventListener('keydown', (e) => e.key === 'Enter' && go());
+        sheet.querySelector('[data-join]').addEventListener('click', go);
+      },
+    });
+  }
+
+  /**
+   * Full room screen: join, live pub/secret/presence, lobby, pending, closed/left states, host pause,
+   * server-driven timer, keep-typing across re-renders. The game only renders its round phases.
+   * @param {{
+   *   game: string, label: string, code: string, join?: boolean, min: number, max: number,
+   *   hydrate: (state: object) => object,
+   *   lobbySummary: (ctrl) => string, openSettings?: (ctrl) => void,
+   *   lobbyListHtml?: (ctrl, players) => string, onLobbyMount?: (ctrl, body) => void,
+   *   canStart?: (ctrl, players) => { ok: boolean, label: string },
+   *   renderPhase: (ctrl, st) => void, onState?: (ctrl, st, prev) => void,
+   * }} spec
+   */
+  async function openRoomScreen(spec) {
+    if (!requireSignIn()) return null;
+    const code = spec.code;
+    if (spec.join) {
+      try {
+        const res = await roomCall(spec.game, 'join', { code, name: myName() || 'Player' });
+        if (res.pending) toast('Round in progress — you’ll be dealt in next round');
+      } catch (e) {
+        toast(roomErrorText(e) || 'Couldn’t join that room');
+        return null;
+      }
+    }
+    const view = { code, pub: null, secret: null, presence: {}, key: '', busy: false, prevState: null };
+    const ctrl = { spec, view, conn: null, shell: null };
+    ctrl.uid = myUid();
+    ctrl.name = (id) => {
+      const p = view.pub && view.pub.players && view.pub.players[id];
+      return p ? p.name : 'Player';
+    };
+    ctrl.players = () => {
+      const players = (view.pub && view.pub.players) || {};
+      return Object.keys(players)
+        .sort((a, b) => (players[a].seat || 0) - (players[b].seat || 0))
+        .map((id) => Object.assign({ id }, players[id]))
+        .filter((p) => !p.left);
+    };
+    ctrl.isHost = () => !!(view.pub && view.pub.host === ctrl.uid);
+    ctrl.act = async (op, args, errEl) => {
+      if (view.busy) return null;
+      view.busy = true;
+      try {
+        const out = await ctrl.conn.op(op, args);
+        if (errEl) errEl.textContent = '';
+        return out || {};
+      } catch (e) {
+        const msg = spec.errorText ? spec.errorText(e) : roomErrorText(e);
+        if (errEl) errEl.textContent = msg || '';
+        else if (msg) toast(msg);
+        return null;
+      } finally {
+        view.busy = false;
+      }
+    };
+    ctrl.leave = async () => {
+      await ctrl.act('leave');
+      ctrl.shell.close();
+    };
+    ctrl.hostBar = (timed) => {
+      if (!ctrl.isHost() || !timed) return '';
+      return `<div class="pk-hostbar"><span>Host</span>${
+        view.pub.paused
+          ? '<button type="button" class="pk-chip" data-host="resume">Resume</button>'
+          : '<button type="button" class="pk-chip" data-host="pause">Pause</button>'
+      }</div>`;
+    };
+    ctrl.pausedNote = () => (view.pub && view.pub.paused ? '<div class="pk-paused">Paused by the host</div>' : '');
+    ctrl.wire = (body) => {
+      body.querySelectorAll('[data-host]').forEach((btn) => btn.addEventListener('click', () => ctrl.act(btn.dataset.host)));
+      const el = body.querySelector('[data-timer]');
+      if (el) {
+        if (!view.pub.deadline && !view.pub.paused) el.hidden = true;
+        else
+          ctrl.timer = countdown(el, {
+            getEndsAt: () => ctrl.conn.localDeadline(),
+            getPausedMs: () => (view.pub && view.pub.paused ? Number(view.pub.paused.remaining) || 0 : null),
+            onDone: spec.onTimerDone ? () => spec.onTimerDone(ctrl) : null,
+          });
+      }
+    };
+    ctrl.render = (html) => ctrl.shell.render(html);
+
+    ctrl.shell = openShell({
+      gameId: spec.game,
+      title: spec.label,
+      subtitle: 'Room ' + code,
+      confirmLeave: () => !!(view.pub && view.pub.status === 'playing'),
+      leaveBody: 'You can rejoin from the invite link while the room is open.',
+      onClose: () => ctrl.conn && ctrl.conn.stop(),
+    });
+    ctrl.conn = connectRoom(spec.game, code, {
+      onPub: (pub) => {
+        view.pub = pub;
+        paint();
+      },
+      onSecret: (secret) => {
+        view.secret = secret;
+        paint();
+      },
+      onPresence: (p) => {
+        view.presence = p;
+        paintPresence();
+      },
+    });
+    if (!ctrl.conn) {
+      ctrl.shell.render('<div class="pk-empty">Can’t reach the game server right now. Try again in a moment.</div>');
+      return ctrl;
+    }
+    ctrl.shell.render('<div class="pk-empty">Joining room…</div>');
+
+    function paintPresence() {
+      ctrl.shell.el.querySelectorAll('[data-presence]').forEach((dot) => {
+        dot.classList.toggle('is-online', isOnline(view.presence, dot.dataset.presence));
+      });
+    }
+
+    function message(text, label) {
+      ctrl.shell
+        .render(`<div class="pk-empty">${esc(text)}<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>${esc(label)}</button></div>`)
+        ?.querySelector('[data-close]')
+        ?.addEventListener('click', () => ctrl.shell.close());
+    }
+
+    function paint() {
+      if (ctrl.shell.closed) return;
+      const pub = view.pub;
+      if (!pub) return message('This room isn’t available any more.', 'Back to games');
+      if (pub.status === 'closed') return message('The host closed this room.', 'Done');
+      if (!pub.players || !pub.players[ctrl.uid] || pub.players[ctrl.uid].left) return message('You’re no longer in this room.', 'Done');
+      const st = pub.status === 'playing' && pub.state ? spec.hydrate(pub.state) : null;
+      const key = JSON.stringify([
+        pub.status, pub.roundNo, pub.host, !!pub.paused, pub.over, pub.players, pub.scores, pub.seen,
+        pub.settings, pub.teamPick || null, pub.state || null, view.secret,
+      ]);
+      if (key === view.key) return;
+      view.key = key;
+      if (spec.onState && st) spec.onState(ctrl, st, view.prevState);
+      view.prevState = st ? JSON.parse(JSON.stringify(st)) : null;
+      // A private reveal (my card on screen) stays put while other players' progress ticks by.
+      const hold = st && !pub.players[ctrl.uid].pending && spec.holdKey ? spec.holdKey(ctrl, st) : null;
+      if (hold && hold === view.holdKey) return;
+      view.holdKey = hold;
+      if (ctrl.timer) ctrl.timer.stop();
+      ctrl.timer = null;
+      const typing = ctrl.shell.el.querySelector('[data-keep]');
+      const kept = typing ? { name: typing.dataset.keep, value: typing.value, focus: document.activeElement === typing } : null;
+      if (pub.status === 'lobby' || !st) renderLobby();
+      else if (pub.players[ctrl.uid].pending) renderPending();
+      else {
+        ctrl.shell.setSubtitle('Room ' + code);
+        spec.renderPhase(ctrl, st);
+      }
+      if (kept) {
+        const again = ctrl.shell.el.querySelector('[data-keep="' + kept.name + '"]');
+        if (again) {
+          again.value = kept.value;
+          if (kept.focus) again.focus();
+        }
+      }
+      paintPresence();
+    }
+
+    function renderLobby() {
+      const pub = view.pub;
+      const isHost = ctrl.isHost();
+      const players = ctrl.players();
+      const start = spec.canStart
+        ? spec.canStart(ctrl, players)
+        : players.length < spec.min
+          ? { ok: false, label: 'Need ' + (spec.min - players.length) + ' more to start' }
+          : { ok: true, label: 'Start' };
+      const list =
+        (spec.lobbyListHtml && spec.lobbyListHtml(ctrl, players)) ||
+        `<div class="pk-lobby-list">${players
+          .map(
+            (p) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${
+              p.id === pub.host ? '<span class="pk-badge">Host</span>' : ''
+            }${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''}</div>`
+          )
+          .join('')}</div>`;
+      const body = ctrl.shell.render(`<div class="pk-page pk-lobby">
+        <div class="pk-code-label">Room code</div>
+        <div class="pk-code" aria-label="Room code ${esc(code)}">${esc(code)}</div>
+        <div class="pk-row">
+          <button type="button" class="pk-btn pk-btn--ghost" data-share>Share link</button>
+          <button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite friends</button>
+        </div>
+        <div class="pk-section">In the room · ${players.length}/${spec.max}</div>
+        ${list}
+        <button type="button" class="pk-row-btn" data-settings ${isHost && spec.openSettings ? '' : 'disabled'}>
+          ${esc(spec.lobbySummary(ctrl))}${isHost && spec.openSettings ? '<span class="pk-chev" aria-hidden="true">›</span>' : ''}
+        </button>
+        ${
+          isHost
+            ? `<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start ${start.ok ? '' : 'disabled'}>${esc(start.label)}</button>`
+            : '<div class="pk-wait">Waiting for the host to start…</div>'
+        }
+        <button type="button" class="pk-link" data-leave>Leave room</button>
+      </div>`);
+      body.querySelector('[data-share]').addEventListener('click', () => shareRoom(spec.game, code, spec.label));
+      body.querySelector('[data-invite]').addEventListener('click', () => inviteFriends(spec.game, code, spec.label));
+      body.querySelector('[data-leave]').addEventListener('click', ctrl.leave);
+      if (isHost && spec.openSettings) body.querySelector('[data-settings]').addEventListener('click', () => spec.openSettings(ctrl));
+      body.querySelector('[data-start]')?.addEventListener('click', () => ctrl.act('start'));
+      if (spec.onLobbyMount) spec.onLobbyMount(ctrl, body);
+    }
+
+    function renderPending() {
+      const body = ctrl.shell.render(`<div class="pk-page pk-empty">
+        <div class="pk-title">Round in progress</div>
+        <div class="pk-sub">You’ll be dealt in when the next round starts.</div>
+        <button type="button" class="pk-link" data-leave>Leave room</button>
+      </div>`);
+      body.querySelector('[data-leave]').addEventListener('click', ctrl.leave);
+    }
+
+    return ctrl;
+  }
+
+  /** Shared result actions row for room games (host deals / ends, others invite / leave). */
+  function roomResultActions(ctrl, o) {
+    const isHost = ctrl.isHost();
+    return `<div class="pk-result-actions">
+      ${
+        isHost
+          ? `<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${esc(o.nextLabel || 'Next round')}</button>`
+          : `<div class="pk-wait">${esc(o.waitLabel || 'Waiting for the host…')}</div>`
+      }
+      <div class="pk-row">
+        <button type="button" class="pk-btn pk-btn--ghost" data-share-result>Share</button>
+        ${isHost && ctrl.spec.openSettings ? '<button type="button" class="pk-btn pk-btn--ghost" data-room-settings>Settings</button>' : '<button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite</button>'}
+      </div>
+      <button type="button" class="pk-link" data-end>${isHost ? 'End room' : 'Leave room'}</button>
+    </div>`;
+  }
+
+  function wireRoomResultActions(ctrl, body, o) {
+    body.querySelector('[data-next]')?.addEventListener('click', () => ctrl.act(o.nextOp || 'next'));
+    body.querySelector('[data-share-result]')?.addEventListener('click', () => o.onShare && o.onShare());
+    body.querySelector('[data-room-settings]')?.addEventListener('click', () => ctrl.spec.openSettings(ctrl));
+    body.querySelector('[data-invite]')?.addEventListener('click', () => inviteFriends(ctrl.spec.game, ctrl.view.code, ctrl.spec.label));
+    body.querySelector('[data-end]')?.addEventListener('click', async () => {
+      await ctrl.act(ctrl.isHost() ? 'end' : 'leave');
+      ctrl.shell.close();
+    });
+  }
+
+  /** Unified share sheet for a party result line. */
+  function shareLine(gameId, label, line) {
+    const text = line + ' — play ' + label + ' on Chaupaal';
+    const url = location.origin + '/';
+    const stats =
+      typeof buildShareStats === 'function'
+        ? buildShareStats({ scoreLine: line, meta: label + ' · party game', text, url, caption: line })
+        : { scoreLine: line, meta: label, text, url };
+    if (typeof openUnifiedShareSheet === 'function') openUnifiedShareSheet({ gameId, title: 'Share', subtitle: line, stats });
+    else if (typeof shareGameResult === 'function') shareGameResult(gameId, stats);
+    else if (navigator.share) navigator.share({ title: label, text, url }).catch(() => {});
+  }
+
+  /** Game home: hero, 20-second how-to, Pass & Play (primary) / Play with friends / Join by code. */
+  function homeHtml(o) {
+    return `<div class="pk-page pk-home">
+      <div class="pk-hero">
+        <div class="pk-hero-mark">${typeof gameMarkHtml === 'function' ? gameMarkHtml(o.game, { size: 64 }) : esc(o.icon || '🎉')}</div>
+        <div class="pk-hero-title">${esc(o.title)}</div>
+        <div class="pk-hero-sub">${esc(o.sub)}</div>
+      </div>
+      ${o.howToHtml || ''}
+      <div class="pk-modes">
+        <button type="button" class="pk-mode pk-mode--primary" data-mode="pass">
+          <span class="pk-mode-title">Pass &amp; Play</span><span class="pk-mode-sub">${esc(o.passSub || 'One phone, pass it around')}</span>
+        </button>
+        <button type="button" class="pk-mode" data-mode="room">
+          <span class="pk-mode-title">Play with friends</span><span class="pk-mode-sub">${esc(o.roomSub || 'Everyone on their own phone')}</span>
+        </button>
+        <button type="button" class="pk-link" data-mode="join">Have a room code? Join</button>
+      </div>
+    </div>`;
+  }
+
   window.PartyKit = {
     esc,
     myUid,
@@ -728,6 +1321,7 @@
     isSignedIn,
     wakeLock,
     openShell,
+    closeThen,
     openSheet,
     mountPlayerEditor,
     mountPassCover,
@@ -745,5 +1339,20 @@
     inviteCardHtml,
     joinFromLink,
     registerPartyGame,
+    segHtml,
+    wireSegs,
+    buzz,
+    ding,
+    mountHoldPeek,
+    bigReveal,
+    mountTeamEditor,
+    requireSignIn,
+    createRoom,
+    openJoinSheet,
+    openRoomScreen,
+    roomResultActions,
+    wireRoomResultActions,
+    shareLine,
+    homeHtml,
   };
 })();

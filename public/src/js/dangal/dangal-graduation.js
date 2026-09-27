@@ -34,6 +34,8 @@
 
     // Party kit (G1+) — Pass & Play on one phone or a Room across phones; points only, never chips
     imposter: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
+    rajamantri: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
+    charades: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
 
     // Classics + court — Live 1v1 state sync (snapshot / score events)
     carrom: { grade: 'live', sync: 'live1v1', stakes: true },
@@ -82,6 +84,8 @@
     { id: 'patangbaazi', genre: 'arcade' },
     // Party kit titles (G1+) — Pass & Play on one phone or a Room across phones.
     { id: 'imposter', genre: 'party', partyKit: true },
+    { id: 'rajamantri', genre: 'party', partyKit: true },
+    { id: 'charades', genre: 'party', partyKit: true },
   ];
   const ROSTER_IDS = ROSTER.map((r) => r.id);
   /** Aliases that resolve to a roster id (kept in sync with GAME_ID_ALIASES). */

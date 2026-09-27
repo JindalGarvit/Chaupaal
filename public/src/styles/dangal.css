@@ -764,6 +764,150 @@
 .im-badge+.im-badge--me{margin-left:6px;}
 .im-empty{max-width:360px;margin:40px auto;text-align:center;color:rgba(255,255,255,.8);font-size:15px;line-height:1.5;}
 
+/* ── Party kit pages (G2) — shared home / lobby / room chrome for kit titles ─ */
+.pk-page{max-width:420px;margin:0 auto;}
+.pk-hero{text-align:center;padding:10px 0 16px;}
+.pk-hero-mark{display:flex;justify-content:center;margin-bottom:10px;color:var(--pk-accent);}
+.pk-hero-title{font:700 26px var(--font-display,'Space Grotesk',sans-serif);}
+.pk-hero-sub{font-size:13px;color:rgba(255,255,255,.62);margin-top:4px;}
+.pk-howto{background:var(--pk-card);border:1px solid var(--pk-line);border-radius:16px;padding:10px 14px;margin-bottom:16px;}
+.pk-howto summary{font:700 14px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.pk-howto ol{margin:10px 0 6px;padding-left:18px;font-size:13px;line-height:1.5;color:rgba(255,255,255,.85);}
+.pk-howto-score{font:700 12px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.6);margin:10px 0 6px;}
+.pk-modes{display:flex;flex-direction:column;gap:10px;}
+.pk-mode{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:16px 18px;border-radius:18px;border:1px solid var(--pk-line);background:var(--pk-card);color:#fff;text-align:left;cursor:pointer;}
+.pk-mode--primary{background:var(--pk-accent);border-color:transparent;}
+.pk-mode-title{font:700 17px var(--font-display,'Space Grotesk',sans-serif);}
+.pk-mode-sub{font-size:13px;opacity:.8;}
+.pk-link{display:block;width:100%;min-height:44px;margin-top:6px;border:none;background:none;color:rgba(255,255,255,.7);font:600 14px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
+.pk-setup-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.pk-title{font:700 22px var(--font-display,'Space Grotesk',sans-serif);text-align:center;word-break:break-word;}
+.pk-setup-head .pk-title{text-align:left;}
+.pk-sub{font-size:14px;color:rgba(255,255,255,.75);text-align:center;line-height:1.45;margin:4px 0 8px;}
+.pk-meta{font-size:12px;color:rgba(255,255,255,.55);margin-top:10px;text-align:center;}
+.pk-progress{font:600 12px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.55);text-align:center;margin-bottom:8px;}
+.pk-section{font:700 12px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.55);margin:18px 0 8px;}
+.pk-row{display:flex;gap:10px;margin-top:12px;}
+.pk-row .pk-btn{flex:1;}
+.pk-row-btn{display:flex;align-items:center;gap:8px;width:100%;min-height:48px;margin-top:14px;padding:0 14px;border-radius:14px;border:1px solid var(--pk-line);background:var(--pk-card);color:#fff;font-size:13px;cursor:pointer;text-align:left;}
+.pk-row-btn:disabled{cursor:default;opacity:.8;}
+.pk-chev{margin-left:auto;opacity:.6;font-size:18px;}
+.pk-code-label{text-align:center;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55);}
+.pk-code{text-align:center;font:700 40px var(--font-display,'Space Grotesk',sans-serif);letter-spacing:.18em;margin:4px 0 8px;}
+.pk-lobby-list{display:flex;flex-direction:column;gap:6px;}
+.pk-lobby-row{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:12px;border:none;background:var(--pk-card);color:#fff;font-size:14px;text-align:left;box-sizing:border-box;}
+button.pk-lobby-row{cursor:pointer;}
+.pk-dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.25);flex-shrink:0;}
+.pk-dot.is-online{background:#66BB6A;}
+.pk-badge{margin-left:auto;padding:2px 8px;border-radius:999px;background:rgba(255,193,7,.18);color:#FFE082;font:700 10px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;}
+.pk-badge--me{margin-left:6px;background:rgba(255,255,255,.12);color:#fff;}
+.pk-lobby-row>span:nth-child(2){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pk-wait{text-align:center;font-size:14px;color:rgba(255,255,255,.62);margin:16px 0;}
+.pk-empty{max-width:360px;margin:40px auto;text-align:center;color:rgba(255,255,255,.8);font-size:15px;line-height:1.5;}
+.pk-hostbar{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.5);}
+.pk-paused{text-align:center;font:700 13px var(--font-display,'Space Grotesk',sans-serif);color:#FFC107;margin:4px 0;}
+.pk-error{min-height:18px;font-size:13px;color:#FFAB91;text-align:center;margin-top:6px;}
+.pk-result-actions{max-width:420px;margin:6px auto 0;}
+.pk-result-glyph{font-size:52px;text-align:center;}
+.pk-result-title{font:700 24px var(--font-display,'Space Grotesk',sans-serif);margin:4px 0;text-align:center;}
+.pk-peek{display:block;width:100%;min-height:44px;margin-top:14px;border-radius:12px;border:1px dashed var(--pk-line);background:transparent;color:rgba(255,255,255,.7);font-size:13px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer;}
+.pk-peek.is-nudge{border-color:#FFC107;color:#FFE082;animation:pk-nudge 1.2s ease-in-out 3;}
+@keyframes pk-nudge{50%{transform:scale(1.03);}}
+.pk-peek-card{margin-top:10px;padding:18px;border-radius:18px;background:linear-gradient(160deg,color-mix(in srgb,var(--pk-accent) 40%,transparent),rgba(255,255,255,.06));}
+.pk-reveal{position:absolute;inset:0;z-index:320;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.72);animation:pk-reveal-in 260ms ease-out both;cursor:pointer;}
+.pk-reveal.is-out{animation:pk-reveal-out 200ms ease-in both;}
+.pk-reveal-inner{text-align:center;animation:pk-reveal-pop 420ms cubic-bezier(.2,1.4,.4,1) both;}
+.pk-reveal-icon{font-size:88px;line-height:1;margin-bottom:12px;filter:drop-shadow(0 6px 18px rgba(0,0,0,.4));}
+.pk-reveal-title{font:700 32px var(--font-display,'Space Grotesk',sans-serif);color:#fff;word-break:break-word;}
+.pk-reveal-sub{font-size:16px;color:rgba(255,255,255,.8);margin-top:6px;}
+.pk-reveal-quote{font:italic 600 18px var(--font-display,'Space Grotesk',sans-serif);color:#FFE082;margin-top:14px;}
+@keyframes pk-reveal-in{from{opacity:0;}to{opacity:1;}}
+@keyframes pk-reveal-out{to{opacity:0;}}
+@keyframes pk-reveal-pop{from{transform:scale(.6);opacity:0;}to{transform:scale(1);opacity:1;}}
+@media (prefers-reduced-motion:reduce){.pk-reveal,.pk-reveal.is-out,.pk-reveal-inner,.pk-peek.is-nudge{animation:none;}}
+.pk-teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.pk-team{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:16px;background:var(--pk-card);border-top:3px solid #4DB6AC;min-width:0;}
+.pk-team--1{border-top-color:#FF8A65;}
+.pk-team-name{font:700 13px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
+.pk-team .pk-player-row{gap:4px;}
+.pk-team .pk-player-input{min-height:40px;padding:0 8px;font-size:15px;}
+.pk-team .pk-player-remove{width:28px;}
+.pk-team .pk-add-player{margin-top:2px;min-height:38px;}
+.pk-team .pk-lobby-row{padding:9px 8px;font-size:13px;}
+.pk-teams-shuffle{display:block;margin:12px auto 0;}
+
+/* ── Raja Mantri Chor Sipahi ─────────────────────────────────────────────── */
+.rm-roles{display:flex;flex-direction:column;gap:4px;margin:8px 0;}
+.rm-roles-row{display:grid;grid-template-columns:22px 1fr auto auto;gap:8px;align-items:center;font-size:12px;color:rgba(255,255,255,.85);}
+.rm-roles-pts{font:700 12px var(--font-display,'Space Grotesk',sans-serif);}
+.rm-roles-from{font-size:11px;color:rgba(255,255,255,.5);min-width:52px;text-align:right;}
+.rm-chit{text-align:center;padding:6px 0;}
+.rm-chit--empty{color:rgba(255,255,255,.6);}
+.rm-chit-icon{font-size:56px;line-height:1.1;}
+.rm-chit-role{font:700 26px var(--font-display,'Space Grotesk',sans-serif);margin:8px 0 4px;word-break:break-word;}
+.rm-chit-pts{display:inline-block;padding:4px 12px;border-radius:999px;background:rgba(255,215,0,.18);color:#FFE082;font:700 14px var(--font-display,'Space Grotesk',sans-serif);}
+.rm-chit--thief .rm-chit-pts{background:rgba(255,82,82,.18);color:#FFAB91;}
+.rm-chit-tip{font-size:13px;color:rgba(255,255,255,.72);margin-top:10px;line-height:1.4;}
+.rm-table{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin:12px 0;}
+.rm-seat{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:14px;background:var(--pk-card);border:1px solid var(--pk-line);text-align:center;}
+.rm-seat.is-open{background:rgba(184,134,11,.22);border-color:rgba(255,215,0,.35);}
+.rm-seat.is-thief{background:rgba(123,30,43,.45);border-color:rgba(255,82,82,.4);}
+.rm-seat-icon{font-size:24px;}
+.rm-seat-name{font-size:13px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rm-seat-role{font-size:11px;color:rgba(255,255,255,.65);}
+.rm-stage{text-align:center;}
+.rm-quote{font:italic 600 20px var(--font-display,'Space Grotesk',sans-serif);color:#FFE082;text-align:center;margin:16px 0;line-height:1.35;}
+.rm-big-btn{display:block;width:100%;min-height:76px;margin-top:16px;border:none;border-radius:20px;background:linear-gradient(135deg,#B8860B,#7B1E2B);color:#fff;font:700 20px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;box-shadow:0 8px 24px rgba(184,134,11,.3);}
+.rm-big-btn:active{transform:scale(.98);}
+.rm-pick{font-size:13px;padding:8px 12px;border-radius:12px;margin:6px 0;text-align:left;}
+.rm-pick.is-right{background:rgba(102,187,106,.18);}
+.rm-pick.is-wrong{background:rgba(255,82,82,.16);}
+.rm-result,.rm-final{text-align:center;}
+.rm-chits{display:flex;flex-direction:column;gap:6px;margin:12px 0;}
+.rm-chit-row{display:grid;grid-template-columns:28px 1fr auto auto;gap:8px;align-items:center;padding:9px 12px;border-radius:12px;background:var(--pk-card);text-align:left;}
+.rm-chit-row.is-thief{background:rgba(123,30,43,.35);}
+.rm-chit-row-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rm-chit-row-role{font-size:12px;color:rgba(255,255,255,.65);}
+.rm-chit-row-pts{font:700 15px var(--font-display,'Space Grotesk',sans-serif);min-width:44px;text-align:right;}
+.rm-chit-row-pts em{display:block;font-style:normal;font-size:11px;color:#FFAB91;}
+
+/* ── Dumb Charades ───────────────────────────────────────────────────────── */
+.ch-card{text-align:center;}
+.ch-card--empty{color:rgba(255,255,255,.6);}
+.ch-card-kind{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.7);}
+.ch-card-title{font:700 30px var(--font-display,'Space Grotesk',sans-serif);margin:12px 0 4px;word-break:break-word;line-height:1.15;}
+.ch-card-alt{font-size:16px;color:rgba(255,255,255,.7);}
+.ch-card-diff{display:inline-block;margin:10px 0 6px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.12);font:700 11px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.05em;}
+.ch-card-diff--easy{background:rgba(102,187,106,.22);color:#A5D6A7;}
+.ch-card-diff--hard{background:rgba(255,112,67,.22);color:#FFAB91;}
+.ch-card-tip{font-size:13px;color:rgba(255,255,255,.72);}
+.ch-scores{display:flex;gap:8px;margin-bottom:10px;}
+.ch-score{flex:1;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:12px;background:var(--pk-card);border-bottom:3px solid #4DB6AC;opacity:.75;}
+.ch-score--1{border-bottom-color:#FF8A65;}
+.ch-score.is-active{opacity:1;background:rgba(255,255,255,.12);}
+.ch-score-name{font:600 13px var(--font-display,'Space Grotesk',sans-serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ch-score-pts{font:700 20px var(--font-display,'Space Grotesk',sans-serif);}
+.ch-timer{font-size:84px;margin:8px 0 10px;line-height:1;}
+.ch-counter{text-align:center;font:700 14px var(--font-display,'Space Grotesk',sans-serif);color:#FFE082;margin-bottom:6px;}
+.ch-notice{text-align:center;font-size:13px;font-weight:600;color:#FFE082;margin:4px 0;}
+.ch-got{display:block;width:100%;min-height:96px;border:none;border-radius:24px;background:linear-gradient(135deg,#00897B,#26A69A);color:#fff;font:700 28px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;box-shadow:0 10px 28px rgba(0,137,123,.35);}
+.ch-got:active{transform:scale(.98);}
+.ch-peek{text-align:center;}
+.ch-gestures{display:flex;flex-direction:column;gap:6px;margin:6px 0 12px;}
+.ch-gesture{display:grid;grid-template-columns:26px auto 1fr;gap:8px;align-items:baseline;font-size:13px;line-height:1.35;}
+.ch-gesture span:last-child{opacity:.75;}
+.pk-sheet .ch-gesture span:last-child{color:var(--muted,#666);opacity:1;}
+.ch-titles{display:flex;flex-direction:column;gap:6px;margin:12px 0;}
+.ch-title-row{padding:8px 12px;border-radius:12px;background:var(--pk-card);font-size:14px;text-align:left;}
+.ch-title-row em{font-style:normal;font-size:12px;opacity:.7;}
+.ch-title-row.is-got{background:rgba(102,187,106,.18);}
+.ch-title-row.is-passed{opacity:.6;}
+.ch-title-row.is-missed{background:rgba(255,112,67,.16);}
+.ch-summary{text-align:center;}
+.ch-final{text-align:center;}
+.ch-final-score{font:700 44px var(--font-display,'Space Grotesk',sans-serif);margin:4px 0;}
+.ch-mvp{font-size:15px;margin:6px 0 14px;}
+
 /* Baithak chat card for a party room invite */
 .party-invite-card{display:flex;flex-direction:column;gap:8px;min-width:220px;}
 .party-invite-head{display:flex;align-items:center;gap:10px;}

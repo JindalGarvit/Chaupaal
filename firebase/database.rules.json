@@ -115,6 +115,44 @@
           }
         }
       },
+      "rajamantri": {
+        "$code": {
+          "pub": {
+            ".read": "auth != null && data.child('players').child(auth.uid).exists()"
+          },
+          "presence": {
+            ".read": "auth != null && root.child('games/rajamantri/' + $code + '/pub/players/' + auth.uid).exists()",
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid && root.child('games/rajamantri/' + $code + '/pub/players/' + auth.uid).exists()",
+              ".validate": "newData.hasChildren(['at']) || !newData.exists()"
+            }
+          },
+          "secrets": {
+            "$uid": {
+              ".read": "auth != null && auth.uid == $uid"
+            }
+          }
+        }
+      },
+      "charades": {
+        "$code": {
+          "pub": {
+            ".read": "auth != null && data.child('players').child(auth.uid).exists()"
+          },
+          "presence": {
+            ".read": "auth != null && root.child('games/charades/' + $code + '/pub/players/' + auth.uid).exists()",
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid && root.child('games/charades/' + $code + '/pub/players/' + auth.uid).exists()",
+              ".validate": "newData.hasChildren(['at']) || !newData.exists()"
+            }
+          },
+          "secrets": {
+            "$uid": {
+              ".read": "auth != null && auth.uid == $uid"
+            }
+          }
+        }
+      },
       "$gameType": {
         "$gameId": {
           ".read": "auth != null && (data.child('players').child(auth.uid).exists() || data.child('playerA').val() == auth.uid || data.child('playerB').val() == auth.uid || !data.exists())",
