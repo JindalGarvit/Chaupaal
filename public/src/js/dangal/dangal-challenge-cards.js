@@ -13,14 +13,10 @@
 
   function formatMode(mode) {
     const labels = {
-      '8ball': '8-Ball',
-      '9ball': '9-Ball',
-      snooker: 'Snooker',
       singles: 'Singles',
       doubles: 'Doubles',
       standard: 'Standard',
       fischer_random: 'Fischer Random',
-      renju: 'Renju',
       classic: 'Classic',
       quick: 'Quick',
       blaze: 'Blaze',
@@ -86,8 +82,9 @@
   function renderChallengeCard(message, myUid) {
     const att = message.attachment || message;
     const isReceiver = att.toUid === myUid;
+    const retired = typeof isRetiredGameId === 'function' && isRetiredGameId(att.gameType);
     const expired = Date.now() > Number(att.expiresAt || 0);
-    const pending = att.status === 'pending' && !expired;
+    const pending = att.status === 'pending' && !expired && !retired;
     const color = att.gameColor || '#E63946';
       const detail = [
       att.timeControl,
@@ -124,7 +121,9 @@
       '</span></div></div>' +
       (detail ? '<div class="baithak-challenge-card__detail">' + esc(detail) + '</div>' : '') +
       '<div class="baithak-challenge-card__footer">' +
-      (isReceiver && pending
+      (retired
+        ? '<button type="button" class="dangal-challenge-accept" data-retired="1">Game retired</button>'
+        : isReceiver && pending
         ? '<button type="button" class="dangal-challenge-accept">Accept</button>' +
           '<button type="button" class="dangal-challenge-decline">Decline</button>'
         : !isReceiver && att.status === 'accepted'
@@ -141,6 +140,10 @@
     const att = message.attachment || message;
     const myUid = typeof getCurrentUid === 'function' ? getCurrentUid() : null;
     card.querySelector('.dangal-challenge-accept')?.addEventListener('click', async () => {
+      if (typeof isRetiredGameId === 'function' && isRetiredGameId(att.gameType)) {
+        if (typeof openRetiredGameScreen === 'function') openRetiredGameScreen(att.gameType);
+        return;
+      }
       const joinOnly = card.querySelector('.dangal-challenge-accept')?.dataset.join === '1';
       const openChat = window.currentOpenChat || {};
       const g = typeof getGame === 'function' ? getGame(att.gameType) : null;

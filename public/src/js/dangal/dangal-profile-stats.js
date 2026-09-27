@@ -14,6 +14,7 @@
       const played = snap.docs
         .map((d) => Object.assign({ gameType: d.id }, d.data()))
         .filter((s) => (s.totalGames || 0) > 0)
+        .filter((s) => !(typeof isRetiredGameId === 'function' && isRetiredGameId(s.gameType)))
         .sort((a, b) => (b.totalGames || 0) - (a.totalGames || 0));
       if (!played.length) {
         containerEl.innerHTML = '<p class="dangal-profile__empty">No games played yet.</p>';

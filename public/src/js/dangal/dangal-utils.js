@@ -1,5 +1,5 @@
 /**
- * Dangal shared utilities (IIFE). Canonical game ids stay snakes / ttt / uno / quiz / fiveinrow.
+ * Dangal shared utilities (IIFE). Canonical game ids stay snakes / ttt / uno / quiz.
  */
 (function () {
   'use strict';
@@ -10,19 +10,10 @@
     ohnocards: 'uno',
     'ohno-cards': 'uno',
     muqabala: 'quiz',
-    fiveinarow: 'fiveinrow',
     shabdfive: 'wordguess',
     kakuro: 'ankjod',
     cricket: 'streetcricket',
-    football: 'gullykick',
-    snooker: 'pool',
-    billiards: 'pool',
-    andarbahar: 'andarbaahar',
-    sattepesatta: 'sattepe',
     kite: 'patangbaazi',
-    khokho: 'khokho',
-    'kho-kho': 'khokho',
-    bowling: 'bowling',
     fischerrandom: 'chess',
     chess960: 'chess',
   };

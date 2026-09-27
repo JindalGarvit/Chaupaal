@@ -230,6 +230,14 @@ function findRealOpponent(filters, onFound, onCancel){
       finish({ name:'Practice AI', simulated:true, reason:data.reason||'timeout' });
       return true;
     }
+    if(data.status==='retired'){
+      settled=true;
+      if(timeoutId){ clearTimeout(timeoutId); timeoutId=null; }
+      if(pollId){ clearInterval(pollId); pollId=null; }
+      try{ if(typeof onCancel==='function') onCancel(); }catch(e){}
+      if(typeof openRetiredGameScreen==='function') openRetiredGameScreen(data.gameId||gameId);
+      return true;
+    }
     if(data.status==='waiting' && data.waitingId){
       waitingId=data.waitingId;
     }

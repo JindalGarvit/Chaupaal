@@ -5,19 +5,24 @@
 const STARTING_CHIPS = 1000;
 const MAX_STAKE = 500;
 const DAILY_CHIP_RESOLVES = 60;
-const RATED = new Set(['chess', 'fiveinrow', 'ttt', 'streetcricket', 'gullykick', 'quiz']);
+const RATED = new Set(['chess', 'ttt', 'streetcricket', 'quiz']);
 
 const ALIASES = {
   snakesladders: 'snakes',
   tictactoe: 'ttt',
   ohnocards: 'uno',
   muqabala: 'quiz',
-  fiveinarow: 'fiveinrow',
   shabdfive: 'wordguess',
   kakuro: 'ankjod',
   cricket: 'streetcricket',
-  football: 'gullykick',
 };
+
+/** Titles culled in Dangal G0 (+ legacy spellings). Mirrors DANGAL_RETIRED_IDS on the client. */
+const RETIRED_GAME_IDS = new Set([
+  'rushrunner', 'pool', 'bowling', 'pickleball', 'tennis', 'fiveinrow', 'andarbaahar',
+  'sattepe', 'business', 'tabletennis', 'kabaddi', 'khokho', 'gullykick',
+  'fiveinarow', 'football', 'snooker', 'billiards', 'andarbahar', 'sattepesatta',
+]);
 
 const ACHIEVEMENTS = {
   first_game: { label: 'Pehla Qadam', desc: 'Play your first Dangal game', chips: 100 },
@@ -35,6 +40,10 @@ function canonicalGameId(id) {
     .toLowerCase()
     .replace(/[\s-]+/g, '');
   return ALIASES[raw] || raw;
+}
+
+function isRetiredGameId(id) {
+  return RETIRED_GAME_IDS.has(canonicalGameId(id));
 }
 
 function kFactor(games) {
@@ -190,6 +199,24 @@ async function resolveGame(db, admin, uid, body) {
     throw err;
   }
 
+  // Retired title: void the match. Stakes only move at resolve (no escrow), so voiding
+  // returns every staked virtual chip to both sides; no stats / Elo / leaderboard writes.
+  if (RETIRED_GAME_IDS.has(gameType)) {
+    const w = await getWallet(db, admin, uid);
+    return {
+      gameType,
+      retired: true,
+      won: false,
+      isDraw: false,
+      eloDelta: 0,
+      chips: w.balance,
+      chipDelta: 0,
+      achievements: [],
+      matchId: null,
+      shared: false,
+    };
+  }
+
   const rawResult = String(body.result || '').toLowerCase();
   const isComplete = rawResult === 'complete' || rawResult === 'finished';
   const isDraw =
@@ -302,6 +329,8 @@ async function resolveGame(db, admin, uid, body) {
 module.exports = {
   STARTING_CHIPS,
   canonicalGameId,
+  isRetiredGameId,
+  RETIRED_GAME_IDS,
   computeEloDelta,
   getWallet,
   ensureWallet,

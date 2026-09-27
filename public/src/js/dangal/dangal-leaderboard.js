@@ -38,6 +38,7 @@
       const row = d.data() || {};
       const id = String(row.uid || '');
       if (!id) return;
+      if (typeof isRetiredGameId === 'function' && isRetiredGameId(row.gameType)) return;
       if (!byUid[id]) byUid[id] = { uid: id, score: 0, wins: 0, games: 0 };
       byUid[id].score += Number(row.score) || 0;
       byUid[id].wins += Number(row.wins) || 0;

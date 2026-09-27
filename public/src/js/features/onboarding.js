@@ -14,6 +14,11 @@ function checkViralLink(){
   const category=params.get('cat')||'GK';
   const target=params.get('score');
   const game=gameFromPath||params.get('game')||'quiz';
+  if(typeof isRetiredGameId==='function'&&isRetiredGameId(game)){
+    document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='dangal')b.click();});
+    setTimeout(()=>{ if(typeof openRetiredGameScreen==='function') openRetiredGameScreen(game); },400);
+    return;
+  }
   const gName=(typeof getGame==='function'&&getGame(game)?.name)||(game==='quiz'||game==='muqabala'?'Muqabala':game==='akhbaar'?'Akhbaar':game);
   const isAkhbaarBeat=game==='akhbaar';
   // Show guest / soft signup banner — Akhbaar = score challenge (not a live Muqabala room)

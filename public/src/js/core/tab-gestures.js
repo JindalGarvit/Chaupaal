@@ -940,6 +940,7 @@
     });
 
     const rows = Object.keys(gamesMap)
+      .filter((id) => !(typeof isRetiredGameId === 'function' && isRetiredGameId(id)))
       .map((id) => {
         const g = gamesMap[id] || {};
         const meta = byId[id] || { id, name: id, icon: '🎮' };
@@ -972,7 +973,7 @@
     const wowPlays = lastWeek ? weekPlays - (lastWeek.plays || 0) : null;
     const wowWins = lastWeek ? weekWins - (lastWeek.wins || 0) : null;
     const wowBit = (n) => (n == null ? '—' : n > 0 ? '+' + n : String(n));
-    const rated = ['chess', 'fiveinrow', 'ttt', 'quiz', 'streetcricket', 'gullykick'];
+    const rated = ['chess', 'ttt', 'quiz', 'streetcricket'];
     const eloBits = rated
       .map((id) => {
         let elo = null;

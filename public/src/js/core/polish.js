@@ -295,8 +295,7 @@ function styleDangalTiles(){
     chess:['#2C3E50','#ECF0F1'],snakes:['#27AE60','#fff'],
     ludo:['#C0392B','#fff'],uno:['#E74C3C','#fff'],
     ttt:['#2980B9','#fff'],wordguess:['#8E44AD','#fff'],
-    business:['#F39C12','#fff'],scribble:['#16A085','#fff'],
-    fiveinrow:['#2C3E50','#3498DB'],rushrunner:['#E67E22','#fff'],
+    scribble:['#16A085','#fff'],
     tiptap:['#9B59B6','#FF6B9D'],quiz:null
   };
   document.querySelectorAll('.dangal-game-tile[data-game]').forEach(tile=>{

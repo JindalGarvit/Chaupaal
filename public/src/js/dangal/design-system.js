@@ -23,52 +23,26 @@
       '<rect x="8" y="10" width="14" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2" transform="rotate(-12 15 20)"/><rect x="14" y="9" width="14" height="20" rx="2" fill="currentColor" opacity=".2" stroke="currentColor" stroke-width="2"/><rect x="18" y="11" width="14" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2" transform="rotate(10 25 21)"/><text x="21" y="23" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">!</text>',
     wordguess:
       '<rect x="5" y="12" width="5.5" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="12" y="12" width="5.5" height="6" rx="1" fill="currentColor"/><rect x="19" y="12" width="5.5" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="26" y="12" width="5.5" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="33" y="12" width="2" height="6" rx=".5" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".5"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M8 24h24M12 28h16"/>',
-    fiveinrow:
-      '<circle cx="6" cy="20" r="3.2" fill="currentColor"/><circle cx="14" cy="20" r="3.2" fill="currentColor"/><circle cx="22" cy="20" r="3.2" fill="currentColor"/><circle cx="30" cy="20" r="3.2" fill="currentColor"/><circle cx="34" cy="20" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/>',
-    business:
-      '<path fill="currentColor" d="M6 32V18h6v14H6zm9 0V10h7v22h-7zm10 0V14h9v18h-9z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M8 21h2M8 25h2M17 14h3M17 18h3M17 22h3M28 18h4M28 22h4"/>',
     tambola:
       '<rect x="6" y="10" width="28" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M6 17h28M6 24h28M15 10v20M25 10v20"/><circle cx="10.5" cy="13.5" r="1.4" fill="currentColor"/><circle cx="20" cy="20.5" r="1.4" fill="currentColor"/><circle cx="29.5" cy="27" r="1.4" fill="currentColor"/>',
     carrom:
       '<circle cx="20" cy="20" r="14" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="20" r="4" fill="currentColor"/><circle cx="11" cy="14" r="2.2" fill="currentColor" opacity=".55"/><circle cx="29" cy="14" r="2.2" fill="currentColor" opacity=".55"/><circle cx="11" cy="26" r="2.2" fill="currentColor" opacity=".55"/><circle cx="29" cy="26" r="2.2" fill="currentColor" opacity=".55"/>',
     streetcricket:
       '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 8c0 10 2 14 4 18M16 26c2 4 4 6 6 6"/><path fill="currentColor" d="M10 6h6v4h-6z"/><circle cx="28" cy="14" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M26 12l4 4M30 12l-4 4"/>',
-    gullykick:
-      '<circle cx="20" cy="20" r="12" fill="none" stroke="currentColor" stroke-width="2.2"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M20 8v24M8 20h24M12 12c4 3 12 3 16 0M12 28c4-3 12-3 16 0"/><path fill="currentColor" d="M17 17h6l1.5 3-1.5 3h-6l-1.5-3z"/>',
     badminton:
       '<path fill="currentColor" d="M20 6l2.5 8H28l-5 4 2 8-5.5-4-5.5 4 2-8-5-4h5.5L20 6z" opacity=".9"/><ellipse cx="20" cy="30" rx="5" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M20 27v-4"/>',
-    tabletennis:
-      '<path fill="currentColor" d="M8 10c0-2 2-4 5-4h6c4 0 7 3 7 7v2c0 5-4 9-9 9H11c-2 0-3-1-3-3V10z"/><circle cx="16" cy="16" r="4.5" fill="none" stroke="#fff" stroke-width="1.6" opacity=".85"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M24 24l8 10"/><circle cx="30" cy="12" r="3.2" fill="currentColor" opacity=".7"/>',
-    pickleball:
-      '<rect x="7" y="6" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="11" cy="12" r="1.3" fill="currentColor"/><circle cx="17" cy="12" r="1.3" fill="currentColor"/><circle cx="11" cy="17" r="1.3" fill="currentColor"/><circle cx="17" cy="17" r="1.3" fill="currentColor"/><circle cx="14" cy="21.5" r="1.3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M18 24l10 12"/><circle cx="30" cy="14" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="30" cy="14" r="1.2" fill="currentColor"/>',
-    kabaddi:
-      '<circle cx="20" cy="20" r="13" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="14" r="3.5" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M14 28c2-6 10-6 12 0M11 18c3 2 6 2 9 0M20 18c3 2 6 2 9 0"/>',
-    khokho:
-      '<path fill="none" stroke="currentColor" stroke-width="2" d="M8 8v24M32 8v24M8 20h24"/><circle cx="14" cy="14" r="2.5" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M14 17v6l-3 5M14 23l3 5"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M22 22c4-1 8 2 10 6"/>',
-    bowling:
-      '<path fill="currentColor" d="M18 6c3 0 5 3 5 7 0 8-2 14-5 19-3-5-5-11-5-19 0-4 2-7 5-7z"/><circle cx="18" cy="11" r="1.2" fill="#fff" opacity=".9"/><circle cx="16.5" cy="14" r="1.2" fill="#fff" opacity=".9"/><circle cx="19.5" cy="14" r="1.2" fill="#fff" opacity=".9"/><circle cx="28" cy="26" r="6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="26" cy="24" r="1.3" fill="currentColor"/><circle cx="29.5" cy="23.5" r="1.3" fill="currentColor"/><circle cx="30" cy="26.5" r="1.3" fill="currentColor"/>',
-    tennis:
-      '<circle cx="14" cy="14" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="1.5" d="M8 10c4 2 8 2 12 0M8 18c4-2 8-2 12 0"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M20 20l10 12"/><circle cx="30" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.2" d="M27 10c2 1.5 4 1.5 6 0"/>',
     rummy:
       '<rect x="6" y="12" width="12" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="9" width="12" height="18" rx="1.5" fill="currentColor" opacity=".18" stroke="currentColor" stroke-width="1.8"/><rect x="22" y="11" width="12" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="currentColor" d="M18 15h4v2h-4zm0 4h4v2h-4z"/>',
     teenpatti:
       '<rect x="5" y="11" width="11" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" transform="rotate(-8 10.5 19)"/><rect x="14.5" y="9" width="11" height="16" rx="1.5" fill="currentColor" opacity=".2" stroke="currentColor" stroke-width="1.8"/><rect x="24" y="11" width="11" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" transform="rotate(8 29.5 19)"/><path fill="currentColor" d="M20 16c0 0-2.5 2.2-2.5 4S19 23 20 24.5C21 23 22.5 21.5 22.5 20S20 16 20 16z"/>',
     bluff:
       '<path fill="none" stroke="currentColor" stroke-width="2" d="M8 18c2-8 22-8 24 0v4c-2 8-22 8-24 0v-4z"/><ellipse cx="14" cy="19" rx="2.5" ry="3" fill="currentColor"/><ellipse cx="26" cy="19" rx="2.5" ry="3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M17 25c1.5 1.5 4.5 1.5 6 0"/>',
-    sattepe:
-      '<text x="20" y="28" text-anchor="middle" font-size="22" font-weight="800" font-family="system-ui,sans-serif" fill="currentColor">7</text><path fill="none" stroke="currentColor" stroke-width="1.6" d="M8 8h24v24H8z" opacity=".45"/>',
-    andarbaahar:
-      '<rect x="5" y="10" width="13" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="22" y="10" width="13" height="20" rx="2" fill="currentColor" opacity=".2" stroke="currentColor" stroke-width="2"/><text x="11.5" y="24" text-anchor="middle" font-size="10" font-weight="700" fill="currentColor">A</text><text x="28.5" y="24" text-anchor="middle" font-size="10" font-weight="700" fill="currentColor">B</text>',
     scribble:
       '<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M8 28c4-10 6-4 10-12s6 2 10-6"/><path fill="currentColor" d="M28 6l6 6-14 14H14V20z"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M8 34h24"/>',
     quiz:
       '<circle cx="20" cy="18" r="12" fill="none" stroke="currentColor" stroke-width="2.2"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M15 15c1-3 9-3 10 1 0 3-4 3-4 6"/><circle cx="20" cy="27" r="1.8" fill="currentColor"/>',
-    rushrunner:
-      '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 14h8M4 20h10M6 26h8"/><circle cx="24" cy="12" r="3" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M24 16v8l-4 8M24 24l5 8M20 20h8"/>',
     patangbaazi:
       '<path fill="currentColor" d="M20 6l10 14-10 6-10-6z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M20 26v10M16 32h8"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M10 20h20"/>',
-    pool:
-      '<circle cx="20" cy="20" r="13" fill="currentColor"/><circle cx="20" cy="20" r="7" fill="#fff"/><text x="20" y="24" text-anchor="middle" font-size="11" font-weight="800" fill="currentColor">8</text>',
     ankjod:
       '<rect x="6" y="6" width="28" height="28" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M6 15.5h28M6 25h28M15.5 6v28M25 6v28"/><text x="11" y="13" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor">3</text><text x="20" y="22.5" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor">7</text><text x="29.5" y="32" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor">1</text>',
     tiptap:
@@ -84,35 +58,22 @@
     ttt: { primary: '#1565C0', secondary: '#E3F2FD', surface: '#0D1B2A', label: 'Tic-Tac-Toe', icon: '⭕', mark: M.ttt, orientation: 'portrait' },
     uno: { primary: '#D32F2F', secondary: '#FF8F00', surface: '#1A0A0A', label: 'Oh, No! Cards', icon: '🃏', mark: M.uno, orientation: 'portrait' },
     wordguess: { primary: '#00796B', secondary: '#B2EBF2', surface: '#0A1A18', label: 'Shabd Five', icon: '📝', mark: M.wordguess, orientation: 'portrait' },
-    fiveinrow: { primary: '#212121', secondary: '#F5F5DC', surface: '#0A0A0A', label: 'Five in a Row', icon: '🔵', mark: M.fiveinrow, orientation: 'portrait' },
-    business: { primary: '#F9A825', secondary: '#1B5E20', surface: '#1A1500', label: 'Business', icon: '🏙️', mark: M.business, orientation: 'portrait' },
     tambola: { primary: '#E91E8C', secondary: '#FFD600', surface: '#1A0010', label: 'Tambola', icon: '🎫', mark: M.tambola, orientation: 'portrait' },
     carrom: { primary: '#8D6E63', secondary: '#FFF8E1', surface: '#1A0F00', label: 'Carrom', icon: '🪙', mark: M.carrom, orientation: 'portrait' },
     streetcricket: { primary: '#2E7D32', secondary: '#FFCC02', surface: '#0A1A0A', label: 'Street Cricket', icon: '🏏', mark: M.streetcricket, orientation: 'landscape', law: 'Street formats', lawHint: 'Over · Nets · Chase — not full cricket law' },
-    gullykick: { primary: '#1B5E20', secondary: '#FFFFFF', surface: '#0A120A', label: 'Gully Kick', icon: '⚽', mark: M.gullykick, orientation: 'landscape', law: 'Street formats', lawHint: 'Classic · SD · Pressure — not full football law' },
     badminton: { primary: '#01579B', secondary: '#E1F5FE', surface: '#000D1A', label: 'Badminton', icon: '🏸', mark: M.badminton, orientation: 'landscape', law: 'BWF-lite', lawHint: 'One game to 21 (win by 2) · arcade timing' },
-    tabletennis: { primary: '#0D47A1', secondary: '#FF6F00', surface: '#000A1A', label: 'Table Tennis', icon: '🏓', mark: M.tabletennis, orientation: 'landscape', law: 'ITTF-lite', lawHint: 'To 11 (win by 2, cap 20) · arcade timing' },
-    pickleball: { primary: '#33691E', secondary: '#FFEA00', surface: '#0A1200', label: 'Pickleball', icon: '🟡', mark: M.pickleball, orientation: 'landscape', law: 'Pickle-lite', lawHint: 'Rally to 11 (win by 2) · kitchen visual only' },
-    kabaddi: { primary: '#BF360C', secondary: '#FFB300', surface: '#1A0800', label: 'Kabaddi', icon: '🤼', mark: M.kabaddi, orientation: 'landscape', law: 'PKL-lite', lawHint: 'First to 5 · arcade raid court' },
-    khokho: { primary: '#00695C', secondary: '#FFE082', surface: '#021A16', label: 'Kho Kho', icon: '🏃', mark: M.khokho, orientation: 'portrait', law: 'Arcade chase', lawHint: 'Batches of 3 · 75s turns — not full federation' },
-    bowling: { primary: '#FF8F00', secondary: '#FFE082', surface: '#120A02', label: 'Bowling', icon: '🎳', mark: M.bowling, orientation: 'portrait', law: 'Arcade lanes', lawHint: 'USBC-lite 10-frame scorebook · House/Dry/Heavy oil' },
-    tennis: { primary: '#2E7D32', secondary: '#FFFFFF', surface: '#0A1A0A', label: 'Tennis', icon: '🎾', mark: M.tennis, orientation: 'landscape', law: 'Games-lite', lawHint: 'First to 2 games · not sets or tiebreak' },
     rummy: { primary: '#6A1B9A', secondary: '#FFD54F', surface: '#100018', label: 'Rummy', icon: '🃏', mark: M.rummy, orientation: 'portrait' },
     teenpatti: { primary: '#4A148C', secondary: '#FFD700', surface: '#0D0018', label: 'Teen Patti', icon: '♠', mark: M.teenpatti, orientation: 'portrait' },
     bluff: { primary: '#37474F', secondary: '#FF1744', surface: '#0A0E10', label: 'Bluff', icon: '🎭', mark: M.bluff, orientation: 'portrait' },
-    sattepe: { primary: '#1565C0', secondary: '#FFD600', surface: '#000A1A', label: 'Satte pe Satta', icon: '7️⃣', mark: M.sattepe, orientation: 'portrait' },
-    andarbaahar: { primary: '#1B5E20', secondary: '#FF6B35', surface: '#001A00', label: 'Andar Bahar', icon: '🎴', mark: M.andarbaahar, orientation: 'portrait' },
     scribble: { primary: '#E91E63', secondary: '#FFFFFF', surface: '#1A1A1A', label: 'Scribble', icon: '🎨', mark: M.scribble, orientation: 'portrait' },
     quiz: { primary: '#6200EA', secondary: '#FFD600', surface: '#0D0020', label: 'Quiz Muqabala', icon: '🧠', mark: M.quiz, orientation: 'portrait' },
-    rushrunner: { primary: '#FF6D00', secondary: '#FFD600', surface: '#1A0A00', label: 'Rush Runner', icon: '💨', mark: M.rushrunner, orientation: 'landscape' },
     patangbaazi: { primary: '#FF6D00', secondary: '#1565C0', surface: '#000D1A', label: 'Patang Baazi', icon: '🪁', mark: M.patangbaazi, orientation: 'landscape' },
-    pool: { primary: '#1B3A2D', secondary: '#F5F5DC', surface: '#0A1A10', label: 'Pool', icon: '🎱', mark: M.pool, orientation: 'landscape' },
     ankjod: { primary: '#1A237E', secondary: '#FFD600', surface: '#0A0014', label: 'Ank Jod', icon: '🔢', mark: M.ankjod, orientation: 'portrait' },
     tiptap: { primary: '#FF6D00', secondary: '#FFD600', surface: '#1A0800', label: 'Tip Tap', icon: '✨', mark: M.tiptap, orientation: 'portrait' },
     brickbreaker: { primary: '#5C6BC0', secondary: '#B39DFF', surface: '#0D0A18', label: 'Brick Breaker', icon: '🧱', mark: M.brickbreaker, orientation: 'landscape' },
   };
 
-  const RATED_GAMES = ['chess', 'fiveinrow', 'ttt', 'streetcricket', 'gullykick', 'quiz'];
+  const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz'];
 
   function escAttr(s) {
     return String(s == null ? '' : s)

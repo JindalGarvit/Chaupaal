@@ -46,41 +46,9 @@
   ];
 
   /** Fallback genre by game id when descriptor omits genre. */
-  const DEFAULT_GENRE_BY_ID = {
-    quiz: 'quiz',
-    chess: 'board',
-    snakes: 'board',
-    ludo: 'board',
-    uno: 'party',
-    ttt: 'board',
-    wordguess: 'brain',
-    fiveinrow: 'board',
-    business: 'board',
-    scribble: 'party',
-    rushrunner: 'arcade',
-    tiptap: 'brain',
-    ankjod: 'brain',
-    kakuro: 'brain',
-    streetcricket: 'rw_sports',
-    gullykick: 'rw_sports',
-    badminton: 'rw_sports',
-    tabletennis: 'rw_sports',
-    pickleball: 'rw_sports',
-    kabaddi: 'rw_sports',
-    khokho: 'rw_sports',
-    bowling: 'rw_sports',
-    tennis: 'rw_sports',
-    tambola: 'party',
-    carrom: 'board',
-    pool: 'board',
-    rummy: 'party',
-    teenpatti: 'party',
-    bluff: 'party',
-    sattepe: 'party',
-    andarbaahar: 'party',
-    patangbaazi: 'arcade',
-    brickbreaker: 'arcade',
-  };
+  const DEFAULT_GENRE_BY_ID = Object.fromEntries(
+    (window.DANGAL_ROSTER || []).map((r) => [r.id, r.genre]).concat([['kakuro', 'brain']])
+  );
 
   function inferGameType(d) {
     if (d.gameType === 'solo' || d.gameType === 'dual' || d.gameType === 'multiplayer') return d.gameType;
@@ -98,6 +66,13 @@
   function genreLabel(genreId) {
     const hit = GAME_GENRES.find((x) => x.id === genreId);
     return hit ? hit.label : 'Games';
+  }
+
+  /** Retired ids (old links, invites, stale rooms) → calm retired screen. Returns true when handled. */
+  function showRetiredIfRetired(gameId) {
+    if (typeof isRetiredGameId !== 'function' || !isRetiredGameId(gameId)) return false;
+    if (typeof openRetiredGameScreen === 'function') openRetiredGameScreen(gameId);
+    return true;
   }
 
   function clearDangalLaunchCtx() {
@@ -226,7 +201,10 @@
     const o = opts || {};
     const gameId = o.gameId || o._descriptor?.id;
     const game = o._descriptor || getGame(gameId);
-    if (!game) return;
+    if (!game) {
+      showRetiredIfRetired(gameId);
+      return;
+    }
 
     const rawLaunch =
       (typeof o._userLaunch === 'function' && o._userLaunch) ||
@@ -338,6 +316,7 @@
    */
   function registerGame(descriptor) {
     if (!descriptor || !descriptor.id || typeof descriptor.launch !== 'function') return;
+    if (typeof isRetiredGameId === 'function' && isRetiredGameId(descriptor.id)) return;
     const next = Object.assign({}, descriptor, {
       gameType: inferGameType(descriptor),
       genre: inferGenre(descriptor),
@@ -393,6 +372,7 @@
   function getGames(filter) {
     const f = filter || {};
     let list = order.map((id) => games.get(id)).filter(Boolean);
+    if (typeof isRosterGameId === 'function') list = list.filter((g) => isRosterGameId(g.id));
 
     if (f.id) return list.filter((g) => g.id === f.id);
     if (f.dangal) list = list.filter((g) => g.dangal !== false);
@@ -420,7 +400,7 @@
   }
 
   /** Q2A — real group/party titles (Live party or multi-seat Practice setup). */
-  const GROUP_PARTY_IDS = ['ludo', 'uno', 'business', 'scribble'];
+  const GROUP_PARTY_IDS = ['ludo', 'uno', 'scribble'];
 
   function gameIsLiveCapable(gameId, game) {
     if (typeof isLiveCapable === 'function') return !!isLiveCapable(gameId);
@@ -445,7 +425,6 @@
       id === 'tiptap' ||
       id === 'ankjod' ||
       id === 'kakuro' ||
-      id === 'rushrunner' ||
       id === 'wordguess' ||
       id === 'brickbreaker'
     ) {
@@ -578,7 +557,7 @@
   /**
    * Registry-driven chat game picker.
    * UX: 1:1 — row = Practice vs AI (or Solo); Challenge = Live with this friend.
-   *     Group allowlists Ludo / Uno / Business / Scribble (party 3–6) — unchanged.
+   *     Group allowlists Ludo / Uno / Scribble (party 3–6).
    */
   function openGamePicker(chat, isGroup) {
     const isSelf = typeof isSelfChat === 'function' && isSelfChat(chat);
@@ -629,7 +608,7 @@
         }));
       title = 'Group games';
       subtitle = 'Party games for this chat — pick players next';
-      emptyHint = 'No party games here yet — try Ludo, Oh No!, Business, or Scribble from Manch.';
+      emptyHint = 'No party games here yet — try Ludo, Oh No!, or Scribble from Manch.';
     } else {
       // 1:1 — row/primary = Practice vs AI (or Solo); Challenge = Live with this friend.
       const rows = getGames({ chat1v1: true }).map((g) => {
@@ -872,7 +851,10 @@
   /** Honest opponent sheet — Practice vs AI or Live challenge friend (never fake Priya). */
   function launchDangalWithOpponent(gameId) {
     const game = getGame(gameId);
-    if (!game) return;
+    if (!game) {
+      showRetiredIfRetired(gameId);
+      return;
+    }
 
     if (gameId === 'ludo') {
       // Practice vs AI or Live challenge friend (same honesty as Chess).
@@ -1101,7 +1083,10 @@
 
   function handleDangalGameTap(gameId) {
     const game = getGame(gameId);
-    if (!game) return;
+    if (!game) {
+      showRetiredIfRetired(gameId);
+      return;
+    }
 
     if (gameId === 'quiz') {
       if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();

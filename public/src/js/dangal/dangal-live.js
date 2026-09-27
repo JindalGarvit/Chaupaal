@@ -7,7 +7,7 @@
  *   clocks{w,b}, clockAt, clockTurn, timeControl,
  *   quiz: { questions?, answers{}, scores{}, qIdx? },
  *   ludoMode: 'classic'|'quick' (host seeds once)
- *   carrom/pool cue: state.balls[] seeded once by host; shooter pushes full settle snaps
+ *   carrom cue: state.balls[] seeded once by host; shooter pushes full settle snaps
  *   uno / Oh No!: host seeds dealt handA/handB + full deck[] + discard once; actor pushes after each play.
  *   Friend Live v1: full deck in RTDB state (UI never paints opp cards; FOW via RTDB read accepted).
  *

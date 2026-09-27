@@ -1,6 +1,6 @@
 /**
  * Dangal session layer — identity, move/game-over feedback.
- * Chess and Five in a Row are the first full consumers; other games inherit via beginGameOverlaySession.
+ * Chess is the first full consumer; other games inherit via beginGameOverlaySession.
  */
 (function () {
   'use strict';
@@ -31,7 +31,7 @@
     if (typeof Sound !== 'undefined' && Sound.play) Sound.play('ui.move');
     if (typeof Haptic !== 'undefined' && Haptic.tap) Haptic.tap();
     const g = gameType || mountedGame;
-    if (g === 'chess' || g === 'fiveinrow') {
+    if (g === 'chess') {
       if (typeof gameFeedback === 'function') {
         /* already called by engines; keep haptic-only here when feedback skipped */
       }

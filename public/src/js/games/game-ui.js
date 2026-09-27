@@ -41,30 +41,17 @@
     tictactoe: '#1565C0',
     ttt: '#1565C0',
     wordguess: '#00796B',
-    fiveinrow: '#212121',
-    business: '#F9A825',
     scribble: '#E91E63',
-    rushrunner: '#FF6D00',
     tiptap: '#FF6D00',
     ankjod: '#1A237E',
     kakuro: '#1A237E',
     streetcricket: '#2E7D32',
-    gullykick: '#1B5E20',
     badminton: '#01579B',
-    tabletennis: '#0D47A1',
-    pickleball: '#33691E',
-    kabaddi: '#BF360C',
-    khokho: '#00695C',
-    bowling: '#FF8F00',
-    tennis: '#2E7D32',
     tambola: '#E91E8C',
     carrom: '#8D6E63',
-    pool: '#1B3A2D',
     rummy: '#6A1B9A',
     teenpatti: '#4A148C',
     bluff: '#37474F',
-    sattepe: '#1565C0',
-    andarbaahar: '#1B5E20',
     patangbaazi: '#FF6D00',
     brickbreaker: '#5C6BC0',
     wrap: '#8134AF',
@@ -83,30 +70,17 @@
     uno: 'Oh, No!',
     ttt: 'Tic-Tac-Toe',
     wordguess: 'Shabd Five',
-    fiveinrow: 'Five in a Row',
-    business: 'Business',
     scribble: 'Scribble',
-    rushrunner: 'Rush Runner',
     tiptap: 'Tip Tap',
     ankjod: 'Ank Jod',
     kakuro: 'Ank Jod',
     streetcricket: 'Street Cricket',
-    gullykick: 'Gully Kick',
     badminton: 'Badminton',
-    tabletennis: 'Table Tennis',
-    pickleball: 'Pickleball',
-    kabaddi: 'Kabaddi',
-    khokho: 'Kho Kho',
-    bowling: 'Bowling',
-    tennis: 'Tennis',
     tambola: 'Tambola',
     carrom: 'Carrom',
-    pool: 'Pool',
     rummy: 'Rummy',
     teenpatti: 'Teen Patti',
     bluff: 'Bluff',
-    sattepe: 'Satte pe Satta',
-    andarbaahar: 'Andar Bahar',
     patangbaazi: 'Patang Baazi',
     brickbreaker: 'Brick Breaker',
     wrap: 'Monthly Wrap',
@@ -141,25 +115,10 @@
       'Hard Mode reuses greens & ambers · Stats show bars, streak, and a month calendar',
       'Practice is a sealed sandbox — never touches streak or Daily stats',
     ],
-    fiveinrow: [
-      'Freestyle: five+ wins · Renju: Black can’t double-three / double-four / overline',
-      'Open fours must be answered — block threats before extending',
-      '15×15 goban (Quick 13 Practice) · Easy/Normal AI · Live clock pass ~18s',
-    ],
-    business: [
-      'Complete colour sets, build houses evenly, collect rent',
-      'Jail, doubles, auctions, mortgage/sell-back when cash is tight',
-      'Deal deeds ± cash on your turn — Live is 1v1, Practice up to 6',
-    ],
     scribble: [
       'Live 1v1 or party 3–6 — one drawer, everyone else races to guess',
       'Word stays secret until reveal · near-miss says “close!” · drawer +50 if someone scores',
       '100 / 75 / 50 by guess order · 3 rounds · group lobby min 3 · party continues while 2+ remain',
-    ],
-    rushrunner: [
-      'Classic or Daily run · each theme has a named flavor (Coin Rush, Heavy Traffic, Long Sprint)',
-      'Clear 2 light missions for a reason to run again · progress saves between sessions',
-      '◀▶ lanes · ⬆ jump lows · ⬇ slide highs · magnet pulls coin zigzags',
     ],
     tiptap: [
       'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',
@@ -176,45 +135,10 @@
       'Live: one friend bowls, the other bats — then swap innings for a fair duel',
       'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
     ],
-    gullykick: [
-      'Street formats — Classic / Sudden Death / Pressure (not full football law)',
-      'Live: one friend shoots, the other dives — then swap halves for a fair duel',
-      'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
-    ],
     badminton: [
       'BWF-lite · one game to 21 (win by 2; 29-all → 30) — not best-of-3',
       'Arcade timing contact — not full BWF court physics',
       'Sweet hits tighten the rally · Easy / Normal / Sharp in Practice',
-    ],
-    tabletennis: [
-      'ITTF-lite · game to 11 win by 2 (hard cap 20) — arcade timing',
-      'Serve every 2 points (every 1 at deuce) — not full ITTF match sets',
-      'Sweet hits tighten the rally — AI pushes back in Practice',
-    ],
-    pickleball: [
-      'Pickle-lite · rally point to 11 win by 2 (cap 20) — not side-out',
-      'Arcade timing · kitchen line is visual only (no zone foul yet)',
-      'Sweet hits tighten the rally — AI pushes back in Practice',
-    ],
-    tennis: [
-      'Games-lite · 0–15–30–40 · first to 2 games — not sets or tiebreak',
-      'Arcade timing contact — not full-court tennis physics',
-      'Sweet hits tighten the rally — AI pushes back in Practice',
-    ],
-    kabaddi: [
-      'PKL-lite · first to 5 — arcade raid court (not full PKL clock/law)',
-      'Touch +1/tag on Home · empty = defense +1 · bonus line + tag = +1',
-      'All-out +2 · 2 empties → DO OR DIE · Live both seats raid & defend · virtual stakes',
-    ],
-    khokho: [
-      'Arcade chase — batches of 3 · 75s turn · each side once (not 9-minute federation)',
-      'Give Kho to switch chasers · after a wipe, Kho before tagging the next batch',
-      'Live: one seat chases (active+Kho), the other runs the batch — then swap · leave=forfeit · virtual stakes',
-    ],
-    bowling: [
-      'Arcade lanes · House / Dry / Heavy oil (not USBC oil patterns)',
-      'Aim · power · Hook · alternate frames · USBC-lite X/／ scorebook',
-      'Live host locks lane · syncs throw + laneId · leave = forfeit · virtual stakes once',
     ],
     tambola: [
       'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',
@@ -223,11 +147,6 @@
     ],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
     uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
-    pool: [
-      'Break from the kitchen — table stays open until a clean solid or stripe',
-      'Clear your group, then the 8 last — early 8 or scratch on 8 loses',
-      'Scratch: cue back in kitchen · Practice AI shoots for real · Live syncs groups',
-    ],
     rummy: [
       'Indian 13-card · pure sequence required · jokers + wild rank from open card',
       'Declare valid · Drop 20 first / 40 middle · Wrong show 80 · points capped at 80',
@@ -243,16 +162,6 @@
       'Call or play mid-hand; last play needs Call or Pass before empty-hand win',
       'Three lives · 0 lives loses · Live never shows honesty before Call',
     ],
-    sattepe: [
-      'Deal all 52 — suits start closed until a seven opens the chain',
-      'Must play if able · Pass when stuck · table lock = fewest cards (tie draw)',
-      'Practice chain AI · Live hides hands · Ace high · virtual stakes only',
-    ],
-    andarbaahar: [
-      'Black house → Andar leads (0.9:1) · red → Bahar leads · other pile pays 1:1',
-      'Pick a virtual stake, then Andar or Bahar · rank match wins that pile',
-      'Live hides the remaining deck · dealt piles public · virtual stakes only',
-    ],
     patangbaazi: [
       'Live duel: both fly — first cut wins (host resolves) · virtual stakes once',
       'Festival is Practice-only heat — not on Live challenge',
@@ -267,8 +176,6 @@
   };
 
   const PB_KEYS = {
-    rushrunner: { key: 'chaupaal_pb_rushrunner', label: 'm', higherBetter: true },
-    rushrunner_daily: { key: 'chaupaal_pb_rushrunner_daily', label: 'm', higherBetter: true },
     tiptap: { key: 'chaupaal_pb_tiptap', label: 'pts', higherBetter: true },
     wordguess: { key: 'chaupaal_pb_wordguess', label: 'guesses', higherBetter: false },
     ankjod: { key: 'chaupaal_pb_ankjod', label: 's', higherBetter: false },
@@ -282,19 +189,8 @@
     streetcricket_nets: { key: 'chaupaal_pb_streetcricket_nets', label: ' clean', higherBetter: true },
     streetcricket_chase: { key: 'chaupaal_pb_streetcricket_chase', label: ' runs', higherBetter: true },
     streetcricket_chase_wins: { key: 'chaupaal_pb_streetcricket_chase_wins', label: ' wins', higherBetter: true },
-    gullykick: { key: 'chaupaal_pb_gullykick', label: ' goals', higherBetter: true },
-    gullykick_classic: { key: 'chaupaal_pb_gullykick_classic', label: '/5', higherBetter: true },
-    gullykick_sd: { key: 'chaupaal_pb_gullykick_sd', label: ' streak', higherBetter: true },
-    gullykick_pressure: { key: 'chaupaal_pb_gullykick_pressure', label: ' clears', higherBetter: true },
     badminton: { key: 'chaupaal_pb_badminton', label: 'pts', higherBetter: true },
-    tabletennis: { key: 'chaupaal_pb_tabletennis', label: 'pts', higherBetter: true },
-    pickleball: { key: 'chaupaal_pb_pickleball', label: 'pts', higherBetter: true },
-    tennis: { key: 'chaupaal_pb_tennis', label: 'games', higherBetter: true },
-    kabaddi: { key: 'chaupaal_pb_kabaddi', label: 'pts', higherBetter: true },
-    khokho: { key: 'chaupaal_pb_khokho', label: 'tags', higherBetter: true },
-    bowling: { key: 'chaupaal_pb_bowling', label: 'pts', higherBetter: true },
     carrom: { key: 'chaupaal_pb_carrom', label: 'coins', higherBetter: true },
-    pool: { key: 'chaupaal_pb_pool_wins', label: 'wins', higherBetter: true },
     brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: 'pts', higherBetter: true },
     brickbreaker_endless: { key: 'chaupaal_pb_brickbreaker_endless', label: 'pts', higherBetter: true },
     patangbaazi_duel: { key: 'chaupaal_pb_patang_duel', label: ' streak', higherBetter: true },
@@ -743,37 +639,12 @@
     } catch (e) {}
   }
 
-  /** Gully Kick per-format PB ids. Legacy `gullykick` maps to Classic. */
-  function gullyKickPbGameId(format) {
-    const f = String(format || 'classic').toLowerCase();
-    if (f === 'sudden' || f === 'sd') return 'gullykick_sd';
-    if (f === 'pressure') return 'gullykick_pressure';
-    return 'gullykick_classic';
-  }
-
-  function migrateGullyKickPb() {
-    try {
-      const classicKey = 'chaupaal_pb_gullykick_classic';
-      const legacyKey = 'chaupaal_pb_gullykick';
-      if (localStorage.getItem(classicKey) == null || localStorage.getItem(classicKey) === '') {
-        const legacy = localStorage.getItem(legacyKey);
-        if (legacy != null && legacy !== '') localStorage.setItem(classicKey, legacy);
-      }
-    } catch (e) {}
-  }
-
   function getGamePB(gameId) {
     if (gameId === 'streetcricket_over' || gameId === 'streetcricket') migrateStreetCricketPb();
-    if (gameId === 'gullykick_classic' || gameId === 'gullykick') migrateGullyKickPb();
     const meta = PB_KEYS[gameId];
     if (!meta) return null;
     const raw = localStorage.getItem(meta.key);
     if (raw == null || raw === '') {
-      // Migrate legacy Rush key
-      if (gameId === 'rushrunner') {
-        const legacy = localStorage.getItem('rushrunner_best');
-        if (legacy != null) return Number(legacy);
-      }
       // Legacy street cricket runs → Over
       if (gameId === 'streetcricket_over') {
         const legacy = localStorage.getItem('chaupaal_pb_streetcricket');
@@ -784,16 +655,6 @@
       }
       if (gameId === 'streetcricket') {
         return getGamePB('streetcricket_over');
-      }
-      if (gameId === 'gullykick_classic') {
-        const legacy = localStorage.getItem('chaupaal_pb_gullykick');
-        if (legacy != null && legacy !== '') {
-          const n = Number(legacy);
-          return Number.isFinite(n) ? n : null;
-        }
-      }
-      if (gameId === 'gullykick') {
-        return getGamePB('gullykick_classic');
       }
       // Legacy Prompt 2–3 cuts score (if any) → festival cuts only
       if (gameId === 'patangbaazi_festival_cuts') {
@@ -819,7 +680,6 @@
       (meta.higherBetter ? next > prev : next < prev);
     if (better) {
       localStorage.setItem(meta.key, String(next));
-      if (gameId === 'rushrunner') localStorage.setItem('rushrunner_best', String(next));
       // Per-diff Ank Jod wins also refresh overall legacy key (lower time = better)
       if (String(gameId).indexOf('ankjod_') === 0) {
         setGamePB('ankjod', next);
@@ -828,11 +688,6 @@
       if (gameId === 'streetcricket_over') {
         try {
           localStorage.setItem('chaupaal_pb_streetcricket', String(next));
-        } catch (e) {}
-      }
-      if (gameId === 'gullykick_classic') {
-        try {
-          localStorage.setItem('chaupaal_pb_gullykick', String(next));
         } catch (e) {}
       }
       return next;
@@ -1980,38 +1835,20 @@
 
   /* ── Dangal progress · stats · soft weekly missions (local, per active profile) ── */
   const SCORE_FOCUS_GAMES = {
-    rushrunner: true,
     tiptap: true,
     ankjod: true,
     wordguess: true,
     streetcricket: true,
-    gullykick: true,
     badminton: true,
-    tabletennis: true,
-    pickleball: true,
-    tennis: true,
-    kabaddi: true,
-    khokho: true,
-    bowling: true,
     carrom: true,
-    pool: true,
     brickbreaker: true,
   };
   const HIGHER_BETTER_SCORE = {
-    rushrunner: true,
     tiptap: true,
     quiz: true,
     streetcricket: true,
-    gullykick: true,
     badminton: true,
-    tabletennis: true,
-    pickleball: true,
-    tennis: true,
-    kabaddi: true,
-    khokho: true,
-    bowling: true,
     carrom: true,
-    pool: true,
     brickbreaker: true,
   };
   const LOWER_BETTER_SCORE = { wordguess: true, ankjod: true };
@@ -2303,7 +2140,10 @@
     const p = getDangalProgress();
     const missions = getDangalMissions(p);
     const done = missions.filter((m) => m.progress >= m.target).length;
-    const matches = Object.values(p.games || {}).reduce(
+    const matches = Object.keys(p.games || {})
+      .filter((id) => !(typeof isRetiredGameId === 'function' && isRetiredGameId(id)))
+      .map((id) => p.games[id] || {})
+      .reduce(
       (acc, g) => {
         acc.played += g.played || 0;
         acc.wins += g.wins || 0;
@@ -2480,7 +2320,7 @@
 
   /* ── Daily spotlight rotation ── */
   function getDailySpotlightGameId(ids) {
-    const list = ids && ids.length ? ids : ['quiz', 'wordguess', 'rushrunner', 'chess', 'tiptap', 'ankjod'];
+    const list = ids && ids.length ? ids : ['quiz', 'wordguess', 'brickbreaker', 'chess', 'tiptap', 'ankjod'];
     const seed = new Date().toISOString().split('T')[0];
     let h = 0;
     for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -2795,8 +2635,6 @@
   window.ankJodPbGameId = ankJodPbGameId;
   window.streetCricketPbGameId = streetCricketPbGameId;
   window.migrateStreetCricketPb = migrateStreetCricketPb;
-  window.gullyKickPbGameId = gullyKickPbGameId;
-  window.migrateGullyKickPb = migrateGullyKickPb;
   window.buildGameShareCard = buildGameShareCard;
   window.buildBeatScoreLink = buildBeatScoreLink;
   window.shareGameResult = shareGameResult;

@@ -17,44 +17,30 @@ const NEVER_FEATURED_FAIRNESS_DAYS = 365;
 /** Do not re-feature the same gameId within this many IST days. */
 const GOTD_GAME_COOLDOWN_DAYS = 7;
 
-const KNOWN_GAME_IDS = [
-  'quiz',
-  'chess',
-  'snakes',
-  'ludo',
-  'uno',
-  'ttt',
-  'wordguess',
-  'fiveinrow',
-  'business',
-  'scribble',
-  'rushrunner',
-  'tiptap',
-  'ankjod',
-  'streetcricket',
-  'gullykick',
-  'brickbreaker',
-];
-
-/** Single source of truth for GOTD genre filters (mirrors client registry). */
+/** Dangal roster → genre (mirrors DANGAL_ROSTER in dangal-graduation.js). */
 const GAME_GENRE_BY_ID = {
-  quiz: 'quiz',
+  tiptap: 'brain',
+  brickbreaker: 'arcade',
+  ankjod: 'brain',
+  wordguess: 'brain',
   chess: 'board',
+  ttt: 'board',
   snakes: 'board',
   ludo: 'board',
   uno: 'party',
-  ttt: 'board',
-  wordguess: 'brain',
-  fiveinrow: 'board',
-  business: 'board',
   scribble: 'party',
-  rushrunner: 'arcade',
-  tiptap: 'brain',
-  ankjod: 'brain',
+  quiz: 'quiz',
+  carrom: 'board',
+  rummy: 'party',
+  teenpatti: 'party',
+  bluff: 'party',
+  tambola: 'party',
   streetcricket: 'rw_sports',
-  gullykick: 'rw_sports',
-  brickbreaker: 'arcade',
+  badminton: 'rw_sports',
+  patangbaazi: 'arcade',
 };
+
+const KNOWN_GAME_IDS = Object.keys(GAME_GENRE_BY_ID);
 
 function genreForGameId(id, gameDoc) {
   if (gameDoc && gameDoc.genre) return String(gameDoc.genre);
@@ -260,7 +246,7 @@ async function getOrComputeGameOfDay(adminApp) {
 
   const metaSnap = await metaRef.get();
   const meta = metaSnap.exists ? metaSnap.data() || {} : {};
-  if (meta.date === date && meta.gameId) {
+  if (meta.date === date && meta.gameId && KNOWN_GAME_IDS.includes(String(meta.gameId))) {
     return {
       gameId: String(meta.gameId),
       date,
@@ -299,7 +285,7 @@ async function getOrComputeGameOfDay(adminApp) {
   await db.runTransaction(async (tx) => {
     const fresh = await tx.get(metaRef);
     const freshData = fresh.exists ? fresh.data() || {} : {};
-    if (freshData.date === date && freshData.gameId) {
+    if (freshData.date === date && freshData.gameId && KNOWN_GAME_IDS.includes(String(freshData.gameId))) {
       return;
     }
     const prevRecent = Array.isArray(freshData.recent) ? freshData.recent.slice() : [];

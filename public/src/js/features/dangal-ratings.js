@@ -760,7 +760,7 @@ async function recordGameResult(key,won,drew,extra){
   }catch(e){}
   if(typeof recordDangalSession==='function'){
     const e=extra&&typeof extra==='object'?extra:{};
-    const scoreOnly=!!e.scoreOnly||key==='rushrunner';
+    const scoreOnly=!!e.scoreOnly;
     recordDangalSession(key,{
       won:scoreOnly?(won?true:undefined):!!won,
       drew:!!drew,

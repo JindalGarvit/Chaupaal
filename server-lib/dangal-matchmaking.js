@@ -7,17 +7,19 @@
  */
 'use strict';
 
-const { canonicalGameId, RATED } = (() => {
+const { canonicalGameId, RATED, isRetiredGameId } = (() => {
   try {
     const econ = require('./dangal-economy');
     return {
       canonicalGameId: econ.canonicalGameId,
-      RATED: econ.RATED || new Set(['chess', 'fiveinrow', 'ttt', 'streetcricket', 'gullykick', 'quiz']),
+      RATED: econ.RATED || new Set(['chess', 'ttt', 'streetcricket', 'quiz']),
+      isRetiredGameId: econ.isRetiredGameId || (() => false),
     };
   } catch (e) {
     return {
       canonicalGameId: (id) => String(id || '').toLowerCase(),
-      RATED: new Set(['chess', 'fiveinrow', 'ttt', 'streetcricket', 'gullykick', 'quiz']),
+      RATED: new Set(['chess', 'ttt', 'streetcricket', 'quiz']),
+      isRetiredGameId: () => false,
     };
   }
 })();
@@ -95,6 +97,14 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
   const FieldValue = admin.firestore.FieldValue;
   const cat = String(category || filters?.category || 'GK').slice(0, 40);
   const game = canonicalGameId(gameId || filters?.gameId || cat);
+  if (isRetiredGameId(game) || isRetiredGameId(cat)) {
+    if (waitingId) {
+      try {
+        await waitingCol(db, cat).doc(String(waitingId)).delete();
+      } catch (e) {}
+    }
+    return { status: 'retired', gameId: game, retired: true };
+  }
   const rated = isRatedGame(game);
   const elo = rated ? await loadGameElo(db, uid, game) : null;
   const col = waitingCol(db, cat);

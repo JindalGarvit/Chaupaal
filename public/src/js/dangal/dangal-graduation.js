@@ -15,7 +15,6 @@
   const GRADUATION = {
     // Phase 1 solos — graduated as each passes quality bar
     brickbreaker: { grade: 'graduated', sync: 'none', stakes: false },
-    rushrunner: { grade: 'graduated', sync: 'none', stakes: false },
     tiptap: { grade: 'graduated', sync: 'none', stakes: false },
     ankjod: { grade: 'graduated', sync: 'none', stakes: false },
     kakuro: { grade: 'graduated', sync: 'none', stakes: false },
@@ -24,36 +23,144 @@
     // Phase 2 boards — Live when friend UID + matchId; Phase 6 stakes on
     chess: { grade: 'live', sync: 'live1v1', stakes: true },
     ttt: { grade: 'live', sync: 'live1v1', stakes: true },
-    fiveinrow: { grade: 'live', sync: 'live1v1', stakes: true },
 
     // Dual / party — Muqabala Live + stakes (Phase 6)
     quiz: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
     snakes: { grade: 'live', sync: 'live1v1', stakes: true },
     ludo: { grade: 'live', sync: 'liveParty', stakes: true },
     uno: { grade: 'live', sync: 'liveParty', stakes: true },
-    business: { grade: 'live', sync: 'live1v1', stakes: true },
     scribble: { grade: 'live', sync: 'liveParty', stakes: true },
 
     // Classics + court — Live 1v1 state sync (snapshot / score events)
     carrom: { grade: 'live', sync: 'live1v1', stakes: true },
-    pool: { grade: 'live', sync: 'live1v1', stakes: true },
     rummy: { grade: 'live', sync: 'live1v1', stakes: true },
     teenpatti: { grade: 'live', sync: 'live1v1', stakes: true },
     bluff: { grade: 'live', sync: 'live1v1', stakes: true },
-    sattepe: { grade: 'live', sync: 'live1v1', stakes: true },
-    andarbaahar: { grade: 'live', sync: 'live1v1', stakes: true },
     tambola: { grade: 'live', sync: 'live1v1', stakes: true },
     streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
-    gullykick: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
     badminton: { grade: 'live', sync: 'live1v1', stakes: true },
-    tabletennis: { grade: 'live', sync: 'live1v1', stakes: true },
-    pickleball: { grade: 'live', sync: 'live1v1', stakes: true },
-    tennis: { grade: 'live', sync: 'live1v1', stakes: true },
-    kabaddi: { grade: 'live', sync: 'live1v1', stakes: true },
-    khokho: { grade: 'live', sync: 'live1v1', stakes: true },
-    bowling: { grade: 'live', sync: 'live1v1', stakes: true },
     patangbaazi: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
   };
+
+  /**
+   * Dangal roster — the only list of shipped titles. Registry, pickers, game-of-day and
+   * challenge surfaces read this. New titles (party G1–G3) are added here in one place.
+   */
+  const ROSTER_SECTIONS = [
+    { id: 'rw_sports', label: 'RW Sports' },
+    { id: 'brain', label: 'Brain Boost' },
+    { id: 'board', label: 'Board & Classics' },
+    { id: 'party', label: 'Party & Social' },
+    { id: 'arcade', label: 'Arcade Rush' },
+    { id: 'quiz', label: 'Quiz & Duel' },
+  ];
+
+  /** @type {{ id: string, genre: string }[]} */
+  const ROSTER = [
+    { id: 'tiptap', genre: 'brain' },
+    { id: 'brickbreaker', genre: 'arcade' },
+    { id: 'ankjod', genre: 'brain' },
+    { id: 'wordguess', genre: 'brain' },
+    { id: 'chess', genre: 'board' },
+    { id: 'ttt', genre: 'board' },
+    { id: 'snakes', genre: 'board' },
+    { id: 'ludo', genre: 'board' },
+    { id: 'uno', genre: 'party' },
+    { id: 'scribble', genre: 'party' },
+    { id: 'quiz', genre: 'quiz' },
+    { id: 'carrom', genre: 'board' },
+    { id: 'rummy', genre: 'party' },
+    { id: 'teenpatti', genre: 'party' },
+    { id: 'bluff', genre: 'party' },
+    { id: 'tambola', genre: 'party' },
+    { id: 'streetcricket', genre: 'rw_sports' },
+    { id: 'badminton', genre: 'rw_sports' },
+    { id: 'patangbaazi', genre: 'arcade' },
+  ];
+  const ROSTER_IDS = ROSTER.map((r) => r.id);
+  /** Aliases that resolve to a roster id (kept in sync with GAME_ID_ALIASES). */
+  const ROSTER_ALIASES = { kakuro: 'ankjod' };
+
+  /** Retired titles (G0 cull) + their legacy link spellings — old links land on the retired screen. */
+  const RETIRED_IDS = [
+    'rushrunner', 'pool', 'bowling', 'pickleball', 'tennis', 'fiveinrow', 'andarbaahar',
+    'sattepe', 'business', 'tabletennis', 'kabaddi', 'khokho', 'gullykick',
+  ];
+  const RETIRED_ALIASES = [
+    'fiveinarow', 'football', 'snooker', 'billiards', 'andarbahar', 'sattepesatta', 'kho-kho',
+  ];
+  const RETIRED_SET = new Set(RETIRED_IDS.concat(RETIRED_ALIASES));
+
+  function normId(gameId) {
+    return String(gameId == null ? '' : gameId).trim().toLowerCase();
+  }
+
+  function isRetiredGameId(gameId) {
+    return RETIRED_SET.has(normId(gameId));
+  }
+
+  function isRosterGameId(gameId) {
+    const raw = normId(gameId);
+    const id = ROSTER_ALIASES[raw] || raw;
+    return ROSTER_IDS.indexOf(id) >= 0;
+  }
+
+  function rosterGenre(gameId) {
+    const raw = normId(gameId);
+    const id = ROSTER_ALIASES[raw] || raw;
+    const hit = ROSTER.find((r) => r.id === id);
+    return hit ? hit.genre : '';
+  }
+
+  function browseDangalGames() {
+    const btn = document.querySelector('.tab-btn[data-tab="dangal"]');
+    if (btn) btn.click();
+    else if (typeof initDangal === 'function') initDangal();
+  }
+
+  /** Calm dead-end for retired deep links, share cards, invites and stale Live rooms. */
+  function openRetiredGameScreen(gameId) {
+    const existing = document.querySelector('[data-dangal-retired]');
+    if (existing) existing.remove();
+    const host = document.querySelector('.device') || document.body;
+    if (!host) return null;
+    const el = document.createElement('div');
+    el.className = 'dangal-retired';
+    el.dataset.dangalRetired = normId(gameId);
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'This game has retired');
+    el.innerHTML = `
+      <div class="dangal-retired__card">
+        <div class="dangal-retired__mark" aria-hidden="true">🎲</div>
+        <div class="dangal-retired__title">This game has retired</div>
+        <p class="dangal-retired__body">It’s no longer on Chaupaal. Plenty more to play in Manch.</p>
+        <button type="button" class="dangal-retired__cta" data-retired-browse>Browse games</button>
+        <button type="button" class="dangal-retired__close" data-retired-close>Close</button>
+      </div>`;
+    let layer = null;
+    const close = () => {
+      if (layer && layer.close) layer.close();
+      else {
+        if (typeof removeNavLayer === 'function') removeNavLayer(el);
+        el.remove();
+      }
+    };
+    if (typeof openLayer === 'function') {
+      layer = openLayer(el, () => {}, { host, remove: true });
+    } else {
+      host.appendChild(el);
+      if (typeof pushNavLayer === 'function') pushNavLayer(el, () => el.remove());
+    }
+    el.querySelector('[data-retired-browse]')?.addEventListener('click', () => {
+      close();
+      browseDangalGames();
+    });
+    el.querySelector('[data-retired-close]')?.addEventListener('click', close);
+    el.addEventListener('click', (e) => {
+      if (e.target === el) close();
+    });
+    return el;
+  }
 
   function getGameGraduation(gameId) {
     const id = typeof canonicalGameId === 'function' ? canonicalGameId(gameId) : String(gameId || '');
@@ -112,6 +219,7 @@
    * hideDefault: omit from default Manch grid (still reachable if known).
    */
   function dangalManchVisibility(gameId) {
+    if (isRetiredGameId(gameId)) return 'hidden';
     const info = getGameGraduation(gameId);
     if (info.hideDefault) return 'hidden';
     if (info.grade === 'polish') return 'deemphasized';
@@ -125,4 +233,12 @@
   window.isLiveCapable = isLiveCapable;
   window.stakesEnabledForGame = stakesEnabled;
   window.dangalManchVisibility = dangalManchVisibility;
+  window.DANGAL_ROSTER = ROSTER;
+  window.DANGAL_ROSTER_IDS = ROSTER_IDS;
+  window.DANGAL_ROSTER_SECTIONS = ROSTER_SECTIONS;
+  window.DANGAL_RETIRED_IDS = RETIRED_IDS;
+  window.isRetiredGameId = isRetiredGameId;
+  window.isRosterGameId = isRosterGameId;
+  window.rosterGenre = rosterGenre;
+  window.openRetiredGameScreen = openRetiredGameScreen;
 })();

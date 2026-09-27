@@ -33,29 +33,16 @@ const canonIds = [
   'ttt',
   'uno',
   'wordguess',
-  'fiveinrow',
-  'business',
   'tambola',
   'carrom',
   'streetcricket',
-  'gullykick',
   'badminton',
-  'tabletennis',
-  'pickleball',
-  'kabaddi',
-  'khokho',
-  'bowling',
-  'tennis',
   'rummy',
   'teenpatti',
   'bluff',
-  'sattepe',
-  'andarbaahar',
   'scribble',
   'quiz',
-  'rushrunner',
   'patangbaazi',
-  'pool',
   'ankjod',
   'tiptap',
   'brickbreaker',
@@ -77,8 +64,7 @@ assert(/Dangal R4-0/.test(conventions), 'CONVENTIONS documents R4-0');
 const apiCount = fs.readdirSync(path.join(root, 'api')).filter((f) => f.endsWith('.js')).length;
 assert(apiCount === 12, `api/*.js count is 12 (got ${apiCount})`);
 
-assert(ds.includes('mark: M.badminton') && ds.includes('mark: M.tabletennis') && ds.includes('mark: M.tennis'), 'racket sports have separate marks');
-assert(ds.includes('mark: M.kabaddi') && ds.includes('mark: M.khokho'), 'kabaddi ≠ kho kho marks');
+assert(ds.includes('mark: M.badminton') && ds.includes('mark: M.patangbaazi'), 'sports marks present');
 assert(ds.includes('mark: M.rummy') && ds.includes('mark: M.teenpatti') && ds.includes('mark: M.uno'), 'party card marks distinct');
 
 console.log('\nR4-0 marks checks passed.');
