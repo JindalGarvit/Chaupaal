@@ -480,6 +480,7 @@ const I18N = {
     cancel:'Cancel',
     save:'Save',
     saving:'Saving…',
+    nhie_lead:'Never have I ever…',
   },
   hi:{
     correct:'Sahi!', wrong:'Galat!', scroll_next:'Aage badhne ke liye scroll karein ↑',

@@ -46,7 +46,6 @@
     tambola: { grade: 'live', sync: 'live1v1', stakes: true },
     streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
     badminton: { grade: 'live', sync: 'live1v1', stakes: true },
-    patangbaazi: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
   };
 
   /**
@@ -82,7 +81,6 @@
     { id: 'tambola', genre: 'party' },
     { id: 'streetcricket', genre: 'rw_sports' },
     { id: 'badminton', genre: 'rw_sports' },
-    { id: 'patangbaazi', genre: 'arcade' },
     // Party kit titles (G1+) — Pass & Play on one phone or a Room across phones.
     { id: 'imposter', genre: 'party', partyKit: true },
     { id: 'rajamantri', genre: 'party', partyKit: true },
@@ -97,14 +95,17 @@
   const RETIRED_IDS = [
     'rushrunner', 'pool', 'bowling', 'pickleball', 'tennis', 'fiveinrow', 'andarbaahar',
     'sattepe', 'business', 'tabletennis', 'kabaddi', 'khokho', 'gullykick',
+    // Dangal H0
+    'patangbaazi',
   ];
   const RETIRED_ALIASES = [
     'fiveinarow', 'football', 'snooker', 'billiards', 'andarbahar', 'sattepesatta', 'kho-kho',
+    'kite', 'kitefight', 'patang',
   ];
   const RETIRED_SET = new Set(RETIRED_IDS.concat(RETIRED_ALIASES));
 
   function normId(gameId) {
-    return String(gameId == null ? '' : gameId).trim().toLowerCase();
+    return String(gameId == null ? '' : gameId).trim().toLowerCase().replace(/[\s-]+/g, '');
   }
 
   function isRetiredGameId(gameId) {

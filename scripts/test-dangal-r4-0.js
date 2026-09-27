@@ -42,7 +42,6 @@ const canonIds = [
   'bluff',
   'scribble',
   'quiz',
-  'patangbaazi',
   'ankjod',
   'tiptap',
   'brickbreaker',
@@ -64,7 +63,7 @@ assert(/Dangal R4-0/.test(conventions), 'CONVENTIONS documents R4-0');
 const apiCount = fs.readdirSync(path.join(root, 'api')).filter((f) => f.endsWith('.js')).length;
 assert(apiCount === 12, `api/*.js count is 12 (got ${apiCount})`);
 
-assert(ds.includes('mark: M.badminton') && ds.includes('mark: M.patangbaazi'), 'sports marks present');
+assert(ds.includes('mark: M.badminton') && !ds.includes('M.patangbaazi'), 'sports marks present (Kite Fight retired in H0)');
 assert(ds.includes('mark: M.rummy') && ds.includes('mark: M.teenpatti') && ds.includes('mark: M.uno'), 'party card marks distinct');
 
 console.log('\nR4-0 marks checks passed.');

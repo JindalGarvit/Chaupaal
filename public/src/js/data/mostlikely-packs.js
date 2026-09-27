@@ -1,7 +1,8 @@
 /**
- * Most Likely To? / Would You Rather? content packs (Dangal G3). Playful, kind, teen-safe.
+ * Most Likely To? / Would You Rather? / Never Have I Ever content packs (Dangal G3, H0). Playful, kind, teen-safe.
  *   likely rows:  'english fragment (after “Who’s most likely to …”)|पूरा हिंदी सवाल'
  *   rather rows:  'Option A|विकल्प A|Option B|विकल्प B'
+ *   never rows:   'english fragment (after “Never have I ever …”)' — English only, localised via i18n
  * `regional` packs are add-ons: on by default only for Hindi locales (global-first).
  * UMD: window.MOSTLIKELY_PACKS / require().
  */
@@ -534,10 +535,276 @@
     },
   ];
 
-  const PACKS = RAW.map((p) => ({
+  /**
+   * Never Have I Ever (H0) — English source; each row completes “Never have I ever …”.
+   * Other languages come through i18n keys `nhie.<pack>:n<i>` (see mostlikely.js), not inline.
+   * Teen-safe: nothing about dating, alcohol, drugs, crime, looks or anything humiliating.
+   */
+  const NEVER_RAW = [
+    {
+      id: 'nhie-travel',
+      en: 'Travel & Adventure',
+      icon: '✈️',
+      never: [
+        'missed a flight',
+        'fallen asleep on a train and missed my stop',
+        'travelled to another country',
+        'got lost in a city I didn’t know',
+        'ridden a camel',
+        'seen snow fall',
+        'swum in the ocean',
+        'been on a road trip longer than ten hours',
+        'slept in a tent',
+        'packed for a trip the night before',
+        'forgotten my passport or ID at home',
+        'taken a selfie in front of a famous landmark',
+        'been seasick on a boat',
+        'ridden a rollercoaster with my eyes closed',
+        'gone skiing or snowboarding',
+        'watched the sunrise from a mountain',
+        'tried to speak a language I barely know while travelling',
+        'got on the wrong bus or train',
+        'had my luggage go missing',
+        'ridden in a hot-air balloon',
+        'climbed a mountain',
+        'seen the Northern Lights',
+        'been to a theme park',
+        'gone camping with no phone signal',
+        'slept at an airport',
+        'been stung by a jellyfish',
+        'fed a giraffe',
+        'gone snorkelling',
+        'visited three countries in one trip',
+        'eaten street food in another country',
+        'driven on the other side of the road',
+        'bought a souvenir I never used',
+        'taken an overnight bus',
+        'been on a cruise ship',
+        'jumped into a lake',
+        'travelled somewhere completely on my own',
+      ],
+    },
+    {
+      id: 'nhie-food',
+      en: 'Food & Kitchen',
+      icon: '🍳',
+      never: [
+        'eaten pizza for breakfast',
+        'burnt toast so badly the fire alarm went off',
+        'tried sushi',
+        'eaten a whole cake by myself',
+        'cooked a meal for more than ten people',
+        'dropped food on the floor and still eaten it',
+        'eaten something I couldn’t pronounce',
+        'put ketchup on something that definitely didn’t need it',
+        'tried a chilli so spicy I had tears in my eyes',
+        'baked bread from scratch',
+        'ordered the same dish every single time at my favourite place',
+        'eaten cereal for dinner',
+        'licked the spoon while baking',
+        'followed a recipe video and got it completely wrong',
+        'eaten dessert before the main course',
+        'had ice cream in the middle of winter',
+        'tried pineapple on pizza',
+        'eaten with chopsticks',
+        'skipped breakfast and regretted it by eleven',
+        'made pancakes in a funny shape',
+        'finished a family-size bag of snacks in one sitting',
+        'grown my own vegetables',
+        'eaten an insect on purpose',
+        'sent food back at a restaurant',
+        'hidden vegetables under something on my plate',
+        'had a sip of milk straight from the carton',
+        'tried a food challenge',
+        'cooked instant noodles at midnight',
+        'eaten a fruit I had never seen before',
+        'made a smoothie that tasted terrible',
+        'eaten someone else’s leftovers from the fridge',
+        'put something in the microwave that wasn’t meant to go in there',
+        'finished a meal and felt hungry again straight away',
+        'tried something from every dish at a buffet',
+        'shared a dessert I secretly wanted all to myself',
+        'made a cup of tea and forgotten to drink it',
+      ],
+    },
+    {
+      id: 'nhie-school',
+      en: 'School & Work',
+      icon: '🎒',
+      never: [
+        'fallen asleep in class',
+        'forgotten my homework and made up an excuse',
+        'got full marks on a test',
+        'called a teacher “Mum” or “Dad” by accident',
+        'stayed up all night to finish a project',
+        'won a school award',
+        'joined a club and quit after one meeting',
+        'been late on my first day at a new school or job',
+        'hit “reply all” on an email by mistake',
+        'worn my top inside out all day without noticing',
+        'forgotten someone’s name right after they told me',
+        'given a presentation I hadn’t prepared for',
+        'laughed during a really serious lesson or meeting',
+        'had a job interview on a video call',
+        'nodded along in a meeting without understanding a word',
+        'studied for the wrong test',
+        'eaten lunch at my desk',
+        'had a weekend job',
+        'changed my career plans more than twice',
+        'been class representative or team captain',
+        'done a group project where I did most of the work',
+        'fallen asleep on a video call',
+        'forgotten to unmute and talked for a whole minute',
+        'worn pyjama bottoms on a video call',
+        'got lost in my own school or office building',
+        'set an alarm and slept through it on an important day',
+        'won a spelling bee or quiz competition',
+        'taken a gap year',
+        'kept in touch with a favourite teacher',
+        'used a calculator for really easy maths',
+        'worked with someone who has the same name as me',
+        'had a part-time job before I turned eighteen',
+        'been on a school trip abroad',
+        'volunteered to go first in a presentation',
+        'brought the wrong books to school for the whole day',
+        'finished my homework on the bus on the way to school',
+      ],
+    },
+    {
+      id: 'nhie-tech',
+      en: 'Phones & Social',
+      icon: '📱',
+      never: [
+        'sent a message to the wrong person',
+        'liked a really old photo while scrolling someone’s profile',
+        'had more than ten thousand unread emails',
+        'cracked my phone screen',
+        'dropped my phone in water',
+        'spent more than six hours on my phone in one day',
+        'got a password wrong three times in a row',
+        'had a post go viral',
+        'posted something and deleted it a minute later',
+        'used a filter that turned me into an animal',
+        'watched a whole series in one weekend',
+        'fallen asleep with my phone on my face',
+        'changed my profile picture five times in one month',
+        'typed a message, deleted it and typed it again five times',
+        'let a call ring out and pretended I didn’t see it',
+        'video-called someone by accident',
+        'run out of battery at the worst possible moment',
+        'taught a grandparent how to use a phone',
+        'recorded a dance video',
+        'been left on “read”',
+        'played a mobile game for three hours straight',
+        'built my own computer',
+        'lost my phone inside my own home',
+        'sent a voice-to-text message that came out hilariously wrong',
+        'downloaded an app and never opened it',
+        'switched my phone off for a whole day on purpose',
+        'had autocorrect turn a word into something silly',
+        'kept an app streak going for more than a hundred days',
+        'argued with a smart speaker',
+        'searched my own name online',
+        'beaten a stranger in an online game',
+        'fixed something by following a video tutorial',
+        'made a playlist for one specific person',
+        'been in a group chat with more than a hundred people',
+        'sent a voice note longer than five minutes',
+        'set my phone to a language I couldn’t read and struggled to change it back',
+      ],
+    },
+    {
+      id: 'nhie-oops',
+      en: 'Oops Moments',
+      icon: '🙈',
+      never: [
+        'waved back at someone who was waving at someone else',
+        'walked into a glass door',
+        'tripped over absolutely nothing in public',
+        'called someone by the wrong name',
+        'laughed so hard I snorted',
+        'said “you too” when a waiter said “enjoy your meal”',
+        'got stuck in a lift',
+        'locked myself out of my home',
+        'pushed a door that clearly said pull',
+        'sent a birthday message on the wrong day',
+        'forgotten what I was saying halfway through a sentence',
+        'sung the wrong lyrics really loudly',
+        'walked into the wrong classroom or meeting',
+        'put salt in my tea or coffee instead of sugar',
+        'left the house wearing two different shoes',
+        'fallen off a chair while leaning back',
+        'sneezed during a completely silent moment',
+        'had one song stuck in my head for a whole week',
+        'laughed at a joke I didn’t understand',
+        'clapped at the wrong moment',
+        'turned up to a party on the wrong day',
+        'got my hair caught in a zip',
+        'spilled a drink on myself right before something important',
+        'answered a question that was meant for someone else',
+        'fallen asleep at a party',
+        'gone for a high-five when they went for a hug',
+        'walked around all day with a price tag still on my clothes',
+        'turned all my white clothes pink in the wash',
+        'got the giggles at the worst possible time',
+        'told a joke and forgotten the punchline',
+        'missed the last step on the stairs',
+        'held a door open for someone who was still really far away',
+        'said goodbye and then walked off in the same direction',
+        'pretended to love a gift I didn’t like',
+        'been caught talking to myself',
+        'replied to a message in my head and forgotten to actually send it',
+      ],
+    },
+    {
+      id: 'nhie-life',
+      en: 'Everyday Life',
+      icon: '🌤️',
+      never: [
+        'kept a houseplant alive for more than a year',
+        'learned to play a musical instrument',
+        'broken a bone',
+        'had a pet fish',
+        'met a celebrity',
+        'been on TV or the radio',
+        'written someone a letter by hand',
+        'ridden a horse',
+        'been to a concert',
+        'run a five-kilometre race',
+        'planted a tree',
+        'done a cartwheel',
+        'read a whole book in one day',
+        'cut my own hair',
+        'dyed my hair a bright colour',
+        'had a sleepover with more than five friends',
+        'won a prize in a raffle',
+        'knitted or sewn something',
+        'seen a shooting star',
+        'slept for more than twelve hours straight',
+        'watched a scary movie alone',
+        'watched the same movie more than ten times',
+        'gone a whole week without watching TV',
+        'volunteered at a charity event',
+        'adopted a pet from a shelter',
+        'finished a jigsaw with more than a thousand pieces',
+        'climbed a tree',
+        'had a nickname I secretly love',
+        'sung karaoke',
+        'made something by hand that I still use',
+        'fixed a bike by myself',
+        'tried yoga',
+        'gone skydiving or bungee jumping',
+        'flown a drone',
+        'taken a dance class',
+        'built a snowman',
+      ],
+    },
+  ];
+
+  const PACKS = RAW.concat(NEVER_RAW).map((p) => ({
     id: p.id,
     en: p.en,
-    hi: p.hi,
+    hi: p.hi || '',
     icon: p.icon,
     regional: !!p.regional,
     likely: (p.likely || []).map((row, i) => {
@@ -548,18 +815,21 @@
       const [aEn, aHi, bEn, bHi] = row.split('|');
       return { key: p.id + ':r' + i, pack: p.id, a: { en: aEn, hi: aHi }, b: { en: bEn, hi: bHi } };
     }),
+    never: (p.never || []).map((en, i) => ({ key: p.id + ':n' + i, pack: p.id, en })),
   }));
 
   const BY_KEY = {};
-  PACKS.forEach((p) => p.likely.concat(p.rather).forEach((item) => (BY_KEY[item.key] = item)));
+  PACKS.forEach((p) => p.likely.concat(p.rather, p.never).forEach((item) => (BY_KEY[item.key] = item)));
+
+  const FIELD = { mlt: 'likely', wyr: 'rather', nhie: 'never' };
 
   function getPack(id) {
     return PACKS.find((p) => p.id === id) || null;
   }
 
-  /** Packs that have content for a mode ('mlt' → likely, 'wyr' → rather). */
+  /** Packs that have content for a mode ('mlt' → likely, 'wyr' → rather, 'nhie' → never). */
   function packsFor(mode) {
-    const field = mode === 'wyr' ? 'rather' : 'likely';
+    const field = FIELD[mode] || FIELD.mlt;
     return PACKS.filter((p) => p[field].length);
   }
 
@@ -575,5 +845,5 @@
     return BY_KEY[key] || null;
   }
 
-  return { PACKS, getPack, packsFor, defaultPacks, byKey };
+  return { PACKS, FIELD, getPack, packsFor, defaultPacks, byKey };
 });

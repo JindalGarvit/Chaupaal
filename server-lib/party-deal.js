@@ -388,7 +388,7 @@ const charadesAdapter = {
   },
 };
 
-// ------------------------------------------------------------------ Most Likely To? / Would You Rather?
+// ------------------------------------------------------------------ Most Likely To? / Would You Rather? / Never Have I Ever
 
 /**
  * Votes sit in server.hidden (no client access) until the round closes; pub only lists who voted.
@@ -418,12 +418,16 @@ const mostlikelyAdapter = {
       deck = out.state;
     }
     if (!prompt) throw err('no_prompts', 'No prompts in the chosen packs');
+    const session = prev ? prev.session : MostLikelyCore.newSession();
+    // Never Have I Ever with fingers: only players with fingers left answer.
+    const roundIds = s.mode === 'nhie' ? MostLikelyCore.nhieRoundPlayers(session, ids, s) : ids;
+    if (roundIds.length < min) throw err('need_players', 'Need at least ' + min + ' players with fingers left');
     room.server = {
       settings: s,
-      pub: MostLikelyCore.createRound(ids, prompt, s, ctx.roundNo),
+      pub: MostLikelyCore.createRound(roundIds, prompt, s, ctx.roundNo),
       hidden: MostLikelyCore.createHidden(),
       deck: deck || { deck: [], sig: '', last: null },
-      session: prev ? prev.session : MostLikelyCore.newSession(),
+      session,
       recorded: false,
     };
     room.secrets = {};
@@ -451,7 +455,7 @@ const mostlikelyAdapter = {
       addRoundPoints(room, s.pub.result.points);
     }
     // Only after the defence beat, so the last round still gets its "defend yourself" moment.
-    if (s.pub.phase === 'result' && MostLikelyCore.isOver(s.settings, room.pub.roundNo)) room.pub.over = true;
+    if (s.pub.phase === 'result' && MostLikelyCore.isOver(s.settings, room.pub.roundNo, s.session)) room.pub.over = true;
   },
   absent(room, ctx) {
     const st = room.server.pub;
@@ -476,14 +480,15 @@ const mostlikelyAdapter = {
     vote(ctx) {
       const { room, uid, args } = ctx;
       const mode = room.server.pub.mode;
-      const action = mode === 'wyr'
-        ? { type: 'vote', id: uid, pick: String(args.pick || ''), guess: String(args.guess || '') }
-        : { type: 'vote', id: uid, target: String(args.target || '') };
+      let action;
+      if (mode === 'nhie') action = { type: 'vote', id: uid, answer: String(args.answer || '') };
+      else if (mode === 'wyr') action = { type: 'vote', id: uid, pick: String(args.pick || ''), guess: String(args.guess || '') };
+      else action = { type: 'vote', id: uid, target: String(args.target || '') };
       ctx.act(action);
       // Your own choice, readable only by you (so a refresh still shows "you picked …").
-      room.secrets[uid] = mode === 'wyr'
-        ? { roundNo: room.pub.roundNo, pick: action.pick, guess: action.guess }
-        : { roundNo: room.pub.roundNo, target: action.target };
+      if (mode === 'nhie') room.secrets[uid] = { roundNo: room.pub.roundNo, answer: action.answer };
+      else if (mode === 'wyr') room.secrets[uid] = { roundNo: room.pub.roundNo, pick: action.pick, guess: action.guess };
+      else room.secrets[uid] = { roundNo: room.pub.roundNo, target: action.target };
       return {};
     },
     revealNow(ctx) {

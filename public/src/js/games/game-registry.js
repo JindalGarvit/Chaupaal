@@ -437,7 +437,7 @@
     // Party kit titles have their own Pass & Play / Room setup — no Practice path
     if (isPartyKit(id)) return null;
     // Category / mode / honesty quirks — still Practice-reachable
-    if (id === 'quiz' || id === 'scribble' || id === 'patangbaazi') return 'special';
+    if (id === 'quiz' || id === 'scribble') return 'special';
     const g = getGame(id);
     if (!g || g.dangal === false) return null;
     if ((g.solo || g.gameType === 'solo') && !gameIsLiveCapable(id, g)) return 'soloPractice';
@@ -475,7 +475,7 @@
 
   /**
    * Shared Practice vs AI contract (Manch + self-chat + 1:1).
-   * Sets honest launch ctx; ≤1 optional setup sheet (Ludo / Uno / Chess / Patang / Snakes).
+   * Sets honest launch ctx; ≤1 optional setup sheet (Ludo / Uno / Chess / Snakes).
    * Always replaces prior Live ctx so Practice never waits on a stale matchId.
    * Friend chat identity must never become the AI seat — always practiceAiChat().
    */
@@ -530,8 +530,8 @@
       return;
     }
 
-    // Snakes / Patang: keep their one mode/version sheet (do not auto-skip).
-    if (gameId === 'snakes' || gameId === 'patangbaazi') {
+    // Snakes: keep its one version sheet (do not auto-skip).
+    if (gameId === 'snakes') {
       window.__dangalLaunchCtx.skipPracticeSetup = false;
     }
 
@@ -582,7 +582,6 @@
         const solo = entry === 'soloPractice';
         let rowDesc = solo ? 'Practice · Solo' : 'Practice vs AI';
         if (g.id === 'scribble') rowDesc = 'Practice vs AI · you draw, AI guesses';
-        if (g.id === 'patangbaazi') rowDesc = 'Practice · Duel or Festival';
         return {
           id: g.id,
           emoji: g.icon,
@@ -629,8 +628,6 @@
           rowDesc = 'Practice · Solo';
         } else if (g.id === 'scribble') {
           rowDesc = 'Practice vs AI · you draw, AI guesses';
-        } else if (g.id === 'patangbaazi') {
-          rowDesc = 'Practice · Duel or Festival';
         } else {
           rowDesc = 'Practice vs AI';
         }

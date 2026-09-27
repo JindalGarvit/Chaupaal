@@ -184,9 +184,9 @@ async function collectGames(_db, q, limit) {
     { id: 'chess', name: 'Chess', subtitle: 'Board game' },
     { id: 'ludo', name: 'Ludo', subtitle: 'Board game' },
     { id: 'scribble', name: 'Scribble', subtitle: 'Draw & guess' },
-    { id: 'ank-jod', name: 'Ank Jod', subtitle: 'Number game' },
+    { id: 'ankjod', name: 'Kakuro', subtitle: 'Number puzzle · cross sums', keywords: 'ank jod' },
   ];
-  return CATALOG.filter((g) => `${g.name} ${g.subtitle}`.toLowerCase().includes(q))
+  return CATALOG.filter((g) => `${g.name} ${g.subtitle} ${g.keywords || ''}`.toLowerCase().includes(q))
     .slice(0, limit)
     .map((g) => ({
       type: 'game',

@@ -22,6 +22,7 @@ const RETIRED_GAME_IDS = new Set([
   'rushrunner', 'pool', 'bowling', 'pickleball', 'tennis', 'fiveinrow', 'andarbaahar',
   'sattepe', 'business', 'tabletennis', 'kabaddi', 'khokho', 'gullykick',
   'fiveinarow', 'football', 'snooker', 'billiards', 'andarbahar', 'sattepesatta',
+  'patangbaazi', 'kite', 'kitefight', 'patang',
 ]);
 
 const ACHIEVEMENTS = {

@@ -52,7 +52,6 @@
     rummy: '#6A1B9A',
     teenpatti: '#4A148C',
     bluff: '#37474F',
-    patangbaazi: '#FF6D00',
     brickbreaker: '#5C6BC0',
     imposter: '#C2185B',
     rajamantri: '#B8860B',
@@ -76,8 +75,8 @@
     wordguess: 'Shabd Five',
     scribble: 'Scribble',
     tiptap: 'Tip Tap',
-    ankjod: 'Ank Jod',
-    kakuro: 'Ank Jod',
+    ankjod: 'Kakuro',
+    kakuro: 'Kakuro',
     streetcricket: 'Street Cricket',
     badminton: 'Badminton',
     tambola: 'Tambola',
@@ -85,7 +84,6 @@
     rummy: 'Rummy',
     teenpatti: 'Teen Patti',
     bluff: 'Bluff',
-    patangbaazi: 'Patang Baazi',
     brickbreaker: 'Brick Breaker',
     imposter: 'Imposter',
     rajamantri: 'Raja Mantri Chor Sipahi',
@@ -134,7 +132,7 @@
       'Continue your campaign · replay cleared levels anytime',
     ],
     ankjod: [
-      'Across/down runs must sum to the clue — digits 1–9, no repeats in a run',
+      'Kakuro: each run of white cells must add up to its clue — digits 1–9, no repeats in a run',
       'Pencil notes · Check finds conflicts · Hint teaches when stuck · long-press Pencil for auto-notes',
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
@@ -170,11 +168,6 @@
       'Call or play mid-hand; last play needs Call or Pass before empty-hand win',
       'Three lives · 0 lives loses · Live never shows honesty before Call',
     ],
-    patangbaazi: [
-      'Live duel: both fly — first cut wins (host resolves) · virtual stakes once',
-      'Festival is Practice-only heat — not on Live challenge',
-      'Leave = forfeit · Rematch = new match · Practice Duel still clears two hunters',
-    ],
     imposter: [
       'Everyone gets the same secret word — except the Imposter',
       'Take turns giving ONE clue word: not the word, not a translation, no repeats',
@@ -196,6 +189,7 @@
     mostlikely: [
       'Most Likely To: everyone secretly votes for one player — the top pick gets crowned',
       'Would You Rather: pick A or B, then guess what most of the room picked',
+      'Never Have I Ever: tap I have or Never — say "I have" and you lose a finger; last hand up wins',
       'Votes stay hidden until the reveal · +1 for reading the room',
       'Settings: packs, rounds, anonymous reveal and your own prompts',
     ],
@@ -225,9 +219,6 @@
     carrom: { key: 'chaupaal_pb_carrom', label: 'coins', higherBetter: true },
     brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: 'pts', higherBetter: true },
     brickbreaker_endless: { key: 'chaupaal_pb_brickbreaker_endless', label: 'pts', higherBetter: true },
-    patangbaazi_duel: { key: 'chaupaal_pb_patang_duel', label: ' streak', higherBetter: true },
-    patangbaazi_festival: { key: 'chaupaal_pb_patang_festival', label: 's', higherBetter: true },
-    patangbaazi_festival_cuts: { key: 'chaupaal_pb_patang_festival_cuts', label: ' cuts', higherBetter: true },
   };
 
   function gameFeedback(action, opts) {
@@ -645,7 +636,7 @@
   }
 
   /* ── Personal bests ── */
-  /** Ank Jod per-difficulty PB ids (legacy overall stays `ankjod`). */
+  /** Kakuro per-difficulty PB ids (id stays `ankjod`; legacy overall key is `ankjod`). */
   function ankJodPbGameId(difficulty) {
     const d = String(difficulty || '').toLowerCase();
     if (d === 'easy' || d === 'medium' || d === 'hard' || d === 'daily') return 'ankjod_' + d;
@@ -688,14 +679,6 @@
       if (gameId === 'streetcricket') {
         return getGamePB('streetcricket_over');
       }
-      // Legacy Prompt 2–3 cuts score (if any) → festival cuts only
-      if (gameId === 'patangbaazi_festival_cuts') {
-        const legacy = localStorage.getItem('chaupaal_pb_patangbaazi');
-        if (legacy != null && legacy !== '') {
-          const n = Number(legacy);
-          return Number.isFinite(n) ? n : null;
-        }
-      }
       return null;
     }
     const n = Number(raw);
@@ -712,7 +695,7 @@
       (meta.higherBetter ? next > prev : next < prev);
     if (better) {
       localStorage.setItem(meta.key, String(next));
-      // Per-diff Ank Jod wins also refresh overall legacy key (lower time = better)
+      // Per-diff Kakuro wins also refresh overall legacy key (lower time = better)
       if (String(gameId).indexOf('ankjod_') === 0) {
         setGamePB('ankjod', next);
       }

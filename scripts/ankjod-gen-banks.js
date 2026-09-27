@@ -1,5 +1,5 @@
 /**
- * Offline Ank Jod bank expander — run: node scripts/ankjod-gen-banks.js
+ * Offline Kakuro (id `ankjod`) bank expander — run: node scripts/ankjod-gen-banks.js
  * Emits JSON of BANK_STRINGS-compatible row arrays that pass uniqueness + connectivity.
  */
 'use strict';

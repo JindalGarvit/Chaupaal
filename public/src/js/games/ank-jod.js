@@ -1,6 +1,6 @@
 /**
- * Ank Jod — solo sum-run puzzle (Phase 2B).
- * Digits 1–9, no repeats in a run; across/down clues must match sums.
+ * Kakuro — solo cross-sum puzzle (Phase 2B). Internal id stays `ankjod` (saves, PBs, leaderboards);
+ * `kakuro` is a permanent alias. Digits 1–9, no repeats in a run; each clue is the sum of its run.
  * Ships verified puzzle banks + light unique-solution generator.
  */
 (function () {
@@ -1459,7 +1459,7 @@
         </button>`
       : '';
     overlay.innerHTML = `
-      ${gameChromeHtml({ title: 'Ank Jod', subtitle: 'Choose difficulty', backId: 'kkDiffBack' })}
+      ${gameChromeHtml({ title: 'Kakuro', subtitle: 'Choose difficulty', backId: 'kkDiffBack' })}
       <div style="flex:1;overflow-y:auto;padding:20px 16px;">
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:6px;">Pick a challenge</div>
         <div style="font-size:13px;color:var(--muted,#8A7F72);margin-bottom:18px;line-height:1.4;">Fill white cells with 1–9. No repeats in a run — each clue is that run’s sum. Progress saves per difficulty.</div>
@@ -2007,14 +2007,13 @@
       coachEl = document.createElement('div');
       coachEl.className = 'kk-coach';
       coachEl.innerHTML = `
-        <div class="kk-coach-card" role="dialog" aria-label="Ank Jod tips">
-          <div class="kk-coach-title">Ank Jod</div>
+        <div class="kk-coach-card" role="dialog" aria-label="Kakuro tips">
+          <div class="kk-coach-title">Kakuro</div>
           <ul class="kk-coach-tips">
-            <li>Digits 1–9 · no repeats inside a run</li>
-            <li>Each clue is the sum of its across or down run</li>
-            <li>Check finds conflicts · Hint teaches · Pencil long-press for auto-notes</li>
+            <li>Fill each run of white cells with digits 1–9 — no repeats inside a run</li>
+            <li>A clue is the sum of the run to its right (across) or below it (down)</li>
+            <li>Pencil for notes · Check finds conflicts · Hint when stuck · long-press Pencil for auto-notes</li>
             <li>Leave anytime — Continue restores your board and timer</li>
-            <li>Pencil for notes · Check for conflicts · Hint when stuck</li>
           </ul>
           <button type="button" class="kk-coach-dismiss game-tap-target" data-kk-coach-ok>Got it</button>
         </div>`;
@@ -2169,7 +2168,7 @@
       const elapsed = getPlayElapsed();
       root.innerHTML = `
         ${gameChromeHtml({
-          title: 'Ank Jod',
+          title: 'Kakuro',
           subtitle: 'Practice · ' + diffMeta.label,
           backId: 'kkBack',
           pauseId: 'kkPause',
@@ -2234,8 +2233,8 @@
         }
         const ask =
           typeof confirmLeaveGame === 'function'
-            ? confirmLeaveGame({ title: 'Leave Ank Jod?', body: 'Progress will be saved — you can Continue later.' })
-            : Promise.resolve(window.confirm('Leave Ank Jod? Progress will be saved.'));
+            ? confirmLeaveGame({ title: 'Leave Kakuro?', body: 'Progress will be saved — you can Continue later.' })
+            : Promise.resolve(window.confirm('Leave Kakuro? Progress will be saved.'));
         Promise.resolve(ask).then((ok) => {
           if (!ok) return;
           persistSave();
@@ -2452,7 +2451,7 @@
         scoreLine: formatTime(elapsed),
         score: secs,
         meta: `${diffMeta.label}${dailyBit}${vsBest ? ` · ${vsBest}` : ''}`,
-        text: `I solved Ank Jod (${diffMeta.label}${dailyBit}) in ${formatTime(elapsed)} on Chaupaal. Can you beat that?`,
+        text: `I solved Kakuro (${diffMeta.label}${dailyBit}) in ${formatTime(elapsed)} on Chaupaal. Can you beat that?`,
       };
       if (pauseCtrl) {
         try {
@@ -2461,7 +2460,7 @@
         pauseCtrl = null;
       }
       root.innerHTML = `
-        ${gameChromeHtml({ title: 'Ank Jod', subtitle: 'Practice · ' + diffMeta.label, backId: 'kkBack' })}
+        ${gameChromeHtml({ title: 'Kakuro', subtitle: 'Practice · ' + diffMeta.label, backId: 'kkBack' })}
         ${
           typeof gameResultHtml === 'function'
             ? gameResultHtml({
@@ -2505,7 +2504,7 @@
               if (f && typeof shareGameResult === 'function') {
                 shareGameResult('ankjod', {
                   ...shareStats,
-                  text: `Hey ${f.name} — beat my Ank Jod ${diffMeta.label} time of ${formatTime(elapsed)} on Chaupaal!`,
+                  text: `Hey ${f.name} — beat my Kakuro ${diffMeta.label} time of ${formatTime(elapsed)} on Chaupaal!`,
                 });
               }
             } else if (typeof shareGameResult === 'function') {
@@ -2618,7 +2617,7 @@
     session = createGameSession({
       id: 'ankjod_' + Date.now(),
       type: 'ankjod',
-      title: 'Ank Jod',
+      title: 'Kakuro',
       mode: 'solo',
       elapsedOffsetMs: resumeElapsed,
       context: {
@@ -2698,7 +2697,7 @@
   }
 
   window.openAnkJod = openAnkJod;
-  // Kakuro-compatible aliases (localized product name remains Ank Jod).
+  // `kakuro` alias for deep links / callers; saves and PBs stay keyed on `ankjod`.
   window.openKakuro = openAnkJod;
   window.__ankJodLastGenStats = {};
   window.__ankJodDebug = {
@@ -2715,7 +2714,7 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'ankjod',
-      name: 'Ank Jod',
+      name: 'Kakuro',
       desc: 'Cross-sums · Easy / Medium / Hard / Daily · Solo',
       icon: '🔢',
       ratingKey: 'ankjod',
@@ -2736,7 +2735,7 @@
     // Alias id for callers / deep links that expect "kakuro"
     registerGame({
       id: 'kakuro',
-      name: 'Ank Jod',
+      name: 'Kakuro',
       desc: 'Cross-sums · Solo',
       icon: '🔢',
       ratingKey: 'ankjod',

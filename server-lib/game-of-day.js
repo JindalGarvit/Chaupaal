@@ -37,7 +37,6 @@ const GAME_GENRE_BY_ID = {
   tambola: 'party',
   streetcricket: 'rw_sports',
   badminton: 'rw_sports',
-  patangbaazi: 'arcade',
   imposter: 'party',
   rajamantri: 'party',
   charades: 'party',

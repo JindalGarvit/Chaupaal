@@ -7,6 +7,7 @@
  *  (e) custom prompts: kindness filter, session-only
  *  (f) room: no voter→choice in shared payloads before reveal; anonymous never publishes it
  *  (g) wiring: roster, graduation, identity, how-to, registry, rules, scripts, api count
+ *  (h) Never Have I Ever (H0): ≥200 statements, fingers, anonymity, room privacy, customs
  */
 'use strict';
 
@@ -38,10 +39,13 @@ const DEVANAGARI = /[\u0900-\u097F]/;
 // ---------- (a) packs ----------
 const likely = [];
 const rather = [];
+const never = [];
 Packs.PACKS.forEach((p) => {
-  assert(p.en && DEVANAGARI.test(p.hi) && p.icon, `pack ${p.id}: English + Devanagari label + icon`);
+  if (p.likely.length || p.rather.length) assert(p.en && DEVANAGARI.test(p.hi) && p.icon, `pack ${p.id}: English + Devanagari label + icon`);
+  else assert(p.en && p.icon && p.never.length, `pack ${p.id}: English label + icon (Never Have I Ever — localised via i18n)`);
   likely.push(...p.likely);
   rather.push(...p.rather);
+  never.push(...p.never);
 });
 const ratherCore = rather.filter((r) => r.pack !== 'hypothetical');
 assert(likely.length >= 200, `Most Likely To prompts ≥200 (got ${likely.length})`);
@@ -247,7 +251,8 @@ function ownerOnlySecrets(room) {
     const sec = room.secrets[uid];
     const v = room.server.hidden.votes[uid];
     if (!v) throw new Error('secret without a vote');
-    if (typeof v === 'string' ? sec.target !== v : sec.pick !== v.pick) throw new Error('secret is not the owner’s own vote');
+    const mine = v === 'have' || v === 'never' ? sec.answer === v : typeof v === 'string' ? sec.target === v : sec.pick === v.pick;
+    if (!mine) throw new Error('secret is not the owner’s own vote');
   });
 }
 
@@ -402,6 +407,193 @@ function ownerOnlySecrets(room) {
   assert(room.pub.players[later].pending && room.pub.state.players.indexOf(later) < 0, 'mid-round joiner votes from the next round');
 })();
 
+// ---------- (h) Never Have I Ever (Dangal H0) ----------
+assert(never.length >= 200, `Never Have I Ever statements ≥200 (got ${never.length})`);
+assert(never.every((x) => x.en && !DEVANAGARI.test(x.en) && /^[a-z]/.test(x.en) && !/^never have i ever/i.test(x.en)), 'statements are plain global English, lower-case continuations of “Never have I ever…”');
+const seenN = new Set(never.map((x) => norm(x.en)));
+assert(seenN.size === never.length, 'no duplicate Never Have I Ever statements');
+const flaggedN = never.filter((x) => ML.kindnessFlags(x.en).length).map((x) => x.key + ':' + ML.kindnessFlags(x.en));
+assert(flaggedN.length === 0, 'kindness guardrail: Never Have I Ever packs are teen-safe' + (flaggedN.length ? ' → ' + flaggedN.join(', ') : ''));
+['stolen a candy bar', 'been arrested', 'spent a night in jail', 'shoplifted gum', 'got drunk'].forEach((x) => {
+  if (!ML.kindnessFlags(x).length) throw new Error('NHIE kindness class missed: ' + x);
+});
+assert(true, 'crime / adult samples trip the guardrail');
+assert(Packs.packsFor('nhie').length >= 6 && Packs.packsFor('nhie').every((p) => p.never.length >= 20), 'six+ Never Have I Ever packs, each with a real set');
+assert(Packs.defaultPacks('nhie', 'en').length > 0 && ML.MODES.indexOf('nhie') >= 0 && ML.MIN.nhie === 2, 'nhie is a mode with default packs; 2 players minimum');
+
+const N3 = ['a', 'b', 'c'];
+g = round('nhie', { reveal: 'names', scoring: true }, N3);
+assert(g.r.fingers === true, 'five-finger scoring is on by default (names reveal)');
+assert(g.act({ type: 'vote', id: 'a', answer: 'maybe' }).error === 'bad_vote', 'answer must be I have / Never');
+g.act({ type: 'vote', id: 'a', answer: 'have' });
+g.act({ type: 'vote', id: 'b', answer: 'never' });
+assert(g.r.phase === 'vote' && !g.r.result && !/have|never/.test(JSON.stringify(g.r).replace(/"mode":"nhie"/, '')), 'no answer in the round state before reveal');
+g.act({ type: 'vote', id: 'c', answer: 'have' });
+res = g.r.result;
+assert(g.r.phase === 'result' && res.counts.have === 2 && res.counts.never === 1 && res.haves.join() === 'a,c' && res.nevers.join() === 'b', 'names reveal: counts + who has / who never');
+assert(res.lost.join() === 'a,c' && !Object.keys(res.points).length, '“I have” costs a finger; no points');
+g = round('nhie', { reveal: 'anon', scoring: true }, N3);
+assert(g.r.fingers === false && !ML.fingersOn(g.s), 'anonymous reveal switches finger loss off (it would name who has)');
+N3.forEach((id, i) => g.act({ type: 'vote', id, answer: i ? 'never' : 'have' }));
+res = g.r.result;
+assert(res.anon && res.haves === null && res.nevers === null && !res.lost.length && res.counts.have === 1, 'anonymous reveal: count only, no names');
+assert(!/"a"|"b"|"c"/.test(JSON.stringify(res)), 'anonymous result never carries a player id');
+g = round('nhie', { reveal: 'names', scoring: false }, N3);
+assert(g.r.fingers === false, 'scoring off = casual (no fingers)');
+g = round('nhie', { reveal: 'names' }, N3);
+g.act({ type: 'quick', haves: ['b'] });
+assert(g.r.result.haves.join() === 'b' && g.r.result.nevers.join() === 'a,c' && g.r.result.lost.join() === 'b', 'show of hands: tapped players have, the rest never');
+
+(function () {
+  const s = ML.mergeSettings({ mode: 'nhie', reveal: 'names', rounds: 0 });
+  const sess = ML.newSession();
+  let ids = ML.nhieRoundPlayers(sess, N3, s);
+  assert(ids.length === 3 && N3.every((id) => ML.fingersLeft(sess, id) === ML.FINGERS), 'everyone starts with five fingers');
+  let n = 0;
+  const haveBy = (who) => {
+    const x = ML.createRound(ids, { key: 'k' + n, en: 's' + n }, s, ++n);
+    const h = ML.createHidden();
+    ids.forEach((id) => ML.applyAction(x, h, s, { type: 'vote', id, answer: who.indexOf(id) >= 0 ? 'have' : 'never' }));
+    ML.recordRound(sess, x);
+    ids = ML.nhieRoundPlayers(sess, N3, s);
+  };
+  for (let i = 0; i < 5; i++) haveBy(['a']);
+  assert(ML.fingersLeft(sess, 'a') === 0 && ids.join() === 'b,c' && !sess.nhieOver, 'out of fingers → sits out; game goes on');
+  const late = ML.nhieRoundPlayers(sess, N3.concat('d'), s);
+  assert(ML.fingersLeft(sess, 'd') === 5 && late.indexOf('d') >= 0, 'late joiner starts level with the lowest hand still in play');
+  delete sess.fingers.d;
+  haveBy(['b']);
+  haveBy(['b', 'c']);
+  assert(ML.fingersLeft(sess, 'b') === 3 && ML.fingersLeft(sess, 'c') === 4, 'fingers tick down per “I have”');
+  for (let i = 0; i < 3 && !sess.nhieOver; i++) haveBy(['b']);
+  assert(sess.nhieOver && sess.winners.join() === 'c' && ML.isOver(s, 99, sess), 'last hand standing wins; session ends even in endless mode');
+  const st = ML.nhieStandings(sess, N3);
+  assert(st.winners.join() === 'c' && st.rows.find((r) => r.id === 'a').fingers === 0, 'standings: winner + per-player fingers');
+  const hl2 = ML.nhieHighlights(sess, N3);
+  assert(hl2.adventurous.ids.join() === 'a,b' && hl2.innocent.ids.join() === 'c', 'Most adventurous / Most innocent from names rounds');
+  assert(hl2.common && hl2.common.counts.have >= 1, 'room-level “most of us have” highlight');
+
+  const tie = ML.newSession();
+  let tids = ML.nhieRoundPlayers(tie, ['x', 'y'], s);
+  for (let i = 0; i < 5; i++) {
+    const x = ML.createRound(tids, { key: 't' + i, en: 't' }, s, i + 1);
+    const h = ML.createHidden();
+    tids.forEach((id) => ML.applyAction(x, h, s, { type: 'vote', id, answer: 'have' }));
+    ML.recordRound(tie, x);
+    tids = ML.nhieRoundPlayers(tie, ['x', 'y'], s);
+  }
+  assert(tie.nhieOver && tie.winners.sort().join() === 'x,y', 'everyone out on the same statement → shared win');
+
+  const capped = ML.newSession();
+  const s3 = ML.mergeSettings({ mode: 'nhie', reveal: 'names', rounds: 10 });
+  ML.nhieRoundPlayers(capped, ['x', 'y'], s3);
+  capped.fingers.x = 2;
+  assert(ML.nhieStandings(capped, ['x', 'y']).winners.join() === 'y' && ML.isOver(s3, 10, capped), 'round cap reached → most fingers left wins');
+  const anonS = ML.newSession();
+  const ax2 = ML.createRound(N3, { key: 'q', en: 'q' }, ML.mergeSettings({ mode: 'nhie', reveal: 'anon' }), 1);
+  const ah = ML.createHidden();
+  N3.forEach((id) => ML.applyAction(ax2, ah, { mode: 'nhie', reveal: 'anon' }, { type: 'vote', id, answer: 'have' }));
+  ML.recordRound(anonS, ax2);
+  assert(!Object.keys(anonS.have).length && anonS.history[0].haves === null && ML.nhieStandings(anonS, N3) === null, 'anonymous rounds never record who has');
+})();
+
+cc = ML.cleanCustom('Never have I ever missed a flight!', 'nhie');
+assert(cc.ok && cc.prompt.en === 'missed a flight' && cc.prompt.custom, 'custom statement: leading “Never have I ever” + trailing punctuation stripped');
+assert(!ML.cleanCustom('stolen from a shop', 'nhie').ok && !ML.cleanCustom('been drunk at school', 'nhie').ok && !ML.cleanCustom('ok', 'nhie').ok, 'custom statements are kindness-filtered and need some text');
+(function () {
+  const s = ML.mergeSettings({ mode: 'nhie', packs: ['nhie-food', 'nhie-travel'] }, 'en');
+  const pool = ML.poolKeys(s, 'en');
+  let st = null;
+  const seen = new Set();
+  const rng = seeded(11);
+  for (let i = 0; i < pool.length; i++) {
+    const out = ML.nextPrompt(st, s, 'en', rng);
+    st = out.state;
+    if (seen.has(out.prompt.key) || !out.prompt.en) throw new Error('nhie: repeat before pool exhausted');
+    seen.add(out.prompt.key);
+  }
+  assert(seen.size === pool.length && pool.length === 72, 'nhie deck: no repeats until the chosen packs run dry');
+  assert(ML.poolKeys(ML.mergeSettings({ mode: 'nhie' }, 'en'), 'en').every((k) => /^nhie-/.test(k)), 'nhie deck deals statements only');
+})();
+
+// NHIE room, names reveal + fingers — full session, no leaks
+(function () {
+  const { room, host, all } = mkRoom({ mode: 'nhie', reveal: 'names', scoring: true, rounds: 0 }, 4);
+  Party.reduceRoom(room, host, 'start', {}, NOW + 10, seeded(12));
+  assert(room.pub.state.mode === 'nhie' && room.pub.state.prompt.en && room.pub.state.fingers, 'NHIE room deals a statement with fingers on');
+  Party.reduceRoom(room, all[1], 'vote', { answer: 'have' }, NOW + 11, Math.random);
+  Party.reduceRoom(room, all[2], 'vote', { answer: 'never' }, NOW + 12, Math.random);
+  noVotesShared(room, 'nhie mid');
+  ownerOnlySecrets(room);
+  assert(room.secrets[all[1]].answer === 'have' && !room.secrets[all[3]] && !room.pub.state.result, 'answers live only in each voter’s own secret until reveal');
+  let code = '';
+  try {
+    Party.reduceRoom(room, all[3], 'vote', { answer: 'yes' }, NOW + 13, Math.random);
+  } catch (e) {
+    code = e.code;
+  }
+  assert(!!code, 'room rejects a bad answer');
+  Party.reduceRoom(room, host, 'vote', { answer: 'never' }, NOW + 14, Math.random);
+  Party.reduceRoom(room, all[3], 'vote', { answer: 'have' }, NOW + 15, Math.random);
+  const st = room.pub.state;
+  assert(st.phase === 'result' && st.result.haves.sort().join() === [all[1], all[3]].sort().join(), 'all answered → names reveal');
+  assert(st.session.fingers[all[1]] === 4 && st.session.fingers[host] === 5, 'room fingers synced in the session');
+  let guard = 0;
+  while (!room.pub.over && guard++ < 80) {
+    if (room.pub.state.phase === 'result') Party.reduceRoom(room, host, 'next', {}, NOW + 500 + guard, seeded(guard));
+    const s = room.pub.state;
+    if (s.phase === 'vote') {
+      if (!s.players.every((id) => ML.fingersLeft(s.session, id) > 0)) throw new Error('out-of-fingers player dealt into a round');
+      s.players.forEach((id, i) => {
+        if (!room.pub.over && room.pub.state.phase === 'vote') Party.reduceRoom(room, id, 'vote', { answer: id === host ? 'never' : i % 2 ? 'have' : 'never' }, NOW + 600 + guard * 5 + i, Math.random);
+        if (room.pub.state.phase === 'vote') noVotesShared(room, 'nhie loop ' + guard);
+      });
+    }
+  }
+  const ses = room.pub.state.session;
+  assert(room.pub.over && ses.nhieOver && ses.winners.length >= 1, 'NHIE room plays to last hand standing (endless mode)');
+  assert(guard > 5, 'out-of-fingers players sit out of later rounds (checked every deal)');
+  Party.reduceRoom(room, host, 'start', {}, NOW + 9e6, seeded(8));
+  assert(room.pub.roundNo === 1 && !room.pub.over && !room.pub.state.session.nhieOver && room.pub.state.players.length === 4, 'Play again: everyone back with five fingers');
+})();
+
+// NHIE room, anonymous (room default) — counts only, never names
+(function () {
+  const { room, host, all } = mkRoom({ mode: 'nhie', reveal: 'anon', rounds: 10 }, 3);
+  Party.reduceRoom(room, host, 'start', {}, NOW + 10, seeded(13));
+  assert(!room.pub.state.fingers, 'anonymous room: fingers off');
+  all.forEach((id, i) => {
+    Party.reduceRoom(room, id, 'vote', { answer: i ? 'never' : 'have' }, NOW + 11 + i, Math.random);
+    noVotesShared(room, 'nhie anon ' + i);
+  });
+  const res = room.pub.state.result;
+  const shared = sharedOf(room);
+  assert(res.anon && res.counts.have === 1 && res.haves === null && res.nevers === null, 'anonymous room reveal: count only');
+  assert(!all.some((id) => new RegExp('"(haves|nevers|lost)":\\[[^\\]]*' + id).test(shared)), 'anonymous room never publishes who has');
+  assert(!Object.keys(room.pub.state.session.have).length, 'anonymous room session keeps no per-player answers');
+  let guard = 0;
+  while (!room.pub.over && guard++ < 60) {
+    if (room.pub.state.phase === 'vote') Party.reduceRoom(room, host, 'tick', {}, room.pub.deadline + 1, Math.random);
+    else Party.reduceRoom(room, host, 'next', {}, NOW + 800 + guard, seeded(guard));
+    Object.keys(room.presence).forEach((id) => (room.presence[id] = { at: (room.pub.deadline || NOW) + 1, online: true }));
+  }
+  assert(room.pub.over && room.pub.roundNo === 10, 'anonymous NHIE room completes a 10-round session');
+})();
+
+// NHIE custom statement via start args (server re-checks)
+(function () {
+  const { room, host } = mkRoom({ mode: 'nhie', reveal: 'names' }, 2);
+  let code = '';
+  try {
+    Party.reduceRoom(room, host, 'start', { custom: 'shoplifted a chocolate bar' }, NOW + 5, seeded(1));
+  } catch (e) {
+    code = e.code;
+  }
+  assert(/custom_blocked/.test(code), 'server re-checks a custom NHIE statement');
+  Party.reduceRoom(room, host, 'start', { custom: 'Never have I ever eaten cereal for dinner' }, NOW + 10, seeded(1));
+  assert(room.pub.state.prompt.custom && room.pub.state.prompt.en === 'eaten cereal for dinner' && !room.server.customs, 'host custom statement is session-only');
+})();
+
 // ---------- (g) wiring ----------
 const sandbox = { window: {}, document: { createElement: () => ({}), querySelector: () => null }, console };
 sandbox.window = sandbox;
@@ -437,6 +629,8 @@ assert(order.every((f, i) => html.includes('/src/js/' + f) && (i === 0 || html.i
 assert(/require\('\.\.\/public\/src\/js\/games\/mostlikely-core\.js'\)/.test(read('server-lib/party-deal.js')), 'server shares the client core (literal require)');
 const core = read('public/src/js/games/mostlikely-core.js');
 assert(/require\('\.\/party-core\.js'\)/.test(core) && /require\('\.\.\/data\/mostlikely-packs\.js'\)/.test(core), 'core bundles party-core + packs by literal path');
+assert(/data-mode="nhie"|'nhie'/.test(client) && /data-answer/.test(client) && /Most adventurous/.test(client) && /Most innocent/.test(client) && /fingersHtml/.test(client), 'client: third mode card, I have / Never, fingers board, adventurous / innocent highlights');
+assert(/Never Have I Ever/.test(gameUi) && /Never Have I Ever/.test(client.slice(client.indexOf('registerGame({'))), 'how-to + registry mention Never Have I Ever');
 const apiCount = fs.readdirSync(path.join(root, 'api')).filter((f) => f.endsWith('.js')).length;
 assert(apiCount === 12, `api/*.js = 12 (got ${apiCount})`);
 

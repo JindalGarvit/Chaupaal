@@ -1,7 +1,7 @@
 /**
- * Most Likely To? + Would You Rather? — pure round logic shared by Pass & Play (client) and Room
- * (server-lib/party-deal.js). Votes live in `hidden` until the round closes; the public round only
- * ever lists who has voted. Anonymous reveal publishes tallies, never voter → choice.
+ * Most Likely To? + Would You Rather? + Never Have I Ever — pure round logic shared by Pass & Play
+ * (client) and Room (server-lib/party-deal.js). Votes live in `hidden` until the round closes; the
+ * public round only ever lists who has voted. Anonymous reveal publishes tallies, never voter → choice.
  * UMD: window.MostLikelyCore / require().
  */
 (function (root, factory) {
@@ -14,9 +14,11 @@
 })(typeof self !== 'undefined' ? self : this, function (PC, Packs) {
   'use strict';
 
-  const MODES = ['mlt', 'wyr'];
-  const MODE_LABELS = { mlt: 'Most Likely To', wyr: 'Would You Rather' };
-  const MIN = { mlt: 3, wyr: 2 };
+  const MODES = ['mlt', 'wyr', 'nhie'];
+  const MODE_LABELS = { mlt: 'Most Likely To', wyr: 'Would You Rather', nhie: 'Never Have I Ever' };
+  const MIN = { mlt: 3, wyr: 2, nhie: 2 };
+  /** Never Have I Ever "five fingers": each “I have” costs one; last player with fingers left wins. */
+  const FINGERS = 5;
   const MIN_PLAYERS = 2;
   const MAX_PLAYERS = 16;
   const ROUND_OPTIONS = [10, 20, 0]; // 0 = endless
@@ -59,9 +61,14 @@
     if (src.voting === 'secret' || src.voting === 'quick') out.voting = src.voting;
     const valid = validPackIds();
     const packs = Array.isArray(src.packs) ? src.packs.filter((id, i, a) => valid.indexOf(id) >= 0 && a.indexOf(id) === i) : [];
-    // Keep choices for both modes; activePacks() narrows to the current mode.
-    out.packs = packs.length ? packs : Packs.defaultPacks('mlt', lang).concat(Packs.defaultPacks('wyr', lang).filter((id) => Packs.defaultPacks('mlt', lang).indexOf(id) < 0));
+    // Keep choices for every mode; activePacks() narrows to the current mode.
+    out.packs = packs.length ? packs : MODES.reduce((ids, m) => ids.concat(Packs.defaultPacks(m, lang).filter((id) => ids.indexOf(id) < 0)), []);
     return out;
+  }
+
+  /** Finger scoring needs names: in an anonymous round, a lost finger would reveal the answer. */
+  function fingersOn(s) {
+    return !!(s && s.mode === 'nhie' && s.scoring && s.reveal !== 'anon');
   }
 
   /** Pack ids in play for this mode (falls back to the mode's defaults). */
@@ -78,7 +85,7 @@
   // ---------------- deck: no repeats until the chosen packs run dry ----------------
 
   function poolKeys(s, lang, customs) {
-    const field = s.mode === 'wyr' ? 'rather' : 'likely';
+    const field = Packs.FIELD[s.mode] || 'likely';
     const keys = [];
     activePacks(s, lang).forEach((id) => {
       const p = Packs.getPack(id);
@@ -150,6 +157,10 @@
       en: /\b(drunk|alcohol|beer|wine|vodka|whisky|whiskey|rum|booze|daaru|daru|sharab|hangover|weed|drugs?|smoke|smoking|smoker|cigarettes?|vape|vaping|gamble|gambling|betting|casino)\b/i,
       hi: /(शराब|दारू|सिगरेट|जुआ|नशा|गांजा)/,
     },
+    crime: {
+      en: /\b(steal|steals|stole|stolen|stealing|shoplift\w*|arrested|jail|prison|crimes?|criminal|illegal|vandal\w*|graffiti|trespass\w*|robbed|robbery|burgl\w*)\b/i,
+      hi: /(चोरी|जेल|गिरफ़्तार|गिरफ्तार|अपराध)/,
+    },
     profanity: {
       en: /\b(fuck\w*|shit\w*|bitch\w*|bastard|asshole|arsehole|dick|pussy|cunt|slut|whore|crap|wtf|bc|mc|bsdk|chutiya|chutiye|bhenchod|behenchod|madarchod|gaand|gandu|randi|harami|haramkhor|kamina|kamine|saala|saali)\b/i,
       hi: /(चूतिया|भेनचोद|बहनचोद|मादरचोद|गांड|गांडू|रंडी|हरामी|कमीना|कमीने|साला|साली)/,
@@ -190,6 +201,14 @@
       if (kindnessFlags(a + ' ' + b).length) return { ok: false, reason: kind };
       return { ok: true, prompt: { custom: true, a: { en: a, hi: '' }, b: { en: b, hi: '' } } };
     }
+    if (mode === 'nhie') {
+      const t = tidy(typeof input === 'string' ? input : input && input.text, 120)
+        .replace(/^never\s+have\s+i\s+ever[\s.…,:-]*/i, '')
+        .replace(/[.!…\s]+$/, '');
+      if (t.length < 3) return { ok: false, reason: 'Write a little more' };
+      if (kindnessFlags(t).length) return { ok: false, reason: kind };
+      return { ok: true, prompt: { custom: true, en: t, hi: '' } };
+    }
     let text = tidy(typeof input === 'string' ? input : input && input.text, 120);
     text = text.replace(/^who('s| is)? most likely to\s+/i, '').replace(/^most likely to\s+/i, '');
     if (text.length < 3) return { ok: false, reason: 'Write a little more' };
@@ -209,6 +228,7 @@
   function promptLines(prompt, mode, lang, both) {
     if (!prompt) return { primary: '', secondary: '' };
     if (mode === 'wyr') return { primary: 'Would you rather…', secondary: '' };
+    if (mode === 'nhie') return { primary: 'Never have I ever ' + String(prompt.en || '').replace(/[.!]+$/, ''), secondary: '' };
     const en = mltQuestionEn(prompt);
     const hi = prompt.hi || '';
     const primary = isHi(lang) && hi ? hi : en;
@@ -234,7 +254,9 @@
 
   function createRound(ids, prompt, settings, n) {
     const s = mergeSettings(settings);
-    return { n: n || 1, mode: s.mode, prompt, players: ids.slice(), phase: 'vote', voted: [], result: null, quick: false };
+    const r = { n: n || 1, mode: s.mode, prompt, players: ids.slice(), phase: 'vote', voted: [], result: null, quick: false };
+    if (s.mode === 'nhie') r.fingers = fingersOn(s);
+    return r;
   }
 
   function createHidden() {
@@ -295,6 +317,20 @@
   function buildResult(round, hidden, s) {
     const anon = s.reveal === 'anon';
     const votes = hidden.votes || {};
+    if (round.mode === 'nhie') {
+      const haves = round.players.filter((id) => votes[id] === 'have');
+      const nevers = round.players.filter((id) => votes[id] === 'never');
+      // Anonymous: counts only — no names, and no finger loss (it would name who has).
+      return {
+        counts: { have: haves.length, never: nevers.length },
+        total: haves.length + nevers.length,
+        anon,
+        points: {},
+        haves: anon ? null : haves,
+        nevers: anon ? null : nevers,
+        lost: round.fingers && !anon ? haves.slice() : [],
+      };
+    }
     if (round.mode === 'wyr') {
       const counts = splitCounts(votes);
       const majority = majorityOf(counts);
@@ -336,7 +372,10 @@
       case 'vote': {
         if (r.phase !== 'vote') return { error: 'phase' };
         if (r.players.indexOf(a.id) < 0) return { error: 'not_player' };
-        if (r.mode === 'wyr') {
+        if (r.mode === 'nhie') {
+          if (a.answer !== 'have' && a.answer !== 'never') return { error: 'bad_vote' };
+          hidden.votes[a.id] = a.answer;
+        } else if (r.mode === 'wyr') {
           if ((a.pick !== 'a' && a.pick !== 'b') || (a.guess !== 'a' && a.guess !== 'b')) return { error: 'bad_vote' };
           hidden.votes[a.id] = { pick: a.pick, guess: a.guess };
         } else {
@@ -359,7 +398,13 @@
       case 'quick': {
         if (r.phase !== 'vote') return { error: 'phase' };
         r.quick = true;
-        if (r.mode === 'wyr') {
+        if (r.mode === 'nhie') {
+          // Show of hands: the phone holder taps everyone whose hand went up.
+          const haves = Array.isArray(a.haves) ? a.haves : [];
+          hidden.votes = {};
+          r.players.forEach((id) => (hidden.votes[id] = haves.indexOf(id) >= 0 ? 'have' : 'never'));
+          close(r, hidden, Object.assign({}, s, { reveal: 'names' }));
+        } else if (r.mode === 'wyr') {
           hidden.votes = {};
           Object.keys(a.picks || {}).forEach((id) => {
             if (r.players.indexOf(id) >= 0 && (a.picks[id] === 'a' || a.picks[id] === 'b')) hidden.votes[id] = { pick: a.picks[id], guess: null };
@@ -404,20 +449,28 @@
     r.result = r.result || null;
     if (r.result) {
       r.result.points = r.result.points || {};
-      if (r.mode === 'wyr') r.result.counts = Object.assign({ a: 0, b: 0 }, r.result.counts || {});
+      if (r.mode === 'nhie') {
+        r.result.counts = Object.assign({ have: 0, never: 0 }, r.result.counts || {});
+        if (!r.result.anon) {
+          r.result.haves = r.result.haves || [];
+          r.result.nevers = r.result.nevers || [];
+        }
+        r.result.lost = r.result.lost || [];
+      } else if (r.mode === 'wyr') r.result.counts = Object.assign({ a: 0, b: 0 }, r.result.counts || {});
       else {
         r.result.tally = r.result.tally || {};
         r.result.top = r.result.top || [];
       }
     }
     r.quick = !!r.quick;
+    if (r.mode === 'nhie') r.fingers = !!r.fingers;
     return r;
   }
 
   // ---------------- session (end-of-game highlights) ----------------
 
   function newSession() {
-    return { rounds: 0, crowns: {}, inSync: {}, rebel: {}, history: [] };
+    return { rounds: 0, crowns: {}, inSync: {}, rebel: {}, history: [], have: {}, never: {}, fingers: null, winners: [], nhieOver: false };
   }
 
   function hydrateSession(x) {
@@ -428,7 +481,34 @@
     s.inSync = s.inSync || {};
     s.rebel = s.rebel || {};
     s.history = s.history || [];
+    s.have = s.have || {};
+    s.never = s.never || {};
+    s.fingers = s.fingers || null;
+    s.winners = s.winners || [];
+    s.nhieOver = !!s.nhieOver;
     return s;
+  }
+
+  function fingersLeft(session, id) {
+    const f = session.fingers || {};
+    return f[id] == null ? FINGERS : Number(f[id]) || 0;
+  }
+
+  /**
+   * Never Have I Ever: who answers this round. With finger scoring, players with no fingers left sit
+   * out; a late joiner starts level with the lowest hand still in play (never a fresh five mid-game).
+   */
+  function nhieRoundPlayers(session, ids, settings) {
+    const s = mergeSettings(settings);
+    if (!fingersOn(s)) return ids.slice();
+    const started = !!(session.fingers && Object.keys(session.fingers).length);
+    session.fingers = session.fingers || {};
+    const alive = ids.filter((id) => id in session.fingers && fingersLeft(session, id) > 0);
+    const floor = started && alive.length ? Math.min.apply(null, alive.map((id) => fingersLeft(session, id))) : FINGERS;
+    ids.forEach((id) => {
+      if (!(id in session.fingers)) session.fingers[id] = floor;
+    });
+    return ids.filter((id) => fingersLeft(session, id) > 0);
   }
 
   /** Fold a closed round into the session. Anonymous rounds record tallies only. */
@@ -437,7 +517,23 @@
     if (!r) return session;
     const p = round.prompt || {};
     session.rounds += 1;
-    if (round.mode === 'wyr') {
+    if (round.mode === 'nhie') {
+      session.history.push({ mode: 'nhie', key: p.key || '', en: p.en || '', custom: !!p.custom, counts: Object.assign({}, r.counts), total: r.total, haves: r.haves ? r.haves.slice() : null });
+      if (r.haves) {
+        r.haves.forEach((id) => (session.have[id] = (session.have[id] || 0) + 1));
+        (r.nevers || []).forEach((id) => (session.never[id] = (session.never[id] || 0) + 1));
+      }
+      if (round.fingers) {
+        session.fingers = session.fingers || {};
+        (r.lost || []).forEach((id) => (session.fingers[id] = Math.max(0, fingersLeft(session, id) - 1)));
+        const alive = round.players.filter((id) => fingersLeft(session, id) > 0);
+        if (alive.length <= 1) {
+          session.nhieOver = true;
+          // Everyone left went out on the same statement → they share the win.
+          session.winners = alive.length ? alive : round.players.slice();
+        }
+      }
+    } else if (round.mode === 'wyr') {
       session.history.push({ mode: 'wyr', key: p.key || '', a: p.a || null, b: p.b || null, counts: Object.assign({}, r.counts), majority: r.majority });
       if (r.picks && r.majority) {
         Object.keys(r.picks).forEach((id) => {
@@ -495,8 +591,35 @@
     };
   }
 
-  function isOver(settings, roundNo) {
+  /** Finger standings (null when no finger round was played). Winners: last hand standing, else most fingers left. */
+  function nhieStandings(session, ids) {
+    if (!session.fingers || !Object.keys(session.fingers).length) return null;
+    const rows = ids.filter((id) => id in session.fingers).map((id) => ({ id, fingers: fingersLeft(session, id) }));
+    let winners = (session.winners || []).filter((id) => ids.indexOf(id) >= 0);
+    if (!winners.length) {
+      const max = rows.reduce((m, x) => Math.max(m, x.fingers), 0);
+      winners = max > 0 ? rows.filter((x) => x.fingers === max).map((x) => x.id) : [];
+    }
+    return { rows, winners };
+  }
+
+  /** Never Have I Ever highlights. Per-player titles come from names rounds only; room stats from counts. */
+  function nhieHighlights(session, ids) {
+    const hist = (session.history || []).filter((h) => h.mode === 'nhie' && h.total > 1);
+    let common = null;
+    let rarest = null;
+    hist.forEach((h) => {
+      const share = h.counts.have / h.total;
+      if (h.counts.have && (!common || share >= common.share)) common = Object.assign({ share }, h);
+      if (!rarest || share <= rarest.share) rarest = Object.assign({ share }, h);
+    });
+    if (common && rarest && common.key === rarest.key) rarest = null;
+    return { adventurous: leaders(session.have || {}, ids), innocent: leaders(session.never || {}, ids), common, rarest };
+  }
+
+  function isOver(settings, roundNo, session) {
     const s = mergeSettings(settings);
+    if (session && session.nhieOver) return true;
     return s.rounds > 0 && Number(roundNo) >= s.rounds;
   }
 
@@ -506,6 +629,7 @@
     MIN,
     MIN_PLAYERS,
     MAX_PLAYERS,
+    FINGERS,
     ROUND_OPTIONS,
     VOTE_SEC,
     DEFENCE_SEC,
@@ -540,6 +664,11 @@
     recordRound,
     verdict,
     highlights,
+    fingersOn,
+    fingersLeft,
+    nhieRoundPlayers,
+    nhieStandings,
+    nhieHighlights,
     isOver,
   };
 });

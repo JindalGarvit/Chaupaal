@@ -122,7 +122,7 @@ async function processRecommendation(db, uid, state, stateRef) {
   }
 
   let items = [
-    { kind: 'game', title: 'Ank Jod', reason: 'A calm puzzle when you want focus' },
+    { kind: 'game', title: 'Kakuro', reason: 'A calm puzzle when you want focus' },
     { kind: 'content', title: "Today's Akhbaar", reason: 'A short read to stay curious' },
     { kind: 'people', title: 'Peepal discovery', reason: 'Someone nearby who shares an interest' },
   ];

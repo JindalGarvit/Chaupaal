@@ -41,8 +41,6 @@
       '<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M8 28c4-10 6-4 10-12s6 2 10-6"/><path fill="currentColor" d="M28 6l6 6-14 14H14V20z"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M8 34h24"/>',
     quiz:
       '<circle cx="20" cy="18" r="12" fill="none" stroke="currentColor" stroke-width="2.2"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M15 15c1-3 9-3 10 1 0 3-4 3-4 6"/><circle cx="20" cy="27" r="1.8" fill="currentColor"/>',
-    patangbaazi:
-      '<path fill="currentColor" d="M20 6l10 14-10 6-10-6z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M20 26v10M16 32h8"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M10 20h20"/>',
     ankjod:
       '<rect x="6" y="6" width="28" height="28" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="1.4" d="M6 15.5h28M6 25h28M15.5 6v28M25 6v28"/><text x="11" y="13" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor">3</text><text x="20" y="22.5" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor">7</text><text x="29.5" y="32" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor">1</text>',
     tiptap:
@@ -75,8 +73,7 @@
     bluff: { primary: '#37474F', secondary: '#FF1744', surface: '#0A0E10', label: 'Bluff', icon: '🎭', mark: M.bluff, orientation: 'portrait' },
     scribble: { primary: '#E91E63', secondary: '#FFFFFF', surface: '#1A1A1A', label: 'Scribble', icon: '🎨', mark: M.scribble, orientation: 'portrait' },
     quiz: { primary: '#6200EA', secondary: '#FFD600', surface: '#0D0020', label: 'Quiz Muqabala', icon: '🧠', mark: M.quiz, orientation: 'portrait' },
-    patangbaazi: { primary: '#FF6D00', secondary: '#1565C0', surface: '#000D1A', label: 'Patang Baazi', icon: '🪁', mark: M.patangbaazi, orientation: 'landscape' },
-    ankjod: { primary: '#1A237E', secondary: '#FFD600', surface: '#0A0014', label: 'Ank Jod', icon: '🔢', mark: M.ankjod, orientation: 'portrait' },
+    ankjod: { primary: '#1A237E', secondary: '#FFD600', surface: '#0A0014', label: 'Kakuro', icon: '🔢', mark: M.ankjod, orientation: 'portrait' },
     tiptap: { primary: '#FF6D00', secondary: '#FFD600', surface: '#1A0800', label: 'Tip Tap', icon: '✨', mark: M.tiptap, orientation: 'portrait' },
     brickbreaker: { primary: '#5C6BC0', secondary: '#B39DFF', surface: '#0D0A18', label: 'Brick Breaker', icon: '🧱', mark: M.brickbreaker, orientation: 'landscape' },
     imposter: { primary: '#C2185B', secondary: '#FFC107', surface: '#1A0712', label: 'Imposter', icon: '🕵️', mark: M.imposter, orientation: 'portrait' },

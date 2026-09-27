@@ -13,7 +13,6 @@
     shabdfive: 'wordguess',
     kakuro: 'ankjod',
     cricket: 'streetcricket',
-    kite: 'patangbaazi',
     fischerrandom: 'chess',
     chess960: 'chess',
   };

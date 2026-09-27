@@ -1,5 +1,5 @@
 /**
- * Dangal G0 — roster cull (13 titles retired, 19 kept).
+ * Dangal G0 — roster cull (13 titles retired, 19 kept); H0 retires Kite Fight (patangbaazi) → 18 kept.
  *  (a) no retired id in registries / identity / graduation / game-of-day / matchmaking
  *  (b) every kept id resolves (roster, registration, identity, graduation, GOTD)
  *  (c) a retired id resolves to the retired screen (client) and voids cleanly (server)
@@ -21,11 +21,12 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const RETIRED = [
   'rushrunner', 'pool', 'bowling', 'pickleball', 'tennis', 'fiveinrow', 'andarbaahar',
   'sattepe', 'business', 'tabletennis', 'kabaddi', 'khokho', 'gullykick',
+  'patangbaazi',
 ];
 const KEPT = [
   'tiptap', 'brickbreaker', 'ankjod', 'wordguess', 'chess', 'ttt', 'snakes', 'ludo', 'uno',
   'scribble', 'quiz', 'carrom', 'rummy', 'teenpatti', 'bluff', 'tambola', 'streetcricket',
-  'badminton', 'patangbaazi',
+  'badminton',
 ];
 /** Party-kit titles added after the cull (G1–G3). */
 const PARTY_ADDED = ['imposter', 'rajamantri', 'charades', 'mostlikely'];
@@ -55,6 +56,8 @@ for (const [name, src] of Object.entries(scanned)) {
   assert(hits.length === 0, `${name}: no retired ids${hits.length ? ' (found ' + hits.join(',') + ')' : ''}`);
 }
 
+const courtSrc = read('public/src/js/games/court-sports.js');
+assert(/id: 'badminton'/.test(courtSrc) && /function openRallySport/.test(courtSrc) && /window\.openBadminton = /.test(courtSrc) && !/patang|kite/i.test(courtSrc), 'court-sports keeps the badminton rally shell; no Kite Fight code');
 const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-classics', 'engines', 'brick-breaker', 'ank-jod', 'imposter', 'rajamantri', 'charades', 'mostlikely']
   .concat(['game-registry'])
   .map((f) => read(`public/src/js/games/${f}.js`))
@@ -62,7 +65,7 @@ const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-
 RETIRED.forEach((id) => {
   assert(!new RegExp(`id:\\s*'${id}'`).test(gameFiles), `${id} not registered by any game file`);
 });
-['openPool', 'openBowling', 'openBusinessGame', 'openGullyKick', 'openKabaddi', 'openKhoKho', 'openSattePeSatta', 'openAndarBahar', 'openRushRunner', 'openFiveInRow', 'openTableTennis', 'openPickleball', 'openTennis'].forEach((fn) => {
+['openPool', 'openBowling', 'openBusinessGame', 'openGullyKick', 'openKabaddi', 'openKhoKho', 'openSattePeSatta', 'openAndarBahar', 'openRushRunner', 'openFiveInRow', 'openTableTennis', 'openPickleball', 'openTennis', 'openPatangBaazi', 'openPatangModeSheet'].forEach((fn) => {
   assert(!new RegExp(`window\\.${fn}\\s*=`).test(gameFiles), `${fn} launcher removed`);
 });
 
@@ -115,7 +118,7 @@ assert(
 assert(
   ROSTER_EXPECTED.every((id) => sandbox.DANGAL_ROSTER_IDS.includes(id)) &&
     sandbox.DANGAL_ROSTER_IDS.every((id) => ROSTER_EXPECTED.includes(id)),
-  'roster == the 19 kept ids + party-kit additions'
+  'roster == the 18 kept ids + party-kit additions'
 );
 assert(sandbox.isRosterGameId('kakuro'), 'kakuro alias resolves to roster (ankjod)');
 assert(
@@ -146,7 +149,7 @@ ROSTER_EXPECTED.forEach((id) => {
 });
 
 // ---------- (c) retired id → retired screen ----------
-RETIRED.concat(['snooker', 'fiveinarow', 'football', 'kho-kho']).forEach((id) => {
+RETIRED.concat(['snooker', 'fiveinarow', 'football', 'kho-kho', 'kite', 'Kite Fight', 'patang']).forEach((id) => {
   assert(sandbox.isRetiredGameId(id), `${id} recognised as retired`);
 });
 assert(sandbox.dangalManchVisibility('pool') === 'hidden', 'retired id hidden from Manch');
@@ -198,12 +201,19 @@ const admin = { firestore: { FieldValue: { serverTimestamp: () => 'ts', incremen
   });
   assert(res.retired === true && res.chipDelta === 0 && res.eloDelta === 0, 'retired match voids: 0 chips, 0 Elo');
   assert(res.chips === 740, 'void returns current wallet balance untouched');
+  const dbK = fakeDb();
+  const kite = await econ.resolveGame(dbK, admin, 'u'.repeat(28), {
+    gameType: 'patangbaazi', result: 'win', won: true, stake: 100, opponentUid: 'o'.repeat(28), matchId: 'm-kite',
+  });
+  assert(kite.retired === true && kite.chipDelta === 0 && !dbK.writes.some((w) => w[0] === 'batch'), 'open Kite Fight stake voids: every held chip stays put');
   assert(!db1.writes.some((w) => w[0] === 'batch'), 'void writes no stats / leaderboard / wallet');
 
   const mm = require(path.join(root, 'server-lib/dangal-matchmaking.js'));
   const db2 = fakeDb();
   const step = await mm.dangalMatchStep(db2, admin, { uid: 'u'.repeat(28), name: 'A', category: 'kabaddi', gameId: 'kabaddi' });
   assert(step.status === 'retired', 'matchmaking rejects retired id');
+  const kiteStep = await mm.dangalMatchStep(fakeDb(), admin, { uid: 'u'.repeat(28), name: 'A', category: 'patangbaazi', gameId: 'patangbaazi' });
+  assert(kiteStep.status === 'retired', 'matchmaking rejects patangbaazi');
   assert(!db2.writes.some((w) => w[0] === 'add'), 'retired id never enqueued');
   const ok = await mm.dangalMatchStep(fakeDb(), admin, { uid: 'u'.repeat(28), name: 'A', category: 'chess', gameId: 'chess' });
   assert(ok.status === 'waiting', 'kept id still queues');

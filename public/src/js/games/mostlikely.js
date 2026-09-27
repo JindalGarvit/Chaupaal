@@ -1,7 +1,8 @@
 /**
- * Most Likely To? — Dangal party game (G3) on the Party Kit. One game, two modes:
+ * Most Likely To? — Dangal party game (G3, H0) on the Party Kit. One game, three modes:
  *   Most Likely To  — everyone votes for the friend who fits the prompt; the room crowns a winner.
  *   Would You Rather — everyone secretly picks a side and predicts the majority.
+ *   Never Have I Ever — everyone answers “I have” / “Never”; optional five-finger elimination.
  * Pass & Play: one phone, offline, no sign-in — secret pass-around vote (or "count of 3, point").
  * Room: each player on their own phone — votes go to party_room and stay server-side until reveal;
  *       anonymous reveal publishes tallies only.
@@ -86,6 +87,7 @@
       s.rounds ? s.rounds + ' rounds' : 'Endless',
       C.activePacks(s, lang()).length + ' packs',
       s.reveal === 'anon' ? 'anonymous %' : 'names shown',
+      s.mode === 'nhie' ? (C.fingersOn(s) ? 'five fingers' : 'casual') : '',
       where === 'pass' && s.voting === 'quick' ? 'count of 3' : '',
     ]
       .filter(Boolean)
@@ -114,6 +116,7 @@
         <li>The tally is revealed and the winner is crowned 👑 (ties share it). They get 15 seconds to defend themselves.</li>
         <li><strong>Would You Rather:</strong> secretly pick A or B, and guess which side most people chose.</li>
         <li>Points (optional): +1 if you voted with the room, or +1 for guessing the majority.</li>
+        <li><strong>Never Have I Ever:</strong> “Never have I ever… missed a flight.” Tap <em>I have</em> or <em>Never</em>. Five fingers each — every “I have” costs one; the last hand standing wins.</li>
       </ol>
       <div class="pk-howto-score">Playful, never mean — no prompts about looks, money, religion or anything unkind.</div>
     </details>`;
@@ -127,11 +130,11 @@
     Kit().openSheet({
       title: 'Packs',
       bodyHtml: `<div class="im-packs">${P.PACKS.map((p) => {
-        const modes = [p.likely.length ? 'Most Likely' : '', p.rather.length ? 'Would You Rather' : ''].filter(Boolean).join(' + ');
+        const modes = [p.likely.length ? 'Most Likely' : '', p.rather.length ? 'Would You Rather' : '', p.never.length ? 'Never Have I Ever' : ''].filter(Boolean).join(' + ');
         return `<label class="im-pack"><input type="checkbox" data-pack="${esc(p.id)}" ${sel.has(p.id) ? 'checked' : ''}>
           <span class="im-pack-icon" aria-hidden="true">${esc(p.icon)}</span>
           <span class="im-pack-name">${esc(packLabel(p))}${p.regional ? ' <em class="ml-regional">Regional</em>' : ''}<span class="ml-pack-modes">${esc(modes)}</span></span>
-          <span class="im-pack-count">${p.likely.length + p.rather.length}</span></label>`;
+          <span class="im-pack-count">${p.likely.length + p.rather.length + p.never.length}</span></label>`;
       }).join('')}</div>
       <div class="pk-field-help" data-pack-err></div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
@@ -151,8 +154,12 @@
   }
 
   function customLabel(c) {
-    return c.mode === 'wyr' ? c.prompt.a.en + ' / ' + c.prompt.b.en : 'Most likely to ' + c.prompt.en;
+    if (c.mode === 'wyr') return c.prompt.a.en + ' / ' + c.prompt.b.en;
+    if (c.mode === 'nhie') return 'Never have I ever ' + c.prompt.en;
+    return 'Most likely to ' + c.prompt.en;
   }
+
+  const CUSTOM_ICON = { mlt: '👉', wyr: '🤔', nhie: '🙊' };
 
   /** Session-only custom prompts. Checked by the kindness filter; never sent anywhere to be stored. */
   function openCustoms(list, mode, onChange) {
@@ -164,7 +171,9 @@
           mode === 'wyr'
             ? `<input class="pk-input" data-a maxlength="80" placeholder="Option A" aria-label="Option A">
                <input class="pk-input ml-mt" data-b maxlength="80" placeholder="Option B" aria-label="Option B">`
-            : `<input class="pk-input" data-text maxlength="120" placeholder="…most likely to (e.g. sing in the shower)" aria-label="Most likely to">`
+            : mode === 'nhie'
+              ? `<input class="pk-input" data-text maxlength="120" placeholder="Never have I ever… (e.g. missed a flight)" aria-label="Never have I ever">`
+              : `<input class="pk-input" data-text maxlength="120" placeholder="…most likely to (e.g. sing in the shower)" aria-label="Most likely to">`
         }
         <div class="pk-error" data-err></div>
         <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-add>Add prompt</button>
@@ -176,7 +185,7 @@
           listEl.innerHTML = list.length
             ? list
                 .map(
-                  (c, i) => `<div class="ml-custom-row"><span class="ml-custom-mode">${c.mode === 'wyr' ? '🤔' : '👉'}</span><span class="ml-custom-text">${esc(customLabel(c))}</span>${
+                  (c, i) => `<div class="ml-custom-row"><span class="ml-custom-mode">${CUSTOM_ICON[c.mode] || '👉'}</span><span class="ml-custom-text">${esc(customLabel(c))}</span>${
                     c.used ? '<span class="ml-custom-used">played</span>' : ''
                   }<button type="button" class="pk-player-remove" data-rm="${i}" aria-label="Remove">✕</button></div>`
                 )
@@ -229,12 +238,12 @@
           <div class="pk-field">
             <div class="pk-field-label">Points</div>
             ${seg('scoring', s.scoring, 'On', 'Off')}
-            <div class="pk-field-help">+1 for voting with the room (Most Likely) or guessing the majority (Would You Rather).</div>
+            <div class="pk-field-help">+1 for voting with the room (Most Likely) or guessing the majority (Would You Rather). Never Have I Ever: five fingers each — every “I have” costs one, last hand standing wins. Off = casual.</div>
           </div>
           <div class="pk-field">
             <div class="pk-field-label">Reveal</div>
             ${K.segHtml('reveal', s.reveal, [['names', 'Show names'], ['anon', 'Anonymous %']])}
-            <div class="pk-field-help">Anonymous shows only the totals — never who voted for what. Most Likely points are off in anonymous rounds.</div>
+            <div class="pk-field-help">Anonymous shows only the totals — never who voted for what. Most Likely points and Never Have I Ever fingers are off in anonymous rounds.</div>
           </div>
           <div class="pk-field">
             <div class="pk-field-label">Vote for yourself (Most Likely)</div>
@@ -303,9 +312,27 @@
     return `<span class="ml-opt-tag">${side.toUpperCase()}</span><span class="ml-opt-text">${esc(l.primary)}${l.secondary ? `<span class="ml-opt-sub">${esc(l.secondary)}</span>` : ''}</span>`;
   }
 
+  /** Statement in the reader's language: i18n key `nhie.<pack>:n<i>`, English source as the fallback. */
+  function nhieText(prompt) {
+    const en = String((prompt && prompt.en) || '').replace(/[.!]+$/, '');
+    if (!prompt || prompt.custom || !prompt.key || typeof t !== 'function') return en;
+    return t('nhie.' + prompt.key, en);
+  }
+
+  function nhieLine(prompt) {
+    const lead = typeof t === 'function' ? t('nhie_lead', 'Never have I ever…') : 'Never have I ever…';
+    return lead + ' ' + nhieText(prompt);
+  }
+
   function promptHtml(prompt, mode) {
     const C = Core();
     const tag = prompt && prompt.custom ? '<span class="ml-tag">Custom</span>' : '';
+    if (mode === 'nhie') {
+      return `<div class="ml-prompt ml-prompt--nhie">${tag}
+        <div class="ml-prompt-lead">${esc(typeof t === 'function' ? t('nhie_lead', 'Never have I ever…') : 'Never have I ever…')}</div>
+        <div class="ml-prompt-q">${esc(nhieText(prompt))}</div>
+      </div>`;
+    }
     if (mode === 'wyr') {
       return `<div class="ml-prompt ml-prompt--wyr">${langBtn()}${tag}
         <div class="ml-prompt-q">Would you rather…</div>
@@ -325,6 +352,11 @@
 
   /** Voting controls. draft = { target } or { pick, guess }. */
   function voteControlsHtml(mode) {
+    if (mode === 'nhie') {
+      return `<div class="ml-choose">
+        <div class="ml-choices ml-choices--nhie"><button type="button" class="ml-choice ml-choice--have" data-answer="have">🙋 I have</button><button type="button" class="ml-choice ml-choice--never" data-answer="never">😇 Never</button></div>
+      </div>`;
+    }
     if (mode === 'wyr') {
       return `<div class="ml-choose">
         <div class="pk-section">Your pick</div>
@@ -338,6 +370,18 @@
 
   function wireVoteControls(root, mode, opts) {
     const draft = opts.draft;
+    if (mode === 'nhie') {
+      const paint = () => {
+        root.querySelectorAll('[data-answer]').forEach((b) => {
+          b.classList.toggle('is-on', b.dataset.answer === draft.answer);
+          b.setAttribute('aria-pressed', String(b.dataset.answer === draft.answer));
+        });
+        opts.onChange(!!draft.answer);
+      };
+      root.querySelectorAll('[data-answer]').forEach((b) => b.addEventListener('click', () => ((draft.answer = b.dataset.answer), paint())));
+      paint();
+      return;
+    }
     if (mode === 'wyr') {
       const paint = () => {
         root.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('is-on', b.dataset.pick === draft.pick));
@@ -424,7 +468,58 @@
     </div>`;
   }
 
+  function nhieHeadline(res) {
+    const total = res.total || 0;
+    if (!total) return 'No answers this round';
+    if (!res.counts.have) return 'Nobody has!';
+    if (res.counts.have === total) return 'Everyone has!';
+    return res.counts.have + ' of ' + total + ' have';
+  }
+
+  function revealNhieHtml(res, nm) {
+    const total = res.total || 0;
+    const pct = total ? Math.round((res.counts.have / total) * 100) : 50;
+    const lost = res.lost || [];
+    const names = (list) =>
+      list.map((id) => `<span class="ml-side-name">${esc(nm(id))}${lost.indexOf(id) >= 0 ? ' <em class="ml-lost">−1 ✋</em>' : ''}</span>`).join('') ||
+      '<span class="ml-side-name is-empty">Nobody</span>';
+    return `<div class="ml-reveal ml-reveal--nhie">
+      <div class="ml-crown"><span class="ml-crown-icon" aria-hidden="true">${!total ? '🤷' : res.counts.have ? '🙋' : '😇'}</span><span class="ml-crown-name">${esc(nhieHeadline(res))}</span></div>
+      <div class="ml-split" role="img" aria-label="${res.counts.have} have, ${res.counts.never} never">
+        <span class="ml-split-a" style="--w:${pct}%"><strong>🙋</strong> ${res.counts.have}</span>
+        <span class="ml-split-b" style="--w:${100 - pct}%"><strong>😇</strong> ${res.counts.never}</span>
+      </div>
+      ${
+        res.anon
+          ? '<div class="pk-field-help">Anonymous — only the count is shown.</div>'
+          : `<div class="ml-sides">
+        <div class="ml-side ml-side--a"><div class="ml-side-label">I have · ${res.counts.have}</div>${names(res.haves || [])}</div>
+        <div class="ml-side ml-side--b"><div class="ml-side-label">Never · ${res.counts.never}</div>${names(res.nevers || [])}</div>
+      </div>`
+      }
+    </div>`;
+  }
+
+  /** Five-finger hands (Never Have I Ever). Empty when no finger round has been played. */
+  function fingersHtml(standings, nm) {
+    if (!standings || !standings.rows.length) return '';
+    const F = Core().FINGERS;
+    const rows = standings.rows
+      .slice()
+      .sort((a, b) => b.fingers - a.fingers || nm(a.id).localeCompare(nm(b.id)))
+      .map(
+        (r) => `<div class="ml-finger-row${r.fingers ? '' : ' is-out'}">
+          <span class="ml-finger-name">${esc(nm(r.id))}</span>
+          <span class="ml-finger-hand" role="img" aria-label="${r.fingers} of ${F} fingers left">${Array.from({ length: F }, (_, i) => `<i class="ml-finger${i < r.fingers ? ' is-up' : ''}"></i>`).join('')}</span>
+          <span class="ml-finger-n">${r.fingers ? r.fingers : 'out'}</span>
+        </div>`
+      )
+      .join('');
+    return `<div class="pk-section">Fingers left</div><div class="ml-fingers">${rows}</div>`;
+  }
+
   function revealHtml(round, nm) {
+    if (round.mode === 'nhie') return revealNhieHtml(round.result, nm);
     return round.mode === 'wyr' ? revealWyrHtml(round.result, nm, round.prompt) : revealMltHtml(round.result, nm, round.prompt);
   }
 
@@ -435,6 +530,7 @@
 
   function revealAnnouncement(round, nm) {
     const res = round.result;
+    if (round.mode === 'nhie') return { icon: !res.total ? '🤷' : res.counts.have ? '🙋' : '😇', title: nhieHeadline(res), sub: nhieLine(round.prompt) };
     if (round.mode === 'wyr') {
       const side = res.majority ? Core().optionLines(round.prompt[res.majority], lang(), false).primary : '';
       return res.majority ? { icon: '🤔', title: 'Most would rather…', sub: side } : { icon: '⚖️', title: res.total ? 'Split room!' : 'No votes' };
@@ -484,20 +580,59 @@
       .join('')}</div></div>`;
   }
 
+  function nhieFinalHtml(session, players, nm) {
+    const C = Core();
+    const ids = players.map((p) => p.id);
+    const st = C.nhieStandings(session, ids);
+    const h = C.nhieHighlights(session, ids);
+    const quote = (x) => (x ? '“' + nhieText(x) + '” (' + x.counts.have + '/' + x.total + ')' : '');
+    const rows = [
+      st && st.winners.length ? ['🖐', st.winners.length > 1 ? 'Last hands standing' : 'Last hand standing', joinNames(st.winners, nm)] : null,
+      h.adventurous.ids.length ? ['🧭', 'Most adventurous', joinNames(h.adventurous.ids, nm) + ' · “I have” ' + h.adventurous.n + '×'] : null,
+      h.innocent.ids.length ? ['😇', 'Most innocent', joinNames(h.innocent.ids, nm) + ' · “Never” ' + h.innocent.n + '×'] : null,
+      h.common ? ['🙋', 'Most of us have', quote(h.common)] : null,
+      h.rarest ? ['🦄', 'Rarest', quote(h.rarest)] : null,
+    ].filter(Boolean);
+    return `${
+      rows.length
+        ? `<div class="ml-final-block"><div class="pk-section">Highlights</div><div class="ml-highs">${rows
+            .map((r) => `<div class="ml-high"><span class="ml-high-icon" aria-hidden="true">${r[0]}</span><span class="ml-high-label">${r[1]}</span><span class="ml-high-text">${esc(r[2])}</span></div>`)
+            .join('')}</div></div>`
+        : ''
+    }${fingersHtml(st, nm)}`;
+  }
+
   function finalHtml(session, players, nm, scores, s) {
     const hasMlt = (session.history || []).some((h) => h.mode === 'mlt');
     const hasWyr = (session.history || []).some((h) => h.mode === 'wyr');
+    const hasNhie = (session.history || []).some((h) => h.mode === 'nhie');
     return `<div class="ml-final">
-      <div class="pk-result-glyph" aria-hidden="true">${hasMlt ? '👑' : '🤔'}</div>
+      <div class="pk-result-glyph" aria-hidden="true">${hasMlt ? '👑' : hasNhie && !hasWyr ? '🙊' : '🤔'}</div>
       <div class="pk-result-title">${session.rounds} round${session.rounds === 1 ? '' : 's'} played</div>
       ${hasMlt ? verdictHtml(session, players, nm) : ''}
       ${hasWyr ? highlightsHtml(session, players, nm, scores, s.scoring) : ''}
-      ${s.scoring ? `<div class="pk-section">Points</div>${Kit().scoreboardHtml(players, scores)}` : ''}
+      ${hasNhie ? nhieFinalHtml(session, players, nm) : ''}
+      ${s.scoring && (hasMlt || hasWyr) ? `<div class="pk-section">Points</div>${Kit().scoreboardHtml(players, scores)}` : ''}
     </div>`;
+  }
+
+  function nhieShareLine(session, players, nm) {
+    const C = Core();
+    const ids = players.map((p) => p.id);
+    const st = C.nhieStandings(session, ids);
+    const h = C.nhieHighlights(session, ids);
+    const parts = [];
+    if (st && st.winners.length) parts.push('Last hand standing: ' + joinNames(st.winners, nm));
+    if (h.adventurous.ids.length) parts.push('Most adventurous: ' + joinNames(h.adventurous.ids, nm));
+    if (h.innocent.ids.length) parts.push('Most innocent: ' + joinNames(h.innocent.ids, nm));
+    if (!parts.length && h.common) parts.push(h.common.counts.have + ' of ' + h.common.total + ' of us have ' + nhieText(h.common));
+    return (parts.join(' · ') || 'We played Never Have I Ever') + ' 🙊';
   }
 
   function finalShareLine(session, players, nm, scores) {
     const C = Core();
+    const lastMode = ((session.history || []).slice(-1)[0] || {}).mode;
+    if (lastMode === 'nhie') return nhieShareLine(session, players, nm);
     const hasMlt = (session.history || []).some((h) => h.mode === 'mlt');
     if (hasMlt) {
       const v = C.verdict(session, players.map((p) => p.id))
@@ -515,6 +650,7 @@
 
   function roundShareLine(round, nm) {
     const res = round.result;
+    if (round.mode === 'nhie') return nhieLine(round.prompt) + ' — ' + (res.total ? res.counts.have + ' of ' + res.total + ' of us have 🙋' : 'nobody answered');
     if (round.mode === 'wyr') {
       const total = res.total || 0;
       if (!total) return 'Would you rather ' + round.prompt.a.en + ' or ' + round.prompt.b.en + '? 🤔';
@@ -551,7 +687,7 @@
         game: GAME,
         icon: '👉',
         title: 'Most Likely To?',
-        sub: '2–16 players · vote on your friends, or pick a side',
+        sub: '2–16 players · vote on your friends, pick a side, or confess',
         howToHtml: howToCardHtml(),
       })
     );
@@ -563,10 +699,16 @@
   }
 
   function modeCardsHtml(mode) {
-    const card = (id, icon, title, sub) =>
-      `<button type="button" class="ml-mode${mode === id ? ' is-on' : ''}" data-mode-pick="${id}" aria-pressed="${mode === id}">
+    const card = (id, icon, title, sub, extra) =>
+      `<button type="button" class="ml-mode${extra || ''}${mode === id ? ' is-on' : ''}" data-mode-pick="${id}" aria-pressed="${mode === id}">
         <span class="ml-mode-icon" aria-hidden="true">${icon}</span><span class="ml-mode-title">${title}</span><span class="ml-mode-sub">${sub}</span></button>`;
-    return `<div class="ml-modes">${card('mlt', '👉', 'Most Likely To', 'Vote for the friend who fits · 3+')}${card('wyr', '🤔', 'Would You Rather', 'Pick a side, guess the room · 2+')}</div>`;
+    return `<div class="ml-modes">${card('mlt', '👉', 'Most Likely To', 'Vote for the friend who fits · 3+')}${card('wyr', '🤔', 'Would You Rather', 'Pick a side, guess the room · 2+')}${card(
+      'nhie',
+      '🙊',
+      'Never Have I Ever',
+      'I have or never · five fingers, last hand standing · 2+',
+      ' ml-mode--wide'
+    )}</div>`;
   }
 
   // ======================= PASS & PLAY =======================
@@ -655,8 +797,11 @@
     if (!skip) session.roundNo += 1;
     const key = out.prompt && out.prompt.key;
     if (key && key.indexOf('c:') === 0 && session.customs[Number(key.slice(2))]) session.customs[Number(key.slice(2))].used = true;
+    const ids = session.players.map((p) => p.id);
+    const roundIds = session.settings.mode === 'nhie' ? C.nhieRoundPlayers(session.stats, ids, session.settings) : ids;
+    if (roundIds.length < C.minPlayers(session.settings)) return renderPassFinal(shell, session);
     session.round = {
-      pub: C.createRound(session.players.map((p) => p.id), out.prompt, session.settings, session.roundNo),
+      pub: C.createRound(roundIds, out.prompt, session.settings, session.roundNo),
       hidden: C.createHidden(),
       recorded: false,
     };
@@ -674,17 +819,27 @@
       ${promptHtml(r.prompt, r.mode)}
       <div class="pk-sub">${
         quick
-          ? r.mode === 'wyr'
-            ? 'On three, everyone raises a hand for A or B.'
-            : 'On three, everyone points at a player.'
-          : 'Everyone votes in secret — pass the phone around.'
+          ? r.mode === 'nhie'
+            ? 'On three, hands up if you have!'
+            : r.mode === 'wyr'
+              ? 'On three, everyone raises a hand for A or B.'
+              : 'On three, everyone points at a player.'
+          : r.mode === 'nhie'
+            ? 'Everyone answers in secret — pass the phone around.'
+            : 'Everyone votes in secret — pass the phone around.'
       }</div>
+      ${r.mode === 'nhie' && r.fingers ? passOutNote(session, r) : ''}
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${quick ? '1… 2… 3!' : 'Start secret vote'}</button>
       <button type="button" class="pk-link" data-skip>Skip this one</button>
     </div>`);
     wireLang(body, () => renderPassPrompt(shell, session));
     body.querySelector('[data-skip]').addEventListener('click', () => startPassRound(shell, session, true));
     body.querySelector('[data-go]').addEventListener('click', () => (quick ? renderPassQuick(shell, session) : renderPassVote(shell, session, 0)));
+  }
+
+  function passOutNote(session, r) {
+    const out = session.players.filter((p) => r.players.indexOf(p.id) < 0).map((p) => p.name);
+    return out.length ? `<div class="pk-field-help">Out of fingers: ${esc(out.join(', '))} — they watch this one.</div>` : '';
   }
 
   function renderPassVote(shell, session, index) {
@@ -715,7 +870,12 @@
         });
       },
       onDone() {
-        const action = r.mode === 'wyr' ? { type: 'vote', id, pick: draft.pick, guess: draft.guess } : { type: 'vote', id, target: draft.target };
+        const action =
+          r.mode === 'nhie'
+            ? { type: 'vote', id, answer: draft.answer }
+            : r.mode === 'wyr'
+              ? { type: 'vote', id, pick: draft.pick, guess: draft.guess }
+              : { type: 'vote', id, target: draft.target };
         Core().applyAction(r, session.round.hidden, session.settings, action);
         renderPassVote(shell, session, index + 1);
       },
@@ -730,18 +890,30 @@
     r.players.forEach((id) => (counts[id] = 0));
     const body = shell.render(`<div class="pk-page">
       ${promptHtml(r.prompt, r.mode)}
-      <div class="pk-section">${r.mode === 'wyr' ? 'Tap A or B for each player' : 'How many pointed at each player?'}</div>
+      <div class="pk-section">${r.mode === 'nhie' ? 'Tap everyone whose hand went up' : r.mode === 'wyr' ? 'Tap A or B for each player' : 'How many pointed at each player?'}</div>
       <div class="ml-quick">${r.players
         .map((id) =>
-          r.mode === 'wyr'
+          r.mode === 'nhie'
+            ? `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><button type="button" class="ml-choice ml-choice--sm" data-hand="${esc(id)}" aria-pressed="false">🙋 I have</button></div>`
+            : r.mode === 'wyr'
             ? `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><span class="ml-quick-ab"><button type="button" class="ml-choice ml-choice--sm" data-q="${esc(id)}" data-side="a">A</button><button type="button" class="ml-choice ml-choice--sm" data-q="${esc(id)}" data-side="b">B</button></span></div>`
             : `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><span class="ml-stepper"><button type="button" data-dec="${esc(id)}" aria-label="One less">−</button><strong data-n="${esc(id)}">0</strong><button type="button" data-inc="${esc(id)}" aria-label="One more">+</button></span></div>`
         )
         .join('')}</div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-reveal disabled>Reveal</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-reveal ${r.mode === 'nhie' ? '' : 'disabled'}>Reveal</button>
     </div>`);
     wireLang(body, () => renderPassQuick(shell, session));
     const btn = body.querySelector('[data-reveal]');
+    const hands = new Set();
+    body.querySelectorAll('[data-hand]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const id = b.dataset.hand;
+        if (hands.has(id)) hands.delete(id);
+        else hands.add(id);
+        b.classList.toggle('is-on', hands.has(id));
+        b.setAttribute('aria-pressed', String(hands.has(id)));
+      })
+    );
     const total = () => Object.keys(counts).reduce((n, id) => n + counts[id], 0);
     body.querySelectorAll('[data-inc],[data-dec]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -759,7 +931,8 @@
       })
     );
     btn.addEventListener('click', () => {
-      Core().applyAction(r, session.round.hidden, session.settings, r.mode === 'wyr' ? { type: 'quick', picks } : { type: 'quick', tally: counts });
+      const action = r.mode === 'nhie' ? { type: 'quick', haves: Array.from(hands) } : r.mode === 'wyr' ? { type: 'quick', picks } : { type: 'quick', tally: counts };
+      Core().applyAction(r, session.round.hidden, session.settings, action);
       renderPassReveal(shell, session);
     });
   }
@@ -812,11 +985,11 @@
     const r = session.round.pub;
     const s = session.settings;
     const nm = (id) => nameOf(session, id);
-    const last = Core().isOver(s, session.roundNo);
+    const last = Core().isOver(s, session.roundNo, session.stats);
     const body = shell.render(`<div class="pk-page">
       ${promptHtml(r.prompt, r.mode)}
       ${revealHtml(r, nm)}
-      ${s.scoring ? `<div class="pk-section">Points</div>${Kit().scoreboardHtml(session.players, session.scores, r.result.points)}` : ''}
+      ${roundBoardHtml(r, s, session.stats, session.players, session.scores, nm)}
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${last ? 'See the verdict' : 'Next round'}</button>
       <div class="pk-row">
         <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
@@ -828,6 +1001,12 @@
     body.querySelector('[data-share]').addEventListener('click', () => share(roundShareLine(r, nm)));
     body.querySelector('[data-end]')?.addEventListener('click', () => renderPassFinal(shell, session));
     body.querySelector('[data-next]').addEventListener('click', () => (last ? renderPassFinal(shell, session) : startPassRound(shell, session)));
+  }
+
+  /** Under a round result: fingers for Never Have I Ever, points for the other modes. */
+  function roundBoardHtml(r, s, stats, players, scores, nm) {
+    if (r.mode === 'nhie') return r.fingers ? fingersHtml(Core().nhieStandings(stats, players.map((p) => p.id)), nm) : '';
+    return s.scoring ? `<div class="pk-section">Points</div>${Kit().scoreboardHtml(players, scores, r.result.points)}` : '';
   }
 
   function renderPassFinal(shell, session) {
@@ -953,6 +1132,7 @@
 
   function myVoteLine(st, secret, nm) {
     if (!secret) return '';
+    if (st.mode === 'nhie') return `You answered <strong>${secret.answer === 'have' ? 'I have' : 'Never'}</strong>`;
     if (st.mode === 'wyr') return `You picked <strong>${secret.pick === 'a' ? 'A' : 'B'}</strong> and guessed most pick <strong>${secret.guess === 'a' ? 'A' : 'B'}</strong>`;
     return `You voted <strong>${esc(nm(secret.target))}</strong>`;
   }
@@ -994,7 +1174,8 @@
         });
         lock.addEventListener('click', async () => {
           const d = view.mlDraft;
-          const out = await ctrl.act('vote', st.mode === 'wyr' ? { pick: d.pick, guess: d.guess } : { target: d.target }, body.querySelector('[data-err]'));
+          const args = st.mode === 'nhie' ? { answer: d.answer } : st.mode === 'wyr' ? { pick: d.pick, guess: d.guess } : { target: d.target };
+          const out = await ctrl.act('vote', args, body.querySelector('[data-err]'));
           if (out) view.mlChange = null;
         });
         return;
@@ -1002,7 +1183,13 @@
       const body = ctrl.render(`<div class="pk-page">${top}
         ${promptHtml(st.prompt, st.mode)}
         <div class="ml-voted">
-          ${inRound ? `<div class="ml-voted-mine">✓ Vote locked · ${myVoteLine(st, secret, nm)} <span class="ml-private">only you can see this</span></div>` : '<div class="pk-sub">You’ll vote from the next round.</div>'}
+          ${
+            inRound
+              ? `<div class="ml-voted-mine">✓ Vote locked · ${myVoteLine(st, secret, nm)} <span class="ml-private">only you can see this</span></div>`
+              : st.mode === 'nhie' && st.fingers && st.session && st.session.fingers && me in st.session.fingers && Core().fingersLeft(st.session, me) === 0
+                ? '<div class="pk-sub">You’re out of fingers — watch the rest 👀</div>'
+                : '<div class="pk-sub">You’ll vote from the next round.</div>'
+          }
           <div class="pk-sub">${st.voted.length}/${st.players.length} voted</div>
           <div class="ml-voted-list">${st.players.map((id) => `<span class="ml-voted-chip${st.voted.indexOf(id) >= 0 ? ' is-in' : ''}">${esc(nm(id))}</span>`).join('')}</div>
           <div class="pk-timer" data-timer></div>
@@ -1042,11 +1229,7 @@
         ${promptHtml(st.prompt, st.mode)}
         ${revealHtml(st, nm)}
         ${
-          over
-            ? finalHtml(st.session, players, nm, pub.scores, s)
-            : s.scoring
-              ? `<div class="pk-section">Points</div>${K.scoreboardHtml(players, pub.scores, st.result.points)}`
-              : ''
+          over ? finalHtml(st.session, players, nm, pub.scores, s) : roundBoardHtml(st, s, st.session, players, pub.scores, nm)
         }
         ${K.roomResultActions(ctrl, {
           nextLabel: over ? 'Play again' : 'Next round',
@@ -1079,7 +1262,7 @@
     registerGame({
       id: 'mostlikely',
       name: LABEL,
-      desc: 'Most Likely To + Would You Rather — secret votes, big reveals',
+      desc: 'Most Likely To · Would You Rather · Never Have I Ever — secret votes, big reveals',
       icon: '👉',
       gameType: 'multiplayer',
       genre: 'party',
@@ -1091,7 +1274,7 @@
       order: 23,
       meta: {
         kit: 'party-kit.js (Pass & Play + Room)',
-        modes: 'Most Likely To · Would You Rather (one game id)',
+        modes: 'Most Likely To · Would You Rather · Never Have I Ever (one game id)',
         voting: 'party_room → server-lib/party-deal.js; votes stay server-side until reveal; anonymous = tallies only',
       },
       launch,
