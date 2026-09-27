@@ -399,8 +399,12 @@
     return GAME_GENRES.slice();
   }
 
-  /** Q2A — real group/party titles (Live party or multi-seat Practice setup). */
-  const GROUP_PARTY_IDS = ['ludo', 'uno', 'scribble'];
+  /** Q2A — real group/party titles (Live party, party-kit Room, or multi-seat Practice setup). */
+  const GROUP_PARTY_IDS = ['ludo', 'uno', 'scribble', 'imposter'];
+
+  function isPartyKit(gameId) {
+    return typeof isPartyKitGame === 'function' && isPartyKitGame(gameId);
+  }
 
   function gameIsLiveCapable(gameId, game) {
     if (typeof isLiveCapable === 'function') return !!isLiveCapable(gameId);
@@ -430,6 +434,8 @@
     ) {
       return 'soloPractice';
     }
+    // Party kit titles have their own Pass & Play / Room setup — no Practice path
+    if (isPartyKit(id)) return null;
     // Category / mode / honesty quirks — still Practice-reachable
     if (id === 'quiz' || id === 'scribble' || id === 'patangbaazi') return 'special';
     const g = getGame(id);
@@ -603,12 +609,13 @@
           name: g.name,
           desc: g.desc,
           liveCapable: gameIsLiveCapable(g.id, g),
+          partyKit: isPartyKit(g.id),
           showChallenge: false,
-          fn: () => g.launch(ctx),
+          fn: () => g.launch(Object.assign({}, ctx, { source: 'chat_group' })),
         }));
       title = 'Group games';
       subtitle = 'Party games for this chat — pick players next';
-      emptyHint = 'No party games here yet — try Ludo, Oh No!, or Scribble from Manch.';
+      emptyHint = 'No party games here yet — try Ludo, Oh No!, Scribble or Imposter from Manch.';
     } else {
       // 1:1 — row/primary = Practice vs AI (or Solo); Challenge = Live with this friend.
       const rows = getGames({ chat1v1: true }).map((g) => {
@@ -855,6 +862,10 @@
       showRetiredIfRetired(gameId);
       return;
     }
+    if (isPartyKit(gameId)) {
+      game.launch({ source: 'manch', mode: 'party' });
+      return;
+    }
 
     if (gameId === 'ludo') {
       // Practice vs AI or Live challenge friend (same honesty as Chess).
@@ -1090,6 +1101,12 @@
 
     if (gameId === 'quiz') {
       if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
+      return;
+    }
+
+    // Party kit: Pass & Play / Play with friends / Join with code — no Practice or stakes sheet
+    if (isPartyKit(gameId)) {
+      game.launch({ source: 'manch', mode: 'party' });
       return;
     }
 

@@ -38,6 +38,7 @@ const GAME_GENRE_BY_ID = {
   streetcricket: 'rw_sports',
   badminton: 'rw_sports',
   patangbaazi: 'arcade',
+  imposter: 'party',
 };
 
 const KNOWN_GAME_IDS = Object.keys(GAME_GENRE_BY_ID);

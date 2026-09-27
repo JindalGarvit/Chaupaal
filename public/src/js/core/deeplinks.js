@@ -21,6 +21,7 @@
     { name: 'join', re: /^\/join(?:\/g)?\/([^/?#]+)\/?$/i },
     { name: 'challenge', re: /^\/challenge\/([^/?#]+)\/?$/i },
     { name: 'invite', re: /^\/invite\/([^/?#]+)\/?$/i },
+    { name: 'party', re: /^\/party\/([^/?#]+)\/?$/i },
   ];
 
   const PENDING_GROUP_INVITE_KEY = 'chaupaal_pending_group_invite';
@@ -53,6 +54,7 @@
     if (name === 'join') return `/join/g/${safe}`;
     if (name === 'story') return `/story/${safe}`;
     if (name === 'challenge') return `/challenge/${safe}`;
+    if (name === 'party') return `/party/${safe}`;
     return '/';
   }
 
@@ -872,7 +874,19 @@
     else if (route.name === 'post') await openPostById(route.id);
     else if (route.name === 'chat') await openChatById(route.id);
     else if (route.name === 'join') await openGroupInvite(route.id);
-    else if (route.name === 'challenge') {
+    else if (route.name === 'party') {
+      // /party/{CODE} or /party/{game}-{CODE} — join a party-kit room (Imposter …)
+      switchTab('dangal');
+      const raw = String(route.id || '');
+      const m = raw.match(/^([a-z]+)-([A-Za-z0-9]{6})$/);
+      const game = m ? m[1] : 'imposter';
+      const code = m ? m[2] : raw;
+      if (window.PartyKit && typeof PartyKit.joinFromLink === 'function') {
+        setTimeout(() => PartyKit.joinFromLink(game, code), 250);
+      } else if (typeof showToast === 'function') {
+        showToast('Party games are loading — try the link again');
+      }
+    } else if (route.name === 'challenge') {
       // Hand off to viral challenge handler (path + query)
       if (typeof checkViralLink === 'function') checkViralLink();
     } else if (route.name === 'invite') {

@@ -85,6 +85,7 @@
     { "source": "/challenge/(.*)", "destination": "/index.html" },
     { "source": "/invite/(.*)", "destination": "/index.html" },
     { "source": "/join/g/(.*)", "destination": "/index.html" },
+    { "source": "/party/(.*)", "destination": "/index.html" },
     { "source": "/join/(.*)", "destination": "/index.html" }
   ],
   "functions": {

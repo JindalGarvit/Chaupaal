@@ -605,4 +605,171 @@
 .dangal-retired__cta{width:100%;min-height:48px;border:none;border-radius:14px;background:var(--game-accent,var(--red,#E63946));color:#fff;font:700 15px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
 .dangal-retired__close{width:100%;min-height:44px;margin-top:4px;border:none;background:none;color:var(--muted,#666);font-size:14px;cursor:pointer;}
 
+/* ── Party kit (G1) — shared Pass & Play / Room building blocks ───────────── */
+.pk-shell{--pk-accent:var(--game-accent,#C2185B);--pk-card:rgba(255,255,255,.07);--pk-line:rgba(255,255,255,.14);}
+.pk-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + var(--safe-bottom,0px));}
+.pk-btn{min-height:48px;padding:0 18px;border-radius:14px;border:none;font:700 15px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;transition:transform 120ms ease,opacity 160ms ease;}
+.pk-btn:active{transform:scale(.98);}
+.pk-btn:disabled{opacity:.45;cursor:default;}
+.pk-btn--primary{background:var(--pk-accent);color:#fff;}
+.pk-btn--ghost{background:var(--pk-card);color:#fff;border:1px solid var(--pk-line);}
+.pk-btn--block{display:block;width:100%;margin-top:14px;}
+.pk-icon-btn{width:44px;height:44px;border-radius:12px;border:1px solid var(--pk-line);background:var(--pk-card);color:#fff;font-size:20px;cursor:pointer;}
+.pk-chip{min-height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--pk-line);background:var(--pk-card);color:#fff;font:600 12px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.pk-input{width:100%;min-height:48px;padding:0 14px;border-radius:14px;border:1px solid var(--pk-line);background:rgba(0,0,0,.25);color:#fff;font-size:16px;box-sizing:border-box;}
+.pk-input::placeholder{color:rgba(255,255,255,.45);}
+.pk-input--code{text-align:center;letter-spacing:.3em;font:700 24px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;background:var(--cream,#f6f1e9);color:var(--ink,#1a1a1a);border-color:var(--line,#e0d8cc);}
+.pk-hint{font-size:12px;color:rgba(255,255,255,.55);margin-top:8px;text-align:center;}
+.pk-players{display:flex;flex-direction:column;gap:8px;}
+.pk-player-row{display:flex;align-items:center;gap:10px;}
+.pk-player-num{width:26px;height:26px;border-radius:50%;background:var(--pk-card);display:flex;align-items:center;justify-content:center;font:700 12px var(--font-display,'Space Grotesk',sans-serif);flex-shrink:0;}
+.pk-player-input{flex:1;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--pk-line);background:rgba(0,0,0,.2);color:#fff;font-size:16px;min-width:0;}
+.pk-player-remove{width:36px;height:36px;border-radius:10px;border:none;background:transparent;color:rgba(255,255,255,.55);font-size:15px;cursor:pointer;}
+.pk-add-player{width:100%;min-height:44px;margin-top:10px;border-radius:12px;border:1px dashed var(--pk-line);background:transparent;color:#fff;font:600 14px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.pk-sheet-scrim{position:absolute;inset:0;z-index:300;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;}
+.pk-sheet{width:100%;max-height:86%;overflow-y:auto;background:var(--white,#fff);color:var(--ink,#1a1a1a);border-radius:24px 24px 0 0;padding:10px 18px calc(20px + var(--safe-bottom,0px));box-sizing:border-box;}
+.pk-sheet-handle{width:40px;height:4px;border-radius:2px;background:var(--line,#ddd);margin:0 auto 12px;}
+.pk-sheet-title{font:700 18px var(--font-display,'Space Grotesk',sans-serif);margin-bottom:12px;}
+.pk-sheet .pk-btn--ghost{background:var(--cream,#f6f1e9);color:var(--ink,#1a1a1a);border-color:var(--line,#e0d8cc);}
+.pk-sheet .pk-btn--primary{background:var(--game-accent,#C2185B);}
+.pk-field{margin:0 0 14px;}
+.pk-field-label{font:700 12px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#777);margin-bottom:6px;}
+.pk-field-help{font-size:12px;color:var(--muted,#777);margin-top:6px;line-height:1.4;}
+.pk-seg{display:flex;flex-wrap:wrap;gap:6px;}
+.pk-seg-btn{flex:1 1 auto;min-height:40px;padding:0 12px;border-radius:12px;border:1.5px solid var(--line,#e0d8cc);background:var(--cream,#f6f1e9);color:var(--ink,#1a1a1a);font:600 13px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.pk-seg-btn.is-on{border-color:var(--game-accent,#C2185B);background:rgba(194,24,91,.1);color:#AD1457;}
+.pk-toggle{display:flex;gap:10px;align-items:center;font-size:14px;line-height:1.35;cursor:pointer;}
+.pk-toggle input{width:20px;height:20px;accent-color:var(--game-accent,#C2185B);}
+.pk-advanced{border-top:1px solid var(--line,#eee);padding-top:10px;margin-top:4px;}
+.pk-advanced summary{font:700 14px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;padding:6px 0 12px;color:var(--muted,#666);}
+.pk-pass{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding-top:6px;}
+.pk-pass-lead{font-size:13px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.06em;}
+.pk-pass-name{font:700 30px var(--font-display,'Space Grotesk',sans-serif);margin-bottom:12px;word-break:break-word;}
+.pk-card{width:100%;max-width:340px;min-height:260px;border-radius:24px;background:linear-gradient(160deg,rgba(255,255,255,.1),rgba(255,255,255,.03));border:1px solid var(--pk-line);display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer;transition:transform 160ms ease,background 200ms ease;}
+.pk-card:active{transform:scale(.99);}
+.pk-card.is-revealed{background:linear-gradient(160deg,rgba(194,24,91,.35),rgba(255,193,7,.12));}
+.pk-card-cover{padding:24px;}
+.pk-card-eye{font-size:42px;margin-bottom:10px;}
+.pk-card-cover-title{font:700 18px var(--font-display,'Space Grotesk',sans-serif);}
+.pk-card-cover-sub{font-size:13px;color:rgba(255,255,255,.55);margin-top:4px;}
+.pk-card-face{width:100%;padding:20px;box-sizing:border-box;}
+.pk-pass-actions{display:flex;gap:10px;width:100%;max-width:340px;margin-top:16px;}
+.pk-pass-actions .pk-btn{flex:1;}
+.pk-timer{font:700 44px var(--font-display,'Space Grotesk',sans-serif);text-align:center;margin:14px 0;font-variant-numeric:tabular-nums;}
+.pk-timer.is-low{color:#FFC107;}
+.pk-timer.is-paused{opacity:.5;}
+.pk-pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:12px 0 4px;}
+.pk-pick{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border-radius:16px;border:1.5px solid var(--pk-line);background:var(--pk-card);color:#fff;cursor:pointer;min-height:84px;}
+.pk-pick.is-selected{border-color:var(--pk-accent);background:rgba(194,24,91,.28);}
+.pk-pick-avatar{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font:700 16px var(--font-display,'Space Grotesk',sans-serif);}
+.pk-pick-name{font-size:13px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pk-pick-count{position:absolute;top:6px;right:8px;font:700 12px var(--font-display,'Space Grotesk',sans-serif);}
+.pk-score{display:flex;flex-direction:column;gap:6px;}
+.pk-score-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--pk-card);}
+.pk-score-row.is-top{background:rgba(255,193,7,.16);}
+.pk-score-rank{width:20px;font:700 13px var(--font-display,'Space Grotesk',sans-serif);color:rgba(255,255,255,.55);}
+.pk-score-name{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pk-score-delta{font:700 12px var(--font-display,'Space Grotesk',sans-serif);color:#81C784;}
+.pk-score-pts{font:700 16px var(--font-display,'Space Grotesk',sans-serif);min-width:24px;text-align:right;}
+
+/* ── Imposter ─────────────────────────────────────────────────────────────── */
+.im-home,.im-setup,.im-lobby,.im-reveal,.im-vote,.im-discuss,.im-steal,.im-result,.im-clue-turn,.im-room-clues{max-width:420px;margin:0 auto;}
+.im-hero{text-align:center;padding:10px 0 16px;}
+.im-hero-mark{display:flex;justify-content:center;margin-bottom:10px;color:#FFC107;}
+.im-hero-title{font:700 26px var(--font-display,'Space Grotesk',sans-serif);}
+.im-hero-sub{font-size:13px;color:rgba(255,255,255,.62);margin-top:4px;}
+.im-howto{background:var(--pk-card);border:1px solid var(--pk-line);border-radius:16px;padding:10px 14px;margin-bottom:16px;}
+.im-howto summary{font:700 14px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.im-howto ol{margin:10px 0 6px;padding-left:18px;font-size:13px;line-height:1.5;color:rgba(255,255,255,.85);}
+.im-howto-score{font-size:12px;color:rgba(255,255,255,.6);}
+.im-modes{display:flex;flex-direction:column;gap:10px;}
+.im-mode{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:16px 18px;border-radius:18px;border:1px solid var(--pk-line);background:var(--pk-card);color:#fff;text-align:left;cursor:pointer;}
+.im-mode--primary{background:var(--pk-accent);border-color:transparent;}
+.im-mode-title{font:700 17px var(--font-display,'Space Grotesk',sans-serif);}
+.im-mode-sub{font-size:13px;opacity:.8;}
+.im-link{display:block;width:100%;min-height:44px;margin-top:6px;border:none;background:none;color:rgba(255,255,255,.7);font:600 14px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
+.im-setup-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.im-step-title{font:700 22px var(--font-display,'Space Grotesk',sans-serif);text-align:center;}
+.im-setup-head .im-step-title{text-align:left;}
+.im-pack-row{display:flex;align-items:center;gap:8px;width:100%;min-height:48px;margin-top:14px;padding:0 14px;border-radius:14px;border:1px solid var(--pk-line);background:var(--pk-card);color:#fff;font-size:14px;cursor:pointer;text-align:left;}
+.pk-sheet .im-pack-row{background:var(--cream,#f6f1e9);color:var(--ink,#1a1a1a);border-color:var(--line,#e0d8cc);margin:0 0 10px;}
+.im-pack-row:disabled{cursor:default;opacity:.8;}
+.im-chev{margin-left:auto;opacity:.6;font-size:18px;}
+.im-setup-meta{font-size:12px;color:rgba(255,255,255,.55);margin-top:8px;text-align:center;}
+.im-packs{display:flex;flex-direction:column;gap:8px;}
+.im-pack{display:flex;align-items:center;gap:12px;min-height:52px;padding:0 14px;border-radius:14px;border:1.5px solid var(--line,#e0d8cc);background:var(--cream,#f6f1e9);color:var(--ink,#1a1a1a);cursor:pointer;text-align:left;}
+.im-pack.is-on{border-color:var(--game-accent,#C2185B);}
+.im-pack-icon{font-size:22px;}
+.im-pack-name{flex:1;font:600 15px var(--font-display,'Space Grotesk',sans-serif);}
+.im-pack-count{font-size:12px;color:var(--muted,#777);}
+.im-progress{font:600 12px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.55);text-align:center;margin-bottom:8px;}
+.im-card{text-align:center;}
+.im-card-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.7);}
+.im-card-word{font:700 34px var(--font-display,'Space Grotesk',sans-serif);margin:10px 0;word-break:break-word;text-align:center;}
+.im-card-tip{font-size:13px;color:rgba(255,255,255,.72);}
+.im-card-role{font-size:44px;}
+.im-card-title{font:700 24px var(--font-display,'Space Grotesk',sans-serif);margin:6px 0;}
+.im-card-hint{display:inline-block;margin:6px 0 10px;padding:6px 12px;border-radius:999px;background:rgba(255,193,7,.18);color:#FFE082;font-size:13px;font-weight:600;}
+.im-card-empty{text-align:center;color:rgba(255,255,255,.6);}
+.im-turn-name{font:700 30px var(--font-display,'Space Grotesk',sans-serif);text-align:center;margin:6px 0 2px;word-break:break-word;}
+.im-turn-sub{font-size:14px;color:rgba(255,255,255,.75);text-align:center;line-height:1.45;margin:4px 0 8px;}
+.im-rule{font-size:12px;color:rgba(255,255,255,.5);text-align:center;margin:8px 0;}
+.im-order{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:14px 0 4px;}
+.im-order-chip{padding:5px 10px;border-radius:999px;background:var(--pk-card);font-size:12px;color:rgba(255,255,255,.7);}
+.im-order-chip.is-done{opacity:.45;text-decoration:line-through;}
+.im-order-chip.is-now{background:var(--pk-accent);color:#fff;opacity:1;text-decoration:none;}
+.im-row{display:flex;gap:10px;margin-top:12px;}
+.im-row .pk-btn{flex:1;}
+.im-clues{display:flex;flex-direction:column;gap:6px;margin:12px 0;}
+.im-clue{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:12px;background:var(--pk-card);}
+.im-clue.is-skipped{opacity:.5;}
+.im-clue-who{font-size:13px;color:rgba(255,255,255,.65);}
+.im-clue-word{font:700 15px var(--font-display,'Space Grotesk',sans-serif);}
+.im-clue-form{display:flex;gap:8px;margin-top:10px;}
+.im-clue-form .pk-input{flex:1;}
+.im-error{min-height:18px;font-size:13px;color:#FFAB91;text-align:center;margin-top:6px;}
+.im-wait{text-align:center;font-size:14px;color:rgba(255,255,255,.62);margin:16px 0;}
+.im-paused{text-align:center;font:700 13px var(--font-display,'Space Grotesk',sans-serif);color:#FFC107;margin:4px 0;}
+.im-hostbar{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.5);}
+.im-peek{display:block;width:100%;min-height:44px;margin-top:14px;border-radius:12px;border:1px dashed var(--pk-line);background:transparent;color:rgba(255,255,255,.7);font-size:13px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer;}
+.im-peek-card{margin-top:10px;padding:18px;border-radius:18px;background:linear-gradient(160deg,rgba(194,24,91,.35),rgba(255,193,7,.12));}
+.im-tally{display:flex;flex-direction:column;gap:6px;margin:12px 0;}
+.im-tally-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:var(--pk-card);}
+.im-tally-row span:first-child{flex:1;}
+.im-arrow{opacity:.5;}
+.im-breakdown{margin:10px 0;}
+.im-breakdown summary{font-size:13px;color:rgba(255,255,255,.7);cursor:pointer;}
+.im-caught{font-size:44px;text-align:center;}
+.im-steal .pk-input{margin-top:10px;}
+.im-result{text-align:center;}
+.im-result-glyph{font-size:52px;}
+.im-result-title{font:700 24px var(--font-display,'Space Grotesk',sans-serif);margin:4px 0;}
+.im-result-sub{font-size:14px;color:rgba(255,255,255,.7);}
+.im-words{display:flex;gap:8px;margin:16px 0 8px;}
+.im-words>div{flex:1;padding:12px;border-radius:14px;background:var(--pk-card);display:flex;flex-direction:column;gap:4px;}
+.im-words span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.55);}
+.im-words strong{font:700 17px var(--font-display,'Space Grotesk',sans-serif);word-break:break-word;}
+.im-result-imps{font-size:14px;margin:8px 0;}
+.im-steal-line{font-size:13px;color:rgba(255,255,255,.75);margin:4px 0;}
+.im-section-label{font:700 12px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.55);margin:18px 0 8px;text-align:left;}
+.im-result-actions{max-width:420px;margin:6px auto 0;}
+.im-code-label{text-align:center;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55);}
+.im-code{text-align:center;font:700 40px var(--font-display,'Space Grotesk',sans-serif);letter-spacing:.18em;margin:4px 0 8px;}
+.im-lobby-list{display:flex;flex-direction:column;gap:6px;}
+.im-lobby-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--pk-card);}
+.im-dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.25);flex-shrink:0;}
+.im-dot.is-online{background:#66BB6A;}
+.im-badge{margin-left:auto;padding:2px 8px;border-radius:999px;background:rgba(255,193,7,.18);color:#FFE082;font:700 10px var(--font-display,'Space Grotesk',sans-serif);text-transform:uppercase;}
+.im-badge--me{margin-left:6px;background:rgba(255,255,255,.12);color:#fff;}
+.im-badge+.im-badge--me{margin-left:6px;}
+.im-empty{max-width:360px;margin:40px auto;text-align:center;color:rgba(255,255,255,.8);font-size:15px;line-height:1.5;}
+
+/* Baithak chat card for a party room invite */
+.party-invite-card{display:flex;flex-direction:column;gap:8px;min-width:220px;}
+.party-invite-head{display:flex;align-items:center;gap:10px;}
+.party-invite-head strong{display:block;font:700 15px var(--font-display,'Space Grotesk',sans-serif);}
+.party-invite-head span{display:block;font-size:11px;opacity:.7;}
+.party-invite-text{font-size:13px;line-height:1.35;}
+.party-invite-join{min-height:40px;border:none;border-radius:12px;background:#C2185B;color:#fff;font:700 14px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+
 

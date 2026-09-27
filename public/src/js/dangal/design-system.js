@@ -49,6 +49,8 @@
       '<circle cx="14" cy="16" r="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="26" cy="16" r="5" fill="currentColor" opacity=".25" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 22v10M16 28h8"/><path fill="currentColor" d="M20 6l1.2 2.8H24l-2.4 1.8.9 2.9L20 12l-2.5 1.5.9-2.9L16 8.8h2.8z"/>',
     brickbreaker:
       '<rect x="5" y="6" width="9" height="5" rx="1" fill="currentColor"/><rect x="15.5" y="6" width="9" height="5" rx="1" fill="currentColor" opacity=".55"/><rect x="26" y="6" width="9" height="5" rx="1" fill="currentColor"/><rect x="5" y="13" width="9" height="5" rx="1" fill="currentColor" opacity=".55"/><rect x="15.5" y="13" width="9" height="5" rx="1" fill="currentColor"/><rect x="26" y="13" width="9" height="5" rx="1" fill="currentColor" opacity=".55"/><circle cx="20" cy="24" r="2.5" fill="currentColor"/><rect x="12" y="32" width="16" height="3.5" rx="1.5" fill="currentColor"/>',
+    imposter:
+      '<path fill="currentColor" d="M20 7c-7.5 0-13 4.6-13 11.2C7 26 13 33 20 33s13-7 13-14.8C33 11.6 27.5 7 20 7z" opacity=".22"/><path fill="none" stroke="currentColor" stroke-width="2.2" d="M20 7c-7.5 0-13 4.6-13 11.2C7 26 13 33 20 33s13-7 13-14.8C33 11.6 27.5 7 20 7z"/><path fill="currentColor" d="M11.5 17.5c2.2-1.6 5.3-1.4 6.8.6-1.3 2.6-5 3-6.8-.6zM28.5 17.5c-2.2-1.6-5.3-1.4-6.8.6 1.3 2.6 5 3 6.8-.6z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 26c3 1.6 7 1.6 10 0"/>',
   };
 
   const GAME_IDENTITY = {
@@ -71,6 +73,7 @@
     ankjod: { primary: '#1A237E', secondary: '#FFD600', surface: '#0A0014', label: 'Ank Jod', icon: '🔢', mark: M.ankjod, orientation: 'portrait' },
     tiptap: { primary: '#FF6D00', secondary: '#FFD600', surface: '#1A0800', label: 'Tip Tap', icon: '✨', mark: M.tiptap, orientation: 'portrait' },
     brickbreaker: { primary: '#5C6BC0', secondary: '#B39DFF', surface: '#0D0A18', label: 'Brick Breaker', icon: '🧱', mark: M.brickbreaker, orientation: 'landscape' },
+    imposter: { primary: '#C2185B', secondary: '#FFC107', surface: '#1A0712', label: 'Imposter', icon: '🕵️', mark: M.imposter, orientation: 'portrait' },
   };
 
   const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz'];

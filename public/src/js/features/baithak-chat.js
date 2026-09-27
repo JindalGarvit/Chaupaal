@@ -1260,6 +1260,11 @@ function renderMsgBubble(m, isGroup){
     const label=chatEsc(att.label||(typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'));
     body=`<div class="mehfil-invite-card">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):''}<strong>${chatEsc(m.text||(typeof t==='function'?t('mehfil_nudge_text',{name:m.name||'Someone'}):'Join Mehfil'))}</strong><button type="button" data-mehfil-invite-join>${label}</button></div>`;
     rich=true;
+  } else if(att && att.type==='party_invite'){
+    body=typeof PartyKit!=='undefined'&&PartyKit.inviteCardHtml
+      ?PartyKit.inviteCardHtml(att,m)
+      :`<div class="party-invite-card"><strong>${chatEsc(m.text||'Join the game')}</strong></div>`;
+    rich=true;
   } else if(att && att.type==='duniya_post'){
     const thumb = att.thumb || att.url || '';
     const cap = att.caption || m.text || 'Post';
@@ -1349,6 +1354,15 @@ function wireChallengeBubble(root){
       if(chat && typeof ensureOpenMehfil==='function') ensureOpenMehfil(chat);
       else if(chat && typeof openMehfil==='function') openMehfil(chat);
       else if(typeof showToast==='function') showToast(typeof t==='function'?t('mehfil_unavailable'):'Mehfil unavailable');
+    });
+  });
+  root?.querySelectorAll?.('[data-party-invite-join]').forEach((btn)=>{
+    if(btn.dataset.wired==='1') return;
+    btn.dataset.wired='1';
+    btn.addEventListener('click',()=>{
+      if(typeof PartyKit!=='undefined'&&PartyKit.joinFromLink){
+        PartyKit.joinFromLink(btn.dataset.partyGame||'imposter',btn.dataset.partyInviteJoin,{chat:window.currentOpenChat||null});
+      } else if(typeof showToast==='function') showToast('Party games are loading — try again');
     });
   });
   root?.querySelectorAll?.('[data-story-id]').forEach((btn)=>{

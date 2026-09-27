@@ -27,6 +27,9 @@ const KEPT = [
   'scribble', 'quiz', 'carrom', 'rummy', 'teenpatti', 'bluff', 'tambola', 'streetcricket',
   'badminton', 'patangbaazi',
 ];
+/** Party-kit titles added after the cull (G1–G3). */
+const PARTY_ADDED = ['imposter'];
+const ROSTER_EXPECTED = KEPT.concat(PARTY_ADDED);
 
 // ---------- (a) retired ids absent from shipped registries ----------
 const stripRetiredLists = (src) =>
@@ -52,7 +55,7 @@ for (const [name, src] of Object.entries(scanned)) {
   assert(hits.length === 0, `${name}: no retired ids${hits.length ? ' (found ' + hits.join(',') + ')' : ''}`);
 }
 
-const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-classics', 'engines', 'brick-breaker', 'ank-jod']
+const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-classics', 'engines', 'brick-breaker', 'ank-jod', 'imposter']
   .concat(['game-registry'])
   .map((f) => read(`public/src/js/games/${f}.js`))
   .join('\n');
@@ -105,10 +108,14 @@ vm.runInContext(read('public/src/js/dangal/dangal-graduation.js'), sandbox);
 
 // ---------- (b) kept ids resolve ----------
 assert(Array.isArray(sandbox.DANGAL_ROSTER_IDS), 'DANGAL_ROSTER_IDS exported');
-assert(sandbox.DANGAL_ROSTER_IDS.length === 19, `roster has 19 titles (got ${sandbox.DANGAL_ROSTER_IDS.length})`);
 assert(
-  KEPT.every((id) => sandbox.DANGAL_ROSTER_IDS.includes(id)) && sandbox.DANGAL_ROSTER_IDS.every((id) => KEPT.includes(id)),
-  'roster == the 19 kept ids'
+  sandbox.DANGAL_ROSTER_IDS.length === ROSTER_EXPECTED.length,
+  `roster has ${ROSTER_EXPECTED.length} titles (got ${sandbox.DANGAL_ROSTER_IDS.length})`
+);
+assert(
+  ROSTER_EXPECTED.every((id) => sandbox.DANGAL_ROSTER_IDS.includes(id)) &&
+    sandbox.DANGAL_ROSTER_IDS.every((id) => ROSTER_EXPECTED.includes(id)),
+  'roster == the 19 kept ids + party-kit additions'
 );
 assert(sandbox.isRosterGameId('kakuro'), 'kakuro alias resolves to roster (ankjod)');
 assert(
@@ -117,7 +124,7 @@ assert(
 );
 const ds = read('public/src/js/dangal/design-system.js');
 const registry = read('public/src/js/games/game-registry.js');
-KEPT.forEach((id) => {
+ROSTER_EXPECTED.forEach((id) => {
   assert(sandbox.isRosterGameId(id) && !sandbox.isRetiredGameId(id), `${id} on roster, not retired`);
   assert(new RegExp(`id:\\s*'${id}'`).test(gameFiles), `${id} registered by a game file`);
   assert(ds.includes(`mark: M.${id}`), `${id} keeps identity mark`);
@@ -130,10 +137,11 @@ assert(/isRetiredGameId\(descriptor\.id\)/.test(registry), 'registerGame rejects
 
 const gotd = require(path.join(root, 'server-lib/game-of-day.js'));
 assert(
-  gotd.KNOWN_GAME_IDS.length === 19 && KEPT.every((id) => gotd.KNOWN_GAME_IDS.includes(id)),
-  'game-of-day rotates the 19-title roster'
+  gotd.KNOWN_GAME_IDS.length === ROSTER_EXPECTED.length &&
+    ROSTER_EXPECTED.every((id) => gotd.KNOWN_GAME_IDS.includes(id)),
+  'game-of-day rotates the full roster'
 );
-KEPT.forEach((id) => {
+ROSTER_EXPECTED.forEach((id) => {
   assert(gotd.GAME_GENRE_BY_ID[id] === sandbox.rosterGenre(id), `${id} GOTD genre matches roster`);
 });
 

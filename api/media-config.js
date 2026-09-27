@@ -944,6 +944,32 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Dangal party rooms (Imposter …): server-side dealing; roles never in shared state ──
+  if (action === 'party_room') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'party');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+      }
+    } catch (e) {}
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    try {
+      const { partyRoom } = require('../server-lib/party-deal');
+      const out = await partyRoom(adminApp, user.uid, body);
+      return sendSuccess(res, out);
+    } catch (e) {
+      const code = e && e.code ? String(e.code) : '';
+      if (code) {
+        const status = code === 'room_not_found' ? 404 : code === 'busy' ? 409 : 400;
+        return sendError(res, status, code.toUpperCase(), e.message || 'Party room action failed');
+      }
+      console.warn('[media-config] party_room', e?.message || e);
+      return sendError(res, 500, 'PARTY_ERROR', 'Party room action failed');
+    }
+  }
+
   // ─── Growth G2 referrals (virtual chips only; no new api/*.js) ─────────
   if (
     action === 'referral_claim' ||

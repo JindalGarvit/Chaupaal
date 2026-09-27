@@ -54,6 +54,7 @@
     bluff: '#37474F',
     patangbaazi: '#FF6D00',
     brickbreaker: '#5C6BC0',
+    imposter: '#C2185B',
     wrap: '#8134AF',
     duniya: '#E63946',
     peepal: '#2A9D8F',
@@ -83,6 +84,7 @@
     bluff: 'Bluff',
     patangbaazi: 'Patang Baazi',
     brickbreaker: 'Brick Breaker',
+    imposter: 'Imposter',
     wrap: 'Monthly Wrap',
     duniya: 'Duniya',
     peepal: 'Peepal',
@@ -166,6 +168,12 @@
       'Live duel: both fly — first cut wins (host resolves) · virtual stakes once',
       'Festival is Practice-only heat — not on Live challenge',
       'Leave = forfeit · Rematch = new match · Practice Duel still clears two hunters',
+    ],
+    imposter: [
+      'Everyone gets the same secret word — except the Imposter',
+      'Take turns giving ONE clue word: not the word, not a translation, no repeats',
+      'Discuss, then vote. Catch the Imposter — but they get one guess to steal the win',
+      'Undercover: the Imposter gets a close word and doesn’t know they’re the odd one out',
     ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',

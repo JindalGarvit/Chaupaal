@@ -7,6 +7,7 @@
  *   live      — real friend sync available
  *   practice  — playable but Practice-labeled (AI / local only)
  *   polish    — thin / rebuilding
+ *   party     — party kit title: Pass & Play on one phone + Room across phones (points, never chips)
  */
 (function () {
   'use strict';
@@ -30,6 +31,9 @@
     ludo: { grade: 'live', sync: 'liveParty', stakes: true },
     uno: { grade: 'live', sync: 'liveParty', stakes: true },
     scribble: { grade: 'live', sync: 'liveParty', stakes: true },
+
+    // Party kit (G1+) — Pass & Play on one phone or a Room across phones; points only, never chips
+    imposter: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
 
     // Classics + court — Live 1v1 state sync (snapshot / score events)
     carrom: { grade: 'live', sync: 'live1v1', stakes: true },
@@ -76,6 +80,8 @@
     { id: 'streetcricket', genre: 'rw_sports' },
     { id: 'badminton', genre: 'rw_sports' },
     { id: 'patangbaazi', genre: 'arcade' },
+    // Party kit titles (G1+) — Pass & Play on one phone or a Room across phones.
+    { id: 'imposter', genre: 'party', partyKit: true },
   ];
   const ROSTER_IDS = ROSTER.map((r) => r.id);
   /** Aliases that resolve to a roster id (kept in sync with GAME_ID_ALIASES). */
@@ -184,6 +190,9 @@
     const g = game || {};
     const id = g.id || '';
     const info = getGameGraduation(id);
+    if (info.grade === 'party') {
+      return '<span class="dangal-honesty-tag dangal-honesty-tag--party">Party</span>';
+    }
     if (info.grade === 'polish') {
       return '<span class="dangal-honesty-tag dangal-honesty-tag--polish">Coming polish</span>';
     }
@@ -205,9 +214,14 @@
     return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
   }
 
+  /** Live 1v1 / Live party via DangalLive challenges. Party-kit rooms are their own flow. */
   function isLiveCapable(gameId) {
     const info = getGameGraduation(gameId);
     return info.sync === 'live1v1' || info.sync === 'liveParty' || info.grade === 'live';
+  }
+
+  function isPartyKitGame(gameId) {
+    return getGameGraduation(gameId).grade === 'party';
   }
 
   function stakesEnabled(gameId) {
@@ -231,6 +245,7 @@
   window.setGameGraduation = setGameGraduation;
   window.dangalHonestyBadgeHtml = dangalHonestyBadgeHtml;
   window.isLiveCapable = isLiveCapable;
+  window.isPartyKitGame = isPartyKitGame;
   window.stakesEnabledForGame = stakesEnabled;
   window.dangalManchVisibility = dangalManchVisibility;
   window.DANGAL_ROSTER = ROSTER;
