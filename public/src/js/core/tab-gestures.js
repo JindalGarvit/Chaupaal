@@ -973,7 +973,7 @@
     const wowPlays = lastWeek ? weekPlays - (lastWeek.plays || 0) : null;
     const wowWins = lastWeek ? weekWins - (lastWeek.wins || 0) : null;
     const wowBit = (n) => (n == null ? '—' : n > 0 ? '+' + n : String(n));
-    const rated = ['chess', 'ttt', 'quiz', 'streetcricket'];
+    const rated = ['chess', 'ttt', 'quiz', 'streetcricket', 'penalty'];
     const eloBits = rated
       .map((id) => {
         let elo = null;

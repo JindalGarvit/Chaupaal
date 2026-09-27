@@ -58,6 +58,7 @@
     charades: '#00897B',
     mostlikely: '#7C4DFF',
     werewolf: '#3949AB',
+    penalty: '#00A86B',
     wrap: '#8134AF',
     duniya: '#E63946',
     peepal: '#2A9D8F',
@@ -91,6 +92,7 @@
     charades: 'Dumb Charades',
     mostlikely: 'Most Likely To?',
     werewolf: 'Werewolf',
+    penalty: 'Penalty Shootout',
     wrap: 'Monthly Wrap',
     duniya: 'Duniya',
     peepal: 'Peepal',
@@ -201,6 +203,12 @@
       'Day: hear who was taken, talk it over, then vote someone out',
       'Village wins when every Werewolf is out · Werewolves win when they match the rest',
       'Advanced: Hunter, Witch, Bodyguard, Tanner, timers, role reveal, voice narrator',
+    ],
+    penalty: [
+      'Shoot: drag on the goal to aim, then hold the button for power — more power spreads the circle',
+      'Save: tap where to dive, then slide Early ↔ Late — early covers more, late reacts to the ball',
+      'Kicks alternate · best of 5, ends early when one side can’t catch up · then sudden death',
+      'Live: both pick at once and the server reveals the kick — nobody sees the other side first',
     ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',

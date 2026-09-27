@@ -12,6 +12,8 @@
     muqabala: 'quiz',
     shabdfive: 'wordguess',
     kakuro: 'ankjod',
+    penaltyshootout: 'penalty',
+    shootout: 'penalty',
     cricket: 'streetcricket',
     fischerrandom: 'chess',
     chess960: 'chess',

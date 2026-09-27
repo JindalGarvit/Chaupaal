@@ -47,6 +47,8 @@
     tambola: { grade: 'live', sync: 'live1v1', stakes: true },
     streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
     badminton: { grade: 'live', sync: 'live1v1', stakes: true },
+    // Dangal H2 — Live kicks are resolved on the server (choices never in shared state)
+    penalty: { grade: 'live', sync: 'live1v1', stakes: true },
   };
 
   /**
@@ -82,6 +84,7 @@
     { id: 'tambola', genre: 'party' },
     { id: 'streetcricket', genre: 'rw_sports' },
     { id: 'badminton', genre: 'rw_sports' },
+    { id: 'penalty', genre: 'rw_sports' },
     // Party kit titles (G1+) — Pass & Play on one phone or a Room across phones.
     { id: 'imposter', genre: 'party', partyKit: true },
     { id: 'rajamantri', genre: 'party', partyKit: true },
@@ -91,7 +94,7 @@
   ];
   const ROSTER_IDS = ROSTER.map((r) => r.id);
   /** Aliases that resolve to a roster id (kept in sync with GAME_ID_ALIASES). */
-  const ROSTER_ALIASES = { kakuro: 'ankjod' };
+  const ROSTER_ALIASES = { kakuro: 'ankjod', penaltyshootout: 'penalty', shootout: 'penalty' };
 
   /** Retired titles (G0 cull) + their legacy link spellings — old links land on the retired screen. */
   const RETIRED_IDS = [

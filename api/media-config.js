@@ -970,6 +970,32 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Dangal Penalty Shootout Live: server resolves each kick; choices never in shared state ──
+  if (action === 'penalty_kick') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'party');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+      }
+    } catch (e) {}
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    try {
+      const { penaltyKick } = require('../server-lib/penalty-engine');
+      const out = await penaltyKick(adminApp, user.uid, body);
+      return sendSuccess(res, out);
+    } catch (e) {
+      const code = e && e.code ? String(e.code) : '';
+      if (code) {
+        const status = code === 'match_not_found' ? 404 : code === 'busy' ? 409 : 400;
+        return sendError(res, status, code.toUpperCase(), e.message || 'Match action failed');
+      }
+      console.warn('[media-config] penalty_kick', e?.message || e);
+      return sendError(res, 500, 'PENALTY_ERROR', 'Match action failed');
+    }
+  }
+
   // ─── Growth G2 referrals (virtual chips only; no new api/*.js) ─────────
   if (
     action === 'referral_claim' ||
@@ -1318,6 +1344,8 @@ async function handlePost(req, res) {
       'request_account_deletion',
       'dangal_wallet_get',
       'dangal_game_resolve',
+      'party_room',
+      'penalty_kick',
       'referral_claim',
       'referral_activate',
       'referral_stats',

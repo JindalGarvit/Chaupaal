@@ -25,6 +25,7 @@
  * @property {boolean} [chatGroup] - show in group chat picker
  * @property {boolean} [dangal] - show in Dangal games grid (default true when registered)
  * @property {boolean} [featured]
+ * @property {boolean} [ownHome] - Manch tap opens the game's own home (mode 'home') instead of the opponent sheet
  * @property {number} [order] - lower sorts first
  * @property {object} [meta] - phase-2 notes (e.g. muqabala engine wiring)
  * @property {(ctx: GameLaunchContext) => void} launch
@@ -863,6 +864,11 @@
       game.launch({ source: 'manch', mode: 'party' });
       return;
     }
+    // Titles with their own home (vs AI · Play a friend) skip the generic opponent sheet.
+    if (game.ownHome) {
+      game.launch({ source: 'manch', mode: 'home' });
+      return;
+    }
 
     if (gameId === 'ludo') {
       // Practice vs AI or Live challenge friend (same honesty as Chess).
@@ -1104,6 +1110,10 @@
     // Party kit: Pass & Play / Play with friends / Join with code — no Practice or stakes sheet
     if (isPartyKit(gameId)) {
       game.launch({ source: 'manch', mode: 'party' });
+      return;
+    }
+    if (game.ownHome) {
+      game.launch({ source: 'manch', mode: 'home' });
       return;
     }
 

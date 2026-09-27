@@ -57,6 +57,8 @@
       '<circle cx="11" cy="28" r="4" fill="currentColor" opacity=".35"/><circle cx="29" cy="28" r="4" fill="currentColor" opacity=".35"/><circle cx="20" cy="11" r="5" fill="currentColor"/><path fill="currentColor" d="M15 4l2 2.5L20 3l3 3.5L25 4l-.8 4h-8.4z" opacity=".8"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M13 24l4.5-6M27 24l-4.5-6M20 34v-9"/>',
     werewolf:
       '<path fill="currentColor" d="M27 5a10 10 0 1 0 8 15A12 12 0 0 1 27 5z" opacity=".3"/><path fill="currentColor" d="M9 34l2-10-3-7 5 3 2-6 2 6h6l2-6 2 6 5-3-3 7 2 10-6-4h-10z"/><circle cx="16" cy="24" r="1.6" fill="#fff"/><circle cx="24" cy="24" r="1.6" fill="#fff"/>',
+    penalty:
+      '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" d="M5 22V8h30v14"/><path fill="none" stroke="currentColor" stroke-width="1" opacity=".5" d="M10 8v14M15 8v14M20 8v14M25 8v14M30 8v14M5 13h30M5 18h30"/><circle cx="20" cy="30" r="5.2" fill="currentColor"/><path fill="#fff" opacity=".85" d="M20 26.6l2.1 1.5-.8 2.5h-2.6l-.8-2.5z"/>',
   };
 
   const GAME_IDENTITY = {
@@ -83,9 +85,10 @@
     charades: { primary: '#00897B', secondary: '#FF7043', surface: '#041A18', label: 'Dumb Charades', icon: '🎭', mark: M.charades, orientation: 'portrait' },
     mostlikely: { primary: '#7C4DFF', secondary: '#FFD54F', surface: '#140A26', label: 'Most Likely To?', icon: '👉', mark: M.mostlikely, orientation: 'portrait' },
     werewolf: { primary: '#3949AB', secondary: '#FFB74D', surface: '#0B0E24', label: 'Werewolf', icon: '🐺', mark: M.werewolf, orientation: 'portrait' },
+    penalty: { primary: '#00A86B', secondary: '#FFFFFF', surface: '#04160F', label: 'Penalty Shootout', icon: '⚽', mark: M.penalty, orientation: 'portrait', law: 'Shootout rules', lawHint: 'Best of 5 then sudden death · kicks alternate' },
   };
 
-  const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz'];
+  const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz', 'penalty'];
 
   function escAttr(s) {
     return String(s == null ? '' : s)

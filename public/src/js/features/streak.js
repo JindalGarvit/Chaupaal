@@ -180,7 +180,8 @@ async function buyStreakFreeze(){
 /**
  * Find a live opponent via Elo-aware server queue (P7).
  * Returns { cancel } immediately.
- * onFound({ name, uid?, simulated, eloDelta? }) — simulated=true → Practice AI (honest).
+ * onFound({ name, uid?, simulated, eloDelta?, matchId?, role? }) — simulated=true → Practice AI (honest).
+ * matchId is shared by both phones; role 'host' = the player who was waiting.
  */
 function findRealOpponent(filters, onFound, onCancel){
   let settled=false;
@@ -223,6 +224,8 @@ function findRealOpponent(filters, onFound, onCancel){
         simulated:false,
         eloDelta:data.eloDelta!=null?data.eloDelta:null,
         band:data.band||null,
+        matchId:data.matchId||'',
+        role:data.role||'',
       });
       return true;
     }

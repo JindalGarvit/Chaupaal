@@ -1118,4 +1118,89 @@ button.pk-lobby-row{cursor:pointer;}
 .ww-recap .ww-recap-day{border-left-color:#FFB74D;}
 @media (prefers-reduced-motion:reduce){.pk-shell.ww-night,.pk-shell.ww-day{transition:none;}}
 
+/* ---------- Dangal H2 — Penalty Shootout ---------- */
+.pen-shell{--pen-accent:#00A86B;color:#fff;}
+.pen-shell [hidden]{display:none!important;}
+.pen-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:8px 12px calc(12px + var(--safe-bottom,0px));overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.pen-board{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);}
+.pen-board:empty{display:none;}
+.pen-board-row{display:grid;grid-template-columns:14px minmax(0,1fr) auto 24px;align-items:center;gap:8px;min-height:24px;font:700 13px var(--font-display,'Space Grotesk',sans-serif);border-radius:8px;padding:0 4px;}
+.pen-board-row.is-turn{background:rgba(0,168,107,.18);}
+.pen-swatch{width:14px;height:14px;border-radius:4px;border:2px solid #fff;box-sizing:border-box;}
+.pen-board-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pen-board-score{text-align:right;font-size:16px;font-variant-numeric:tabular-nums;}
+.pen-board-meta{font-size:11px;color:rgba(255,255,255,.6);text-align:center;text-transform:uppercase;letter-spacing:.06em;}
+.pen-dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;max-width:150px;}
+.pen-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.18);}
+.pen-dot--goal{background:#00E676;}
+.pen-dot--miss{background:#FF5252;}
+.pen-stage{position:relative;flex:1 1 auto;min-height:260px;max-height:62vh;border-radius:16px;overflow:hidden;background:#0A1622;touch-action:none;}
+.pen-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;}
+.pen-banner{position:absolute;left:8px;right:8px;top:8px;padding:6px 10px;border-radius:10px;background:rgba(0,0,0,.6);font:700 12px var(--font-display,'Space Grotesk',sans-serif);text-align:center;pointer-events:none;}
+.pen-cover{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,22,15,.97);padding:16px;}
+.pen-cover-card{text-align:center;max-width:300px;}
+.pen-cover-lead{font-size:13px;color:rgba(255,255,255,.7);}
+.pen-cover-name{font:800 30px var(--font-display,'Space Grotesk',sans-serif);margin:6px 0;word-break:break-word;}
+.pen-cover-sub{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:16px;}
+.pen-controls{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;min-height:150px;}
+.pen-shell--result .pen-controls{min-height:0;}
+.pen-prompt{font:800 17px var(--font-display,'Space Grotesk',sans-serif);text-align:center;}
+.pen-hint{font-size:12px;color:rgba(255,255,255,.65);text-align:center;line-height:1.35;}
+.pen-hint--center{padding:10px 0;}
+.pen-btn{min-height:52px;padding:0 18px;border-radius:14px;border:none;font:800 16px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 120ms ease,opacity 160ms ease;}
+.pen-btn:active{transform:scale(.98);}
+.pen-btn:disabled{opacity:.4;cursor:default;}
+.pen-btn--primary{background:var(--pen-accent);color:#fff;}
+.pen-btn--ghost{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.16);}
+.pen-meter{height:8px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;}
+.pen-meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#00E676,#FFD54F 70%,#FF5252);border-radius:inherit;}
+.pen-timing{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;font:700 12px var(--font-display,'Space Grotesk',sans-serif);color:rgba(255,255,255,.75);}
+.pen-timing input{width:100%;min-height:32px;accent-color:var(--pen-accent);}
+.pen-timing-note{font-size:12px;text-align:center;color:#A5D6A7;min-height:16px;}
+.pen-clock{font:800 14px var(--font-display,'Space Grotesk',sans-serif);text-align:center;font-variant-numeric:tabular-nums;}
+.pen-clock.is-low{color:#FF8A80;}
+.pen-opp-state{font-size:12px;text-align:center;color:rgba(255,255,255,.6);}
+.pen-locked{padding:12px;border-radius:14px;background:rgba(0,168,107,.16);text-align:center;font:800 15px var(--font-display,'Space Grotesk',sans-serif);}
+.pen-wait{display:flex;flex-direction:column;gap:10px;padding:8px 0;}
+.pen-result .game-result{padding:4px 0 0;}
+.pen-result-board{padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.06);margin:8px 0;text-align:left;}
+.pen-result-board .pen-board-row{min-height:26px;}
+.pen-shell--result .pen-stage{min-height:200px;max-height:36vh;}
+.pen-moments{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:6px 0;}
+.pen-moment{padding:4px 10px;border-radius:999px;background:rgba(255,213,79,.18);color:#FFE082;font:700 12px var(--font-display,'Space Grotesk',sans-serif);}
+.pen-settle{text-align:center;margin:4px 0;}
+.pen-settle-line{font:800 15px var(--font-display,'Space Grotesk',sans-serif);color:#FFD54F;}
+.pen-settle-note{font-size:11px;color:rgba(255,255,255,.5);}
+.pen-mute{min-width:40px;min-height:40px;border:none;background:transparent;color:#fff;font-size:18px;cursor:pointer;}
+.pen-home .pk-hero-sub{max-width:280px;margin-left:auto;margin-right:auto;}
+.pen-howto{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 16px;}
+.pen-howto-tile{padding:10px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);text-align:center;}
+.pen-howto-art{position:relative;height:54px;margin-bottom:6px;border-radius:10px;background:linear-gradient(#16283A 0 45%,#1E7A3A 45%);overflow:hidden;}
+.pen-howto-art::before{content:"";position:absolute;left:22%;right:22%;top:10%;height:38%;border:2px solid #fff;border-bottom:none;border-radius:2px 2px 0 0;}
+.pen-howto-ball{position:absolute;left:50%;bottom:6px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:#fff;animation:pen-howto-shot 2.4s ease-in infinite;}
+.pen-howto-finger{position:absolute;left:58%;bottom:0;font-size:16px;animation:pen-howto-swipe 2.4s ease-in-out infinite;}
+.pen-howto-glove{position:absolute;left:50%;top:22%;font-size:18px;margin-left:-9px;animation:pen-howto-dive 2.4s ease-in-out infinite;}
+.pen-howto-title{font:800 13px var(--font-display,'Space Grotesk',sans-serif);}
+.pen-howto-text{font-size:11px;color:rgba(255,255,255,.65);line-height:1.35;margin-top:2px;}
+@keyframes pen-howto-shot{0%,30%{transform:translate(0,0) scale(1);}60%,100%{transform:translate(18px,-30px) scale(.6);}}
+@keyframes pen-howto-swipe{0%{transform:translate(0,0);opacity:0;}10%{opacity:1;}35%{transform:translate(10px,-18px);opacity:1;}50%,100%{opacity:0;}}
+@keyframes pen-howto-dive{0%,35%{transform:translateX(0) rotate(0);}60%,85%{transform:translateX(-22px) rotate(-50deg);}100%{transform:translateX(0);}}
+.pen-record{text-align:center;font-size:12px;color:rgba(255,255,255,.55);margin-top:8px;}
+.pen-swatches{display:flex;flex-wrap:wrap;gap:8px;}
+.pen-kit-btn{width:44px;height:44px;border-radius:12px;border:2px solid rgba(0,0,0,.12);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;}
+.pen-kit-btn.is-on{border-color:#00A86B;box-shadow:0 0 0 2px rgba(0,168,107,.35);}
+.pen-kit-btn:disabled{opacity:.3;cursor:default;}
+.pen-kit-shirt{width:26px;height:26px;border-radius:6px 6px 4px 4px;background:var(--kit-a);}
+.pen-kit-shirt--stripes{background:repeating-linear-gradient(90deg,var(--kit-a) 0 5px,var(--kit-b) 5px 10px);}
+.pen-kit-shirt--hoops{background:repeating-linear-gradient(180deg,var(--kit-a) 0 5px,var(--kit-b) 5px 10px);}
+.pen-kit-shirt--halves{background:linear-gradient(90deg,var(--kit-a) 50%,var(--kit-b) 50%);}
+.pen-kit-shirt--sash{background:linear-gradient(135deg,var(--kit-a) 38%,var(--kit-b) 38% 62%,var(--kit-a) 62%);}
+.pen-glove-btn{width:40px;height:40px;border-radius:50%;border:2px solid rgba(0,0,0,.15);cursor:pointer;}
+.pen-glove-btn.is-on{box-shadow:0 0 0 3px #00A86B;}
+.pen-finding{display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px 0 4px;}
+.pen-finding-ball{font-size:40px;animation:pen-bounce 1s ease-in-out infinite;}
+@keyframes pen-bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+@media (max-width:380px){.pen-body{padding:6px 8px calc(10px + var(--safe-bottom,0px));}.pen-stage{min-height:230px;}.pen-howto-text{font-size:10px;}}
+@media (prefers-reduced-motion:reduce){.pen-howto-ball,.pen-howto-finger,.pen-howto-glove,.pen-finding-ball{animation:none;}}
+
 

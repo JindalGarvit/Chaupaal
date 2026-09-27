@@ -12,6 +12,8 @@
     hundred_games: { label: 'Dangal Guru', desc: 'Play 100 Dangal games', chips: 1000, icon: '🌟' },
     won_stake: { label: 'Raazi Tha', desc: 'Win a chip-staked game', chips: 100, icon: '🎰' },
     chess_first_win: { label: 'Pehli Chaal', desc: 'Win your first chess game', chips: 150, icon: '♟' },
+    penalty_clean_sheet: { label: 'Clean Sheet', desc: 'Win a penalty shootout without conceding', chips: 150, icon: '🧤' },
+    penalty_panenka: { label: 'Panenka', desc: 'Score a soft chip down the middle', chips: 150, icon: '🥄' },
   };
 
   function showAchievementToast(ach) {

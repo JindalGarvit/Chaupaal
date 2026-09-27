@@ -84,6 +84,11 @@ async function loadGameElo(db, uid, gameId) {
   return 1200;
 }
 
+/** Shared Live match id — written into the claimed waiter doc so both phones join the same match. */
+function mintMatchId(game, now) {
+  return String(game || 'dangal').replace(/[^\w-]/g, '').slice(0, 24) + '_mm_' + now.toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
 function waitingCol(db, category) {
   const cat = String(category || 'GK').slice(0, 40);
   return db.collection('matchmaking').doc(cat).collection('waiting');
@@ -109,6 +114,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
   const elo = rated ? await loadGameElo(db, uid, game) : null;
   const col = waitingCol(db, cat);
   const now = Date.now();
+  const mmId = mintMatchId(game, now);
 
   // If already waiting, check claim / try widen band claim
   if (waitingId) {
@@ -126,6 +132,8 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
         status: 'matched',
         simulated: false,
         uid: mine.claimedBy,
+        matchId: mine.matchId || '',
+        role: 'host',
         name: mine.claimerName || 'Your opponent',
         eloDelta: null,
       };
@@ -161,6 +169,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
             if (d.claimedBy) throw new Error('claimed');
             tx.update(opponent.ref, {
               claimedBy: uid,
+              matchId: mmId,
               claimerName: name || 'You',
               claimedAt: FieldValue.serverTimestamp(),
               claimElo: elo,
@@ -177,6 +186,8 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
             status: 'matched',
             simulated: false,
             uid: opponent.uid,
+            matchId: mmId,
+            role: 'guest',
             name: opponent.name || 'Your opponent',
             eloDelta: delta,
             band,
@@ -197,6 +208,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
             if ((fresh.data() || {}).claimedBy) throw new Error('claimed');
             tx.update(opp.ref, {
               claimedBy: uid,
+              matchId: mmId,
               claimerName: name || 'You',
               claimedAt: FieldValue.serverTimestamp(),
             });
@@ -211,6 +223,8 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
             status: 'matched',
             simulated: false,
             uid: opp.uid,
+            matchId: mmId,
+            role: 'guest',
             name: opp.name || 'Your opponent',
             rated: false,
           };
@@ -250,6 +264,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
           if ((fresh.data() || {}).claimedBy) throw new Error('claimed');
           tx.update(opponent.ref, {
             claimedBy: uid,
+            matchId: mmId,
             claimerName: name || 'You',
             claimedAt: FieldValue.serverTimestamp(),
             claimElo: elo,
@@ -263,6 +278,8 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
           status: 'matched',
           simulated: false,
           uid: opponent.uid,
+          matchId: mmId,
+          role: 'guest',
           name: opponent.name || 'Your opponent',
           eloDelta: delta,
           band,
@@ -279,6 +296,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
         if ((fresh.data() || {}).claimedBy) throw new Error('claimed');
         tx.update(opp.ref, {
           claimedBy: uid,
+          matchId: mmId,
           claimerName: name || 'You',
           claimedAt: FieldValue.serverTimestamp(),
         });
@@ -290,6 +308,8 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
         status: 'matched',
         simulated: false,
         uid: opp.uid,
+        matchId: mmId,
+        role: 'guest',
         name: opp.name || 'Your opponent',
         rated: false,
       };
@@ -369,4 +389,5 @@ module.exports = {
   dangalMatchStep,
   dangalMatchCancel,
   pruneStaleDangalQueues,
+  mintMatchId,
 };

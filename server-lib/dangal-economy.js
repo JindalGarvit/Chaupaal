@@ -5,7 +5,9 @@
 const STARTING_CHIPS = 1000;
 const MAX_STAKE = 500;
 const DAILY_CHIP_RESOLVES = 60;
-const RATED = new Set(['chess', 'ttt', 'streetcricket', 'quiz']);
+const RATED = new Set(['chess', 'ttt', 'streetcricket', 'quiz', 'penalty']);
+/** Results only the server may report (it resolved every move) — client claims are ignored. */
+const SERVER_SETTLED = new Set(['penalty']);
 
 const ALIASES = {
   snakesladders: 'snakes',
@@ -14,6 +16,8 @@ const ALIASES = {
   muqabala: 'quiz',
   shabdfive: 'wordguess',
   kakuro: 'ankjod',
+  penaltyshootout: 'penalty',
+  shootout: 'penalty',
   cricket: 'streetcricket',
 };
 
@@ -33,6 +37,8 @@ const ACHIEVEMENTS = {
   hundred_games: { label: 'Dangal Guru', desc: 'Play 100 Dangal games', chips: 1000 },
   won_stake: { label: 'Raazi Tha', desc: 'Win a chip-staked game', chips: 100 },
   chess_first_win: { label: 'Pehli Chaal', desc: 'Win your first chess game', chips: 150 },
+  penalty_clean_sheet: { label: 'Clean Sheet', desc: 'Win a penalty shootout without conceding', chips: 150 },
+  penalty_panenka: { label: 'Panenka', desc: 'Score a soft chip down the middle', chips: 150 },
 };
 
 function canonicalGameId(id) {
@@ -91,6 +97,9 @@ function evaluateNewAchievements(earnedSet, ctx) {
   if (ctx.totalGamesEver === 100) tryAdd('hundred_games');
   if (ctx.wonWithStake) tryAdd('won_stake');
   if (ctx.gameType === 'chess' && ctx.isFirstWin) tryAdd('chess_first_win');
+  (ctx.extra || []).forEach((key) => {
+    if (out.indexOf(key) < 0) tryAdd(key);
+  });
   return out;
 }
 
@@ -109,7 +118,7 @@ async function getWallet(db, admin, uid) {
 }
 
 async function settleSide(db, FieldValue, uid, opts, batch) {
-  const { gameType, won, isDraw, eloDelta, stake, resultTag, dayKey } = opts;
+  const { gameType, won, isDraw, eloDelta, stake, resultTag, dayKey, extra } = opts;
   const dailyRef = db.collection('users').doc(uid).collection('dailyCredits').doc(dayKey);
   const dailySnap = await dailyRef.get();
   const dailyCount = Number(dailySnap.data()?.resolves) || 0;
@@ -141,6 +150,7 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
     isFirstWin,
     wonWithStake: won && stake > 0,
     gameType,
+    extra: Array.isArray(extra) ? extra : [],
   });
   let achChips = 0;
   newKeys.forEach((k) => {
@@ -191,13 +201,38 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
   };
 }
 
-async function resolveGame(db, admin, uid, body) {
+/**
+ * @param {object} [opts] server-internal only (never from a request body):
+ *   trusted — the caller resolved the match itself (required for SERVER_SETTLED games);
+ *   flags — { [uid]: achievementKey[] } proven by that server.
+ */
+async function resolveGame(db, admin, uid, body, opts) {
   const FieldValue = admin.firestore.FieldValue;
   const gameType = canonicalGameId(body.gameType);
   if (!gameType || gameType.length > 40) {
     const err = new Error('Invalid gameType');
     err.code = 'VALIDATION_ERROR';
     throw err;
+  }
+  const trusted = !!(opts && opts.trusted);
+  const flags = (opts && opts.flags) || {};
+
+  // Practice (no opponent, no stake) reports like any other title; a Live claim is ignored.
+  const claimsLive = !!String(body.opponentUid || '').trim() || Number(body.stake) > 0;
+  if (SERVER_SETTLED.has(gameType) && !trusted && claimsLive) {
+    const w = await getWallet(db, admin, uid);
+    return {
+      gameType,
+      serverSettled: true,
+      won: false,
+      isDraw: false,
+      eloDelta: 0,
+      chips: w.balance,
+      chipDelta: 0,
+      achievements: [],
+      matchId: null,
+      shared: false,
+    };
   }
 
   // Retired title: void the match. Stakes only move at resolve (no escrow), so voiding
@@ -278,12 +313,22 @@ async function resolveGame(db, admin, uid, body) {
     db,
     FieldValue,
     uid,
-    { gameType, won, isDraw, eloDelta: isComplete ? 0 : eloDelta, stake: isComplete ? 0 : stake, resultTag, dayKey },
+    {
+      gameType,
+      won,
+      isDraw,
+      eloDelta: isComplete ? 0 : eloDelta,
+      stake: isComplete ? 0 : stake,
+      resultTag,
+      dayKey,
+      extra: trusted ? flags[uid] : null,
+    },
     batch
   );
 
+  let opponent = null;
   if (opponentUid) {
-    await settleSide(
+    opponent = await settleSide(
       db,
       FieldValue,
       opponentUid,
@@ -295,6 +340,7 @@ async function resolveGame(db, admin, uid, body) {
         stake,
         resultTag: isDraw ? 'draw' : won ? 'loss' : 'win',
         dayKey,
+        extra: trusted ? flags[opponentUid] : null,
       },
       batch
     );
@@ -311,6 +357,14 @@ async function resolveGame(db, admin, uid, body) {
     matchId: matchId || null,
     shared: !!opponentUid,
   };
+  if (opponent) {
+    payload.opponent = {
+      chips: opponent.chips,
+      chipDelta: opponent.chipDelta,
+      eloDelta: opponent.eloDelta,
+      achievements: opponent.achievements,
+    };
+  }
   if (lockRef) batch.set(lockRef, { result: payload, at: FieldValue.serverTimestamp() });
   if (matchRef) {
     batch.set(matchRef, {
@@ -338,4 +392,5 @@ module.exports = {
   resolveGame,
   ACHIEVEMENTS,
   RATED,
+  SERVER_SETTLED,
 };

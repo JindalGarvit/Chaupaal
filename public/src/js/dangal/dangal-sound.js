@@ -71,7 +71,62 @@
     } catch (e) {}
   }
 
+  /** Stadium bed: looped soft noise through a band-pass, breathing slowly. */
+  function playCrowd() {
+    if (!allowed()) return stopAmbient();
+    if (amb && amb.kind === 'crowd') return;
+    stopAmbient();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      const ctx = new AC();
+      const master = ctx.createGain();
+      master.gain.value = 0;
+      master.connect(ctx.destination);
+      const len = ctx.sampleRate * 2;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++) {
+        last = last * 0.96 + (Math.random() * 2 - 1) * 0.04;
+        data[i] = last * 6;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 700;
+      band.Q.value = 0.6;
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = 0.12;
+      lfoGain.gain.value = PAD_GAIN * 0.5;
+      lfo.connect(lfoGain).connect(master.gain);
+      src.connect(band).connect(master);
+      src.start();
+      lfo.start();
+      master.gain.setTargetAtTime(PAD_GAIN * 1.4, ctx.currentTime, 1.2);
+      amb = { kind: 'crowd', ctx, master, oscs: [src, lfo] };
+    } catch (e) {
+      amb = null;
+    }
+  }
+
+  /** Short crowd swell over the bed (goal / big save); no-op when the bed isn't playing. */
+  function crowdSwell(strength) {
+    if (!amb || amb.kind !== 'crowd' || !allowed()) return;
+    try {
+      const t = amb.ctx.currentTime;
+      const peak = PAD_GAIN * (2 + 5 * Math.max(0, Math.min(1, Number(strength) || 0.6)));
+      amb.master.gain.cancelScheduledValues(t);
+      amb.master.gain.setTargetAtTime(peak, t, 0.08);
+      amb.master.gain.setTargetAtTime(PAD_GAIN * 1.4, t + 0.9, 0.7);
+    } catch (e) {}
+  }
+
   function playAmbient(kind) {
+    if (kind === 'crowd') return playCrowd();
     const notes = PADS[kind];
     if (!notes || !allowed()) return stopAmbient();
     if (amb && amb.kind === kind) return;
@@ -115,6 +170,7 @@
     },
     playAmbient,
     stopAmbient,
+    crowdSwell,
     duckAmbient() {},
     preloadGame() {},
     setEnabled(on) {
