@@ -59,6 +59,8 @@
       '<path fill="currentColor" d="M27 5a10 10 0 1 0 8 15A12 12 0 0 1 27 5z" opacity=".3"/><path fill="currentColor" d="M9 34l2-10-3-7 5 3 2-6 2 6h6l2-6 2 6 5-3-3 7 2 10-6-4h-10z"/><circle cx="16" cy="24" r="1.6" fill="#fff"/><circle cx="24" cy="24" r="1.6" fill="#fff"/>',
     penalty:
       '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" d="M5 22V8h30v14"/><path fill="none" stroke="currentColor" stroke-width="1" opacity=".5" d="M10 8v14M15 8v14M20 8v14M25 8v14M30 8v14M5 13h30M5 18h30"/><circle cx="20" cy="30" r="5.2" fill="currentColor"/><path fill="#fff" opacity=".85" d="M20 26.6l2.1 1.5-.8 2.5h-2.6l-.8-2.5z"/>',
+    poker:
+      '<rect x="6" y="9" width="14" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2" transform="rotate(-10 13 19)"/><rect x="18" y="8" width="14" height="20" rx="2" fill="currentColor" opacity=".2" stroke="currentColor" stroke-width="2" transform="rotate(8 25 18)"/><path fill="currentColor" d="M25.6 13.5c-1.8 2-4.1 3.3-4.1 5.4 0 1.3 1 2.2 2.2 2.2.7 0 1.3-.3 1.6-.8l-.6 2.4h1.8l-.6-2.4c.3.5.9.8 1.6.8 1.2 0 2.2-.9 2.2-2.2 0-2.1-2.3-3.4-4.1-5.4z" transform="rotate(8 25 18)"/><circle cx="12" cy="32" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="32" r="1.6" fill="currentColor"/>',
   };
 
   const GAME_IDENTITY = {
@@ -86,6 +88,7 @@
     mostlikely: { primary: '#7C4DFF', secondary: '#FFD54F', surface: '#140A26', label: 'Most Likely To?', icon: '👉', mark: M.mostlikely, orientation: 'portrait' },
     werewolf: { primary: '#3949AB', secondary: '#FFB74D', surface: '#0B0E24', label: 'Werewolf', icon: '🐺', mark: M.werewolf, orientation: 'portrait' },
     penalty: { primary: '#00A86B', secondary: '#FFFFFF', surface: '#04160F', label: 'Penalty Shootout', icon: '⚽', mark: M.penalty, orientation: 'portrait', law: 'Shootout rules', lawHint: 'Best of 5 then sudden death · kicks alternate' },
+    poker: { primary: '#1B7F4B', secondary: '#F5C542', surface: '#06170F', label: "Texas Hold'em", icon: '♠', mark: M.poker, orientation: 'portrait', law: 'No-Limit Hold’em', lawHint: 'Standard rules · virtual chips only' },
   };
 
   const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz', 'penalty'];

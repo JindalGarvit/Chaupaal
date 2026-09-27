@@ -7,7 +7,9 @@ const MAX_STAKE = 500;
 const DAILY_CHIP_RESOLVES = 60;
 const RATED = new Set(['chess', 'ttt', 'streetcricket', 'quiz', 'penalty']);
 /** Results only the server may report (it resolved every move) — client claims are ignored. */
-const SERVER_SETTLED = new Set(['penalty']);
+const SERVER_SETTLED = new Set(['penalty', 'poker']);
+/** Chips move only through the game's own server path — even practice results are ignored here. */
+const SERVER_ONLY = new Set(['poker']);
 
 const ALIASES = {
   snakesladders: 'snakes',
@@ -17,6 +19,9 @@ const ALIASES = {
   shabdfive: 'wordguess',
   kakuro: 'ankjod',
   penaltyshootout: 'penalty',
+  holdem: 'poker',
+  texasholdem: 'poker',
+  'texashold\'em': 'poker',
   shootout: 'penalty',
   cricket: 'streetcricket',
 };
@@ -39,6 +44,8 @@ const ACHIEVEMENTS = {
   chess_first_win: { label: 'Pehli Chaal', desc: 'Win your first chess game', chips: 150 },
   penalty_clean_sheet: { label: 'Clean Sheet', desc: 'Win a penalty shootout without conceding', chips: 150 },
   penalty_panenka: { label: 'Panenka', desc: 'Score a soft chip down the middle', chips: 150 },
+  poker_royal_flush: { label: 'Royal Flush', desc: 'Make a royal flush at Texas Hold’em', chips: 250 },
+  poker_bluff_master: { label: 'Bluff Master', desc: 'Win 10 pots without a showdown at public tables', chips: 200 },
 };
 
 function canonicalGameId(id) {
@@ -219,7 +226,7 @@ async function resolveGame(db, admin, uid, body, opts) {
 
   // Practice (no opponent, no stake) reports like any other title; a Live claim is ignored.
   const claimsLive = !!String(body.opponentUid || '').trim() || Number(body.stake) > 0;
-  if (SERVER_SETTLED.has(gameType) && !trusted && claimsLive) {
+  if (SERVER_SETTLED.has(gameType) && !trusted && (claimsLive || SERVER_ONLY.has(gameType))) {
     const w = await getWallet(db, admin, uid);
     return {
       gameType,
@@ -393,4 +400,5 @@ module.exports = {
   ACHIEVEMENTS,
   RATED,
   SERVER_SETTLED,
+  weekKey,
 };

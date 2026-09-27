@@ -49,7 +49,12 @@
     badminton: { grade: 'live', sync: 'live1v1', stakes: true },
     // Dangal H2 — Live kicks are resolved on the server (choices never in shared state)
     penalty: { grade: 'live', sync: 'live1v1', stakes: true },
+    // Dangal H3 — server shuffles, deals and settles; wallet stakes only at Quick tables + Sit & Go
+    poker: { grade: 'live', sync: 'liveParty', stakes: true },
   };
+
+  /** 18+ only (simulated gambling): hidden from pickers until the player is confirmed adult. */
+  const AGE_GATED_IDS = ['poker', 'teenpatti'];
 
   /**
    * Dangal roster — the only list of shipped titles. Registry, pickers, game-of-day and
@@ -60,6 +65,7 @@
     { id: 'brain', label: 'Brain Boost' },
     { id: 'board', label: 'Board & Classics' },
     { id: 'party', label: 'Party & Social' },
+    { id: 'cards', label: 'Cards' },
     { id: 'arcade', label: 'Arcade Rush' },
     { id: 'quiz', label: 'Quiz & Duel' },
   ];
@@ -78,9 +84,10 @@
     { id: 'scribble', genre: 'party' },
     { id: 'quiz', genre: 'quiz' },
     { id: 'carrom', genre: 'board' },
-    { id: 'rummy', genre: 'party' },
-    { id: 'teenpatti', genre: 'party' },
-    { id: 'bluff', genre: 'party' },
+    { id: 'poker', genre: 'cards' },
+    { id: 'teenpatti', genre: 'cards' },
+    { id: 'rummy', genre: 'cards' },
+    { id: 'bluff', genre: 'cards' },
     { id: 'tambola', genre: 'party' },
     { id: 'streetcricket', genre: 'rw_sports' },
     { id: 'badminton', genre: 'rw_sports' },
@@ -94,7 +101,14 @@
   ];
   const ROSTER_IDS = ROSTER.map((r) => r.id);
   /** Aliases that resolve to a roster id (kept in sync with GAME_ID_ALIASES). */
-  const ROSTER_ALIASES = { kakuro: 'ankjod', penaltyshootout: 'penalty', shootout: 'penalty' };
+  const ROSTER_ALIASES = {
+    kakuro: 'ankjod',
+    penaltyshootout: 'penalty',
+    shootout: 'penalty',
+    holdem: 'poker',
+    texasholdem: 'poker',
+    "texashold'em": 'poker',
+  };
 
   /** Retired titles (G0 cull) + their legacy link spellings — old links land on the retired screen. */
   const RETIRED_IDS = [
@@ -244,6 +258,151 @@
    * Phase 9 prep — retirement / quality gate without deleting titles.
    * hideDefault: omit from default Manch grid (still reachable if known).
    */
+  const ADULT_KEY = 'chaupaal_adult_confirmed';
+
+  function isAgeGatedGame(gameId) {
+    const raw = normId(gameId);
+    return AGE_GATED_IDS.indexOf(ROSTER_ALIASES[raw] || raw) >= 0;
+  }
+
+  function currentProfile() {
+    return typeof userProfile !== 'undefined' && userProfile ? userProfile : null;
+  }
+
+  function localAdultConfirmed() {
+    try {
+      const v = JSON.parse(localStorage.getItem(ADULT_KEY) || 'null');
+      const uid = typeof getCurrentUid === 'function' ? getCurrentUid() || '' : '';
+      return !!(v && (v.uid || '') === uid);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * 18+ status for simulated-gambling titles (mirrors server-lib/poker-engine ageGate):
+   * teen mode / under-18 DOB → 'under_18'; adult DOB → 'ok'; else the one-time self-confirmation.
+   * @returns {'ok'|'under_18'|'confirm'}
+   */
+  function ageGateStatus(profile) {
+    const u = profile || currentProfile() || {};
+    if (u.teenMode === true || u.isMinor === true) return 'under_18';
+    if (typeof isTeenModeUser === 'function' && isTeenModeUser(u)) return 'under_18';
+    const age = typeof userAge === 'function' ? userAge(u) : null;
+    if (age != null && age > 0) return age >= 18 ? 'ok' : 'under_18';
+    if (u.adultConfirmedAt || localAdultConfirmed()) return 'ok';
+    return 'confirm';
+  }
+
+  function canSeeAgeGatedGames() {
+    return ageGateStatus() === 'ok';
+  }
+
+  /** Records the one-time "I'm 18 or older" confirmation (server writes users/{uid}.adultConfirmedAt). */
+  async function confirmAdult() {
+    const uid = typeof getCurrentUid === 'function' ? getCurrentUid() || '' : '';
+    if (uid && typeof apiFetch === 'function') {
+      const res = await apiFetch('/api/media-config', { method: 'POST', needAuth: true, body: { action: 'poker_table', op: 'age_confirm' } });
+      if (!res || !res.ok) {
+        const e = new Error((res && res.error && res.error.message) || 'Couldn’t save that — try again');
+        e.code = (res && res.error && res.error.code) || 'ERROR';
+        throw e;
+      }
+    }
+    const p = currentProfile();
+    if (p) p.adultConfirmedAt = Date.now();
+    try {
+      localStorage.setItem(ADULT_KEY, JSON.stringify({ uid, at: Date.now() }));
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent('chaupaal:age-gate', { detail: { status: 'ok' } }));
+    } catch (e) {}
+    return true;
+  }
+
+  /**
+   * Calm 18+ gate. Resolves true when the player may continue.
+   * @param {string} gameId
+   */
+  function openAgeGateSheet(gameId) {
+    return new Promise((resolve) => {
+      const status = ageGateStatus();
+      if (status === 'ok') return resolve(true);
+      const label = typeof gameDisplayName === 'function' ? gameDisplayName(gameId) : 'This game';
+      const kit = window.PartyKit;
+      const under = status === 'under_18';
+      const body = under
+        ? `<p class="dangal-age-gate__text">${label} is for players 18 and over. Plenty more to play in Manch.</p>
+           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-age-ok>OK</button>`
+        : `<p class="dangal-age-gate__text">${label} uses virtual chips that can’t be bought or cashed out. It’s for players 18 and over.</p>
+           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-age-yes>I confirm I’m 18 or older</button>
+           <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-age-no>Not now</button>`;
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        resolve(v);
+      };
+      if (!kit || typeof kit.openSheet !== 'function') {
+        if (under) return finish(false);
+        const ok = typeof window.confirm === 'function' && window.confirm('Confirm you’re 18 or older to play ' + label);
+        if (!ok) return finish(false);
+        confirmAdult().then(() => finish(true), () => finish(false));
+        return;
+      }
+      kit.openSheet({
+        title: under ? '18+ only' : 'Are you 18 or older?',
+        bodyHtml: `<div class="dangal-age-gate">${body}</div>`,
+        onMount(el, close) {
+          el.querySelector('[data-age-ok]')?.addEventListener('click', () => close());
+          el.querySelector('[data-age-no]')?.addEventListener('click', () => close());
+          el.querySelector('[data-age-yes]')?.addEventListener('click', async (ev) => {
+            ev.currentTarget.disabled = true;
+            try {
+              await confirmAdult();
+              done = true;
+              close();
+              resolve(true);
+            } catch (e) {
+              ev.currentTarget.disabled = false;
+              if (String(e.code).toUpperCase() === 'AGE_GATE') {
+                if (typeof showToast === 'function') showToast(label + ' is for players 18 and over');
+                close();
+              } else if (typeof showToast === 'function') showToast(e.message || 'Couldn’t save that — try again');
+            }
+          });
+        },
+        onClose: () => finish(false),
+      });
+    });
+  }
+
+  function isIndiaLocale() {
+    try {
+      const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || '']).map(String);
+      if (langs.some((l) => /-IN$/i.test(l))) return true;
+      const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '').toString();
+      return tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Cards order: Poker leads everywhere except India, where Teen Patti leads. Both always listed. */
+  function orderCardsForLocale(list) {
+    const arr = (list || []).slice();
+    const first = isIndiaLocale() ? 'teenpatti' : 'poker';
+    const second = first === 'poker' ? 'teenpatti' : 'poker';
+    const iF = arr.findIndex((g) => g && g.id === first);
+    const iS = arr.findIndex((g) => g && g.id === second);
+    if (iF > iS && iS >= 0) {
+      const tmp = arr[iF];
+      arr[iF] = arr[iS];
+      arr[iS] = tmp;
+    }
+    return arr;
+  }
+
   function dangalManchVisibility(gameId) {
     if (isRetiredGameId(gameId)) return 'hidden';
     const info = getGameGraduation(gameId);
@@ -268,4 +427,12 @@
   window.isRosterGameId = isRosterGameId;
   window.rosterGenre = rosterGenre;
   window.openRetiredGameScreen = openRetiredGameScreen;
+  window.DANGAL_AGE_GATED_IDS = AGE_GATED_IDS;
+  window.isAgeGatedGame = isAgeGatedGame;
+  window.ageGateStatus = ageGateStatus;
+  window.canSeeAgeGatedGames = canSeeAgeGatedGames;
+  window.confirmAdultForGames = confirmAdult;
+  window.openAgeGateSheet = openAgeGateSheet;
+  window.isIndiaLocale = isIndiaLocale;
+  window.orderCardsForLocale = orderCardsForLocale;
 })();

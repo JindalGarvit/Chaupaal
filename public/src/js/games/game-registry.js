@@ -42,6 +42,7 @@
     { id: 'brain', label: 'Brain Boost', icon: '🧠', color: '#6A1B9A' },
     { id: 'board', label: 'Board & Classics', icon: '♟️', color: '#5D4037' },
     { id: 'party', label: 'Party & Social', icon: '🎉', color: '#E65100' },
+    { id: 'cards', label: 'Cards', icon: '🂡', color: '#1B5E20' },
     { id: 'arcade', label: 'Arcade Rush', icon: '👾', color: '#1565C0' },
     { id: 'quiz', label: 'Quiz & Duel', icon: '🎯', color: '#C62828' },
   ];
@@ -204,6 +205,12 @@
     const game = o._descriptor || getGame(gameId);
     if (!game) {
       showRetiredIfRetired(gameId);
+      return;
+    }
+    if (!o._ageOk && typeof isAgeGatedGame === 'function' && isAgeGatedGame(game.id) && typeof ageGateStatus === 'function' && ageGateStatus() !== 'ok') {
+      if (typeof openAgeGateSheet === 'function') {
+        openAgeGateSheet(game.id).then((ok) => ok && launchDangalGame(Object.assign({}, o, { _ageOk: true })));
+      }
       return;
     }
 
@@ -374,6 +381,10 @@
     const f = filter || {};
     let list = order.map((id) => games.get(id)).filter(Boolean);
     if (typeof isRosterGameId === 'function') list = list.filter((g) => isRosterGameId(g.id));
+    // 18+ titles stay out of pickers until the player is confirmed adult (launches still gate).
+    if (!f.includeAgeGated && typeof isAgeGatedGame === 'function' && typeof canSeeAgeGatedGames === 'function' && !canSeeAgeGatedGames()) {
+      list = list.filter((g) => !isAgeGatedGame(g.id));
+    }
 
     if (f.id) return list.filter((g) => g.id === f.id);
     if (f.dangal) list = list.filter((g) => g.dangal !== false);

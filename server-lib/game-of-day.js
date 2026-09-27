@@ -31,9 +31,10 @@ const GAME_GENRE_BY_ID = {
   scribble: 'party',
   quiz: 'quiz',
   carrom: 'board',
-  rummy: 'party',
-  teenpatti: 'party',
-  bluff: 'party',
+  poker: 'cards',
+  teenpatti: 'cards',
+  rummy: 'cards',
+  bluff: 'cards',
   tambola: 'party',
   streetcricket: 'rw_sports',
   badminton: 'rw_sports',
@@ -46,6 +47,8 @@ const GAME_GENRE_BY_ID = {
 };
 
 const KNOWN_GAME_IDS = Object.keys(GAME_GENRE_BY_ID);
+/** 18+ simulated-gambling titles are never featured to everyone (mirrors DANGAL_AGE_GATED_IDS). */
+const AGE_GATED_IDS = new Set(['poker', 'teenpatti']);
 
 function genreForGameId(id, gameDoc) {
   if (gameDoc && gameDoc.genre) return String(gameDoc.genre);
@@ -251,7 +254,7 @@ async function getOrComputeGameOfDay(adminApp) {
 
   const metaSnap = await metaRef.get();
   const meta = metaSnap.exists ? metaSnap.data() || {} : {};
-  if (meta.date === date && meta.gameId && KNOWN_GAME_IDS.includes(String(meta.gameId))) {
+  if (meta.date === date && meta.gameId && KNOWN_GAME_IDS.includes(String(meta.gameId)) && !AGE_GATED_IDS.has(String(meta.gameId))) {
     return {
       gameId: String(meta.gameId),
       date,
@@ -264,7 +267,7 @@ async function getOrComputeGameOfDay(adminApp) {
 
   const gamesSnap = await db.collection('games').get();
   const allGames = gamesSnap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
-  const active = allGames.filter((g) => g.active !== false && KNOWN_GAME_IDS.includes(g.id));
+  const active = allGames.filter((g) => g.active !== false && KNOWN_GAME_IDS.includes(g.id) && !AGE_GATED_IDS.has(g.id));
 
   const { candidates, yesterdayGenre } = pickGotdCandidates(active, meta, date);
   if (!candidates.length) {
@@ -290,7 +293,7 @@ async function getOrComputeGameOfDay(adminApp) {
   await db.runTransaction(async (tx) => {
     const fresh = await tx.get(metaRef);
     const freshData = fresh.exists ? fresh.data() || {} : {};
-    if (freshData.date === date && freshData.gameId && KNOWN_GAME_IDS.includes(String(freshData.gameId))) {
+    if (freshData.date === date && freshData.gameId && KNOWN_GAME_IDS.includes(String(freshData.gameId)) && !AGE_GATED_IDS.has(String(freshData.gameId))) {
       return;
     }
     const prevRecent = Array.isArray(freshData.recent) ? freshData.recent.slice() : [];
@@ -453,6 +456,7 @@ module.exports = {
   LOW_ENGAGEMENT_MIN_AGE_DAYS,
   GOTD_GAME_COOLDOWN_DAYS,
   KNOWN_GAME_IDS,
+  AGE_GATED_IDS,
   GAME_GENRE_BY_ID,
   calendarDateIST,
   previousIstDate,

@@ -7872,9 +7872,9 @@
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Housie · rival ticket · Live claims', icon: '🎫', genre: 'party', launch: openTambola, order: 30 },
       { id: 'carrom', name: 'Carrom', desc: 'Live · stakes · AI', icon: '🪙', genre: 'board', launch: openCarrom, order: 31 },
-      { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'party', launch: openRummy, order: 33 },
-      { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'party', launch: openTeenPatti, order: 34 },
-      { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'party', launch: openBluff, order: 35 },
+      { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'cards', launch: openRummy, order: 33 },
+      { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'cards', launch: openTeenPatti, order: 34 },
+      { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'cards', launch: openBluff, order: 35 },
     ];
     games.forEach((g) => {
       registerGame({

@@ -210,6 +210,25 @@
           }
         }
       },
+      "poker": {
+        "$tableId": {
+          "pub": {
+            ".read": "auth != null && data.child('players').child(auth.uid).exists()"
+          },
+          "presence": {
+            ".read": "auth != null && root.child('games/poker/' + $tableId + '/pub/players/' + auth.uid).exists()",
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid && root.child('games/poker/' + $tableId + '/pub/players/' + auth.uid).exists()",
+              ".validate": "!newData.exists() || (newData.child('at').isNumber() && newData.child('at').val() <= now + 5000)"
+            }
+          },
+          "secrets": {
+            "$uid": {
+              ".read": "auth != null && auth.uid == $uid"
+            }
+          }
+        }
+      },
       "$gameType": {
         "$gameId": {
           ".read": "auth != null && (data.child('players').child(auth.uid).exists() || data.child('playerA').val() == auth.uid || data.child('playerB').val() == auth.uid || !data.exists())",

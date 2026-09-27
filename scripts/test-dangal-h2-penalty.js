@@ -449,7 +449,7 @@ function rtdbTrip(v) {
     const ach = read('public/src/js/dangal/dangal-achievements.js');
     assert(/penalty_clean_sheet/.test(ach) && /penalty_panenka/.test(ach), 'achievements listed on the client');
     const econSrc = read('server-lib/dangal-economy.js');
-    assert(/penalty_clean_sheet/.test(econSrc) && /penalty_panenka/.test(econSrc) && /SERVER_SETTLED = new Set\(\['penalty'\]\)/.test(econSrc), 'economy: achievements + server-settled');
+    assert(/penalty_clean_sheet/.test(econSrc) && /penalty_panenka/.test(econSrc) && /SERVER_SETTLED = new Set\(\[[^\]]*'penalty'/.test(econSrc), 'economy: achievements + server-settled');
     assert(/penalty: 'rw_sports'/.test(read('server-lib/game-of-day.js')), 'game of the day knows penalty');
     assert(/'penalty'/.test(read('public/src/js/core/tab-gestures.js')), 'leaderboard / rating list includes penalty');
     const api = read('api/media-config.js');

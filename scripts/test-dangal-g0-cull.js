@@ -32,7 +32,9 @@ const KEPT = [
 const PARTY_ADDED = ['imposter', 'rajamantri', 'charades', 'mostlikely', 'werewolf'];
 /** Sports titles added after the cull (H2). */
 const SPORTS_ADDED = ['penalty'];
-const ROSTER_EXPECTED = KEPT.concat(PARTY_ADDED, SPORTS_ADDED);
+/** Cards titles added after the cull (H3). */
+const CARDS_ADDED = ['poker'];
+const ROSTER_EXPECTED = KEPT.concat(PARTY_ADDED, SPORTS_ADDED, CARDS_ADDED);
 
 // ---------- (a) retired ids absent from shipped registries ----------
 const stripRetiredLists = (src) =>
@@ -60,7 +62,7 @@ for (const [name, src] of Object.entries(scanned)) {
 
 const courtSrc = read('public/src/js/games/court-sports.js');
 assert(/id: 'badminton'/.test(courtSrc) && /function openRallySport/.test(courtSrc) && /window\.openBadminton = /.test(courtSrc) && !/patang|kite/i.test(courtSrc), 'court-sports keeps the badminton rally shell; no Kite Fight code');
-const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-classics', 'engines', 'brick-breaker', 'ank-jod', 'imposter', 'rajamantri', 'charades', 'mostlikely', 'werewolf', 'penalty']
+const gameFiles = ['arcade', 'board-games', 'rw-sports', 'court-sports', 'party-classics', 'engines', 'brick-breaker', 'ank-jod', 'imposter', 'rajamantri', 'charades', 'mostlikely', 'werewolf', 'penalty', 'poker']
   .concat(['game-registry'])
   .map((f) => read(`public/src/js/games/${f}.js`))
   .join('\n');

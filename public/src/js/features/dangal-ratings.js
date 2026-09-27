@@ -270,6 +270,7 @@ function renderDangalContinueAndChips(host) {
 
 function renderDangalGotdSlot(host, gotd) {
   if (!host || !gotd?.gameId || typeof getGame !== 'function') return;
+  if (typeof isAgeGatedGame === 'function' && isAgeGatedGame(gotd.gameId)) return;
   const g = getGame(gotd.gameId);
   if (!g) return;
   const card = document.createElement('div');
@@ -505,6 +506,23 @@ function renderDangalGamesGrid() {
     if (list.some((g) => Number.isFinite(Number(g._manchScore)))) {
       list = [...list].sort((a, b) => Number(b._manchScore || 0) - Number(a._manchScore || 0));
     }
+    if (state.genre === 'cards') {
+      const lead = typeof isIndiaLocale === 'function' && isIndiaLocale() ? ['teenpatti', 'poker'] : ['poker', 'teenpatti'];
+      list = [...list].sort((a, b) => {
+        const ia = lead.indexOf(a.id);
+        const ib = lead.indexOf(b.id);
+        return (ia < 0 ? 9 : ia) - (ib < 0 ? 9 : ib);
+      });
+    } else if (typeof orderCardsForLocale === 'function') list = orderCardsForLocale(list);
+    const gateStatus = typeof ageGateStatus === 'function' ? ageGateStatus() : 'ok';
+    const gateCard =
+      gateStatus === 'ok' || (state.genre && state.genre !== 'cards') || state.live || (state.mode && state.mode !== 'all' && !state.genre)
+        ? ''
+        : gateStatus === 'under_18'
+          ? state.genre === 'cards'
+            ? '<div class="dangal-age-note" style="grid-column:1/-1">Some card games are for players 18 and over.</div>'
+            : ''
+          : `<button type="button" class="dangal-age-note dangal-age-note--action" style="grid-column:1/-1" data-age-gate>Texas Hold’em and Teen Patti are 18+. <span>Confirm your age to see them</span></button>`;
     if (!list.length) {
       manchGrid.innerHTML = '';
       if (typeof renderEmptyState === 'function') {
@@ -538,9 +556,19 @@ function renderDangalGamesGrid() {
           '<div class="cp-empty" style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);">No games match this filter.</div>';
       }
     } else {
-      manchGrid.innerHTML = list.map(dangalTileHtml).join('');
+      manchGrid.innerHTML = list.map(dangalTileHtml).join('') + gateCard;
       wireDangalTiles(manchGrid);
     }
+    manchGrid.querySelector('[data-age-gate]')?.addEventListener('click', () => {
+      if (typeof openAgeGateSheet !== 'function') return;
+      openAgeGateSheet('poker').then((ok) => {
+        if (!ok || !manchGrid.isConnected) return;
+        (typeof getGames === 'function' ? getGames({ dangal: true, includeAgeGated: true }) : []).forEach((g) => {
+          if (typeof isAgeGatedGame === 'function' && isAgeGatedGame(g.id) && !library.some((x) => x.id === g.id)) library.push(g);
+        });
+        paintManchGrid();
+      });
+    });
   }
 
   paintManchGrid();

@@ -14,6 +14,8 @@
     chess_first_win: { label: 'Pehli Chaal', desc: 'Win your first chess game', chips: 150, icon: '♟' },
     penalty_clean_sheet: { label: 'Clean Sheet', desc: 'Win a penalty shootout without conceding', chips: 150, icon: '🧤' },
     penalty_panenka: { label: 'Panenka', desc: 'Score a soft chip down the middle', chips: 150, icon: '🥄' },
+    poker_royal_flush: { label: 'Royal Flush', desc: 'Make a royal flush at Texas Hold’em', chips: 250, icon: '👑' },
+    poker_bluff_master: { label: 'Bluff Master', desc: 'Win 10 pots without a showdown at public tables', chips: 200, icon: '🃏' },
   };
 
   function showAchievementToast(ach) {

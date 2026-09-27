@@ -996,6 +996,43 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Dangal Texas Hold'em Live: server shuffles, deals, times and settles; hole cards owner-only ──
+  if (action === 'poker_table') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'party');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+      }
+    } catch (e) {}
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    try {
+      const { pokerTable } = require('../server-lib/poker-engine');
+      const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+      const ip = fwd || (req.socket && req.socket.remoteAddress) || '';
+      const out = await pokerTable(adminApp, user.uid, body, { ip });
+      return sendSuccess(res, out);
+    } catch (e) {
+      const code = e && e.code ? String(e.code) : '';
+      if (code) {
+        const status =
+          code === 'table_not_found'
+            ? 404
+            : code === 'busy'
+              ? 409
+              : code === 'age_gate' || code === 'age_confirm'
+                ? 403
+                : code === 'insufficient_chips'
+                  ? 402
+                  : 400;
+        return sendError(res, status, code.toUpperCase(), e.message || 'Table action failed');
+      }
+      console.warn('[media-config] poker_table', e?.message || e);
+      return sendError(res, 500, 'POKER_ERROR', 'Table action failed');
+    }
+  }
+
   // ─── Growth G2 referrals (virtual chips only; no new api/*.js) ─────────
   if (
     action === 'referral_claim' ||
@@ -1346,6 +1383,7 @@ async function handlePost(req, res) {
       'dangal_game_resolve',
       'party_room',
       'penalty_kick',
+      'poker_table',
       'referral_claim',
       'referral_activate',
       'referral_stats',
