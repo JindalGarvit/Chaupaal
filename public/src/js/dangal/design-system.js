@@ -55,6 +55,8 @@
       '<path fill="currentColor" d="M9 16l4 4 7-9 7 9 4-4-2 12H11z"/><rect x="11" y="29" width="18" height="3" rx="1" fill="currentColor" opacity=".6"/><rect x="6" y="6" width="7" height="9" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-12 9.5 10.5)"/><rect x="27" y="6" width="7" height="9" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(12 30.5 10.5)"/>',
     charades:
       '<circle cx="20" cy="9" r="4" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 13v11M20 24l-5 9M20 24l5 9M20 16l-8-5M20 16l8 3 3-6"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6 18c-1.5 2-1.5 4 0 6M34 23c1.5 2 1.5 4 0 6" opacity=".6"/>',
+    mostlikely:
+      '<circle cx="11" cy="28" r="4" fill="currentColor" opacity=".35"/><circle cx="29" cy="28" r="4" fill="currentColor" opacity=".35"/><circle cx="20" cy="11" r="5" fill="currentColor"/><path fill="currentColor" d="M15 4l2 2.5L20 3l3 3.5L25 4l-.8 4h-8.4z" opacity=".8"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M13 24l4.5-6M27 24l-4.5-6M20 34v-9"/>',
   };
 
   const GAME_IDENTITY = {
@@ -80,6 +82,7 @@
     imposter: { primary: '#C2185B', secondary: '#FFC107', surface: '#1A0712', label: 'Imposter', icon: '🕵️', mark: M.imposter, orientation: 'portrait' },
     rajamantri: { primary: '#B8860B', secondary: '#7B1E2B', surface: '#1A1004', label: 'Raja Mantri Chor Sipahi', icon: '👑', mark: M.rajamantri, orientation: 'portrait' },
     charades: { primary: '#00897B', secondary: '#FF7043', surface: '#041A18', label: 'Dumb Charades', icon: '🎭', mark: M.charades, orientation: 'portrait' },
+    mostlikely: { primary: '#7C4DFF', secondary: '#FFD54F', surface: '#140A26', label: 'Most Likely To?', icon: '👉', mark: M.mostlikely, orientation: 'portrait' },
   };
 
   const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz'];

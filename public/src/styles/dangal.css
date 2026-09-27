@@ -908,6 +908,103 @@ button.pk-lobby-row{cursor:pointer;}
 .ch-final-score{font:700 44px var(--font-display,'Space Grotesk',sans-serif);margin:4px 0;}
 .ch-mvp{font-size:15px;margin:6px 0 14px;}
 
+/* ── Most Likely To? / Would You Rather (G3) ──────────────────────────────── */
+.ml-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.ml-mode{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:14px;border-radius:18px;border:1.5px solid var(--pk-line);background:var(--pk-card);color:#fff;text-align:left;cursor:pointer;}
+.ml-mode.is-on{border-color:var(--pk-accent);background:color-mix(in srgb,var(--pk-accent) 28%,transparent);}
+.ml-mode-icon{font-size:24px;}
+.ml-mode-title{font:700 15px var(--font-display,'Space Grotesk',sans-serif);}
+.ml-mode-sub{font-size:12px;color:rgba(255,255,255,.6);line-height:1.3;}
+.ml-prompt{position:relative;padding:22px 18px 18px;border-radius:22px;background:linear-gradient(160deg,color-mix(in srgb,var(--pk-accent) 34%,transparent),rgba(255,255,255,.05));border:1px solid var(--pk-line);text-align:center;margin-bottom:14px;}
+.ml-prompt-q{font:700 21px/1.3 var(--font-display,'Space Grotesk',sans-serif);}
+.ml-prompt-sub{display:block;font-size:15px;line-height:1.4;color:rgba(255,255,255,.7);margin-top:6px;}
+.ml-lang{position:absolute;top:8px;right:8px;min-width:40px;min-height:32px;border-radius:10px;border:1px solid var(--pk-line);background:rgba(0,0,0,.25);color:#fff;font:700 12px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.ml-lang[aria-pressed="true"]{background:var(--pk-accent);border-color:transparent;}
+.ml-tag{display:inline-block;margin-bottom:8px;padding:3px 10px;border-radius:999px;background:rgba(0,0,0,.25);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,255,255,.7);}
+.ml-options{display:flex;flex-direction:column;gap:8px;text-align:left;}
+.ml-opt{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:14px;background:rgba(0,0,0,.22);}
+.ml-opt-tag{flex-shrink:0;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 13px var(--font-display,'Space Grotesk',sans-serif);background:var(--pk-accent);}
+.ml-opt--b .ml-opt-tag{background:#FFD54F;color:#1a1026;}
+.ml-opt-text{font:600 16px/1.35 var(--font-display,'Space Grotesk',sans-serif);}
+.ml-opt-sub{display:block;font:400 14px/1.4 inherit;color:rgba(255,255,255,.65);margin-top:3px;}
+.ml-or{text-align:center;font:700 12px var(--font-display,'Space Grotesk',sans-serif);letter-spacing:.1em;color:rgba(255,255,255,.5);}
+.ml-choose{font-size:13px;color:rgba(255,255,255,.65);margin:10px 0 6px;text-align:center;}
+.ml-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ml-choice{min-height:52px;border-radius:14px;border:1.5px solid var(--pk-line);background:var(--pk-card);color:#fff;font:700 18px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;}
+.ml-choice.is-on{border-color:var(--pk-accent);background:color-mix(in srgb,var(--pk-accent) 45%,transparent);}
+.ml-choice--guess{font-size:14px;min-height:46px;}
+.ml-choice--sm{min-height:36px;min-width:44px;font-size:14px;}
+.ml-vote-face{text-align:left;}
+.pk-card--vote{min-height:auto;align-items:stretch;touch-action:auto;cursor:default;}
+.pk-card--vote:active{transform:none;}
+.pk-timer--inline{display:inline;font-size:inherit;margin:0;}
+.ml-reveal{display:flex;flex-direction:column;gap:12px;margin:10px 0;}
+.ml-crown{display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px;border-radius:20px;background:linear-gradient(160deg,rgba(255,213,79,.24),rgba(255,255,255,.04));text-align:center;transform:scale(.92);opacity:0;transition:transform 420ms cubic-bezier(.2,1.4,.4,1),opacity 300ms ease;}
+.ml-reveal.is-in .ml-crown{transform:none;opacity:1;}
+.ml-crown--none{font-size:14px;color:rgba(255,255,255,.7);}
+.ml-crown-icon{font-size:38px;}
+.ml-crown-name{font:700 22px var(--font-display,'Space Grotesk',sans-serif);}
+.ml-crown-sub{font-size:13px;color:rgba(255,255,255,.65);}
+.ml-badge{display:inline-block;padding:4px 12px;border-radius:999px;background:#FFD54F;color:#1a1026;font:700 12px var(--font-display,'Space Grotesk',sans-serif);}
+.ml-bars{display:flex;flex-direction:column;gap:6px;}
+.ml-bar-row{display:grid;grid-template-columns:minmax(70px,30%) 1fr 28px;gap:8px;align-items:center;font-size:14px;}
+.ml-bar-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ml-bar{height:12px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;}
+.ml-bar-fill{display:block;height:100%;width:0;border-radius:inherit;background:var(--pk-accent);transition:width 700ms ease-out 200ms;}
+.ml-reveal.is-in .ml-bar-fill{width:var(--w,0%);}
+.ml-bar-count{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;}
+.ml-who{margin-top:4px;padding:8px 12px;border-radius:14px;background:var(--pk-card);font-size:13px;}
+.ml-who summary{cursor:pointer;color:rgba(255,255,255,.75);}
+.ml-who-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--pk-line);}
+.ml-split{display:flex;height:44px;border-radius:14px;overflow:hidden;background:rgba(255,255,255,.08);}
+.ml-split-a,.ml-split-b{display:flex;align-items:center;gap:4px;padding:0 10px;white-space:nowrap;font-size:13px;flex:0 0 50%;transition:flex-basis 700ms ease-out 200ms;overflow:hidden;}
+.ml-split-a{background:var(--pk-accent);}
+.ml-split-b{background:#FFD54F;color:#1a1026;justify-content:flex-end;}
+.ml-reveal.is-in .ml-split-a,.ml-reveal.is-in .ml-split-b{flex-basis:var(--w,50%);}
+.ml-sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ml-side{padding:10px;border-radius:14px;background:var(--pk-card);border-top:3px solid var(--pk-accent);min-width:0;}
+.ml-side--b{border-top-color:#FFD54F;}
+.ml-side-label{font:700 12px var(--font-display,'Space Grotesk',sans-serif);color:rgba(255,255,255,.65);}
+.ml-side-opt{font-size:13px;margin:3px 0 6px;}
+.ml-side-name{display:inline-block;margin:2px 4px 0 0;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.1);font-size:12px;}
+.ml-defence{text-align:center;padding:16px;border-radius:20px;background:rgba(255,213,79,.12);margin:10px 0;}
+.ml-defence-title{font:700 20px var(--font-display,'Space Grotesk',sans-serif);}
+.ml-defence-hi{font-size:14px;color:rgba(255,255,255,.65);margin-top:2px;}
+.ml-verdict{display:flex;flex-direction:column;gap:6px;}
+.ml-verdict-row{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;background:var(--pk-card);text-align:left;}
+.ml-verdict-row.is-clean{opacity:.65;}
+.ml-verdict-name{font:700 14px var(--font-display,'Space Grotesk',sans-serif);}
+.ml-verdict-text{font-size:13px;color:rgba(255,255,255,.75);}
+.ml-final{text-align:center;}
+.ml-final-block{margin:14px 0;text-align:left;}
+.ml-highs{display:flex;flex-direction:column;gap:6px;}
+.ml-high{display:grid;grid-template-columns:28px 1fr;gap:2px 8px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--pk-card);text-align:left;}
+.ml-high-icon{grid-row:span 2;font-size:22px;}
+.ml-high-label{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,255,255,.6);}
+.ml-high-text{font:700 14px var(--font-display,'Space Grotesk',sans-serif);}
+.ml-quick{display:flex;flex-direction:column;gap:6px;margin:10px 0;}
+.ml-quick-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-radius:12px;background:var(--pk-card);}
+.ml-quick-name{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ml-quick-ab{display:flex;gap:6px;}
+.ml-stepper{display:flex;align-items:center;gap:10px;}
+.ml-stepper button{width:36px;height:36px;border-radius:10px;border:1px solid var(--pk-line);background:rgba(0,0,0,.2);color:#fff;font-size:18px;cursor:pointer;}
+.ml-stepper strong{min-width:20px;text-align:center;font-variant-numeric:tabular-nums;}
+.ml-voted{margin:12px 0;text-align:center;}
+.ml-voted-list{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:8px;}
+.ml-voted-chip{padding:4px 10px;border-radius:999px;background:var(--pk-card);font-size:12px;opacity:.5;}
+.ml-voted-chip.is-in{opacity:1;background:rgba(102,187,106,.22);}
+.ml-voted-mine{padding:10px 12px;border-radius:12px;background:rgba(102,187,106,.14);font-size:14px;}
+.ml-private{display:block;font-size:11px;color:rgba(255,255,255,.55);margin-top:2px;}
+.ml-custom-list{display:flex;flex-direction:column;gap:6px;margin:10px 0;}
+.ml-custom-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:var(--pk-card);font-size:13px;}
+.ml-custom-mode{flex-shrink:0;}
+.ml-custom-text{flex:1;min-width:0;}
+.ml-custom-used{font-size:11px;opacity:.6;}
+.ml-regional{font-style:normal;font-size:10px;padding:1px 6px;margin-left:6px;border-radius:999px;background:rgba(255,213,79,.2);color:#FFD54F;}
+.ml-pack-modes{display:block;font-size:11px;color:rgba(255,255,255,.55);}
+.ml-mt{margin-top:8px;}
+@media (prefers-reduced-motion:reduce){.ml-crown,.ml-bar-fill,.ml-split-a,.ml-split-b{transition:none;}}
+
 /* Baithak chat card for a party room invite */
 .party-invite-card{display:flex;flex-direction:column;gap:8px;min-width:220px;}
 .party-invite-head{display:flex;align-items:center;gap:10px;}

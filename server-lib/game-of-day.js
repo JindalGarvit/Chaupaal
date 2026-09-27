@@ -41,6 +41,7 @@ const GAME_GENRE_BY_ID = {
   imposter: 'party',
   rajamantri: 'party',
   charades: 'party',
+  mostlikely: 'party',
 };
 
 const KNOWN_GAME_IDS = Object.keys(GAME_GENRE_BY_ID);

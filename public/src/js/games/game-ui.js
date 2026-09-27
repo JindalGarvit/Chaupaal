@@ -57,6 +57,7 @@
     imposter: '#C2185B',
     rajamantri: '#B8860B',
     charades: '#00897B',
+    mostlikely: '#7C4DFF',
     wrap: '#8134AF',
     duniya: '#E63946',
     peepal: '#2A9D8F',
@@ -89,6 +90,7 @@
     imposter: 'Imposter',
     rajamantri: 'Raja Mantri Chor Sipahi',
     charades: 'Dumb Charades',
+    mostlikely: 'Most Likely To?',
     wrap: 'Monthly Wrap',
     duniya: 'Duniya',
     peepal: 'Peepal',
@@ -190,6 +192,12 @@
       'Teammates guess before the timer ends · Got it ✓ = +1',
       'One Pass per turn by default · the actor can hold 👁 to re-check the title',
       'On a video call, teammates can type guesses — close spellings count',
+    ],
+    mostlikely: [
+      'Most Likely To: everyone secretly votes for one player — the top pick gets crowned',
+      'Would You Rather: pick A or B, then guess what most of the room picked',
+      'Votes stay hidden until the reveal · +1 for reading the room',
+      'Settings: packs, rounds, anonymous reveal and your own prompts',
     ],
     brickbreaker: [
       'Campaign or Score Attack — pick before you Serve',

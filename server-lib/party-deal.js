@@ -17,6 +17,7 @@
 const ImposterCore = require('../public/src/js/games/imposter-core.js');
 const RajaMantriCore = require('../public/src/js/games/rajamantri-core.js');
 const CharadesCore = require('../public/src/js/games/charades-core.js');
+const MostLikelyCore = require('../public/src/js/games/mostlikely-core.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -387,11 +388,143 @@ const charadesAdapter = {
   },
 };
 
+// ------------------------------------------------------------------ Most Likely To? / Would You Rather?
+
+/**
+ * Votes sit in server.hidden (no client access) until the round closes; pub only lists who voted.
+ * A host's custom prompt arrives with start/next (args.custom), is re-checked here and lives only
+ * in this round — the host's list stays on their phone.
+ */
+const mostlikelyAdapter = {
+  core: MostLikelyCore,
+  min: MostLikelyCore.MIN_PLAYERS,
+  max: MostLikelyCore.MAX_PLAYERS,
+  mergeSettings: (s) => MostLikelyCore.mergeSettings(s),
+  deal(room, ids, ctx) {
+    const s = MostLikelyCore.mergeSettings(room.pub.settings);
+    const min = MostLikelyCore.minPlayers(s);
+    if (ids.length < min) throw err('need_players', 'Need at least ' + min + ' players for ' + MostLikelyCore.MODE_LABELS[s.mode]);
+    const prev = ctx.roundNo > 1 && room.server ? room.server : null;
+    let deck = prev ? prev.deck : null;
+    let prompt = null;
+    const custom = ctx.args && ctx.args.custom;
+    if (custom) {
+      const c = MostLikelyCore.cleanCustom(custom, s.mode);
+      if (!c.ok) throw err('custom_blocked', c.reason);
+      prompt = Object.assign({ key: 'c:' + ctx.roundNo }, c.prompt);
+    } else {
+      const out = MostLikelyCore.nextPrompt(deck, s, 'en', ctx.rng);
+      prompt = out.prompt;
+      deck = out.state;
+    }
+    if (!prompt) throw err('no_prompts', 'No prompts in the chosen packs');
+    room.server = {
+      settings: s,
+      pub: MostLikelyCore.createRound(ids, prompt, s, ctx.roundNo),
+      hidden: MostLikelyCore.createHidden(),
+      deck: deck || { deck: [], sig: '', last: null },
+      session: prev ? prev.session : MostLikelyCore.newSession(),
+      recorded: false,
+    };
+    room.secrets = {};
+  },
+  view(s) {
+    return Object.assign(MostLikelyCore.publicView(s.pub), { session: s.session });
+  },
+  phaseKey: (s) => s.pub.phase + ':' + s.pub.n,
+  deadlineMs(s) {
+    if (s.pub.phase === 'vote') return MostLikelyCore.VOTE_SEC * 1000;
+    if (s.pub.phase === 'defence') return MostLikelyCore.DEFENCE_SEC * 1000;
+    return 0;
+  },
+  apply(room, action) {
+    const s = room.server;
+    const out = MostLikelyCore.applyAction(s.pub, s.hidden, s.settings, action);
+    if (!out.error) s.pub = out.pub;
+    return out;
+  },
+  afterChange(room) {
+    const s = room.server;
+    if (s.pub.result && !s.recorded) {
+      s.recorded = true;
+      MostLikelyCore.recordRound(s.session, s.pub);
+      addRoundPoints(room, s.pub.result.points);
+    }
+    // Only after the defence beat, so the last round still gets its "defend yourself" moment.
+    if (s.pub.phase === 'result' && MostLikelyCore.isOver(s.settings, room.pub.roundNo)) room.pub.over = true;
+  },
+  absent(room, ctx) {
+    const st = room.server.pub;
+    if (st.phase !== 'vote' || !st.voted.length) return;
+    const present = st.players.filter((id) => !ctx.gone(id));
+    if (present.length && present.every((id) => st.voted.indexOf(id) >= 0)) ctx.act({ type: 'close' }, true);
+  },
+  timeout(room, ctx) {
+    const p = room.server.pub.phase;
+    if (p === 'vote') ctx.act({ type: 'close' }, true);
+    else if (p === 'defence') ctx.act({ type: 'endDefence' }, true);
+  },
+  betweenRounds: (s) => s.pub.phase === 'result',
+  canNext: (s, room) => s.pub.phase === 'result' && !room.pub.over,
+  newGameOnStart: (room) => !!room.pub.over,
+  onJoinPlaying: () => true,
+  onLeave(room, uid) {
+    const s = room.server;
+    MostLikelyCore.removePlayer(s.pub, s.hidden, s.settings, uid);
+  },
+  ops: {
+    vote(ctx) {
+      const { room, uid, args } = ctx;
+      const mode = room.server.pub.mode;
+      const action = mode === 'wyr'
+        ? { type: 'vote', id: uid, pick: String(args.pick || ''), guess: String(args.guess || '') }
+        : { type: 'vote', id: uid, target: String(args.target || '') };
+      ctx.act(action);
+      // Your own choice, readable only by you (so a refresh still shows "you picked …").
+      room.secrets[uid] = mode === 'wyr'
+        ? { roundNo: room.pub.roundNo, pick: action.pick, guess: action.guess }
+        : { roundNo: room.pub.roundNo, target: action.target };
+      return {};
+    },
+    revealNow(ctx) {
+      if (!ctx.isHost) throw err('host_only', 'Only the host can reveal early');
+      const st = ctx.room.server.pub;
+      if (st.phase !== 'vote') return {};
+      if (!st.voted.length) throw err('no_votes', 'Wait for at least one vote');
+      ctx.act({ type: 'close' });
+      return {};
+    },
+    endDefence(ctx) {
+      const st = ctx.room.server.pub;
+      if (st.phase !== 'defence') return {};
+      if (!ctx.isHost && st.result.top.indexOf(ctx.uid) < 0) throw err('not_allowed', 'Only the host or the crowned player can skip');
+      ctx.act({ type: 'endDefence' });
+      return {};
+    },
+    finish(ctx) {
+      if (!ctx.isHost) throw err('host_only', 'Only the host can end the game');
+      if (ctx.room.server.pub.phase !== 'result') throw err('phase', 'Finish this round first');
+      ctx.room.pub.over = true;
+      return {};
+    },
+  },
+  hydrate(s) {
+    s.pub = MostLikelyCore.hydrateRound(s.pub);
+    s.hidden = s.hidden || {};
+    s.hidden.votes = s.hidden.votes || {};
+    s.deck = s.deck || { deck: [], sig: '', last: null };
+    s.deck.deck = s.deck.deck || [];
+    s.session = MostLikelyCore.hydrateSession(s.session);
+    s.recorded = !!s.recorded;
+  },
+};
+
 /** Per-game adapters. New party titles add an entry here. */
 const GAMES = {
   imposter: imposterAdapter,
   rajamantri: rajamantriAdapter,
   charades: charadesAdapter,
+  mostlikely: mostlikelyAdapter,
 };
 
 // ------------------------------------------------------------------ room engine
@@ -485,7 +618,7 @@ function migrateHost(room, now) {
   return false;
 }
 
-function dealRound(room, now, rng) {
+function dealRound(room, now, rng, args) {
   const pub = room.pub;
   // Pending joiners take a seat; players who left are dropped between rounds.
   seatOrder(pub).forEach((id) => {
@@ -503,7 +636,7 @@ function dealRound(room, now, rng) {
   if (ids.length < game.min) throw err('need_players', 'Need at least ' + game.min + ' players');
   if (ids.length > game.max) throw err('too_many_players', 'Max ' + game.max + ' players');
   const roundNo = (Number(pub.roundNo) || 0) + 1;
-  game.deal(room, ids, { rng: typeof rng === 'function' ? rng : Math.random, roundNo, now });
+  game.deal(room, ids, { rng: typeof rng === 'function' ? rng : Math.random, roundNo, now, args: args || {} });
   ids.forEach((id) => {
     if (!(id in pub.scores)) pub.scores[id] = 0;
   });
@@ -645,7 +778,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
         pub.roundNo = 0;
         pub.over = false;
       }
-      dealRound(room, now, rng);
+      dealRound(room, now, rng, a);
       settle(room, context(room, uid, a, now, rng));
       publish(room, now);
       return { room, result: { roundNo: pub.roundNo } };

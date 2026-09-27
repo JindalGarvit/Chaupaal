@@ -363,6 +363,55 @@
     return { hide };
   }
 
+  /**
+   * Private pass-around vote: "Pass to <name>" → they open it → tap-to-choose UI → lock & pass.
+   * Unlike mountPassCover the face stays open while choosing (voting needs taps), and the whole
+   * face is wiped on lock so the next voter sees nothing.
+   * @param {HTMLElement} root
+   * @param {{ name: string, lead?: string, bodyHtml: string, doneLabel?: string,
+   *           onMount: (face: HTMLElement, setReady: (ok: boolean) => void) => void, onDone: Function }} opts
+   */
+  function mountPassVote(root, opts) {
+    const o = opts || {};
+    root.innerHTML = `<div class="pk-pass">
+      <div class="pk-pass-lead">${esc(o.lead || 'Pass the phone to')}</div>
+      <div class="pk-pass-name">${esc(o.name)}</div>
+      <div class="pk-card pk-card--vote" data-pk-card>
+        <div class="pk-card-cover" data-pk-cover>
+          <div class="pk-card-eye" aria-hidden="true">🤫</div>
+          <div class="pk-card-cover-title">Secret vote</div>
+          <div class="pk-card-cover-sub">Only ${esc(o.name)} should look</div>
+        </div>
+        <div class="pk-card-face" data-pk-face hidden></div>
+      </div>
+      <div class="pk-pass-actions">
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pk-open>I’m ${esc(o.name)} — show me</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pk-done hidden disabled>${esc(o.doneLabel || 'Lock vote & pass')}</button>
+      </div>
+    </div>`;
+    const cover = root.querySelector('[data-pk-cover]');
+    const face = root.querySelector('[data-pk-face]');
+    const openBtn = root.querySelector('[data-pk-open]');
+    const doneBtn = root.querySelector('[data-pk-done]');
+    openBtn.addEventListener('click', () => {
+      face.innerHTML = o.bodyHtml;
+      face.hidden = false;
+      cover.hidden = true;
+      openBtn.hidden = true;
+      doneBtn.hidden = false;
+      root.querySelector('[data-pk-card]').classList.add('is-revealed');
+      haptic('select');
+      o.onMount(face, (ok) => (doneBtn.disabled = !ok));
+    });
+    doneBtn.addEventListener('click', () => {
+      if (doneBtn.disabled) return;
+      face.innerHTML = '';
+      root.innerHTML = '';
+      haptic('select');
+      o.onDone();
+    });
+  }
+
   // ---------------- countdown ----------------
 
   /**
@@ -1236,9 +1285,18 @@
       body.querySelector('[data-invite]').addEventListener('click', () => inviteFriends(spec.game, code, spec.label));
       body.querySelector('[data-leave]').addEventListener('click', ctrl.leave);
       if (isHost && spec.openSettings) body.querySelector('[data-settings]').addEventListener('click', () => spec.openSettings(ctrl));
-      body.querySelector('[data-start]')?.addEventListener('click', () => ctrl.act('start'));
+      body.querySelector('[data-start]')?.addEventListener('click', () => startWith('start', spec.startArgs));
       if (spec.onLobbyMount) spec.onLobbyMount(ctrl, body);
     }
+
+    /** Start/next with optional per-deal args from the game (e.g. a host's session-only prompt). */
+    async function startWith(op, argsFn) {
+      const extra = typeof argsFn === 'function' ? argsFn(ctrl, op) : null;
+      const out = await ctrl.act(op, extra ? extra.args : undefined);
+      if (extra && typeof extra.onDone === 'function') extra.onDone(!!out);
+      return out;
+    }
+    ctrl.startWith = startWith;
 
     function renderPending() {
       const body = ctrl.shell.render(`<div class="pk-page pk-empty">
@@ -1270,7 +1328,7 @@
   }
 
   function wireRoomResultActions(ctrl, body, o) {
-    body.querySelector('[data-next]')?.addEventListener('click', () => ctrl.act(o.nextOp || 'next'));
+    body.querySelector('[data-next]')?.addEventListener('click', () => ctrl.startWith(o.nextOp || 'next', ctrl.spec.startArgs));
     body.querySelector('[data-share-result]')?.addEventListener('click', () => o.onShare && o.onShare());
     body.querySelector('[data-room-settings]')?.addEventListener('click', () => ctrl.spec.openSettings(ctrl));
     body.querySelector('[data-invite]')?.addEventListener('click', () => inviteFriends(ctrl.spec.game, ctrl.view.code, ctrl.spec.label));
@@ -1325,6 +1383,7 @@
     openSheet,
     mountPlayerEditor,
     mountPassCover,
+    mountPassVote,
     countdown,
     mountPicker,
     scoreboardHtml,
