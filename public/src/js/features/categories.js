@@ -1125,7 +1125,8 @@ async function initPeepal(){
       peepalQuestions=SAMPLE_PEEPAL.map((q)=>({...q,isSample:true,isDemo:true}));
     }
     renderPeepalFeed();
-    renderPeepalNudges();
+    // duniya.js (which owns the nudges) loads after this file; the first tab paint can beat it.
+    if(typeof renderPeepalNudges==='function') renderPeepalNudges();
   }
 }
 

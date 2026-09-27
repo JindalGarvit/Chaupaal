@@ -4291,6 +4291,7 @@ function openLudoGame(chat, playerCount, opts){
 
 // ===================== OH NO! CARDS ENGINE (Classic, Double Sided, Blaze Mode) =====================
 function openUnoGame(chat, variant='normal', opts){
+  if(!chat||!chat.name)chat=Object.assign({id:'ai'},chat||{},{name:(chat&&chat.id&&chat.id!=='ai')?'Friend':'Practice AI'});
   const COLORS_UNO=['red','yellow','green','blue'];
   const COLOR_HEX={red:'#E74C3C',yellow:'#F1C40F',green:'#2ECC71',blue:'#3498DB',wild:'#2C3E50',black:'#1a1a2e'};
   const NUMBER_CARDS=[0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9];

@@ -27,6 +27,7 @@
     voteSec: 60,
     defenceSec: 20,
     voteStyle: 'group', // Pass & Play: 'group' (host taps accused) | 'secret' (pass-around)
+    mixRegional: false, // Mixed draws regional packs too (Hindi locales) — global-first default
   };
 
   // ---------------- text helpers ----------------
@@ -158,7 +159,14 @@
     out.imposters = Math.max(0, Math.min(4, Number(out.imposters) || 0));
     const packOk = out.pack === 'mixed' || !!PACKS_MOD.getPack(out.pack);
     if (!packOk) out.pack = 'mixed';
+    out.mixRegional = out.mixRegional === true;
     return out;
+  }
+
+  /** Packs the Mixed deck draws from: the global set, plus regional add-ons when asked. */
+  function mixedPacks(mixRegional) {
+    const global = PACKS_MOD.PACKS.filter((p) => !p.regional);
+    return mixRegional || !global.length ? PACKS_MOD.PACKS : global;
   }
 
   function toWord(en, hi, alts) {
@@ -166,10 +174,10 @@
   }
 
   /** Pick a (pack, word) not yet used this session. */
-  function pickWord(packId, rng, usedKeys) {
+  function pickWord(packId, rng, usedKeys, mixRegional) {
     const used = new Set(usedKeys || []);
     const pool = [];
-    const packs = packId === 'mixed' ? PACKS_MOD.PACKS : [PACKS_MOD.getPack(packId)].filter(Boolean);
+    const packs = packId === 'mixed' ? mixedPacks(mixRegional) : [PACKS_MOD.getPack(packId)].filter(Boolean);
     packs.forEach((p) => p.words.forEach((row, i) => pool.push({ p, row, key: p.id + ':' + i })));
     let fresh = pool.filter((x) => !used.has(x.key));
     if (!fresh.length) fresh = pool;
@@ -201,7 +209,7 @@
     if (ids.length < MIN_PLAYERS || ids.length > MAX_PLAYERS) throw new Error('player_count');
     const k = resolveImposterCount(ids.length, s.imposters);
     const imposters = shuffle(ids, rng).slice(0, k);
-    const pick = pickWord(s.pack, rng, o.usedKeys);
+    const pick = pickWord(s.pack, rng, o.usedKeys, s.mixRegional);
     const row = pick.row;
     let majority = toWord(row[0], row[1], row[4]);
     let minority = toWord(row[2], row[3]);

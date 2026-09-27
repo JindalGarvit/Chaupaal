@@ -607,6 +607,7 @@
 
 /* ── Party kit (G1) — shared Pass & Play / Room building blocks ───────────── */
 .pk-shell{--pk-accent:var(--game-accent,#C2185B);--pk-card:rgba(255,255,255,.07);--pk-line:rgba(255,255,255,.14);}
+.pk-shell [hidden],.pk-sheet-scrim [hidden]{display:none!important;}
 .pk-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + var(--safe-bottom,0px));}
 .pk-btn{min-height:48px;padding:0 18px;border-radius:14px;border:none;font:700 15px var(--font-display,'Space Grotesk',sans-serif);cursor:pointer;transition:transform 120ms ease,opacity 160ms ease;}
 .pk-btn:active{transform:scale(.98);}

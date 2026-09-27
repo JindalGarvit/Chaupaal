@@ -37,11 +37,14 @@
   }
 
   function loadSettings() {
+    let s;
     try {
-      return Object.assign({}, Core().DEFAULT_SETTINGS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
+      s = Object.assign({}, Core().DEFAULT_SETTINGS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
     } catch (e) {
-      return Object.assign({}, Core().DEFAULT_SETTINGS);
+      s = Object.assign({}, Core().DEFAULT_SETTINGS);
     }
+    s.mixRegional = String(lang()).indexOf('hi') === 0;
+    return s;
   }
 
   function saveSettings(s) {
@@ -302,7 +305,9 @@
     const paintMeta = () => {
       const n = editor.count();
       const k = Core().resolveImposterCount(n, settings.imposters);
-      body.querySelector('[data-meta]').textContent =
+      const meta = body.querySelector('[data-meta]');
+      if (!meta) return;
+      meta.textContent =
         (settings.variant === 'undercover' ? 'Undercover' : 'Classic') +
         ' · ' + k + (k === 1 ? ' Imposter' : ' Imposters') +
         (settings.discussionSec ? ' · ' + settings.discussionSec + 's talk' : '');
@@ -1350,6 +1355,7 @@
   // ---------------- registration ----------------
 
   if (window.PartyKit) PartyKit.registerPartyGame(GAME, { label: LABEL, openRoom });
+  const launchImposter = window.PartyKit ? PartyKit.withGameData(GAME, openImposter) : openImposter;
 
   if (typeof registerGame === 'function') {
     registerGame({
@@ -1370,9 +1376,9 @@
         dealing: 'party_room → server-lib/party-deal.js; roles never in shared state',
         packs: 'data/imposter-packs.js',
       },
-      launch: openImposter,
+      launch: launchImposter,
     });
   }
 
-  window.openImposterGame = openImposter;
+  window.openImposterGame = launchImposter;
 })();

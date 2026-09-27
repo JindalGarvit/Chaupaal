@@ -307,7 +307,10 @@
       minPerTeam: Core().MIN_PER_TEAM,
       max: Core().MAX_PLAYERS,
     });
-    const paintMeta = () => (body.querySelector('[data-meta]').textContent = metaLine(settings));
+    const paintMeta = () => {
+      const meta = body.querySelector('[data-meta]');
+      if (meta) meta.textContent = metaLine(settings);
+    };
     paintMeta();
     body.querySelector('[data-settings]').addEventListener('click', () =>
       openSettings(settings, {
@@ -712,6 +715,7 @@
   // ---------------- registration ----------------
 
   if (window.PartyKit) PartyKit.registerPartyGame(GAME, { label: LABEL, openRoom });
+  const launch = window.PartyKit ? PartyKit.withGameData(GAME, open) : open;
 
   if (typeof registerGame === 'function') {
     registerGame({
@@ -732,9 +736,9 @@
         dealing: 'party_room → server-lib/party-deal.js; only the actor reads the title',
         packs: 'data/charades-packs.js',
       },
-      launch: open,
+      launch,
     });
   }
 
-  window.openCharadesGame = open;
+  window.openCharadesGame = launch;
 })();

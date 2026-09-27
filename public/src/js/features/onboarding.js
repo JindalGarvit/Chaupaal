@@ -24,9 +24,11 @@ function checkViralLink(){
   // Show guest / soft signup banner — Akhbaar = score challenge (not a live Muqabala room)
   document.querySelector('.guest-banner[data-viral-challenge]')?.remove();
   const banner=document.createElement('div');banner.className='guest-banner';banner.dataset.viralChallenge='1';
+  const vEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const vTarget=target!=null&&Number.isFinite(Number(target))?Number(target):null;
   const viralCopy=isAkhbaarBeat
-    ?`<strong>${String(challenger).replace(/</g,'')}</strong> shared a score${target!=null?` of ${target}`:''} on Akhbaar — try to beat it`
-    :`<strong>${String(challenger).replace(/</g,'')}</strong> challenged you! Beat their score${target!=null?` of ${target}`:''} on ${gName}`;
+    ?`<strong>${vEsc(challenger)}</strong> shared a score${vTarget!=null?` of ${vTarget}`:''} on Akhbaar — try to beat it`
+    :`<strong>${vEsc(challenger)}</strong> challenged you! Beat their score${vTarget!=null?` of ${vTarget}`:''} on ${vEsc(gName)}`;
   banner.innerHTML=`<div>${viralCopy}</div><button class="guest-signup-btn" id="guestSignupBtn" type="button">${typeof currentUser!=='undefined'&&currentUser?'Keep playing':'Sign up to keep score!'}</button>`;
   document.getElementById('topbar')?.after(banner);
   document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{

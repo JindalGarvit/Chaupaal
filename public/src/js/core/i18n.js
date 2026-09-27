@@ -2549,25 +2549,32 @@ function bootLanguagePreference(){
  *   data-i18n-title="key"        → title
  */
 function applyChromeI18n(){
+  // A key missing from every pack resolves to itself — keep the HTML's own English copy instead.
+  const resolved=(key,vars,original)=>{
+    const v=t(key,vars||{});
+    return v&&v!==key?v:original;
+  };
+  const applyAttr=(sel,dataAttr,attr)=>{
+    document.querySelectorAll(sel).forEach(el=>{
+      const key=el.getAttribute(dataAttr);
+      if(!key) return;
+      const stash='i18nDefault'+attr.replace(/-/g,'');
+      if(el.dataset[stash]==null) el.dataset[stash]=el.getAttribute(attr)||'';
+      const v=resolved(key,null,el.dataset[stash]);
+      if(v) el.setAttribute(attr,v);
+    });
+  };
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const key=el.getAttribute('data-i18n');
     if(!key) return;
+    if(el.dataset.i18nDefault==null) el.dataset.i18nDefault=el.textContent;
     const vars={};
     if(el.hasAttribute('data-i18n-n')) vars.n=el.getAttribute('data-i18n-n');
-    el.textContent=t(key,vars);
+    el.textContent=resolved(key,vars,el.dataset.i18nDefault);
   });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{
-    const key=el.getAttribute('data-i18n-placeholder');
-    if(key) el.setAttribute('placeholder',t(key));
-  });
-  document.querySelectorAll('[data-i18n-aria]').forEach(el=>{
-    const key=el.getAttribute('data-i18n-aria');
-    if(key) el.setAttribute('aria-label',t(key));
-  });
-  document.querySelectorAll('[data-i18n-title]').forEach(el=>{
-    const key=el.getAttribute('data-i18n-title');
-    if(key) el.setAttribute('title',t(key));
-  });
+  applyAttr('[data-i18n-placeholder]','data-i18n-placeholder','placeholder');
+  applyAttr('[data-i18n-aria]','data-i18n-aria','aria-label');
+  applyAttr('[data-i18n-title]','data-i18n-title','title');
 }
 
 /** Resolve UI string: selected lang → English → optional string fallback → key. */

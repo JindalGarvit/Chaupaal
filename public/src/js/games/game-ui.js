@@ -2487,6 +2487,7 @@
       const challenger = params.get('name') || params.get('challenge');
       if (!challenger && !gameFromPath) return null;
       const game = gameFromPath || params.get('game') || 'quiz';
+      if (typeof isRetiredGameId === 'function' && isRetiredGameId(game)) return null;
       const score = params.get('score');
       const cat = params.get('cat') || 'GK';
       return {

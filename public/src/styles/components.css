@@ -2248,7 +2248,9 @@ html.theme-dark .lehar-empty{color:#fff;}
   flex-shrink:0;border:0;background:rgba(255,255,255,.12);color:inherit;
   font:700 10px var(--font-display,'Space Grotesk',sans-serif);letter-spacing:.02em;
   padding:6px 8px;border-radius:999px;cursor:pointer;opacity:.9;
+  position:relative;
 }
+.game-howto-btn::before{content:'';position:absolute;left:50%;top:50%;width:max(100%,44px);height:44px;transform:translate(-50%,-50%);}
 .game-howto-btn:active{opacity:1;transform:scale(0.97);}
 .dangal-federation-honesty{font-size:11px;}
 .game-chrome-action{min-height:36px;border:0;border-radius:10px;padding:7px 10px;background:rgba(255,255,255,.1);color:inherit;font:700 11px 'Space Grotesk',sans-serif;cursor:pointer}.game-chrome-action.is-active{background:var(--game-accent);color:#fff}.game-chrome-metric{font:700 13px 'Space Grotesk',sans-serif;color:var(--game-accent);}

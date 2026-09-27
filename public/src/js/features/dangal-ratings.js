@@ -216,8 +216,10 @@ function renderDangalContinueAndChips(host) {
       pending.game === 'akhbaar'
         ? 'Akhbaar'
         : ((typeof getGame === 'function' && getGame(pending.game)?.name) || pending.game);
+    const chipEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const chipScore = Number.isFinite(pending.score) ? pending.score : 'their score';
     challengeChip = `<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
-      <div><strong>${pending.challenger} challenged you</strong><span>Beat ${pending.score != null ? pending.score : 'their score'} on ${gName}</span></div>
+      <div><strong>${chipEsc(pending.challenger)} challenged you</strong><span>Beat ${chipEsc(chipScore)} on ${chipEsc(gName)}</span></div>
       <span>Play →</span>
     </button>`;
   }
@@ -780,7 +782,13 @@ async function recordGameResult(key,won,drew,extra){
 }
 
 function openQuizCategorySheet(){
-  const sheet=document.getElementById('quizCategorySheet');
+  let sheet=document.getElementById('quizCategorySheet');
+  if(!sheet){
+    sheet=document.createElement('div');
+    sheet.id='quizCategorySheet';
+    sheet.className='quiz-category-sheet hidden';
+    (document.querySelector('.device')||document.body).appendChild(sheet);
+  }
   const ratings=userProfile?.categoryRatings||{};
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">

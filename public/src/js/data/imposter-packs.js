@@ -6,6 +6,7 @@
  *   partner = hand-made related word dealt to the Undercover imposter
  *   alts    = extra accepted spellings for the steal guess (lowercase)
  * Teen-safe only.
+ * `regional` packs are add-ons: Mixed draws them only for Hindi locales (global-first); they stay pickable.
  */
 (function (root, factory) {
   const packs = factory();
@@ -16,10 +17,63 @@
 
   const PACKS = [
     {
+      id: 'worldfood',
+      en: 'Food & Drink',
+      hi: 'खाना-पीना',
+      icon: '🍕',
+      words: [
+        ['Spaghetti', 'स्पेगेटी', 'Macaroni', 'मैकरोनी'],
+        ['Burger', 'बर्गर', 'Sandwich', 'सैंडविच'],
+        ['Sushi', 'सुशी', 'Sashimi', 'साशिमी'],
+        ['Pasta', 'पास्ता', 'Risotto', 'रिसोट्टो'],
+        ['Tacos', 'टाकोस', 'Burrito', 'बुरिटो', ['taco']],
+        ['Pancakes', 'पैनकेक', 'Waffles', 'वॉफ़ल', ['pancake']],
+        ['Croissant', 'क्रोसाँ', 'Bagel', 'बेगल'],
+        ['Donut', 'डोनट', 'Muffin', 'मफ़िन', ['doughnut']],
+        ['Fried Chicken', 'फ़्राइड चिकन', 'Chicken Nuggets', 'चिकन नगेट्स'],
+        ['Marshmallow', 'मार्शमैलो', 'Toffee', 'टॉफ़ी'],
+        ['Mac and Cheese', 'मैक एंड चीज़', 'Grilled Cheese', 'ग्रिल्ड चीज़', ['mac n cheese']],
+        ['Hot Dog', 'हॉट डॉग', 'Sausage Roll', 'सॉसेज रोल', ['hotdog']],
+        ['French Fries', 'फ़्रेंच फ़्राइज़', 'Potato Wedges', 'पोटैटो वेजेज़', ['fries', 'chips']],
+        ['Salad', 'सलाद', 'Coleslaw', 'कोलस्लॉ'],
+        ['Meatballs', 'मीटबॉल', 'Sausages', 'सॉसेज'],
+        ['Dumplings', 'डम्पलिंग', 'Spring Rolls', 'स्प्रिंग रोल', ['dumpling', 'momos']],
+        ['Ramen', 'रामेन', 'Pho', 'फ़ो'],
+        ['Eggs Benedict', 'एग्स बेनेडिक्ट', 'Poached Egg', 'पोच्ड एग'],
+        ['Steak', 'स्टेक', 'Roast Chicken', 'रोस्ट चिकन'],
+        ['Lemonade', 'नींबू पानी', 'Iced Tea', 'आइस्ड टी'],
+        ['Smoothie', 'स्मूदी', 'Milkshake', 'मिल्कशेक'],
+        ['Maple Syrup', 'मेपल सिरप', 'Honey', 'शहद'],
+        ['Cereal', 'सीरियल', 'Porridge', 'दलिया', ['cornflakes']],
+        ['Toast', 'टोस्ट', 'Garlic Bread', 'गार्लिक ब्रेड'],
+        ['Pretzel', 'प्रेट्ज़ेल', 'Breadsticks', 'ब्रेडस्टिक'],
+        ['Hummus', 'हम्मस', 'Guacamole', 'ग्वाकामोले', ['houmous']],
+        ['Falafel', 'फ़लाफ़ेल', 'Shawarma', 'शावरमा'],
+        ['Brownie', 'ब्राउनी', 'Fudge', 'फ़ज'],
+        ['Cookie', 'कुकी', 'Cracker', 'क्रैकर', ['biscuit']],
+        ['Apple Pie', 'एप्पल पाई', 'Cheesecake', 'चीज़केक'],
+        ['Hot Chocolate', 'हॉट चॉकलेट', 'Latte', 'लाटे', ['cocoa']],
+        ['Paella', 'पाएला', 'Jambalaya', 'जम्बालाया'],
+        ['Lasagne', 'लज़ानिया', 'Moussaka', 'मूसाका', ['lasagna']],
+        ['Fish and Chips', 'फ़िश एंड चिप्स', 'Fish Fingers', 'फ़िश फ़िंगर्स'],
+        ['Barbecue', 'बारबेक्यू', 'Picnic', 'पिकनिक', ['bbq']],
+        ['Popsicle', 'पॉप्सिकल', 'Slushie', 'स्लशी', ['ice lolly']],
+        ['Blueberry', 'ब्लूबेरी', 'Blackberry', 'ब्लैकबेरी'],
+        ['Strawberry', 'स्ट्रॉबेरी', 'Raspberry', 'रसभरी'],
+        ['Pineapple', 'अनानास', 'Coconut', 'नारियल'],
+        ['Avocado', 'एवोकाडो', 'Olive', 'जैतून'],
+        ['Peanut Butter', 'पीनट बटर', 'Jam', 'जैम'],
+        ['Birthday Cake', 'बर्थडे केक', 'Cupcake', 'कपकेक'],
+        ['Cotton Candy', 'कॉटन कैंडी', 'Lollipop', 'लॉलीपॉप', ['candy floss', 'buddhi ke baal']],
+        ['Orange Juice', 'संतरे का जूस', 'Apple Juice', 'सेब का जूस', ['oj']],
+      ],
+    },
+    {
       id: 'food',
-      en: 'Food & Chai',
-      hi: 'खाना और चाय',
+      en: 'Indian Food & Chai',
+      hi: 'भारतीय खाना और चाय',
       icon: '🍛',
+      regional: true,
       words: [
         ['Samosa', 'समोसा', 'Kachori', 'कचौरी'],
         ['Chai', 'चाय', 'Coffee', 'कॉफ़ी', ['tea', 'chay']],
@@ -67,6 +121,7 @@
     },
     {
       id: 'bollywood',
+      regional: true,
       en: 'Bollywood',
       hi: 'बॉलीवुड',
       icon: '🎬',
@@ -118,6 +173,7 @@
     },
     {
       id: 'cricket',
+      regional: true,
       en: 'Cricket',
       hi: 'क्रिकेट',
       icon: '🏏',
@@ -168,6 +224,7 @@
     },
     {
       id: 'places',
+      regional: true,
       en: 'Indian Cities & Places',
       hi: 'भारत के शहर और जगहें',
       icon: '🗺️',
@@ -218,6 +275,7 @@
     },
     {
       id: 'festivals',
+      regional: true,
       en: 'Festivals',
       hi: 'त्योहार',
       icon: '🪔',

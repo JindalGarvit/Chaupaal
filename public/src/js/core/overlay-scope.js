@@ -18,11 +18,8 @@
     '#unoBack',
     '#tttBack',
     '#wgBack',
-    '#firBack',
-    '#busBack',
     '#scribbleBack',
     '#scribbleClose',
-    '#rrBack',
     '#cbBack',
     '#kkBack',
     '#kkDiffBack',
@@ -68,8 +65,33 @@
     return true;
   }
 
+  /** Sheets that live in index.html and are reused — hide them, never remove them. */
+  function isPermanentShell(el) {
+    return (
+      el.id === 'quizCategorySheet' ||
+      el.id === 'muqabalaOverlay' ||
+      el.id === 'aiFinder' ||
+      !!(el.classList && (el.classList.contains('quiz-category-sheet') || el.classList.contains('muqabala-overlay') || el.classList.contains('ai-finder-overlay')))
+    );
+  }
+
+  function hidePermanentShell(el) {
+    try {
+      if (typeof window.removeNavLayer === 'function') window.removeNavLayer(el);
+    } catch (e) {}
+    el.classList.remove('open');
+    el.classList.add('hidden');
+    try {
+      if (typeof restoreAppShell === 'function') restoreAppShell('dismissOverlay');
+    } catch (e) {}
+  }
+
   function dismissOverlay(el) {
     if (!el || !el.isConnected) return;
+    if (isPermanentShell(el)) {
+      hidePermanentShell(el);
+      return;
+    }
     // Isolate each step: a throwing feature close must never abort nav/history cleanup
     try {
       if (typeof window.removeNavLayer === 'function') window.removeNavLayer(el);

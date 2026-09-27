@@ -279,6 +279,40 @@
    * @param {HTMLElement} root
    * @param {{ name: string, lead?: string, revealHtml: () => string, doneLabel?: string, onDone: Function, onFirstReveal?: Function }} opts
    */
+  /**
+   * Run `onAway` when the page is backgrounded, blurred or unloaded (app switcher thumbnails,
+   * bfcache snapshots) so no secret stays painted. Self-removes once `root` leaves the DOM.
+   */
+  const awayWatchers = new Set();
+  let awayWired = false;
+  function pruneAway() {
+    awayWatchers.forEach((w) => {
+      if (!w.root.isConnected) awayWatchers.delete(w);
+    });
+  }
+  function fireAway() {
+    pruneAway();
+    awayWatchers.forEach((w) => {
+      try {
+        w.onAway();
+      } catch (e) {}
+    });
+  }
+  function coverWhenAway(root, onAway) {
+    if (!awayWired) {
+      awayWired = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') fireAway();
+      });
+      window.addEventListener('blur', fireAway);
+      window.addEventListener('pagehide', fireAway);
+    }
+    pruneAway();
+    const w = { root, onAway };
+    awayWatchers.add(w);
+    return () => awayWatchers.delete(w);
+  }
+
   function mountPassCover(root, opts) {
     const o = opts || {};
     let seen = false;
@@ -355,8 +389,14 @@
         show();
       }
     });
+    const stopAway = coverWhenAway(root, () => {
+      clearTimeout(holdTimer);
+      card.dataset.tapMode = '0';
+      hide();
+    });
     doneBtn.addEventListener('click', () => {
       hide();
+      stopAway();
       root.innerHTML = '';
       o.onDone();
     });
@@ -403,8 +443,19 @@
       haptic('select');
       o.onMount(face, (ok) => (doneBtn.disabled = !ok));
     });
+    const stopAway = coverWhenAway(root, () => {
+      if (face.hidden) return;
+      face.innerHTML = '';
+      face.hidden = true;
+      cover.hidden = false;
+      openBtn.hidden = false;
+      doneBtn.hidden = true;
+      doneBtn.disabled = true;
+      root.querySelector('[data-pk-card]')?.classList.remove('is-revealed');
+    });
     doneBtn.addEventListener('click', () => {
       if (doneBtn.disabled) return;
+      stopAway();
       face.innerHTML = '';
       root.innerHTML = '';
       haptic('select');
@@ -825,9 +876,80 @@
     g.openRoom(clean, Object.assign({ join: true }, opts || {}));
   }
 
+  // ---------------- lazy game data (packs + cores stay off first paint) ----------------
+
+  /** index.html lists these as <script type="text/x-lazy" data-party-lazy> so bust-assets stamps them. */
+  const LAZY_DATA = {
+    imposter: ['data/imposter-packs.js', 'games/imposter-core.js'],
+    rajamantri: ['games/rajamantri-core.js'],
+    charades: ['data/charades-packs.js', 'games/charades-core.js'],
+    mostlikely: ['data/mostlikely-packs.js', 'games/mostlikely-core.js'],
+  };
+  const lazyLoaded = {};
+  const lazyLoading = {};
+
+  function lazyUrl(rel) {
+    const tag = document.querySelector(`script[data-party-lazy][src*="/src/js/${rel}"]`);
+    return (tag && tag.getAttribute('src')) || '/src/js/' + rel;
+  }
+
+  function loadLazyScript(rel) {
+    if (lazyLoaded[rel]) return Promise.resolve();
+    if (!lazyLoading[rel]) {
+      lazyLoading[rel] = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = lazyUrl(rel);
+        s.async = false;
+        s.onload = () => {
+          lazyLoaded[rel] = true;
+          resolve();
+        };
+        s.onerror = () => {
+          delete lazyLoading[rel];
+          s.remove();
+          reject(new Error('lazy_load_failed'));
+        };
+        document.head.appendChild(s);
+      });
+    }
+    return lazyLoading[rel];
+  }
+
+  function gameDataReady(game) {
+    return (LAZY_DATA[game] || []).every((rel) => lazyLoaded[rel]);
+  }
+
+  function ensureGameData(game) {
+    return (LAZY_DATA[game] || []).reduce((p, rel) => p.then(() => loadLazyScript(rel)), Promise.resolve());
+  }
+
+  /** Wrap a game entry point so its packs/core load first (sync when already loaded). */
+  function withGameData(game, fn) {
+    return function () {
+      const args = arguments;
+      if (gameDataReady(game)) return fn.apply(this, args);
+      return ensureGameData(game).then(
+        () => fn.apply(this, args),
+        () => toast('Couldn’t load the game — check your connection and try again')
+      );
+    };
+  }
+
+  // Warm every party title once the app is idle, so a later airplane-mode Pass & Play still opens.
+  function prefetchGameData() {
+    Object.keys(LAZY_DATA).reduce((p, game) => p.then(() => ensureGameData(game)).catch(() => {}), Promise.resolve());
+  }
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const idle = () => (window.requestIdleCallback ? requestIdleCallback(prefetchGameData, { timeout: 8000 }) : setTimeout(prefetchGameData, 1500));
+    if (document.readyState === 'complete') setTimeout(idle, 3000);
+    else window.addEventListener('load', () => setTimeout(idle, 3000), { once: true });
+  }
+
   /** Party titles register a room opener so links and chat cards can route to them. */
   function registerPartyGame(game, spec) {
-    games[game] = spec || {};
+    const s = Object.assign({}, spec || {});
+    if (typeof s.openRoom === 'function') s.openRoom = withGameData(game, s.openRoom);
+    games[game] = s;
   }
 
   // ---------------- settings controls ----------------
@@ -902,6 +1024,7 @@
     btn.addEventListener('pointerleave', hide);
     btn.addEventListener('pointercancel', hide);
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    coverWhenAway(btn, hide);
   }
 
   /**
@@ -1384,6 +1507,8 @@
     mountPlayerEditor,
     mountPassCover,
     mountPassVote,
+    coverWhenAway,
+    awayWatcherCount: () => (pruneAway(), awayWatchers.size),
     countdown,
     mountPicker,
     scoreboardHtml,
@@ -1398,6 +1523,8 @@
     inviteCardHtml,
     joinFromLink,
     registerPartyGame,
+    ensureGameData,
+    withGameData,
     segHtml,
     wireSegs,
     buzz,

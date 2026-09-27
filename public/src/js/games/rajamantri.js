@@ -283,7 +283,10 @@
       max: Core().MAX_PLAYERS,
       onChange: () => paintMeta(),
     });
-    const paintMeta = () => (body.querySelector('[data-meta]').textContent = modeLine(editor.count(), settings));
+    const paintMeta = () => {
+      const meta = body.querySelector('[data-meta]');
+      if (meta) meta.textContent = modeLine(editor.count(), settings);
+    };
     paintMeta();
     body.querySelector('[data-settings]').addEventListener('click', () =>
       openSettings(settings, {
@@ -645,6 +648,7 @@
   // ---------------- registration ----------------
 
   if (window.PartyKit) PartyKit.registerPartyGame(GAME, { label: LABEL, openRoom });
+  const launch = window.PartyKit ? PartyKit.withGameData(GAME, open) : open;
 
   if (typeof registerGame === 'function') {
     registerGame({
@@ -664,9 +668,9 @@
         kit: 'party-kit.js (Pass & Play + Room)',
         dealing: 'party_room → server-lib/party-deal.js; chits readable only by their owner until revealed',
       },
-      launch: open,
+      launch,
     });
   }
 
-  window.openRajaMantriGame = open;
+  window.openRajaMantriGame = launch;
 })();

@@ -118,8 +118,14 @@ const used = [];
 for (let i = 0; i < 40; i++) used.push(Core.deal(ids(3), { pack: 'jobs' }, { rng: seeded(i + 7), usedKeys: used }).key);
 assert(new Set(used).size === 40, 'no repeat words within a session until the pack runs out');
 const mixedPacks = new Set();
-for (let i = 0; i < 80; i++) mixedPacks.add(Core.deal(ids(3), { pack: 'mixed' }, { rng: seeded(i + 99) }).hidden.category.id);
-assert(mixedPacks.size >= 6, `Mixed draws across packs (${mixedPacks.size} packs seen)`);
+for (let i = 0; i < 80; i++) mixedPacks.add(Core.deal(ids(3), { pack: 'mixed', mixRegional: true }, { rng: seeded(i + 99) }).hidden.category.id);
+assert(mixedPacks.size >= 6, `Mixed (Hindi locale) draws across packs (${mixedPacks.size} packs seen)`);
+const globalMixed = new Set();
+for (let i = 0; i < 120; i++) globalMixed.add(Core.deal(ids(3), { pack: 'mixed' }, { rng: seeded(i + 7) }).hidden.category.id);
+assert(
+  [...globalMixed].every((id) => !Packs.getPack(id).regional) && globalMixed.size >= 3,
+  `Mixed (global default) skips regional packs (${[...globalMixed].join(', ')})`
+);
 
 // ---------- (d) steal matching ----------
 const w = (en, hi, alts) => ({ en, hi, alts: alts || [] });

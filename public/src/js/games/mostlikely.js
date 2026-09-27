@@ -243,7 +243,7 @@
           <div class="pk-field">
             <div class="pk-field-label">Defend yourself (Most Likely)</div>
             ${seg('defence', s.defence, 'On', 'Off')}
-            <div class="pk-field-help">15 seconds for the crowned player — “Apni safai do!”</div>
+            <div class="pk-field-help">15 seconds for the crowned player to plead their case</div>
           </div>
           ${
             room
@@ -587,7 +587,10 @@
     </div>`);
     let editor = null;
     const rawNames = () => Array.from(body.querySelectorAll('[data-pk-name]')).map((i) => i.value);
-    const paintMeta = () => (body.querySelector('[data-meta]').textContent = modeLine(settings, 'pass'));
+    const paintMeta = () => {
+      const meta = body.querySelector('[data-meta]');
+      if (meta) meta.textContent = modeLine(settings, 'pass');
+    };
     const mountEditor = () => {
       editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), {
         names,
@@ -1070,6 +1073,7 @@
   // ---------------- registration ----------------
 
   if (window.PartyKit) PartyKit.registerPartyGame(GAME, { label: LABEL, openRoom });
+  const launch = window.PartyKit ? PartyKit.withGameData(GAME, open) : open;
 
   if (typeof registerGame === 'function') {
     registerGame({
@@ -1090,9 +1094,9 @@
         modes: 'Most Likely To · Would You Rather (one game id)',
         voting: 'party_room → server-lib/party-deal.js; votes stay server-side until reveal; anonymous = tallies only',
       },
-      launch: open,
+      launch,
     });
   }
 
-  window.openMostLikelyGame = open;
+  window.openMostLikelyGame = launch;
 })();

@@ -333,7 +333,7 @@
           if (typeof onBack === 'function') onBack();
           else {
             const btn = el.querySelector(
-              '#chatBack,.chat-back,[data-overlay-dismiss],#chessBack,#wgBack,#kkBack,#firBack,#busBack,#scribbleBack,#rrBack,#cbBack,#tttBack,#unoBack,#ludoBack,#slBack'
+              '#chatBack,.chat-back,[data-overlay-dismiss],#chessBack,#wgBack,#kkBack,#scribbleBack,#cbBack,#tttBack,#unoBack,#ludoBack,#slBack'
             );
             if (btn) btn.click();
             else el.remove();
