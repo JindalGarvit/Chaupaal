@@ -59,6 +59,7 @@
 
     if (peepalMode === 'khoj') {
       ensureRoomHeader(screen || feed, 'peepal', 'khoj');
+      document.getElementById('vrikshaTop')?.classList.add('hidden');
       document.getElementById('peepalIntentCard')?.classList.add('hidden');
       document.getElementById('peepalDiscovery')?.classList.add('hidden');
       document.getElementById('peepalMashhoorGrid')?.classList.add('hidden');
@@ -71,6 +72,7 @@
     }
 
     if (peepalMode === 'mashhoor') {
+      document.getElementById('vrikshaTop')?.classList.add('hidden');
       document.getElementById('peepalIntentCard')?.classList.add('hidden');
       document.getElementById('peepalDiscovery')?.classList.add('hidden');
       document.getElementById('peepalKhojSurface')?.classList.add('hidden');
@@ -82,9 +84,11 @@
     feed?.querySelector('[data-peepal-mode-banner]')?.remove();
     document.getElementById('peepalMashhoorGrid')?.classList.add('hidden');
     document.getElementById('peepalKhojSurface')?.classList.add('hidden');
+    document.getElementById('vrikshaTop')?.classList.remove('hidden');
     document.getElementById('peepalIntentCard')?.classList.remove('hidden');
     document.getElementById('peepalDiscovery')?.classList.add('hidden');
     document.getElementById('peepalCompatPeeks')?.classList.add('hidden');
+    if (typeof window.loadVrikshaFriendPicks === 'function') window.loadVrikshaFriendPicks();
     if (feed) feed.classList.remove('hidden');
     ensureRoomHeader(screen || feed, 'peepal', 'vriksha');
     if (typeof renderPeepalFeed === 'function') {

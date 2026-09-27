@@ -931,17 +931,6 @@
     }, 50);
   }
 
-  function wireGlobalSearchEntry() {
-    document.getElementById('globalSearchBtn')?.addEventListener('click', () => openUniversalSearch());
-    document.getElementById('globalSearchBtnDesktop')?.addEventListener('click', () => openUniversalSearch());
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wireGlobalSearchEntry);
-  } else {
-    wireGlobalSearchEntry();
-  }
-
   window.registerSearchProvider = registerSearchProvider;
   window.universalSearch = universalSearch;
   window.searchUsersProvider = searchUsersProvider;

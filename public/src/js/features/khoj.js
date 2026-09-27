@@ -1,6 +1,6 @@
 /**
- * Khoj — complete seek surface (K1).
- * Top: Chaupaal universal search. Below: intent chips + Find (people/strangers).
+ * Khoj — people-only seek surface: intent chips + Find (strangers to connect).
+ * Universal Chaupaal search lives on Vriksha only.
  * Compact filters (progressive). Empty query → friendship-first peeks (K0).
  */
 (function () {
@@ -57,20 +57,12 @@
     return '';
   }
 
-  function openKhojChaupaalSearch() {
-    if (typeof openUniversalSearch === 'function') {
-      openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
-      return;
-    }
-    if (typeof openPeopleSearchWithContacts === 'function') {
-      openPeopleSearchWithContacts({ surface: 'peepal' });
-    }
-  }
-
   function syncIntentVisibility(mode) {
     const card = document.getElementById('peepalIntentCard');
+    const top = document.getElementById('vrikshaTop');
     const panel = document.getElementById('peepalKhojSurface');
     if (card) card.classList.toggle('hidden', mode !== 'vriksha');
+    if (top) top.classList.toggle('hidden', mode !== 'vriksha');
     if (panel) panel.classList.toggle('hidden', mode !== 'khoj');
   }
 
@@ -106,32 +98,23 @@
       });
       const peeks = page.peeks || [];
       khojHasMore = !!page.hasMore;
+      if (typeof noteKhojShownUids === 'function') noteKhojShownUids(peeks);
       if (reset) {
         khojShownPeeks = peeks.slice();
         if (!peeks.length) {
           listEl.innerHTML = `<div class="khoj-compat-empty">
             <p>${tt(
               'khoj_empty_peeks',
-              'No eligible people yet — we never invent profiles. Invite a friend or search Chaupaal.'
+              'No eligible people yet — we never invent profiles. Invite a friend, or describe who you hope to meet above.'
             )}</p>
             <div class="khoj-empty-ctas" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
               <button type="button" class="btn btn--primary" data-khoj-cta="invite">${tt('contacts_invite_cta', 'Invite friends')}</button>
-              <button type="button" class="btn btn--ghost" data-khoj-cta="search">${tt('shortcut_peepal_global_search', 'Search Chaupaal')}</button>
               <button type="button" class="btn btn--ghost" data-khoj-cta="akhbaar">${tt('day0_play_akhbaar', 'Play Akhbaar')}</button>
             </div>
           </div>`;
           listEl.querySelector('[data-khoj-cta="invite"]')?.addEventListener('click', () => {
             if (typeof shareInviteToChaupaal === 'function') shareInviteToChaupaal();
             else if (typeof openDay0MeetSheet === 'function') openDay0MeetSheet();
-          });
-          listEl.querySelector('[data-khoj-cta="search"]')?.addEventListener('click', () => {
-            const top = document.getElementById('khojChaupaalSearch');
-            if (top) {
-              top.focus();
-              top.classList.add('khoj-global-search--pulse');
-              setTimeout(() => top.classList.remove('khoj-global-search--pulse'), 900);
-            }
-            openKhojChaupaalSearch();
           });
           listEl.querySelector('[data-khoj-cta="akhbaar"]')?.addEventListener('click', () => {
             if (typeof showTab === 'function') showTab('akhbaar');
@@ -273,6 +256,7 @@
     if (feed) feed.classList.add('hidden');
     mash?.classList.add('hidden');
     intentCard?.classList.add('hidden');
+    document.getElementById('vrikshaTop')?.classList.add('hidden');
     discovery?.classList.add('hidden');
 
     if (!panel) {
@@ -297,10 +281,6 @@
     const pro = isProViewer();
 
     panel.innerHTML = `
-      <button type="button" class="khoj-global-search" id="khojChaupaalSearch" aria-label="${tt('search_chaupaal', 'Search Chaupaal')}">
-        <span class="khoj-global-search-icon" aria-hidden="true">${icon('search', 16)}</span>
-        <span class="khoj-global-search-label">${tt('khoj_global_ph', 'Search Chaupaal — posts, people, games…')}</span>
-      </button>
       <div class="peepal-card peepal-intent-card peepal-intent-card--khoj" id="khojIntentCard">
         <div class="peepal-intent-card-sub">
           ${
@@ -347,8 +327,6 @@
         });
       }
     } catch (e) {}
-
-    panel.querySelector('#khojChaupaalSearch')?.addEventListener('click', openKhojChaupaalSearch);
 
     const listEl = panel.querySelector('#khojCompatList');
     const reloadPeeks = () => {
@@ -530,8 +508,6 @@
 
   window.renderKhojSurface = renderKhojSurface;
   window.syncPeepalIntentVisibility = syncIntentVisibility;
-  window.openKhojChaupaalSearch = openKhojChaupaalSearch;
-
   document.addEventListener('DOMContentLoaded', () => {
     const orig = window.setPeepalMode;
     if (typeof orig === 'function' && !orig._khojWrapped) {

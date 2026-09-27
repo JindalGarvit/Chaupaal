@@ -32,7 +32,7 @@ assert(/setPeepalMode\(['"]khoj['"]\)/.test(cats), '1 Find routes to Khoj');
 assert(/peepalKhojSurface|renderKhojSurface/.test(khoj), '2 Khoj people surface');
 assert(/mashhoor_trending/.test(modes) && /mashhoor_trending/.test(api), '3 Mashhoor server trending');
 assert(/\['khoj',\s*'vriksha',\s*'mashhoor'\]/.test(modes), '4 swipe order Khoj→Vriksha→Mashhoor');
-assert(/shortcut_peepal_global_search/.test(gest) && /openUniversalSearch/.test(gest), '4 morph Search Chaupaal');
+assert(/shortcut_peepal_global_search/.test(gest) && /openVrikshaChaupaalSearch/.test(gest), '4 morph Search Chaupaal');
 
 // Honesty
 assert(/isDiscoveryEligibleUser/.test(core) && /filterStrangersOnly|stranger/.test(api), '5 stranger filters');
@@ -41,7 +41,7 @@ assert(/cp-demo-badge.*Sample|Sample · sign in/.test(core), '7 guest Sample lab
 assert(!/discovery-match-badge/.test(core) && !/matchPct/.test(khoj), '8 no match % badges');
 
 // Khoj core
-assert(/openUniversalSearch\(\{\s*types:\s*\[['"]users['"]/.test(khoj), '9 top bar universal search');
+assert(!/openUniversalSearch/.test(khoj) && /openUniversalSearch\(\{\s*types\s*\}\)|openUniversalSearch\(\{\s*types:/.test(cats), '9 universal search lives on Vriksha, not Khoj');
 assert(/intent_discover/.test(discovery), '10 Find uses intent_discover');
 assert(/wireKhojFilters|renderKhojFiltersMarkup/.test(khoj), '11 filters wired');
 assert(/discovery_person_signal/.test(discovery) && /discovery_person_signal/.test(api), '12 feedback signal');

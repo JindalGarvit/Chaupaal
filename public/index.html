@@ -385,7 +385,6 @@
 
   <!-- TOP BAR retired (Phase 3) — keep ids for JS hooks; visually hidden -->
   <div class="topbar topbar--retired" id="topbar" hidden aria-hidden="true">
-    <button class="icon-btn" id="globalSearchBtn" aria-label="Search" data-icon="search"></button>
     <div class="streak-pill" id="streakPill" hidden><span id="streakNum">0</span><span id="streakFreezeCount">0</span></div>
     <button class="icon-btn" id="settingsBtn" aria-label="Settings" hidden data-icon="settings"></button>
     <button class="profile-btn" id="profileBtn" aria-label="Profile" hidden><span id="profileBtnInner" data-icon="armchair" data-icon-size="18"></span></button>
@@ -475,6 +474,21 @@
 
   <div class="tab-panel active" id="panel-peepal">
     <div class="peepal-screen" id="peepalScreen">
+      <!-- Vriksha top: the only universal Chaupaal search + stranger friendship picks -->
+      <section class="vriksha-top" id="vrikshaTop" data-nav-ignore="1">
+        <button type="button" class="vriksha-global-search" id="vrikshaChaupaalSearch" aria-label="Search Chaupaal" data-i18n-aria="search_chaupaal">
+          <span class="vriksha-global-search-icon" aria-hidden="true" data-icon="search" data-icon-size="16"></span>
+          <span class="vriksha-global-search-label" data-i18n="vriksha_search_ph">Search all of Chaupaal</span>
+        </button>
+        <p class="vriksha-global-search-hint" data-i18n="vriksha_search_hint">Find posts, discussions, groups, games, or anyone by name or @handle. Looking to meet someone new? Use Khoj.</p>
+        <div class="vriksha-picks hidden" id="vrikshaPicks" aria-label="People you might befriend">
+          <div class="vriksha-picks-head">
+            <span class="vriksha-picks-title" data-i18n="vriksha_picks_title">People you might befriend</span>
+            <button type="button" class="vriksha-picks-more" id="vrikshaPicksMore" data-i18n="vriksha_picks_more">More on Khoj</button>
+          </div>
+          <div class="vriksha-picks-row" id="vrikshaPicksRow" data-swipe-ignore aria-live="polite"></div>
+        </div>
+      </section>
       <!-- Intent card (Vriksha) — discussions only; people Find lives on Khoj (K0/K3) -->
       <div class="peepal-card peepal-intent-card" id="peepalIntentCard" data-nav-ignore="1">
         <div class="peepal-intent-card-head">
@@ -491,7 +505,6 @@
         <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" rows="2" placeholder="What's on your mind to discuss?" data-i18n-placeholder="peepal_discuss_ph" data-living-ph="peepal_discuss"></textarea>
         <div class="peepal-intent-actions" role="group" aria-label="Peepal actions">
           <button type="button" class="peepal-ai-search-btn peepal-intent-act peepal-intent-act--primary peepal-intent-act--discuss" id="peepalIntentDiscuss" title="Start discussion"><span data-icon="message-circle" data-icon-size="16" style="margin-right:4px;"></span> <span data-i18n="peepal_discuss">Discuss</span></button>
-          <button type="button" class="peepal-intent-act peepal-intent-act--global" id="peepalIntentGlobalSearch" title="Search Chaupaal"><span data-icon="globe" data-icon-size="15"></span><span>Chaupaal</span></button>
           <button type="button" class="peepal-intent-act" id="peepalAiSearchGo" title="Find people on Khoj"><span data-icon="search" data-icon-size="15"></span><span data-i18n="peepal_find_btn">Find on Khoj</span></button>
         </div>
         <div id="peepalCompatPeeks" class="peepal-compat-peeks hidden" aria-hidden="true"></div>
@@ -550,9 +563,6 @@
           <img src="/brand/chaupaal-mark-charpai-v2as.png" alt="" width="28" height="28">
         </span>
         <span>Chaupaal</span>
-      </div>
-      <div class="sidebar-logo-actions">
-        <button class="icon-btn" id="globalSearchBtnDesktop" aria-label="Search Chaupaal" title="Search" data-icon="search"></button>
       </div>
     </div>
 

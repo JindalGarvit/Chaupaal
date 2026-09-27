@@ -476,7 +476,7 @@ function renderDiscoverySection(profiles){
       renderEmptyState(el, {
         icon:'🌳',
         title:'No people to meet right now',
-        message:'Invite a friend or search Chaupaal — we never invent matches.',
+        message:'Invite a friend — we never invent matches.',
         actionLabel: 'Invite',
         onAction: () => {
           if (typeof ChaupaalReferrals?.openInviteToChaupaalShare === 'function') {
@@ -485,22 +485,9 @@ function renderDiscoverySection(profiles){
             shareInviteToChaupaal();
           }
         },
-        secondaryActions: [
-          {
-            label: 'Search Chaupaal',
-            onClick: () => {
-              if (typeof openKhojChaupaalSearch === 'function') openKhojChaupaalSearch();
-              else if (typeof openUniversalSearch === 'function') {
-                openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
-              } else if (typeof openGlobalSearch === 'function') openGlobalSearch();
-              else if (typeof openSearch === 'function') openSearch();
-              else document.getElementById('openSearchBtn')?.click();
-            },
-          },
-        ],
       });
     } else {
-      el.innerHTML = `<div class="discovery-loading">No people suggestions — invite a friend or search Chaupaal.</div>`;
+      el.innerHTML = `<div class="discovery-loading">No people suggestions — invite a friend to Chaupaal.</div>`;
     }
     return el;
   }
@@ -909,6 +896,82 @@ function rankCompatibilityPeeks(profiles, opts) {
 let _compatPeekCache = [];
 let _compatPeekCursor = 0;
 
+/**
+ * Eligible stranger pool (friends / pending dropped by isDiscoveryEligibleUser).
+ * Temporarily steers discoveryFilters.matchIntent, then restores it.
+ */
+async function fetchCompatStrangerPool({ intentOverride = null } = {}) {
+  const prevIntent = discoveryFilters.matchIntent;
+  if (intentOverride) discoveryFilters.matchIntent = intentOverride;
+  let raw = [];
+  try {
+    raw = typeof getDiscoveryProfiles === 'function' ? await getDiscoveryProfiles() : [];
+  } catch (e) {
+    raw = [];
+  }
+  try {
+    if (typeof hydrateRelationships === 'function' && raw.length) {
+      await hydrateRelationships(raw.map((p) => p.user?.uid || p.uid).filter(Boolean));
+      raw = raw.filter((p) => isDiscoveryEligibleUser(p.user || p));
+    }
+  } catch (e) {}
+  if (intentOverride) discoveryFilters.matchIntent = prevIntent;
+  // Guest-only labeled samples — never pad signed-in discovery with invented people.
+  if (
+    raw.length < 8 &&
+    !(typeof currentUser !== 'undefined' && currentUser) &&
+    typeof SAMPLE_DISCOVERY_POOL !== 'undefined'
+  ) {
+    const extra = SAMPLE_DISCOVERY_POOL.filter((u) => isDiscoveryEligibleUser(u)).map((u) => ({
+      user: { ...u, isSample: true },
+      score: 50,
+      reasons: ['Sample', ...((u.interests || []).slice(0, 1))],
+      reason: 'Sample · sign in for real people',
+      isSample: true,
+    }));
+    const seen = new Set(raw.map((p) => p.user?.uid));
+    extra.forEach((p) => {
+      if (p.user?.uid && !seen.has(p.user.uid)) {
+        seen.add(p.user.uid);
+        raw.push(p);
+      }
+    });
+  }
+  return raw;
+}
+
+/** Uids Khoj has rendered this session — Vriksha picks avoid repeating them. */
+const _khojShownUids = new Set();
+function noteKhojShownUids(peeks) {
+  (peeks || []).forEach((p) => {
+    const uid = p?.user?.uid;
+    if (uid) _khojShownUids.add(uid);
+  });
+}
+
+let _vrikshaPicksCache = [];
+
+/**
+ * Vriksha "people you might befriend" strip — strangers only, friendship lean,
+ * separate cache from Khoj so neither list resets the other.
+ */
+async function getVrikshaFriendPicks(opts) {
+  const o = opts || {};
+  const limit = Math.max(1, Math.min(12, Number(o.limit) || 6));
+  if (o.reset || !_vrikshaPicksCache.length) {
+    const raw = await fetchCompatStrangerPool({ intentOverride: 'Friendship' });
+    _vrikshaPicksCache = rankCompatibilityPeeks(raw, { friendshipMajority: true }).filter(
+      (p) => p.lean !== 'dating' && p.lean !== 'career'
+    );
+  }
+  const fresh = _vrikshaPicksCache.filter((p) => !_khojShownUids.has(p.user?.uid));
+  const pool = fresh.length >= Math.min(3, limit) ? fresh : _vrikshaPicksCache;
+  const friendsFirst = pool
+    .filter((p) => p.lean === 'friendship')
+    .concat(pool.filter((p) => p.lean !== 'friendship'));
+  return { peeks: friendsFirst.slice(0, limit), total: friendsFirst.length };
+}
+
 async function getCompatibilityPeeks(opts) {
   const o = opts || {};
   const limit = Math.max(1, Math.min(20, Number(o.limit) || 3));
@@ -916,53 +979,13 @@ async function getCompatibilityPeeks(opts) {
   const friendshipOnly = !!o.friendshipOnly;
   const networkingDefault = !!o.networkingDefault || isViewerProfessional();
   if (reset || !_compatPeekCache.length) {
-    const prevIntent = discoveryFilters.matchIntent;
+    let intentOverride = null;
     if (networkingDefault && !friendshipOnly) {
-      discoveryFilters.matchIntent =
-        discoveryFilters.matchIntent || 'Networking / Professional connections';
+      intentOverride = discoveryFilters.matchIntent || 'Networking / Professional connections';
     } else if (friendshipOnly || o.emptyFriendship) {
-      discoveryFilters.matchIntent = 'Friendship';
+      intentOverride = 'Friendship';
     }
-    let raw = [];
-    try {
-      raw = typeof getDiscoveryProfiles === 'function' ? await getDiscoveryProfiles() : [];
-    } catch (e) {
-      raw = [];
-    }
-    // Hydrate relationships so stranger filter can drop friends / pending
-    try {
-      if (typeof hydrateRelationships === 'function' && raw.length) {
-        await hydrateRelationships(raw.map((p) => p.user?.uid || p.uid).filter(Boolean));
-        raw = raw.filter((p) => isDiscoveryEligibleUser(p.user || p));
-      }
-    } catch (e) {}
-    if (networkingDefault && !friendshipOnly) {
-      discoveryFilters.matchIntent = prevIntent;
-    } else if (friendshipOnly || o.emptyFriendship) {
-      discoveryFilters.matchIntent = prevIntent;
-    }
-    // Pull a wider pool for Khoj scroll when possible
-    // Guest-only labeled samples — never pad signed-in discovery with invented people.
-    if (
-      raw.length < 8 &&
-      !(typeof currentUser !== 'undefined' && currentUser) &&
-      typeof SAMPLE_DISCOVERY_POOL !== 'undefined'
-    ) {
-      const extra = SAMPLE_DISCOVERY_POOL.filter((u) => isDiscoveryEligibleUser(u)).map((u) => ({
-        user: { ...u, isSample: true },
-        score: 50,
-        reasons: ['Sample', ...((u.interests || []).slice(0, 1))],
-        reason: 'Sample · sign in for real people',
-        isSample: true,
-      }));
-      const seen = new Set(raw.map((p) => p.user?.uid));
-      extra.forEach((p) => {
-        if (p.user?.uid && !seen.has(p.user.uid)) {
-          seen.add(p.user.uid);
-          raw.push(p);
-        }
-      });
-    }
+    const raw = await fetchCompatStrangerPool({ intentOverride });
     _compatPeekCache = rankCompatibilityPeeks(raw, {
       friendshipMajority: networkingDefault ? false : o.friendshipMajority !== false,
     });
@@ -1131,6 +1154,8 @@ function tintPeepalIntentChips(root) {
 window.craftSpecificIcebreaker = craftSpecificIcebreaker;
 window.rankCompatibilityPeeks = rankCompatibilityPeeks;
 window.getCompatibilityPeeks = getCompatibilityPeeks;
+window.getVrikshaFriendPicks = getVrikshaFriendPicks;
+window.noteKhojShownUids = noteKhojShownUids;
 window.mountCompatPeeks = mountCompatPeeks;
 window.renderCompatPeekCard = renderCompatPeekCard;
 window.wireCompatPeekHost = wireCompatPeekHost;

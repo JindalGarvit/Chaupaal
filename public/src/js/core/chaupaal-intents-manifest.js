@@ -95,9 +95,7 @@
     phrases: [/search (for|chaupaal)/i],
     priority: 70,
     run: () => {
-      if (typeof openUniversalSearch === 'function') {
-        openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
-      }
+      if (typeof window.openVrikshaChaupaalSearch === 'function') window.openVrikshaChaupaalSearch();
     },
   });
 
@@ -628,7 +626,7 @@
     phrases: [/^search\b/i],
     priority: 55,
     run: () => {
-      if (typeof openUniversalSearch === 'function') openUniversalSearch();
+      if (typeof window.openVrikshaChaupaalSearch === 'function') window.openVrikshaChaupaalSearch();
     },
   });
   reg({

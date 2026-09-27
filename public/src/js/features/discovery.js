@@ -188,17 +188,6 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
             ChaupaalReferrals.openInviteToChaupaalShare();
           }
         },
-        secondaryActions: [
-          {
-            label: 'Search Chaupaal',
-            onClick: () => {
-              if (typeof openKhojChaupaalSearch === 'function') openKhojChaupaalSearch();
-              else if (typeof openUniversalSearch === 'function') {
-                openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
-              }
-            },
-          },
-        ],
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${data.emptyMessage || 'No matches found.'}${refineHint}</div>`;
@@ -410,20 +399,11 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
       renderEmptyState(resultsEl, {
         icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
         title:'No matches yet',
-        message:'No eligible open profiles right now. We never invent people — try inviting a friend or Search Chaupaal.',
+        message:'No eligible open profiles right now. We never invent people — try inviting a friend or broader wording.',
         actionLabel:'Invite',
         onAction:()=>{
           if(typeof shareInviteToChaupaal==='function') shareInviteToChaupaal();
         },
-        secondaryActions: [{
-          label:'Search Chaupaal',
-          onAction:()=>{
-            if (typeof openKhojChaupaalSearch === 'function') openKhojChaupaalSearch();
-            else if (typeof openUniversalSearch === 'function') {
-              openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
-            }
-          },
-        }],
       });
     } else {
       resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">No eligible open profiles right now.</div>`;

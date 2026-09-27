@@ -954,6 +954,40 @@ async function loadPeepalPage({reset=false}={}){
   }
 }
 
+function openVrikshaChaupaalSearch(){
+  const types=['users','duniya','peepal','groups','games'];
+  const tabBtn=document.querySelector('.bottom-tabs .tab-btn[data-tab="peepal"]');
+  if(tabBtn&&!tabBtn.classList.contains('active')) tabBtn.click();
+  const mode=typeof window.peepalMode==='function'?window.peepalMode():'vriksha';
+  if(mode!=='vriksha'&&typeof setPeepalMode==='function') setPeepalMode('vriksha');
+  const fn=window.openUniversalSearch||(typeof openUniversalSearch!=='undefined'?openUniversalSearch:null);
+  if(typeof fn==='function') return fn({ types });
+  setTimeout(()=>{ if(typeof window.openUniversalSearch==='function') window.openUniversalSearch({ types }); },300);
+}
+window.openVrikshaChaupaalSearch=openVrikshaChaupaalSearch;
+
+let _vrikshaPicksLoading=false;
+async function loadVrikshaFriendPicks(opts){
+  const wrap=document.getElementById('vrikshaPicks');
+  const row=document.getElementById('vrikshaPicksRow');
+  if(!wrap||!row||_vrikshaPicksLoading||typeof getVrikshaFriendPicks!=='function') return;
+  _vrikshaPicksLoading=true;
+  try{
+    const { peeks }=await getVrikshaFriendPicks({ limit:6, reset:!!opts?.reset });
+    if(!peeks.length){ wrap.classList.add('hidden'); row.innerHTML=''; return; }
+    row.innerHTML=peeks.map(p=>renderCompatPeekCard(p)).join('');
+    wireCompatPeekHost(row,peeks);
+    wrap.classList.remove('hidden');
+    try{ if(typeof hydrateIcons==='function') hydrateIcons(row); }catch(e){}
+  }catch(e){
+    console.warn('[vriksha] friend picks',e?.message||e);
+    wrap.classList.add('hidden');
+  }finally{
+    _vrikshaPicksLoading=false;
+  }
+}
+window.loadVrikshaFriendPicks=loadVrikshaFriendPicks;
+
 async function initPeepal(){
   const feed=document.getElementById('peepalFeed');if(!feed)return;
   delete feed.dataset.loaded;
@@ -1017,21 +1051,20 @@ async function initPeepal(){
       }
     });
   }
-  const globalBtn=document.getElementById('peepalIntentGlobalSearch');
-  if(globalBtn&&!globalBtn.dataset.wired){
-    globalBtn.dataset.wired='1';
-    globalBtn.addEventListener('click',()=>{
-      const fn=window.openUniversalSearch||(typeof openUniversalSearch!=='undefined'?openUniversalSearch:null);
-      if(typeof fn==='function'){
-        fn({ types:['users','duniya','peepal','groups','games'] });
-      }else{
-        setTimeout(()=>{
-          const fn2=window.openUniversalSearch;
-          if(typeof fn2==='function') fn2({ types:['users','duniya','peepal','groups','games'] });
-        },300);
-      }
-    });
+  const vSearchBtn=document.getElementById('vrikshaChaupaalSearch');
+  if(vSearchBtn&&!vSearchBtn.dataset.wired){
+    vSearchBtn.dataset.wired='1';
+    vSearchBtn.addEventListener('click',()=>openVrikshaChaupaalSearch());
   }
+  const vMoreBtn=document.getElementById('vrikshaPicksMore');
+  if(vMoreBtn&&!vMoreBtn.dataset.wired){
+    vMoreBtn.dataset.wired='1';
+    vMoreBtn.addEventListener('click',()=>{ if(typeof setPeepalMode==='function') setPeepalMode('khoj'); });
+  }
+  const onVriksha=(typeof window.peepalMode==='function'?window.peepalMode():'vriksha')==='vriksha';
+  document.getElementById('vrikshaTop')?.classList.toggle('hidden',!onVriksha);
+  try{ if(typeof hydrateIcons==='function') hydrateIcons(document.getElementById('vrikshaTop')); }catch(e){}
+  if(onVriksha) loadVrikshaFriendPicks();
   const discussBtn=document.getElementById('peepalIntentDiscuss');
   if(discussBtn&&!discussBtn.dataset.wired){
     discussBtn.dataset.wired='1';

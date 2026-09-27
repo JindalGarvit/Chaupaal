@@ -352,7 +352,10 @@
           id: 'search',
           label: tt('shortcut_peepal_global_search', 'Search Chaupaal'),
           run: () => {
-            if (typeof openUniversalSearch === 'function') {
+            if (typeof window.openVrikshaChaupaalSearch === 'function') {
+              window.openVrikshaChaupaalSearch();
+            } else if (typeof openUniversalSearch === 'function') {
+              switchTo('peepal');
               openUniversalSearch({ types: ['users', 'duniya', 'peepal', 'groups', 'games'] });
             } else if (typeof openPeopleSearchWithContacts === 'function') {
               openPeopleSearchWithContacts({ surface: 'peepal' });

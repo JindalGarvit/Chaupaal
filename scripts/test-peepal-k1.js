@@ -15,8 +15,13 @@ const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 const khoj = read('public/src/js/features/khoj.js');
-assert(/khojChaupaalSearch|khoj-global-search/.test(khoj), 'Khoj has Chaupaal search control');
-assert(/openUniversalSearch/.test(khoj), 'top search opens universal search');
+assert(!/khojChaupaalSearch|openUniversalSearch|data-khoj-cta="search"/.test(khoj), 'Khoj is people-only (no universal search)');
+const html = read('public/index.html');
+assert(/id="vrikshaChaupaalSearch"/.test(html) && /id="vrikshaPicks"/.test(html), 'Vriksha top: search + friend picks');
+assert(!/globalSearchBtn|peepalIntentGlobalSearch/.test(html), 'top-bar and globe search entries removed');
+const cats = read('public/src/js/features/categories.js');
+assert(/function openVrikshaChaupaalSearch/.test(cats) && /openUniversalSearch/.test(cats), 'Vriksha search opens universal search');
+assert(/getVrikshaFriendPicks/.test(cats), 'Vriksha picks mounted');
 assert(/khojIntentInput/.test(khoj) && /khojIntentGo/.test(khoj), 'intent Find still present');
 assert(/renderKhojFiltersMarkup|wireKhojFilters/.test(khoj), 'compact filters wired');
 assert(/khojBackToPeeks|Back to peeks/.test(khoj), 'way back to peeks');
@@ -49,7 +54,7 @@ assert(
 );
 
 const gestures = read('public/src/js/core/tab-gestures.js');
-assert(/openUniversalSearch/.test(gestures), 'morph Search Chaupaal kept');
+assert(/openVrikshaChaupaalSearch/.test(gestures), 'morph Search Chaupaal routes to Vriksha search');
 
 const apiCount = fs.readdirSync(path.join(root, 'api')).filter((f) => f.endsWith('.js')).length;
 assert(apiCount === 12, `api/*.js === 12 (got ${apiCount})`);

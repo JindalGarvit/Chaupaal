@@ -46,8 +46,6 @@ html,body{
     border-bottom:1px solid var(--line);
   }
   .sidebar-logo-brand{display:flex;align-items:center;gap:10px;}
-  .sidebar-logo-actions{display:flex;align-items:center;gap:6px;}
-  .sidebar-logo-actions .icon-btn{width:32px;height:32px;font-size:14px;flex-shrink:0;}
   .tab-btn{
     flex:0 0 auto;flex-direction:row;justify-content:flex-start;
     padding:10px 12px;border-radius:var(--r-tab);gap:12px;
