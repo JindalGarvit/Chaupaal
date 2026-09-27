@@ -47,17 +47,79 @@
     } catch (e) {}
   }
 
+  // Gentle synthesized pads (no audio files): 'night' = low hum, 'day' = soft bright chord.
+  const PADS = { night: [98, 147, 196], day: [262, 330, 392] };
+  const PAD_GAIN = 0.018;
+  let amb = null;
+
+  function stopAmbient() {
+    if (!amb) return;
+    const a = amb;
+    amb = null;
+    try {
+      const t = a.ctx.currentTime;
+      a.master.gain.cancelScheduledValues(t);
+      a.master.gain.setTargetAtTime(0, t, 0.4);
+      setTimeout(() => {
+        a.oscs.forEach((o) => {
+          try {
+            o.stop();
+          } catch (e) {}
+        });
+        a.ctx.close().catch(() => {});
+      }, 1600);
+    } catch (e) {}
+  }
+
+  function playAmbient(kind) {
+    const notes = PADS[kind];
+    if (!notes || !allowed()) return stopAmbient();
+    if (amb && amb.kind === kind) return;
+    stopAmbient();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      const ctx = new AC();
+      const master = ctx.createGain();
+      master.gain.value = 0;
+      master.connect(ctx.destination);
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = 0.08;
+      lfoGain.gain.value = PAD_GAIN * 0.4;
+      lfo.connect(lfoGain).connect(master.gain);
+      const oscs = [lfo];
+      notes.forEach((f, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = kind === 'night' ? 'sine' : 'triangle';
+        o.frequency.value = f;
+        o.detune.value = (i - 1) * 4;
+        g.gain.value = 1 / notes.length;
+        o.connect(g).connect(master);
+        o.start();
+        oscs.push(o);
+      });
+      lfo.start();
+      master.gain.setTargetAtTime(PAD_GAIN, ctx.currentTime, 1.2);
+      amb = { kind, ctx, master, oscs };
+    } catch (e) {
+      amb = null;
+    }
+  }
+
   window.Sound = {
     play,
     playVaried(token) {
       play(token);
     },
-    playAmbient() {},
-    stopAmbient() {},
+    playAmbient,
+    stopAmbient,
     duckAmbient() {},
     preloadGame() {},
     setEnabled(on) {
       enabled = !!on;
+      if (!enabled) stopAmbient();
     },
     isEnabled() {
       return enabled;

@@ -408,7 +408,7 @@
    * Unlike mountPassCover the face stays open while choosing (voting needs taps), and the whole
    * face is wiped on lock so the next voter sees nothing.
    * @param {HTMLElement} root
-   * @param {{ name: string, lead?: string, bodyHtml: string, doneLabel?: string,
+   * @param {{ name: string, lead?: string, bodyHtml: string, doneLabel?: string, coverTitle?: string, coverIcon?: string,
    *           onMount: (face: HTMLElement, setReady: (ok: boolean) => void) => void, onDone: Function }} opts
    */
   function mountPassVote(root, opts) {
@@ -418,8 +418,8 @@
       <div class="pk-pass-name">${esc(o.name)}</div>
       <div class="pk-card pk-card--vote" data-pk-card>
         <div class="pk-card-cover" data-pk-cover>
-          <div class="pk-card-eye" aria-hidden="true">🤫</div>
-          <div class="pk-card-cover-title">Secret vote</div>
+          <div class="pk-card-eye" aria-hidden="true">${esc(o.coverIcon || '🤫')}</div>
+          <div class="pk-card-cover-title">${esc(o.coverTitle || 'Secret vote')}</div>
           <div class="pk-card-cover-sub">Only ${esc(o.name)} should look</div>
         </div>
         <div class="pk-card-face" data-pk-face hidden></div>
@@ -884,6 +884,7 @@
     rajamantri: ['games/rajamantri-core.js'],
     charades: ['data/charades-packs.js', 'games/charades-core.js'],
     mostlikely: ['data/mostlikely-packs.js', 'games/mostlikely-core.js'],
+    werewolf: ['games/werewolf-core.js'],
   };
   const lazyLoaded = {};
   const lazyLoading = {};
@@ -1212,9 +1213,10 @@
    *   hydrate: (state: object) => object,
    *   lobbySummary: (ctrl) => string, openSettings?: (ctrl) => void,
    *   lobbyListHtml?: (ctrl, players) => string, onLobbyMount?: (ctrl, body) => void,
-   *   canStart?: (ctrl, players) => { ok: boolean, label: string },
-   *   renderPhase: (ctrl, st) => void, onState?: (ctrl, st, prev) => void,
-   * }} spec
+ *   canStart?: (ctrl, players) => { ok: boolean, label: string },
+ *   renderPhase: (ctrl, st) => void, onState?: (ctrl, st, prev) => void,
+ *   renderPending?: (ctrl, st) => void,
+ * }} spec
    */
   async function openRoomScreen(spec) {
     if (!requireSignIn()) return null;
@@ -1352,7 +1354,7 @@
       const typing = ctrl.shell.el.querySelector('[data-keep]');
       const kept = typing ? { name: typing.dataset.keep, value: typing.value, focus: document.activeElement === typing } : null;
       if (pub.status === 'lobby' || !st) renderLobby();
-      else if (pub.players[ctrl.uid].pending) renderPending();
+      else if (pub.players[ctrl.uid].pending) renderPending(st);
       else {
         ctrl.shell.setSubtitle('Room ' + code);
         spec.renderPhase(ctrl, st);
@@ -1421,7 +1423,8 @@
     }
     ctrl.startWith = startWith;
 
-    function renderPending() {
+    function renderPending(st) {
+      if (spec.renderPending) return spec.renderPending(ctrl, st);
       const body = ctrl.shell.render(`<div class="pk-page pk-empty">
         <div class="pk-title">Round in progress</div>
         <div class="pk-sub">You’ll be dealt in when the next round starts.</div>
@@ -1458,6 +1461,56 @@
     body.querySelector('[data-end]')?.addEventListener('click', async () => {
       await ctrl.act(ctrl.isHost() ? 'end' : 'leave');
       ctrl.shell.close();
+    });
+  }
+
+  // ---------------- room chat ----------------
+
+  /**
+   * Compact room chat: recent messages + one input. `channel` keys the kept draft across re-renders.
+   * @param {{ channel: string, messages: {from:string,text:string}[], name: (id) => string, me: string,
+   *           title?: string, placeholder?: string, disabled?: string, limit?: number }} o
+   */
+  function chatHtml(o) {
+    const msgs = (o.messages || []).slice(-(o.limit || 12));
+    return `<div class="pk-chat" data-chat="${esc(o.channel)}">
+      ${o.title ? `<div class="pk-chat-title">${esc(o.title)}</div>` : ''}
+      <div class="pk-chat-log" aria-live="polite">${
+        msgs.length
+          ? msgs
+              .map((m) => `<div class="pk-chat-msg${m.from === o.me ? ' is-me' : ''}"><b>${esc(m.from === o.me ? 'You' : o.name(m.from))}</b> ${esc(m.text)}</div>`)
+              .join('')
+          : '<div class="pk-chat-empty">No messages yet</div>'
+      }</div>
+      ${
+        o.disabled
+          ? `<div class="pk-chat-off">${esc(o.disabled)}</div>`
+          : `<form class="pk-chat-form" data-chat-form>
+        <input class="pk-input pk-chat-input" data-keep="chat-${esc(o.channel)}" maxlength="160" placeholder="${esc(o.placeholder || 'Say something…')}" autocomplete="off" enterkeyhint="send" aria-label="${esc(o.placeholder || 'Message')}">
+        <button type="submit" class="pk-btn pk-btn--primary pk-chat-send" aria-label="Send">➤</button>
+      </form>`
+      }
+    </div>`;
+  }
+
+  /** Wire every chat box in `body`: onSend(channel, text) → Promise<boolean> (true clears the draft). */
+  function wireChat(body, onSend) {
+    body.querySelectorAll('[data-chat]').forEach((box) => {
+      const log = box.querySelector('.pk-chat-log');
+      if (log) log.scrollTop = log.scrollHeight;
+      const form = box.querySelector('[data-chat-form]');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = form.querySelector('input');
+        const text = input.value.trim();
+        if (!text) return;
+        const ok = await onSend(box.dataset.chat, text);
+        if (ok) {
+          const again = document.querySelector('[data-keep="' + input.dataset.keep + '"]');
+          if (again) again.value = '';
+        }
+      });
     });
   }
 
@@ -1538,6 +1591,8 @@
     openRoomScreen,
     roomResultActions,
     wireRoomResultActions,
+    chatHtml,
+    wireChat,
     shareLine,
     homeHtml,
   };

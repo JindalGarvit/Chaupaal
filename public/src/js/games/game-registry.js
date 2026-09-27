@@ -400,7 +400,7 @@
   }
 
   /** Q2A — real group/party titles (Live party, party-kit Room, or multi-seat Practice setup). */
-  const GROUP_PARTY_IDS = ['ludo', 'uno', 'scribble', 'imposter', 'rajamantri', 'charades', 'mostlikely'];
+  const GROUP_PARTY_IDS = ['ludo', 'uno', 'scribble', 'imposter', 'rajamantri', 'charades', 'mostlikely', 'werewolf'];
 
   function isPartyKit(gameId) {
     return typeof isPartyKitGame === 'function' && isPartyKitGame(gameId);

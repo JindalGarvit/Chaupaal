@@ -37,6 +37,7 @@
     rajamantri: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
     charades: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
     mostlikely: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
+    werewolf: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
 
     // Classics + court — Live 1v1 state sync (snapshot / score events)
     carrom: { grade: 'live', sync: 'live1v1', stakes: true },
@@ -86,6 +87,7 @@
     { id: 'rajamantri', genre: 'party', partyKit: true },
     { id: 'charades', genre: 'party', partyKit: true },
     { id: 'mostlikely', genre: 'party', partyKit: true },
+    { id: 'werewolf', genre: 'party', partyKit: true },
   ];
   const ROSTER_IDS = ROSTER.map((r) => r.id);
   /** Aliases that resolve to a roster id (kept in sync with GAME_ID_ALIASES). */

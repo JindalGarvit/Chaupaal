@@ -41,6 +41,7 @@ const LAZY = {
   rajamantri: ['games/rajamantri-core.js'],
   charades: ['data/charades-packs.js', 'games/charades-core.js'],
   mostlikely: ['data/mostlikely-packs.js', 'games/mostlikely-core.js'],
+  werewolf: ['games/werewolf-core.js'],
 };
 const kitSrc = read('public/src/js/games/party-kit.js');
 Object.keys(LAZY).forEach((game) => {
@@ -55,7 +56,7 @@ Object.keys(LAZY).forEach((game) => {
   });
 });
 assert(/launchImposter = window\.PartyKit \? PartyKit\.withGameData\(GAME, openImposter\)/.test(read('public/src/js/games/imposter.js')), 'Imposter launcher waits for its data');
-['rajamantri', 'charades', 'mostlikely'].forEach((g) => {
+['rajamantri', 'charades', 'mostlikely', 'werewolf'].forEach((g) => {
   const src = read(`public/src/js/games/${g}.js`);
   assert(/const launch = window\.PartyKit \? PartyKit\.withGameData\(GAME, open\) : open;/.test(src), `${g} launcher waits for its data`);
   assert(/\blaunch,/.test(src), `${g} registers the wrapped launcher`);
@@ -176,7 +177,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
   assert(/const stopAway = coverWhenAway\(root, \(\) => \{\s*if \(face\.hidden\) return;\s*face\.innerHTML = '';/.test(kitSrc), 'secret vote wipes the open ballot on app switch');
   assert(/coverWhenAway\(btn, hide\)/.test(kitSrc), 'hold-peek closes on app switch');
   assert(/\.pk-shell \[hidden\],\.pk-sheet-scrim \[hidden\]\{display:none!important;\}/.test(read('public/src/styles/dangal.css')), 'hidden buttons stay hidden (vote cover shows one action)');
-  ['imposter', 'rajamantri', 'charades', 'mostlikely'].forEach((g) => {
+  ['imposter', 'rajamantri', 'charades', 'mostlikely', 'werewolf'].forEach((g) => {
     const src = read(`public/src/js/games/${g}.js`);
     assert(!/localStorage\.setItem\([^)]*(secret|role|word|chit|vote)/i.test(src), `${g}: no secret persisted (refresh can't recover it)`);
     assert(!/body\.querySelector\('\[data-meta\]'\)\.textContent/.test(src), `${g}: setup meta line is null-safe`);

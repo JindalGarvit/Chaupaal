@@ -55,6 +55,8 @@
       '<circle cx="20" cy="9" r="4" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 13v11M20 24l-5 9M20 24l5 9M20 16l-8-5M20 16l8 3 3-6"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M6 18c-1.5 2-1.5 4 0 6M34 23c1.5 2 1.5 4 0 6" opacity=".6"/>',
     mostlikely:
       '<circle cx="11" cy="28" r="4" fill="currentColor" opacity=".35"/><circle cx="29" cy="28" r="4" fill="currentColor" opacity=".35"/><circle cx="20" cy="11" r="5" fill="currentColor"/><path fill="currentColor" d="M15 4l2 2.5L20 3l3 3.5L25 4l-.8 4h-8.4z" opacity=".8"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M13 24l4.5-6M27 24l-4.5-6M20 34v-9"/>',
+    werewolf:
+      '<path fill="currentColor" d="M27 5a10 10 0 1 0 8 15A12 12 0 0 1 27 5z" opacity=".3"/><path fill="currentColor" d="M9 34l2-10-3-7 5 3 2-6 2 6h6l2-6 2 6 5-3-3 7 2 10-6-4h-10z"/><circle cx="16" cy="24" r="1.6" fill="#fff"/><circle cx="24" cy="24" r="1.6" fill="#fff"/>',
   };
 
   const GAME_IDENTITY = {
@@ -80,6 +82,7 @@
     rajamantri: { primary: '#B8860B', secondary: '#7B1E2B', surface: '#1A1004', label: 'Raja Mantri Chor Sipahi', icon: '👑', mark: M.rajamantri, orientation: 'portrait' },
     charades: { primary: '#00897B', secondary: '#FF7043', surface: '#041A18', label: 'Dumb Charades', icon: '🎭', mark: M.charades, orientation: 'portrait' },
     mostlikely: { primary: '#7C4DFF', secondary: '#FFD54F', surface: '#140A26', label: 'Most Likely To?', icon: '👉', mark: M.mostlikely, orientation: 'portrait' },
+    werewolf: { primary: '#3949AB', secondary: '#FFB74D', surface: '#0B0E24', label: 'Werewolf', icon: '🐺', mark: M.werewolf, orientation: 'portrait' },
   };
 
   const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz'];

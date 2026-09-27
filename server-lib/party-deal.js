@@ -18,6 +18,7 @@ const ImposterCore = require('../public/src/js/games/imposter-core.js');
 const RajaMantriCore = require('../public/src/js/games/rajamantri-core.js');
 const CharadesCore = require('../public/src/js/games/charades-core.js');
 const MostLikelyCore = require('../public/src/js/games/mostlikely-core.js');
+const { createWerewolfAdapter } = require('./werewolf-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -530,6 +531,7 @@ const GAMES = {
   rajamantri: rajamantriAdapter,
   charades: charadesAdapter,
   mostlikely: mostlikelyAdapter,
+  werewolf: createWerewolfAdapter({ err }),
 };
 
 // ------------------------------------------------------------------ room engine
