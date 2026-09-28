@@ -1607,6 +1607,9 @@
     return openHome();
   }
 
+  const lazy = (fn) => (Kit() && typeof Kit().withGameData === 'function' ? Kit().withGameData(GAME, fn) : fn);
+  const openGame = lazy(launch);
+
   if (Kit() && typeof Kit().registerPartyGame === 'function') {
     Kit().registerPartyGame(GAME, { openRoom: (code) => joinFriends(code) });
   }
@@ -1630,10 +1633,17 @@
         core: 'poker-core.js (evaluator, betting, side pots, bots — shared with the server)',
         live: 'poker_table → server-lib/poker-engine.js; CSPRNG deal, hole cards owner-only, server timers + settlement',
       },
-      launch,
+      launch: openGame,
     });
   }
 
-  window.openPoker = launch;
-  window.PokerGame = { launch, openHome, startPractice, openLive, openRankings, openHistory };
+  window.openPoker = openGame;
+  window.PokerGame = {
+    launch: openGame,
+    openHome: lazy(openHome),
+    startPractice: lazy(startPractice),
+    openLive: lazy(openLive),
+    openRankings: lazy(openRankings),
+    openHistory: lazy(openHistory),
+  };
 })();

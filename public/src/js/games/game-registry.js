@@ -4,7 +4,7 @@
  * Self-registration: each game file calls registerGame(descriptor) at load time.
  *
  * @typedef {'solo'|'dual'|'multiplayer'} GameType
- * @typedef {'rw_sports'|'brain'|'board'|'party'|'arcade'|'quiz'|'other'} GameGenre
+ * @typedef {'solo'|'board'|'words'|'cards'|'rw_sports'|'party'|'other'} GameGenre
  *
  * @typedef {Object} GameLaunchContext
  * @property {object} [chat]
@@ -38,19 +38,15 @@
 
   /** Genre catalog — UI label + order for Manch chips. */
   const GAME_GENRES = [
-    { id: 'rw_sports', label: 'RW Sports', icon: '🏏', color: '#2E7D32' },
-    { id: 'brain', label: 'Brain Boost', icon: '🧠', color: '#6A1B9A' },
-    { id: 'board', label: 'Board & Classics', icon: '♟️', color: '#5D4037' },
-    { id: 'party', label: 'Party & Social', icon: '🎉', color: '#E65100' },
+    { id: 'solo', label: 'Solo', icon: '🧠', color: '#6A1B9A' },
+    { id: 'board', label: 'Boards', icon: '♟️', color: '#5D4037' },
+    { id: 'words', label: 'Words', icon: '🔤', color: '#C62828' },
     { id: 'cards', label: 'Cards', icon: '🂡', color: '#1B5E20' },
-    { id: 'arcade', label: 'Arcade Rush', icon: '👾', color: '#1565C0' },
-    { id: 'quiz', label: 'Quiz & Duel', icon: '🎯', color: '#C62828' },
+    { id: 'rw_sports', label: 'Sports', icon: '🏏', color: '#2E7D32' },
+    { id: 'party', label: 'Party', icon: '🎉', color: '#E65100' },
   ];
 
-  /** Fallback genre by game id when descriptor omits genre. */
-  const DEFAULT_GENRE_BY_ID = Object.fromEntries(
-    (window.DANGAL_ROSTER || []).map((r) => [r.id, r.genre]).concat([['kakuro', 'brain']])
-  );
+  const LEGACY_GENRES = { brain: 'solo', arcade: 'solo', quiz: 'words', sports: 'rw_sports' };
 
   function inferGameType(d) {
     if (d.gameType === 'solo' || d.gameType === 'dual' || d.gameType === 'multiplayer') return d.gameType;
@@ -59,14 +55,19 @@
     return 'dual';
   }
 
+  /** The roster owns section membership; a descriptor's own genre only counts for non-roster ids. */
   function inferGenre(d) {
-    const g = String(d.genre || '').trim().toLowerCase();
+    const rostered = typeof rosterGenre === 'function' ? rosterGenre(d.id) : '';
+    if (rostered) return rostered;
+    let g = String(d.genre || '').trim().toLowerCase();
+    g = LEGACY_GENRES[g] || g;
     if (GAME_GENRES.some((x) => x.id === g)) return g;
-    return DEFAULT_GENRE_BY_ID[d.id] || 'other';
+    return 'other';
   }
 
   function genreLabel(genreId) {
-    const hit = GAME_GENRES.find((x) => x.id === genreId);
+    const id = LEGACY_GENRES[genreId] || genreId;
+    const hit = GAME_GENRES.find((x) => x.id === id);
     return hit ? hit.label : 'Games';
   }
 
@@ -1160,7 +1161,7 @@
     icon: '🧠',
     gameType: 'dual',
     liveDuel: true,
-    genre: 'quiz',
+    genre: 'words',
     ratingKey: null,
     dangal: true,
     chat1v1: true,

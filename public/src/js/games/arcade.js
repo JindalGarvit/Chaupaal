@@ -1334,7 +1334,7 @@ if (typeof registerGame === 'function') {
     icon: '✨',
     ratingKey: 'tiptap',
     gameType: 'solo',
-    genre: 'brain',
+    genre: 'solo',
     solo: true,
     selfChat: true,
     order: 110,

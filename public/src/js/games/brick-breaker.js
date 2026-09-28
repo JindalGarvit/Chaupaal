@@ -1368,7 +1368,7 @@ if (typeof registerGame === 'function') {
     icon: '🧱',
     ratingKey: 'brickbreaker',
     gameType: 'solo',
-    genre: 'arcade',
+    genre: 'solo',
     solo: true,
     selfChat: true,
     order: 105,

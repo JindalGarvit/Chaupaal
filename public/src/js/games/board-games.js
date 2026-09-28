@@ -1515,7 +1515,7 @@ if (typeof registerGame === 'function') {
     icon: '🎨',
     ratingKey: 'scribble',
     gameType: 'multiplayer',
-    genre: 'party',
+    genre: 'words',
     chat1v1: true,
     chatGroup: true,
     selfChat: true,

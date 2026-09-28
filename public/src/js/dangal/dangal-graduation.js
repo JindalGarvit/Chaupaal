@@ -61,28 +61,30 @@
    * challenge surfaces read this. New titles (party G1–G3) are added here in one place.
    */
   const ROSTER_SECTIONS = [
-    { id: 'rw_sports', label: 'RW Sports' },
-    { id: 'brain', label: 'Brain Boost' },
-    { id: 'board', label: 'Board & Classics' },
-    { id: 'party', label: 'Party & Social' },
+    { id: 'solo', label: 'Solo' },
+    { id: 'board', label: 'Boards' },
+    { id: 'words', label: 'Words' },
     { id: 'cards', label: 'Cards' },
-    { id: 'arcade', label: 'Arcade Rush' },
-    { id: 'quiz', label: 'Quiz & Duel' },
+    { id: 'rw_sports', label: 'Sports' },
+    { id: 'party', label: 'Party' },
   ];
+
+  /** Section ids from before H4 — still accepted from descriptors / cached docs. */
+  const LEGACY_GENRES = { brain: 'solo', arcade: 'solo', quiz: 'words', sports: 'rw_sports' };
 
   /** @type {{ id: string, genre: string }[]} */
   const ROSTER = [
-    { id: 'tiptap', genre: 'brain' },
-    { id: 'brickbreaker', genre: 'arcade' },
-    { id: 'ankjod', genre: 'brain' },
-    { id: 'wordguess', genre: 'brain' },
+    { id: 'tiptap', genre: 'solo' },
+    { id: 'brickbreaker', genre: 'solo' },
+    { id: 'ankjod', genre: 'solo' },
+    { id: 'wordguess', genre: 'words' },
     { id: 'chess', genre: 'board' },
     { id: 'ttt', genre: 'board' },
     { id: 'snakes', genre: 'board' },
     { id: 'ludo', genre: 'board' },
-    { id: 'uno', genre: 'party' },
-    { id: 'scribble', genre: 'party' },
-    { id: 'quiz', genre: 'quiz' },
+    { id: 'uno', genre: 'cards' },
+    { id: 'scribble', genre: 'words' },
+    { id: 'quiz', genre: 'words' },
     { id: 'carrom', genre: 'board' },
     { id: 'poker', genre: 'cards' },
     { id: 'teenpatti', genre: 'cards' },
@@ -422,6 +424,7 @@
   window.DANGAL_ROSTER = ROSTER;
   window.DANGAL_ROSTER_IDS = ROSTER_IDS;
   window.DANGAL_ROSTER_SECTIONS = ROSTER_SECTIONS;
+  window.DANGAL_LEGACY_GENRES = LEGACY_GENRES;
   window.DANGAL_RETIRED_IDS = RETIRED_IDS;
   window.isRetiredGameId = isRetiredGameId;
   window.isRosterGameId = isRosterGameId;

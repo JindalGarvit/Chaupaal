@@ -885,6 +885,8 @@
     charades: ['data/charades-packs.js', 'games/charades-core.js'],
     mostlikely: ['data/mostlikely-packs.js', 'games/mostlikely-core.js'],
     werewolf: ['games/werewolf-core.js'],
+    penalty: ['games/penalty-core.js'],
+    poker: ['games/poker-core.js'],
   };
   const lazyLoaded = {};
   const lazyLoading = {};

@@ -2274,6 +2274,9 @@
     return openHome();
   }
 
+  const lazy = (fn) => (Kit() && typeof Kit().withGameData === 'function' ? Kit().withGameData(GAME, fn) : fn);
+  const openGame = lazy(launch);
+
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'penalty',
@@ -2294,10 +2297,10 @@
         core: 'penalty-core.js (outcome model + IFAB-style shootout, shared with the server)',
         live: 'penalty_kick → server-lib/penalty-engine.js; kick + dive stay server-side until both are in',
       },
-      launch,
+      launch: openGame,
     });
   }
 
-  window.openPenaltyShootout = launch;
-  window.PenaltyGame = { createPitch, launch, startLocal, startLive, openHome };
+  window.openPenaltyShootout = openGame;
+  window.PenaltyGame = { createPitch, launch: openGame, startLocal: lazy(startLocal), startLive: lazy(startLive), openHome: lazy(openHome) };
 })();

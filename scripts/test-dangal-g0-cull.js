@@ -139,7 +139,7 @@ ROSTER_EXPECTED.forEach((id) => {
   assert(grad && grad.grade !== 'practice', `${id} graduation entry present`);
   assert(!!sandbox.rosterGenre(id), `${id} has a roster genre`);
 });
-assert(/window\.DANGAL_ROSTER/.test(registry) && /isRosterGameId\(g\.id\)/.test(registry), 'registry genre + getGames read the roster');
+assert(/rosterGenre\(d\.id\)/.test(registry) && /isRosterGameId\(g\.id\)/.test(registry), 'registry genre + getGames read the roster');
 assert(/isRetiredGameId\(descriptor\.id\)/.test(registry), 'registerGame rejects retired ids');
 
 const gotd = require(path.join(root, 'server-lib/game-of-day.js'));

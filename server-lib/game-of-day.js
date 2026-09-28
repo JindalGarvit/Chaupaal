@@ -19,17 +19,17 @@ const GOTD_GAME_COOLDOWN_DAYS = 7;
 
 /** Dangal roster → genre (mirrors DANGAL_ROSTER in dangal-graduation.js). */
 const GAME_GENRE_BY_ID = {
-  tiptap: 'brain',
-  brickbreaker: 'arcade',
-  ankjod: 'brain',
-  wordguess: 'brain',
+  tiptap: 'solo',
+  brickbreaker: 'solo',
+  ankjod: 'solo',
+  wordguess: 'words',
   chess: 'board',
   ttt: 'board',
   snakes: 'board',
   ludo: 'board',
-  uno: 'party',
-  scribble: 'party',
-  quiz: 'quiz',
+  uno: 'cards',
+  scribble: 'words',
+  quiz: 'words',
   carrom: 'board',
   poker: 'cards',
   teenpatti: 'cards',
@@ -51,6 +51,7 @@ const KNOWN_GAME_IDS = Object.keys(GAME_GENRE_BY_ID);
 const AGE_GATED_IDS = new Set(['poker', 'teenpatti']);
 
 function genreForGameId(id, gameDoc) {
+  if (GAME_GENRE_BY_ID[id]) return GAME_GENRE_BY_ID[id];
   if (gameDoc && gameDoc.genre) return String(gameDoc.genre);
   return GAME_GENRE_BY_ID[id] || 'other';
 }
@@ -137,6 +138,9 @@ async function ensureGamesSeeded(db, FieldValue) {
     const data = snap.data() || {};
     if (!data.genre) {
       batch.set(snap.ref, { genre, active: true }, { merge: true });
+      writes += 1;
+    } else if (data.genre !== genre) {
+      batch.set(snap.ref, { genre }, { merge: true });
       writes += 1;
     }
   });
