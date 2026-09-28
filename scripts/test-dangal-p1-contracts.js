@@ -58,7 +58,7 @@ assert(Rules.nonDefault('chess', Rules.defaults('chess')).length === 0, 'default
 const house = Rules.nonDefault('chess', { time: '3+2', chess960: true, bogus: 1 });
 assert(house.length === 2 && /Time control: 3\+2/.test(house[0].text) && /On/.test(house[1].text), 'house rules list only non-defaults');
 assert(/House rules in this game/.test(Rules.sheetHtml('chess', { variants: { chess960: true } })) && !/House rules/.test(Rules.sheetHtml('chess')), 'sheet: house-rules block only when non-default');
-assert(Rules.normalize('penalty', { bestOf: 7 }).bestOf === 5 && Rules.normalize('bluff', { lives: 99 }).lives === 5, 'normalize coerces into options/range');
+assert(Rules.normalize('penalty', { bestOf: 7 }).bestOf === 5 && Rules.normalize('bluff', { windowSec: 99 }).windowSec === 5, 'normalize coerces into options/range');
 const locked = Rules.lockVariants('snakes', { variant: 'moksha' });
 assert(Object.isFrozen(locked) && Object.isFrozen(locked.values) && locked.values.variant === 'moksha' && locked.locked, 'lockVariants freezes the match record');
 assert(Rules.fromLaunchCtx('chess', { timeControl: '∞', chess960: true }).time === 'none' && Rules.fromLaunchCtx('ludo', { ludoMode: 'quick' }).mode === 'quick', 'launch context maps onto declared variants');

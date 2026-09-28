@@ -7868,29 +7868,8 @@
     }
   }
 
-  if (typeof registerGame === 'function') {
-    const games = [
-      { id: 'tambola', name: 'Tambola', desc: 'Housie · rival ticket · Live claims', icon: '🎫', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'cards', launch: openBluff, order: 35 },
-    ];
-    games.forEach((g) => {
-      registerGame({
-        id: g.id,
-        name: g.name,
-        desc: g.desc,
-        icon: g.icon,
-        gameType: 'dual',
-        liveDuel: true,
-        genre: g.genre,
-        selfChat: true,
-        dangal: true,
-        chat1v1: true,
-        order: g.order,
-        launch: g.launch,
-      });
-    });
-  }
-
-  window.openTambola = openTambola;
-  window.openBluff = openBluff;
+  // Dangal P9: Tambola (tambola-ui.js) and Bluff (bluff-ui.js) moved to party rooms; the old 1v1
+  // versions above are no longer registered.
+  void openTambola;
+  void openBluff;
 })();

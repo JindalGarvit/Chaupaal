@@ -45,8 +45,8 @@
     // Dangal P8 — server deal + rules (server-lib/rummy-engine.js, teenpatti-engine.js); 2–6 / 3–7 player tables
     rummy: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 2–6' },
     teenpatti: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 3–7' },
-    bluff: { grade: 'live', sync: 'live1v1', stakes: true },
-    tambola: { grade: 'live', sync: 'live1v1', stakes: true },
+    bluff: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 3–8' },
+    tambola: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 2–100+' },
     streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
     badminton: { grade: 'live', sync: 'live1v1', stakes: true },
     // Dangal H2 — Live kicks are resolved on the server (choices never in shared state)

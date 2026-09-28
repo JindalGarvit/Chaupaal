@@ -66,8 +66,13 @@
     // Dangal P8 Teen Patti (server-lib/teenpatti-engine.js): 20s turn + 20s bank; timeout packs. Two
     // timeouts in a row sit you out (auto-pack) until you tap I'm back.
     teenpatti: { reconnectMs: 90000, turnMs: 20000, bankMs: 20000, afk: { action: 'fold', maxMisses: 2 }, leave: 'pack', abandon: { winner: 'none', chips: 'stack_returns', rated: false }, dualLeave: 'table_continues', resign: false, rematch: { swapSides: false, sameVariants: true } },
-    bluff: { afk: { action: 'pass', maxMisses: 3 } },
-    tambola: { afk: { action: 'auto_play', maxMisses: 99 }, resign: true },
+    // Dangal P9 Bluff (server-lib/bluff-engine.js): 25s turn; a missed turn passes (Follow the rank)
+    // or plays the smallest legal card; 3 misses in a row — or leaving — hands the seat to a bot.
+    // The challenge window (3/5/8s) is a room setting, not a turn clock.
+    bluff: { reconnectMs: 60000, turnMs: 25000, afk: { action: 'pass_or_smallest', maxMisses: 3 }, leave: 'bot_takeover', resign: false, rematch: { swapSides: false, sameVariants: true } },
+    // Dangal P9 Tambola (server-lib/tambola-engine.js): no turns — the draw never waits for anyone.
+    // Missing a number is on you (daubs are yours); leaving keeps your tickets in play but you can't claim.
+    tambola: { reconnectMs: 120000, afk: { action: 'none', maxMisses: 99 }, leave: 'tickets_idle', abandon: { winner: 'none', chips: 'pot_shares', rated: false }, dualLeave: 'room_continues', resign: false, spectate: true, rematch: { swapSides: false, sameVariants: true } },
     streetcricket: { afk: { action: 'auto_play', maxMisses: 3 } },
     badminton: { afk: { action: 'auto_play', maxMisses: 3 } },
     // Server-resolved engines (H2 / H3): shipped timings stay the policy until their tuning prompt.
@@ -195,6 +200,29 @@
     return pol.rematch.swapSides && list.length === 2 ? [list[1], list[0]] : list;
   }
 
+  /** Rooms bigger than this use designated tickers instead of every phone nudging the clock. */
+  const BIG_ROOM = 8;
+  const TICK_LEADS = 3;
+
+  /**
+   * Who nudges a room's server clock. Small rooms: everyone (jitter spreads it). Big rooms (Tambola):
+   * the host and the first two other seats tick on time; everyone else waits 4–8 s past the deadline
+   * and only ticks if the leads are gone — so a draw costs ~3 calls, not 100.
+   * @returns {{ lead: boolean, delayMs: number }}
+   */
+  function tickRole(pub, uid) {
+    const players = (pub && pub.players) || {};
+    const ids = Object.keys(players)
+      .filter((id) => !players[id].left && !players[id].pending)
+      .sort((a, b) => (players[a].seat || 0) - (players[b].seat || 0));
+    if (ids.length <= BIG_ROOM) return { lead: true, delayMs: 0 };
+    const host = pub.host && ids.indexOf(pub.host) >= 0 ? [pub.host] : [];
+    const leads = host.concat(ids.filter((id) => id !== pub.host)).slice(0, TICK_LEADS);
+    if (leads.indexOf(uid) >= 0) return { lead: true, delayMs: 0 };
+    const k = Math.max(0, ids.indexOf(uid));
+    return { lead: false, delayMs: 4000 + (k % 5) * 1000 };
+  }
+
   /** Friendly countdown text for the opponent-reconnecting banner. */
   function countdownText(msLeft) {
     const s = Math.max(0, Math.ceil((Number(msLeft) || 0) / 1000));
@@ -216,5 +244,7 @@
     settlementKey,
     rematchSeats,
     countdownText,
+    BIG_ROOM,
+    tickRole,
   };
 });

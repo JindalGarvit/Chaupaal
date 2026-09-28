@@ -26,6 +26,8 @@ const { createQuizAdapter } = require('./quiz-engine.js');
 const { createCarromAdapter } = require('./carrom-engine.js');
 const { createRummyAdapter } = require('./rummy-engine.js');
 const { createTeenPattiAdapter } = require('./teenpatti-engine.js');
+const { createBluffAdapter } = require('./bluff-engine.js');
+const { createTambolaAdapter } = require('./tambola-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -547,9 +549,11 @@ GAMES.quizroom = createQuizAdapter({ err });
 GAMES.carrom = createCarromAdapter({ err });
 GAMES.rummy = createRummyAdapter({ err });
 GAMES.teenpatti = createTeenPattiAdapter({ err });
+GAMES.bluff = createBluffAdapter({ err });
+GAMES.tambola = createTambolaAdapter({ err });
 
 /** Ops where an 18+ game re-checks the caller's server-side age status. */
-const AGE_OPS = new Set(['create', 'join', 'settings', 'start']);
+const AGE_OPS = new Set(['create', 'join', 'settings', 'start', 'quick']);
 
 /** 18+ status from the user's own profile doc ('ok' | 'confirm' | 'under_18'); never from the request. */
 async function adultStatus(adminApp, uid, deps) {
@@ -875,6 +879,19 @@ function reduceRoom(room, uid, op, args, now, rng) {
         }
         const after = JSON.stringify(room.server.pub) + '|' + pub.deadline;
         if (before !== after || migrated) publish(room, now);
+      } else if (pub.status === 'lobby' && game.lobbyTick && !pub.paused && pub.deadline && now >= pub.deadline) {
+        // Public tables start themselves when the lobby countdown ends (Tambola).
+        pub.deadline = null;
+        if (game.lobbyTick(room, now)) {
+          Object.keys(pub.scores).forEach((id) => (pub.scores[id] = 0));
+          pub.roundNo = 0;
+          pub.over = false;
+          dealRound(room, now, rng, { auto: true });
+          settle(room, context(room, pub.host, {}, now, rng));
+          publish(room, now);
+        } else {
+          bump(room, now);
+        }
       } else if (migrated) {
         bump(room, now);
       }
@@ -971,7 +988,8 @@ async function partyRoom(adminApp, uid, body, deps) {
 
   if (op === 'dice_stats') return diceStats(adminApp, uid);
   if ((op === 'quick' || op === 'quick_cancel') && GAMES[game].quick) {
-    return Object.assign({ game, serverNow: now }, await GAMES[game].quick(adminApp, uid, op, b, now, partyRoom));
+    const tools = { transact: (path, fn) => transactRoom(rtdb, path, fn), deps };
+    return Object.assign({ game, serverNow: now }, await GAMES[game].quick(adminApp, uid, op, b, now, partyRoom, tools));
   }
 
   if (op === 'create') {
@@ -1005,7 +1023,7 @@ async function partyRoom(adminApp, uid, body, deps) {
   const path = `games/${game}/${code}`;
   const g = GAMES[game];
   if (g.direct && g.direct[op]) return Object.assign({ code, game, serverNow: now }, await g.direct[op](adminApp, rtdb, path, uid, b));
-  if (g.prepare && op === 'start') b.prep = await g.prepare(adminApp, rtdb, path, uid, deps);
+  if (g.prepare && (op === 'start' || (g.prepareOps && g.prepareOps.indexOf(op) >= 0))) b.prep = await g.prepare(adminApp, rtdb, path, uid, deps, op);
   const result = await transactRoom(rtdb, path, (current) => {
     const out = reduceRoom(current, uid, op, b, now, Math.random);
     const req = g.pendingSettlement && out.room.server ? g.pendingSettlement(out.room.server) : null;

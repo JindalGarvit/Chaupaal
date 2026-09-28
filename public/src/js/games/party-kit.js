@@ -640,7 +640,8 @@
    * @param {string} code
    * @param {{ onPub: (pub: object|null) => void, onSecret: (secret: object|null) => void, onPresence?: (p: object) => void }} handlers
    */
-  function connectRoom(game, code, handlers) {
+  function connectRoom(game, code, handlers, opts) {
+    const o = opts || {};
     const uid = myUid();
     const base = 'games/' + game + '/' + code;
     const ref = typeof rtdb !== 'undefined' && rtdb ? rtdb.ref(base) : null;
@@ -695,7 +696,8 @@
     const onPresence = later((snap) => handlers.onPresence && handlers.onPresence(snap.val() || {}));
     pubRef.on('value', onPub, onPubErr);
     secretRef.on('value', onSecret, later(() => handlers.onSecret(null)));
-    presenceRef.on('value', onPresence, () => {});
+    // Big rooms skip everyone else's heartbeats (100 phones × a beat each is a lot of downstream).
+    if (o.presence !== false) presenceRef.on('value', onPresence, () => {});
 
     const serverNow = () => Date.now() + offset;
     const beat = (online) => {
@@ -729,10 +731,13 @@
     beat();
     const hb = setInterval(beat, PRESENCE_MS);
     const maybeTick = (force) => {
-      if (stopped || !pub || pub.status !== 'playing') return;
+      // A lobby with a deadline is a public table counting down to its own start.
+      if (stopped || !pub || (pub.status !== 'playing' && !(pub.status === 'lobby' && pub.deadline))) return;
       const now = Date.now();
       if (now - lastTick < TICK_MIN_GAP_MS) return;
-      const due = pub.deadline && !pub.paused && serverNow() >= pub.deadline;
+      const role = window.DangalLivePolicy && window.DangalLivePolicy.tickRole ? window.DangalLivePolicy.tickRole(pub, uid) : { lead: true, delayMs: 0 };
+      if (force && !role.lead) return;
+      const due = pub.deadline && !pub.paused && serverNow() >= pub.deadline + role.delayMs;
       if (!due && !force) return;
       lastTick = now;
       // Small jitter so every phone doesn't hit the server in the same millisecond.
@@ -919,6 +924,8 @@
     carrom: ['games/carrom-physics.js', 'games/carrom-core.js'],
     rummy: ['games/rummy-core.js'],
     teenpatti: ['games/teenpatti-core.js'],
+    bluff: ['games/bluff-core.js'],
+    tambola: ['games/tambola-core.js'],
     wordguess: ['games/data/shabd-answers.js', 'games/data/shabd-allowed.js', 'games/data/shabd-gloss.js', 'games/shabd-lexicon.js'],
   };
   const lazyLoaded = {};
@@ -1356,7 +1363,7 @@
         view.presence = p;
         paintPresence();
       },
-    });
+    }, { presence: spec.presence !== false });
     if (!ctrl.conn) {
       ctrl.shell.render('<div class="pk-empty">Can’t reach the game server right now. Try again in a moment.</div>');
       return ctrl;

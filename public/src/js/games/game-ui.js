@@ -156,9 +156,9 @@
       'Sweet hits tighten the rally · Easy / Normal / Sharp in Practice',
     ],
     tambola: [
-      'Auto-daub on a real 3×9 ticket — claim Early Five, lines, corners, then Full House',
-      'Practice races a real rival ticket · Live shares one bag; claim before the next call',
-      'First valid Full House ends · interim pts shown · virtual stakes on Live only',
+      'Numbers are called one by one — mark them on your ticket (or turn on auto-mark)',
+      'Tap Claim when a prize is done: Early Five, lines, corners, Full House · first valid claim wins',
+      'A wrong claim (bogey) blocks that ticket · 2 to 100+ players · Caller mode works offline',
     ],
     carrom: ['Pocket your own men from your baseline', 'Queen after one of yours, then cover it', 'Striker in the pocket = foul + due'],
     uno: ['Match colour, number or symbol to play', 'Tap "Oh No!" as you play your second-to-last card', 'Think a Draw Four was a bluff? Challenge it'],
@@ -173,9 +173,9 @@
       'Show when two are left · pot limit shows everyone · 18+ · virtual chips only',
     ],
     bluff: [
-      'Play 1–3 face-down onto the pile — first claim locks the rank',
-      'Call or play mid-hand; last play needs Call or Pass before empty-hand win',
-      'Three lives · 0 lives loses · Live never shows honesty before Call',
+      'Play 1–4 cards face down and say what they are — true or not',
+      'Anyone can call “Bluff!” before the timer ends · wrong side picks up the pile',
+      'Empty your hand and survive the last call to win · 3–8 players',
     ],
     imposter: [
       'Everyone gets the same secret word — except the Imposter',
