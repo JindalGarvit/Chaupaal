@@ -190,7 +190,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
   assert(!/#firBack|#busBack|#rrBack/.test(overlay), 'overlay-scope: no retired back selectors');
   assert(!/#firBack|#busBack|#rrBack/.test(read('public/src/js/core/touch.js')), 'touch.js: no retired back selectors');
   assert(/let sheet=document\.getElementById\('quizCategorySheet'\);\s*if\(!sheet\)\{/.test(read('public/src/js/features/dangal-ratings.js')), 'quiz sheet is recreated if missing');
-  assert(/if\(!chat\|\|!chat\.name\)chat=Object\.assign\(\{id:'ai'\}/.test(read('public/src/js/games/engines.js')), 'Oh, No! opponent never renders "undefined"');
+  assert(/name: tr\('bot', 'Bot'\) \+ ' ' \+ i \+ ' · '/.test(read('public/src/js/games/ohno-ui.js')), 'Oh No! opponents are named seats (bots labelled), never "undefined"');
   assert(/if\(typeof renderPeepalNudges==='function'\) renderPeepalNudges\(\);/.test(read('public/src/js/features/categories.js')), 'Peepal first paint survives nudges loading later');
   assert(/if \(typeof isRetiredGameId === 'function' && isRetiredGameId\(game\)\) return null;/.test(read('public/src/js/games/game-ui.js')), 'retired beat-score links never show a challenge chip');
   const ratings = read('public/src/js/features/dangal-ratings.js');

@@ -895,6 +895,7 @@
     ludo: ['games/ludo-core.js'],
     snakes: ['games/snakes-core.js'],
     ttt: ['games/ttt-core.js'],
+    uno: ['games/ohno-core.js'],
   };
   const lazyLoaded = {};
   const lazyLoading = {};

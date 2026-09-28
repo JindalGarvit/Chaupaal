@@ -39,7 +39,9 @@
     ttt: { turnMs: 30000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'forfeit' },
     snakes: { turnMs: 15000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'bot_takeover' },
     ludo: { turnMs: 20000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'bot_takeover' },
-    uno: { afk: { action: 'auto_play', maxMisses: 3 } },
+    // Dangal P4 Oh No! (server-lib/ohno-engine.js): turn clock → auto-draw then pass; after
+    // maxMisses (or on leave) a bot finishes the seat so the table can play on.
+    uno: { turnMs: 20000, afk: { action: 'auto_draw', maxMisses: 3 }, leave: 'bot_takeover' },
     scribble: { afk: { action: 'skip_turn', maxMisses: 2 }, resign: false },
     quiz: { afk: { action: 'no_answer', maxMisses: 3 }, rematch: { swapSides: false, sameVariants: true } },
     carrom: { afk: { action: 'pass', maxMisses: 3 } },

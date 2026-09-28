@@ -20,6 +20,7 @@ const CharadesCore = require('../public/src/js/games/charades-core.js');
 const MostLikelyCore = require('../public/src/js/games/mostlikely-core.js');
 const { createWerewolfAdapter } = require('./werewolf-engine.js');
 const { createClassicsAdapters } = require('./classics-rooms.js');
+const { createOhnoAdapter } = require('./ohno-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -535,6 +536,7 @@ const GAMES = {
   werewolf: createWerewolfAdapter({ err }),
 };
 Object.assign(GAMES, createClassicsAdapters({ err }));
+GAMES.uno = createOhnoAdapter({ err });
 
 // ------------------------------------------------------------------ room engine
 

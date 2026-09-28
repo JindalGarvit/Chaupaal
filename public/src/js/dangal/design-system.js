@@ -68,7 +68,7 @@
     snakes: { primary: '#2E7D32', secondary: '#F9E784', surface: '#1A3A2A', label: 'Snakes & Ladders', icon: '🐍', mark: M.snakes, orientation: 'portrait' },
     ludo: { primary: '#E040FB', secondary: '#FFD740', surface: '#1A1A2E', label: 'Ludo', icon: '🎯', mark: M.ludo, orientation: 'portrait' },
     ttt: { primary: '#1565C0', secondary: '#E3F2FD', surface: '#0D1B2A', label: 'Tic-Tac-Toe', icon: '⭕', mark: M.ttt, orientation: 'portrait' },
-    uno: { primary: '#D32F2F', secondary: '#FF8F00', surface: '#1A0A0A', label: 'Oh, No! Cards', icon: '🃏', mark: M.uno, orientation: 'portrait' },
+    uno: { primary: '#D32F2F', secondary: '#FF8F00', surface: '#1A0A0A', label: 'Oh No!', icon: '🃏', mark: M.uno, orientation: 'portrait' },
     wordguess: { primary: '#00796B', secondary: '#B2EBF2', surface: '#0A1A18', label: 'Shabd Five', icon: '📝', mark: M.wordguess, orientation: 'portrait' },
     tambola: { primary: '#E91E8C', secondary: '#FFD600', surface: '#1A0010', label: 'Tambola', icon: '🎫', mark: M.tambola, orientation: 'portrait' },
     carrom: { primary: '#8D6E63', secondary: '#FFF8E1', surface: '#1A0F00', label: 'Carrom', icon: '🪙', mark: M.carrom, orientation: 'portrait' },
@@ -104,7 +104,7 @@
     ttt: 'Classic Tic-Tac-Toe rules',
     snakes: 'Standard rules',
     ludo: 'Standard rules',
-    uno: 'Classic shedding-card rules · our own deck',
+    uno: 'Rules based on the classic shedding card game',
     scribble: 'Draw-and-guess party rules · our own word list',
     quiz: 'Timed quiz duel · our own questions',
     carrom: 'Simplified rules based on common carrom rules',
@@ -256,7 +256,7 @@
         window.GAME_LABELS.muqabala = GAME_IDENTITY.quiz.label;
         window.GAME_LABELS.tictactoe = GAME_IDENTITY.ttt.label;
         window.GAME_LABELS.kakuro = GAME_IDENTITY.ankjod.label;
-        window.GAME_LABELS.uno = 'Oh, No!';
+        window.GAME_LABELS.uno = 'Oh No!';
       }
     } catch (e) {}
   }

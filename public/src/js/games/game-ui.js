@@ -73,7 +73,7 @@
     chess: 'Chess',
     snakes: 'Snakes & Ladders',
     ludo: 'Ludo',
-    uno: 'Oh, No!',
+    uno: 'Oh No!',
     ttt: 'Tic-Tac-Toe',
     wordguess: 'Shabd Five',
     scribble: 'Scribble',
@@ -157,7 +157,7 @@
       'First valid Full House ends · interim pts shown · virtual stakes on Live only',
     ],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
-    uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh, No!' at 1 card · Blaze hits harder · Flip switches sides"],
+    uno: ['Match colour, number or symbol to play', 'Tap "Oh No!" as you play your second-to-last card', 'Think a Draw Four was a bluff? Challenge it'],
     rummy: [
       'Indian 13-card · pure sequence required · jokers + wild rank from open card',
       'Declare valid · Drop 20 first / 40 middle · Wrong show 80 · points capped at 80',

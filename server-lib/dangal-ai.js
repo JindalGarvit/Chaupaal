@@ -143,6 +143,11 @@ const CHESS_PERSONAS = {
   tricky: { name: 'Tricky Bot', style: { aggression: 0.6, bluff: 0.8, speed: 0.6, chattiness: 0.4 } },
   friendly: { name: 'Friendly Bot', style: { aggression: 0.2, bluff: 0.1, speed: 0.4, chattiness: 0.7 } },
 };
+/** Oh No! bots: honest bots only play Draw Four legally; bluffers may bluff and can be challenged. */
+const OHNO_PERSONAS = {
+  honest: { name: 'Honest Bot', style: { aggression: 0.5, bluff: 0, speed: 0.6, chattiness: 0.3 } },
+  bluffer: { name: 'Bluffer Bot', style: { aggression: 0.7, bluff: 0.6, speed: 0.6, chattiness: 0.4 } },
+};
 
 /**
  * Chess coach grounding: every move the text mentions must be one of the engine's moves
@@ -184,7 +189,8 @@ const FALLBACKS = {
     return { words: words.slice(0, n) };
   },
   botPersona(input) {
-    const cp = String(input.gameId || '') === 'chess' ? CHESS_PERSONAS[String(input.persona || '').toLowerCase()] : null;
+    const table = { chess: CHESS_PERSONAS, uno: OHNO_PERSONAS }[String(input.gameId || '')];
+    const cp = table ? table[String(input.persona || '').toLowerCase()] : null;
     if (cp) return { name: cp.name, style: Object.assign({}, cp.style) };
     const style = LEVEL_STYLE[String(input.level || 'regular').toLowerCase()] || LEVEL_STYLE.regular;
     const name = PERSONA_NAMES[hashInt(String(input.gameId || '') + ':' + (input.seed || '')) % PERSONA_NAMES.length];

@@ -103,7 +103,7 @@ assert(/tr\('ai', 'AI'\)/.test(read('public/src/js/games/penalty.js')), 'Penalty
 const dangal = read('public/src/js/features/dangal.js');
 assert(/practiceAiName = 'Practice AI'/.test(dangal) && /simulated \? practiceAiName/.test(dangal), 'Quiz simulated opponents are Practice AI, never a human name');
 assert(/name: tr\('bot', 'Bot'\) \+ ' ' \+ \+\+botN/.test(read('public/src/js/games/ludo-ui.js')), 'Ludo bot seats are labelled Bot');
-assert(/Oh, No!/.test(read('public/src/js/games/engines.js')) && !/\bUNO\b/.test(stripComments(read('public/src/js/games/engines.js'))), 'shedding-card game ships as "Oh, No!"');
+assert(/Oh No!/.test(read('public/src/js/games/ohno-ui.js')) && !/\bUNO\b/.test(stripComments(read('public/src/js/games/ohno-ui.js'))), 'shedding-card game ships as "Oh No!"');
 
 // ---------- (c) retired ids + dead keys ----------
 const RETIRED = ['rushrunner', 'pickleball', 'tabletennis', 'fiveinrow', 'andarbaahar', 'andarbahar', 'sattepe', 'kabaddi', 'khokho', 'gullykick', 'patangbaazi', 'kitefight'];

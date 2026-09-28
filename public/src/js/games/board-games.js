@@ -1406,7 +1406,7 @@ function openGroupGameSetup(groupChat, gameId){
   let members=(groupChat.members||[{name:'Player 2',avatar:'👤'},{name:'Player 3',avatar:'👤'},{name:'Player 4',avatar:'👤'}]);
   const multiGames={
     ludo:{name:'🎯 Ludo',min:2,max:4},
-    uno:{name:'🃏 Oh, No! Cards',min:2,max:6},
+    uno:{name:'🃏 Oh No!',min:2,max:10},
     // Scribble party lobby — min 3 / max 6 (Live when seats have UIDs).
     scribble:{name:'🎨 Scribble party',min:3,max:6},
   };
@@ -1491,7 +1491,7 @@ function openGroupGameSetup(groupChat, gameId){
           openScribbleGame(groupChat,opponents,{party:true,partyLocal:true});
         }
       }
-      else if(gameId==='uno')openUnoVariantPicker(fakeChat);
+      else if(gameId==='uno'&&window.OhNoGame)window.OhNoGame.launch({source:'manch'});
     });
   }
   document.querySelector('.device').appendChild(sheet);
