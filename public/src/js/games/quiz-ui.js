@@ -569,7 +569,9 @@
       if (!st || !st.question) return;
       const rv = st.reveal;
       const t = now();
-      const open = !rv && t >= st.startAt && t <= st.endsAt && m.picks[st.qn] == null && inGame() && !m.big;
+      // After a rejoin the local pick is gone, but the server already has this player's answer.
+      const answered = m.picks[st.qn] != null || !!(st.answered && st.answered[me()]);
+      const open = !rv && t >= st.startAt && t <= st.endsAt && !answered && inGame() && !m.big;
       markOptions(body, { picked: rv && rv.picks[me()] != null ? rv.picks[me()] : m.picks[st.qn], correct: rv ? rv.correct : null, counts: rv && m.big ? rv.counts : null, enabled: open });
     }
 

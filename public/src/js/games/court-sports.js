@@ -507,10 +507,10 @@
         badminton:
           'Simplified rules · one game to 21, win by 2 after 20-all, 29-all → 30. Rally point; winner serves. Arcade timing — not full court physics or best-of-3.',
       };
-      GameUI.attachHowTo(shell.overlay, {
-        title: spec.name || 'Rally',
-        body: howBodies[spec.id] || matchSub + ' · arcade timing',
-      });
+      const shared = window.DangalRules && window.DangalRules.get(spec.id);
+      GameUI.attachHowTo(shell.overlay, shared
+        ? { gameId: spec.id, title: 'How to play ' + (spec.name || 'Badminton') }
+        : { title: spec.name || 'Rally', body: howBodies[spec.id] || matchSub + ' · arcade timing' });
     }
 
     function isFrozen() {

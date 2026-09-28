@@ -702,13 +702,30 @@
       if (stopped) return;
       myPresence.set({ at: serverNow(), online: online !== false }).catch(() => {});
     };
-    try {
-      myPresence.onDisconnect().set({ at: firebase.database.ServerValue.TIMESTAMP, online: false });
-    } catch (e) {
+    const armDisconnect = () => {
       try {
-        myPresence.onDisconnect().set({ at: Date.now(), online: false });
-      } catch (err) {}
-    }
+        myPresence.onDisconnect().set({ at: firebase.database.ServerValue.TIMESTAMP, online: false });
+      } catch (e) {
+        try {
+          myPresence.onDisconnect().set({ at: Date.now(), online: false });
+        } catch (err) {}
+      }
+    };
+    armDisconnect();
+    // RTDB drops an onDisconnect once it fires: re-arm after every reconnect or a later app kill goes unseen.
+    const connRef = rtdb.ref('.info/connected');
+    let wasConnected = null;
+    const onConn = (snap) => {
+      const up = !!(snap && snap.val());
+      if (up && wasConnected === false && !stopped) {
+        armDisconnect();
+        beat();
+      }
+      wasConnected = up;
+    };
+    try {
+      connRef.on('value', onConn, () => {});
+    } catch (e) {}
     beat();
     const hb = setInterval(beat, PRESENCE_MS);
     const maybeTick = (force) => {
@@ -761,6 +778,7 @@
         presenceRef.off('value', onPresence);
         try {
           infoRef.off('value', onInfo);
+          connRef.off('value', onConn);
         } catch (e) {}
         myPresence.set({ at: Date.now(), online: false }).catch(() => {});
         try {
@@ -898,6 +916,7 @@
     uno: ['games/ohno-core.js'],
     scribble: ['games/scribble-core.js'],
     quizroom: ['games/quiz-core.js'],
+    wordguess: ['games/data/shabd-answers.js', 'games/data/shabd-allowed.js', 'games/data/shabd-gloss.js', 'games/shabd-lexicon.js'],
   };
   const lazyLoaded = {};
   const lazyLoading = {};
@@ -999,10 +1018,20 @@
 
   // ---------------- feedback ----------------
 
+  /** The shared game Sounds / Vibration prefs (Classics prefs sheet); default on. */
+  function feedbackPrefs() {
+    try {
+      if (window.ClassicsKit && typeof ClassicsKit.prefs === 'function') return ClassicsKit.prefs();
+    } catch (e) {}
+    return { sound: true, haptics: true };
+  }
+
   /** Time-up buzzer + strong haptic (dangal-sound / dangal-haptic, Quiet mode respected). */
   function buzz() {
+    const p = feedbackPrefs();
     try {
-      if (window.Sound) Sound.play('ui.lose');
+      if (p.sound && window.Sound) Sound.play('ui.lose');
+      if (!p.haptics) return;
       if (window.Haptic) Haptic.heavy();
       else haptic('error');
     } catch (e) {}
@@ -1010,9 +1039,10 @@
 
   /** Short success chime + light haptic. */
   function ding() {
+    const p = feedbackPrefs();
     try {
-      if (window.Sound) Sound.play('ui.check');
-      if (window.Haptic) Haptic.medium();
+      if (p.sound && window.Sound) Sound.play('ui.check');
+      if (p.haptics && window.Haptic) Haptic.medium();
     } catch (e) {}
   }
 

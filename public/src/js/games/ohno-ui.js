@@ -125,7 +125,7 @@
 
   // ---------------- events → words + sounds ----------------
 
-  function eventText(e, nameOf) {
+  function eventText(e, nameOf, me) {
     const n = (i) => nameOf(i);
     switch (e.type) {
       case 'play':
@@ -155,7 +155,7 @@
       case 'pass':
         return n(e.seat) + ' ' + tr('kept', 'kept the card');
       case 'round_over':
-        return roundWinLine(n(e.seat), e.seat === ui.me) + ' · +' + e.points;
+        return roundWinLine(n(e.seat), e.seat === me) + ' · +' + e.points;
       case 'takeover':
         return n(e.seat) + ' ' + (e.reason === 'afk' ? tr('afkBot', 'is away — a bot takes over') : tr('leftBot', 'left — a bot takes over'));
       case 'round_start':
@@ -529,7 +529,7 @@
     /** New events since the last paint: sounds + a short ticker; the discard flips through played cards. */
     function playEvents(events) {
       if (!events.length) return;
-      const lines = events.map((e) => eventText(e, nameOf)).filter(Boolean);
+      const lines = events.map((e) => eventText(e, nameOf, ui.me)).filter(Boolean);
       const plays = events.filter((e) => e.type === 'play');
       const ticker = host.querySelector('[data-ticker]');
       const topEl = host.querySelector('[data-top]');
@@ -544,7 +544,7 @@
           if (topEl) topEl.classList.remove('is-new');
           return;
         }
-        const text = eventText(e, nameOf);
+        const text = eventText(e, nameOf, ui.me);
         if (ticker && text) ticker.textContent = text;
         if (EVENT_FX[e.type] && (e.seat !== ui.me || e.type === 'draw')) CK().fx(EVENT_FX[e.type]);
         if (e.type === 'play' && topEl) {

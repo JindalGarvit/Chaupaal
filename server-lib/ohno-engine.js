@@ -19,6 +19,7 @@
 const crypto = require('crypto');
 const OhNoCore = require('../public/src/js/games/ohno-core.js');
 const Policy = require('../public/src/js/dangal/dangal-live-policy.js');
+const { abandonStayer } = require('./classics-rooms.js');
 
 const STAKES = [0, 10, 25, 50, 100];
 const BOT_MS_PER_EVENT = 750;
@@ -100,7 +101,8 @@ function createOhnoAdapter({ err, rng }) {
     const st = s.pub;
     room.secrets = {};
     st.seats.forEach((x, i) => {
-      if (x.bot && !x.forfeit) return;
+      // A taken-over seat is a bot now: its old owner must not see that hand or a challenge peek.
+      if (x.bot) return;
       if (!room.pub.players[x.id]) return;
       room.secrets[x.id] = Object.assign({ roundNo: room.pub.roundNo }, OhNoCore.privateView(st, i));
     });
@@ -115,7 +117,8 @@ function createOhnoAdapter({ err, rng }) {
     if (!st.over || s.settleReq) return;
     const ranking = (st.ranking || []).map((i) => st.seats[i]).filter((x) => room.pub.players[x.id]).map((x) => x.id);
     const forfeits = st.seats.filter((x) => x.forfeit && room.pub.players[x.id]).map((x) => x.id);
-    s.settleReq = { matchId: s.matchId, game: 'uno', ranking, teams: null, stake: s.settings.stake, draw: false, rolls: {}, forfeits, done: false };
+    const stayer = abandonStayer(st.seats, (id) => !!room.pub.players[id]);
+    s.settleReq = { matchId: s.matchId, game: 'uno', ranking, teams: null, stake: s.settings.stake, draw: false, rolls: {}, forfeits, stayer, done: false };
     room.pub.settlement = { status: 'pending' };
   }
 

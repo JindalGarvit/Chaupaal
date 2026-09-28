@@ -281,12 +281,17 @@ function loadLexicon() {
     const s = room.server.pub;
     const word = s.word;
     const choices = s.choices || [];
-    const pubJson = JSON.stringify(room.pub);
+    // String *values* only: a pack word like "game" must not match the JSON key "game".
+    const values = new Set();
+    (function walk(v) {
+      if (typeof v === 'string') values.add(v);
+      else if (v && typeof v === 'object') Object.keys(v).forEach((k) => walk(v[k]));
+    })(room.pub);
     const hidden = s.phase === 'pick' || s.phase === 'draw';
     let leaked = false;
     if (hidden) {
       (word ? [word] : choices).forEach((w) => {
-        if (pubJson.indexOf('"' + w + '"') >= 0) leaked = true;
+        if (values.has(w)) leaked = true;
       });
       Object.keys(room.secrets || {}).forEach((id) => {
         if (id !== s.drawer) leaked = true;

@@ -1530,6 +1530,7 @@ button.pk-lobby-row{cursor:pointer;}
 .ld-token.is-stacked{width:5%;height:5%;}
 .ld-token.is-legal{cursor:pointer;z-index:4;animation:ld-legal 0.9s ease-in-out infinite;}
 .ld-token.is-legal::after{content:'';position:absolute;inset:-35%;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 2px var(--tok,#fff);}
+.ld-token.is-legal::before{content:'';position:absolute;inset:-55%;border-radius:50%;}
 .ld-token.is-home{opacity:.9;}
 @keyframes ld-legal{0%,100%{transform:translate(-50%,-50%) scale(1);}50%{transform:translate(-50%,-50%) scale(1.18);}}
 .ld-ghost{position:absolute;width:5.2%;height:5.2%;transform:translate(-50%,-50%);border-radius:50%;border:2px dashed var(--tok,#fff);background:color-mix(in srgb,var(--tok,#fff) 25%,transparent);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#1b1b1b;}
@@ -1540,6 +1541,7 @@ button.pk-lobby-row{cursor:pointer;}
 /* Snakes & Ladders board */
 .sl-board-wrap{width:100%;max-width:min(420px,calc(100vw - 24px));margin:0 auto;}
 .sl-board{position:relative;width:100%;aspect-ratio:1/1;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.35);}
+@media (min-width:700px) and (min-height:860px){.pk-page.ld-game,.pk-page.sl-game,.ld-board-wrap,.sl-board-wrap{max-width:min(640px,calc(100vw - 48px),calc(100vh - 380px));}}
 .sl-svg{position:absolute;inset:0;width:100%;height:100%;display:block;}
 .sl-token{position:absolute;width:7.5%;height:7.5%;transform:translate(-50%,-50%);transition:left .16s ease,top .16s ease;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;}
 .sl-token svg{width:100%;height:100%;filter:drop-shadow(0 1px 1px rgba(0,0,0,.55));}
@@ -1860,6 +1862,9 @@ button.on-card{cursor:pointer;touch-action:none;}
 .qz-opt.is-picked{border-color:var(--pk-accent);background:rgba(194,24,91,.28);}
 .qz-opt.is-correct{border-color:#66BB6A;background:rgba(102,187,106,.3);animation:qz-pulse 420ms ease;}
 .qz-opt.is-wrong{border-color:#EF5350;background:rgba(239,83,80,.28);}
+.qz-opt.is-correct .qz-opt-key,.qz-opt.is-wrong .qz-opt-key{font-size:0;}
+.qz-opt.is-correct .qz-opt-key::after{content:'✓';font-size:16px;color:#A5D6A7;}
+.qz-opt.is-wrong .qz-opt-key::after{content:'✗';font-size:16px;color:#EF9A9A;}
 .qz-opt.is-dim{opacity:.45;}
 @keyframes qz-pulse{0%{transform:scale(1);}50%{transform:scale(1.03);}100%{transform:scale(1);}}
 .qz-feedback{min-height:24px;text-align:center;}

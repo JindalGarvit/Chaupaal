@@ -18,7 +18,7 @@
     coords: true,
     legalDots: true,
     autoQueen: false,
-    autoClaim: true,
+    autoClaim: false,
     premove: true,
     level: 3,
     persona: '',
@@ -71,6 +71,7 @@
     no_first_move: 'Aborted — no first move',
     opponent_left: 'Aborted — opponent left',
     no_show: 'Opponent didn’t join',
+    both_left: 'Void — both players left. No chips or rating moved',
     cancelled: 'Challenge cancelled',
   };
 

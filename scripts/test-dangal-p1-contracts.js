@@ -194,6 +194,11 @@ function memDb() {
     store,
     admin: { firestore: { FieldValue: FV } },
     collection: colRef,
+    async runTransaction(fn) {
+      const ops = [];
+      await fn({ get: (r) => r.get(), set: (r, d, o) => ops.push([r, d, o]) });
+      for (const [r, d, o] of ops) await r.set(d, o);
+    },
     batch() {
       const ops = [];
       return {
@@ -221,14 +226,15 @@ function memDb() {
   await db.collection('users').doc(B).collection('gameStats').doc('carrom').set({ elo: 1450, totalGames: 30, wins: 15 });
   const body = { gameType: 'carrom', result: 'win', won: true, opponentUid: B, stake: 50, matchId: 'carrom_mm_abc' };
   const [r1, r2] = await Promise.all([econ.resolveGame(db, db.admin, A, body), econ.resolveGame(db, db.admin, B, Object.assign({}, body, { won: false, result: 'loss', opponentUid: A }))]);
-  const dupes = [r1, r2].filter((r) => r.duplicate).length;
-  assert(dupes === 1, 'concurrent double report settles once (create() guard)');
+  assert(r1.pending && !r1.chipDelta && !r2.duplicate && !r2.pending, 'client win claim waits; the loser’s report settles');
+  const r3 = await econ.resolveGame(db, db.admin, B, Object.assign({}, body, { won: false, result: 'loss', opponentUid: A }));
+  assert(r3.duplicate, 'double report settles once (create() guard)');
   const aStats = db.store.get('users/' + A + '/gameStats/carrom');
   assert(aStats.elo > 1480 && aStats.elo < 1500 && aStats.rating && aStats.rating.games === 36 && aStats.rating.v === 2, 'rated win: Elo number continues, Glicko record added');
   const again = await econ.resolveGame(db, db.admin, A, body);
   assert(again.duplicate && db.store.get('users/' + A + '/gameStats/carrom').totalGames === 36, 'retry is idempotent');
-  const ledger = [...db.store.keys()].filter((k) => /chipTransactions\/m_carrom_mm_abc$/.test(k));
-  assert(ledger.length === 2 && db.store.get(ledger[0]).matchId === 'carrom_mm_abc', 'one ledger entry per side, keyed by matchId');
+  const ledger = [...db.store.keys()].filter((k) => /chipTransactions\/m_c_carrom_mm_abc$/.test(k));
+  assert(ledger.length === 2 && db.store.get(ledger[0]).matchId === 'c_carrom_mm_abc', 'one ledger entry per side, keyed by (client-namespaced) matchId');
 
   // TTT: history kept, rating frozen.
   await db.collection('users').doc(A).collection('gameStats').doc('ttt').set({ elo: 1333, totalGames: 9 });
@@ -237,10 +243,10 @@ function memDb() {
   assert(ttt.eloDelta === 0 && !ttt.rated && tStats.elo === 1333 && tStats.totalGames === 10 && !tStats.rating, 'TTT unrated: history kept, rating untouched');
 
   // Friend-only private table: unrated unless marked rated; bots never rated.
-  const priv = await econ.resolveGame(db, db.admin, A, { gameType: 'carrom', result: 'win', won: true, opponentUid: B, matchId: 'carrom_friend_1' });
+  const priv = await econ.resolveGame(db, db.admin, B, { gameType: 'carrom', result: 'loss', won: false, opponentUid: A, matchId: 'carrom_friend_1' });
   assert(!priv.rated && priv.eloDelta === 0, 'private friend table unrated by default');
-  const privRated = await econ.resolveGame(db, db.admin, A, { gameType: 'carrom', result: 'win', won: true, opponentUid: B, matchId: 'carrom_friend_2', rated: true });
-  assert(privRated.rated && privRated.eloDelta > 0, 'private table rated when marked');
+  const privRated = await econ.resolveGame(db, db.admin, B, { gameType: 'carrom', result: 'loss', won: false, opponentUid: A, matchId: 'carrom_friend_2', rated: true });
+  assert(privRated.rated && privRated.eloDelta < 0, 'private table rated when marked');
   const bot = await econ.resolveGame(db, db.admin, A, { gameType: 'carrom', result: 'win', won: true, vsBot: true, matchId: 'carrom_bot_1' });
   assert(!bot.rated && bot.eloDelta === 0, 'no rating change vs bots');
 

@@ -245,9 +245,12 @@ const step = (m, uid, op, args, now) => Engine.reduceMatch(JSON.parse(JSON.strin
   assert(m.pub.status === 'playing' && m.pub.claimable === 'threefold', 'threefold → Claim draw offered (auto-claim off)');
   const cl = step(m, B, 'claim_draw', {}, t + 2000).match;
   assert(cl.pub.reason === 'threefold' && cl.pub.result === '1/2-1/2', 'claimed threefold draw');
-  let auto = created().m;
+  let auto = created({ autoClaim: true }).m;
   cyc.forEach((mv, i) => (auto = step(auto, i % 2 ? B : A, 'move', { move: mv }, t + 100 * (i + 1)).match));
-  assert(auto.pub.status === 'over' && auto.pub.reason === 'threefold', 'auto-claim (default on) ends at threefold');
+  assert(auto.pub.status === 'over' && auto.pub.reason === 'threefold', 'auto-claim (opted in) ends at threefold');
+  let dflt = created().m;
+  cyc.forEach((mv, i) => (dflt = step(dflt, i % 2 ? B : A, 'move', { move: mv }, t + 100 * (i + 1)).match));
+  assert(dflt.pub.status === 'playing' && dflt.pub.claimable === 'threefold', 'default: threefold is a claim, not automatic');
 }
 {
   // FIDE 6.9 on the server + abort rules + first-move timeout

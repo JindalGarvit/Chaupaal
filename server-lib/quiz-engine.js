@@ -25,6 +25,7 @@ const Service = require('./quiz-service.js');
 const MIN_TICK_MS = 200;
 const LATE_GRACE_MS = 300;
 const MAX_RTT_SAMPLES = 7;
+const MAX_ECHO_MS = 1500;
 const PARTY_QUESTION_MS = [10000, 15000, 20000, 30000];
 
 const cryptoRng = () => crypto.randomInt(0, 0x100000000) / 0x100000000;
@@ -338,8 +339,8 @@ function createQuizAdapter({ err, rng, poolFn }) {
       if (st.mode === 'duel') {
         for (const id of st.order) {
           const pr = room.presence && room.presence[id];
-          const offline = !pr || pr.online === false ? ctx.now - (Number(pr && pr.at) || 0) : 0;
-          if (!present(room, id) || (pr && offline >= pol.reconnectMs)) {
+          // A killed app leaves online:true with a stale heartbeat — that counts as offline too.
+          if (!present(room, id) || (pr && Policy.reconnectStatus(pr, ctx.now, pol).expired)) {
             ctx.act({ type: 'forfeit', uid: id, now: ctx.now }, true);
             return;
           }
@@ -373,6 +374,12 @@ function createQuizAdapter({ err, rng, poolFn }) {
       if (st.over) return;
       room.server.clock = now || Date.now();
       forfeit(st, uid, room.server.clock);
+    },
+    onResume(room, dt) {
+      const st = room.server && room.server.pub;
+      if (!st || st.over || !(dt > 0)) return;
+      if (st.startAt) st.startAt += dt;
+      if (st.endsAt) st.endsAt += dt;
     },
     ops: {
       answer(ctx) {
@@ -443,7 +450,8 @@ function createQuizAdapter({ err, rng, poolFn }) {
         }
         const cur = (await ref.once('value')).val() || {};
         const p = cur.p || {};
-        if (p.n !== String(body.n) || now - (Number(p.at) || 0) > 5000) return { rtt: null };
+        // The client picks when to echo, so a slow echo is refused rather than trusted.
+        if (p.n !== String(body.n) || now - (Number(p.at) || 0) > MAX_ECHO_MS) return { rtt: null };
         const rtt = now - Number(p.at);
         const s = (Array.isArray(cur.s) ? cur.s : []).concat([rtt]).slice(-MAX_RTT_SAMPLES);
         await ref.set({ s });

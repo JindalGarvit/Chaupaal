@@ -102,8 +102,11 @@ function createScribbleAdapter({ err, rng }) {
     const s = room.server;
     const st = s.pub;
     if (!st.over || s.settleReq) return;
-    const ranking = Core.ranking(st).filter((id) => room.pub.players[id]);
-    const forfeits = Object.keys(st.kicked).filter((id) => room.pub.players[id]);
+    // Players who left or were kicked forfeit and place last, whatever their score.
+    const out = (id) => !!st.kicked[id] || !!(room.pub.players[id] && room.pub.players[id].left);
+    const all = Core.ranking(st).filter((id) => room.pub.players[id]);
+    const ranking = all.filter((id) => !out(id)).concat(all.filter(out));
+    const forfeits = Object.keys(room.pub.players).filter(out);
     s.settleReq = { matchId: s.matchId, game: 'scribble', ranking, teams: null, stake: s.settings.stake, draw: false, rolls: {}, forfeits, done: false };
     room.pub.settlement = s.settings.stake ? { status: 'pending' } : null;
     if (!s.settings.stake) s.settleReq.done = true;
@@ -255,6 +258,17 @@ function createScribbleAdapter({ err, rng }) {
         room.server.clock = now || Date.now();
         Core.endTurn(st, 'left', room.server.clock, 0);
       }
+      const staying = st.players.filter((p) => !st.kicked[p.id] && room.pub.players[p.id] && !room.pub.players[p.id].left);
+      if (staying.length < 2) {
+        // Nobody left to draw for — the game ends and whoever stayed takes it.
+        st.phase = 'over';
+        st.over = true;
+        st.drawer = null;
+      }
+    },
+    onResume(room, dt) {
+      const st = room.server && room.server.pub;
+      if (st && !st.over && dt > 0) st.phaseAt = (Number(st.phaseAt) || 0) + dt;
     },
     ops: {
       pick(ctx) {

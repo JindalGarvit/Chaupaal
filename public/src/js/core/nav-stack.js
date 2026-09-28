@@ -285,6 +285,7 @@
         // (Android back / swipe-back share the same path).
         if (el.dataset.navLayer && stack.length && stack[stack.length - 1]?.el === el) {
           try {
+            el.dataset.navClosing = '1';
             history.back();
             return;
           } catch (e) {}
@@ -565,6 +566,23 @@
     // Browser already consumed one history entry. If our JS stack still has a layer,
     // dismiss it here WITHOUT calling history.back() again (that would pop chat/deep routes).
     if (stack.length > 0) {
+      // Games own their exit (leave confirm, forfeit warning): hand Back to the game's own
+      // back button and keep its history entry until the overlay actually closes.
+      const peek = stack[stack.length - 1];
+      const gameBack =
+        peek && peek.el && peek.el.isConnected && peek.el.dataset.navClosing !== '1' && peek.el.classList.contains('game-overlay') && peek.el.querySelector('.game-back-btn');
+      if (gameBack) {
+        try {
+          history.pushState({ chaupaalLayer: true, key: peek.key }, '');
+        } catch (err) {}
+        e.stopImmediatePropagation?.();
+        try {
+          const coach = peek.el.querySelector('.game-coach [data-coach-dismiss]');
+          const stay = document.querySelector('#gameLeaveConfirm [data-leave-stay]') || document.querySelector('.chess-sheet .chess-sheet__cancel');
+          (coach || stay || gameBack).click();
+        } catch (err) {}
+        return;
+      }
       const top = stack.pop();
       layerHistoryDepth = Math.max(0, layerHistoryDepth - 1);
       syncLayerHistoryDepth();

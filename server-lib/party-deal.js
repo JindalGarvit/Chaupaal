@@ -646,6 +646,12 @@ function dealRound(room, now, rng, args) {
       delete pub.players[id].pending;
     }
   });
+  // Rematch: whoever already walked away isn't dealt into a game (and its stake) they never agreed to.
+  if ((Number(pub.roundNo) || 0) > 0) {
+    seatOrder(pub).forEach((id) => {
+      if (id !== pub.host && !isOnline(room, id, now)) pub.players[id].pending = true;
+    });
+  }
   const ids = activeIds(pub);
   const game = GAMES[pub.game];
   if (ids.length < game.min) throw err('need_players', 'Need at least ' + game.min + ' players');
@@ -761,8 +767,9 @@ function reduceRoom(room, uid, op, args, now, rng) {
       }
       if (room.presence[uid]) room.presence[uid] = { at: now, online: false };
       const remaining = seatOrder(pub).filter((id) => !pub.players[id].left);
-      if (!remaining.length) pub.status = 'closed';
-      else if (pub.host === uid) pub.host = remaining[0];
+      if (remaining.length && pub.host === uid) pub.host = remaining[0];
+      // The last leaver still runs onLeave so the game can end and queue its settlement
+      // (otherwise an earlier leaver's forfeit would vanish with the room).
       if (inRound && pub.status === 'playing') {
         const before = game.phaseKey(s);
         game.onLeave(room, uid, now);
@@ -773,6 +780,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
       } else {
         bump(room, now);
       }
+      if (!remaining.length) pub.status = 'closed';
       return { room, result: { left: true } };
     }
 
@@ -804,7 +812,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
       needRound();
       if (!isHost) throw err('host_only', 'Only the host can pause');
       if (pub.paused || !pub.deadline) return { room, result: {} };
-      pub.paused = { remaining: Math.max(0, pub.deadline - now) };
+      pub.paused = { remaining: Math.max(0, pub.deadline - now), at: now };
       pub.deadline = null;
       publish(room, now);
       return { room, result: {} };
@@ -815,6 +823,8 @@ function reduceRoom(room, uid, op, args, now, rng) {
       if (!isHost) throw err('host_only', 'Only the host can resume');
       if (!pub.paused) return { room, result: {} };
       pub.deadline = now + (Number(pub.paused.remaining) || 0);
+      // Games with their own phase clocks (Scribble hints/turn end, Quiz answer window) shift them too.
+      if (game.onResume && pub.paused.at) game.onResume(room, Math.max(0, now - Number(pub.paused.at)));
       pub.paused = null;
       publish(room, now);
       return { room, result: {} };
@@ -986,6 +996,8 @@ async function settleRoom(adminApp, rtdb, path, req, deps) {
   const db = (deps && deps.db) || adminApp.firestore();
   const admin = (deps && deps.admin) || adminApp;
   const results = {};
+  // A retry (or a racing op) finds the match already settled: post-settle hooks must not run twice.
+  let settledBefore = false;
   if (req.kind === 'h2h') {
     const out = await economy.resolveGame(
       db,
@@ -995,6 +1007,7 @@ async function settleRoom(adminApp, rtdb, path, req, deps) {
       { trusted: true }
     );
     const o = out || {};
+    settledBefore = !!o.duplicate;
     const opp = o.opponent || {};
     results[req.a] = { place: req.result === 'loss' ? 2 : 1, won: req.result === 'win', draw: req.result === 'draw', chipDelta: o.chipDelta || 0, eloDelta: o.eloDelta || 0 };
     results[req.b] = { place: req.result === 'win' ? 2 : 1, won: req.result === 'loss', draw: req.result === 'draw', chipDelta: opp.chipDelta || 0, eloDelta: opp.eloDelta || 0 };
@@ -1008,14 +1021,16 @@ async function settleRoom(adminApp, rtdb, path, req, deps) {
       draw: !!req.draw,
       rolls: req.rolls || {},
       forfeits: req.forfeits || [],
+      stayer: req.stayer || null,
     });
+    settledBefore = !!(out && out.duplicate);
     Object.keys((out && out.players) || {}).forEach((id) => {
       const p = out.players[id];
       results[id] = { place: p.place, chipDelta: p.chipDelta, won: !!p.won };
     });
   }
   const g = GAMES[String(path).split('/')[1]];
-  if (g && g.afterSettle) {
+  if (g && g.afterSettle && !settledBefore) {
     try {
       await g.afterSettle(adminApp, req, deps);
     } catch (e) {

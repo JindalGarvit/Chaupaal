@@ -33,6 +33,29 @@ function seatOf(s, uid) {
   return i;
 }
 
+/** AFK auto-play covers the seat's whole turn (roll → move → bonus rolls), so one timeout = one miss. */
+function wholeTurn(st, step) {
+  const seat = st.turn;
+  let out = {};
+  let guard = 0;
+  while (!st.over && st.turn === seat && guard++ < 12) {
+    out = step() || {};
+    if (out.error) break;
+  }
+  return out;
+}
+
+/**
+ * Everyone left: the last human to leave stayed while the others walked out, so they win (policy
+ * abandonOutcome). If the last one went AFK instead, nobody stayed → void.
+ */
+function abandonStayer(seats, isHuman) {
+  const humans = seats.filter((x) => isHuman(x.id));
+  if (humans.length < 2 || humans.some((x) => !x.forfeit)) return null;
+  const last = humans.slice().sort((a, b) => (Number(b.forfeitAt) || 0) - (Number(a.forfeitAt) || 0))[0];
+  return last && last.forfeitWhy === 'left' ? last.id : null;
+}
+
 function createClassicsAdapters({ err }) {
   // ------------------------------------------------------------ shared dice-game plumbing
 
@@ -78,7 +101,8 @@ function createClassicsAdapters({ err }) {
         teams = { winners: st.seats.filter((x) => x.team === st.winnerTeam).map((x) => x.id).filter((id) => room.pub.players[id]) };
       }
       const forfeits = st.seats.filter((x) => x.forfeit && room.pub.players[x.id]).map((x) => x.id);
-      s.settleReq = { matchId: s.matchId, game, ranking: humans, teams, stake: s.settings.stake, draw: false, rolls, forfeits, done: false };
+      const stayer = abandonStayer(st.seats, (id) => !!room.pub.players[id]);
+      s.settleReq = { matchId: s.matchId, game, ranking: humans, teams, stake: s.settings.stake, draw: false, rolls, forfeits, stayer, done: false };
       room.pub.settlement = { status: 'pending' };
       const top = (teams ? teams.winners : humans.slice(0, 1)).filter((id) => forfeits.indexOf(id) < 0);
       top.forEach((id) => (room.pub.scores[id] = (Number(room.pub.scores[id]) || 0) + 1));
@@ -207,10 +231,8 @@ function createClassicsAdapters({ err }) {
     levels: LudoCore.LEVELS,
     turnMs: Policy.policyFor('ludo').turnMs || 20000,
     move: (st, token) => LudoCore.move(st, token),
-    autoStep(st) {
-      if (st.phase === 'roll') return LudoCore.roll(st, Dice.rollDie());
-      return LudoCore.move(st, LudoCore.autoMoveToken(st));
-    },
+    autoStep: (st) =>
+      wholeTurn(st, () => (st.phase === 'roll' ? LudoCore.roll(st, Dice.rollDie()) : LudoCore.move(st, LudoCore.autoMoveToken(st)))),
     botStep(st) {
       const seat = st.seats[st.turn];
       if (st.phase === 'roll') LudoCore.roll(st, Dice.rollDie());
@@ -226,7 +248,7 @@ function createClassicsAdapters({ err }) {
     levels: ['normal'],
     turnMs: Policy.policyFor('snakes').turnMs || 15000,
     move: () => ({ error: 'no_moves_in_snakes' }),
-    autoStep: (st) => SnakesCore.roll(st, Dice.rollDie()),
+    autoStep: (st) => wholeTurn(st, () => SnakesCore.roll(st, Dice.rollDie())),
     botStep: (st) => SnakesCore.roll(st, Dice.rollDie()),
   });
 
@@ -338,4 +360,4 @@ function createClassicsAdapters({ err }) {
   return { ludo, snakes, ttt };
 }
 
-module.exports = { createClassicsAdapters, STAKES };
+module.exports = { createClassicsAdapters, STAKES, wholeTurn, abandonStayer };

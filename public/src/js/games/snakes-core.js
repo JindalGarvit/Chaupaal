@@ -292,6 +292,8 @@
     if (!seat || seat.forfeit) return false;
     seat.bot = true;
     seat.forfeit = true;
+    seat.forfeitWhy = reason || 'left';
+    seat.forfeitAt = st.forfeitCount = (Number(st.forfeitCount) || 0) + 1;
     pushLog(st, { type: 'takeover', seat: seatIdx, reason: reason || 'left' });
     if (!st.over) checkOver(st);
     return true;

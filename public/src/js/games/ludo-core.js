@@ -254,8 +254,12 @@
     st.phase = 'over';
     st.dice = 0;
     st.ranking = finalRanking(st);
+    if (st.settings.teams) {
+      if (st.winnerTeam == null) st.winnerTeam = st.seats[st.ranking[0]].team;
+      const wt = st.winnerTeam;
+      st.ranking = st.ranking.filter((si) => st.seats[si].team === wt).concat(st.ranking.filter((si) => st.seats[si].team !== wt));
+    }
     st.ranking.forEach((si, k) => (st.seats[si].place = k + 1));
-    if (st.settings.teams) st.winnerTeam = st.seats[st.ranking[0]].team;
     pushLog(st, { type: 'over', reason, ranking: st.ranking.slice(), winnerTeam: st.winnerTeam });
   }
 
@@ -266,6 +270,7 @@
         const ids = [team, team + 2];
         if (ids.every((i) => st.seats[i].done)) {
           ids.forEach((i) => st.placements.indexOf(i) < 0 && st.placements.push(i));
+          st.winnerTeam = team;
           finish(st, 'team');
           return true;
         }
@@ -378,6 +383,8 @@
     if (!seat || seat.forfeit) return false;
     seat.bot = true;
     seat.forfeit = true;
+    seat.forfeitWhy = reason || 'left';
+    seat.forfeitAt = st.forfeitCount = (Number(st.forfeitCount) || 0) + 1;
     seat.level = 'normal';
     pushLog(st, { type: 'takeover', seat: seatIdx, reason: reason || 'left' });
     if (!st.over) checkOver(st);

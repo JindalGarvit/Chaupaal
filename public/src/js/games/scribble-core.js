@@ -325,6 +325,9 @@
     if (!st.players.some((p) => p.id === uid) || st.kicked[uid]) return { error: 'not_player' };
     const drawing = st.phase === 'draw' && st.word;
     if (!drawing) {
+      if (st.phase === 'pick' && uid === st.drawer && (st.choices || []).some((w) => revealsWord(raw, w))) {
+        return { error: 'word_blocked', reason: 'No giving away the word!' };
+      }
       say(st, uid, 'msg', raw);
       return {};
     }
@@ -344,12 +347,13 @@
       const left = (eligible || []).filter((id) => id !== st.drawer && !st.guessed[id]);
       return { correct: true, pts, allGuessed: left.length === 0 };
     }
-    if (revealsWord(raw, st.word) && !isClose(raw, st.word)) {
-      // e.g. the word inside a longer message — counts as a guess attempt, never shown to others
+    if (revealsWord(raw, st.word) || isClose(raw, st.word)) {
+      // A near-miss or the word inside a longer message: only the guesser sees "so close" — a public
+      // line would spell the word for everyone else.
       return { close: true, hidden: true };
     }
     say(st, uid, 'msg', raw);
-    return isClose(raw, st.word) ? { close: true } : {};
+    return {};
   }
 
   /** Close the turn: drawer points, recap, reveal. reason: 'all' | 'time' | 'skipped' | 'left' | 'kicked'. */

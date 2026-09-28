@@ -264,6 +264,26 @@ function anyAutoClaim(pub) {
   return !!(pub.autoClaim[pub.white] || pub.autoClaim[pub.black]);
 }
 
+/**
+ * Live policy: both players past the reconnect window → void, unrated, no stake moves.
+ * Runs on a rejoin *before* the clock check so the returner can't win on time or by abandonment.
+ */
+function voidIfBothGone(m, now, uid) {
+  const pub = m.pub;
+  if (pub.status !== 'playing' || pub.tc.days) return false;
+  const opp = other(pub, uid);
+  if (!opp || !Policy.reconnectStatus(m.presence[opp], now, POLICY).expired) return false;
+  pub.status = 'void';
+  pub.reason = 'both_left';
+  pub.result = '*';
+  pub.winner = null;
+  pub.endedAt = now;
+  pub.clock.running = false;
+  pub.drawOffer = null;
+  pub.deadline = 0;
+  return true;
+}
+
 /** Flag / first-move / Daily deadline / abandonment checks. Returns true when state changed. */
 function checkClocks(m, now, uid) {
   const pub = m.pub;
@@ -361,7 +381,7 @@ function reduceMatch(current, uid, op, args, now, deps) {
       });
       m.pub.joined[uid] = true;
       m.pub.names[uid] = cleanName(a.name) || 'Player';
-      m.pub.autoClaim[uid] = a.autoClaim !== false;
+      m.pub.autoClaim[uid] = a.autoClaim === true;
       touchSeat(m.pub, uid, dev, now);
       m.presence[uid] = { at: now, online: true };
       return { match: bump(m), result: { created: true, role: 'player' } };
@@ -372,11 +392,13 @@ function reduceMatch(current, uid, op, args, now, deps) {
       throw err('not_in_match', 'This game is for two other players');
     }
     if (a.name) pub.names[uid] = cleanName(a.name) || pub.names[uid] || 'Player';
-    if (a.autoClaim != null || pub.autoClaim[uid] == null) pub.autoClaim[uid] = a.autoClaim !== false;
+    if (a.autoClaim != null || pub.autoClaim[uid] == null) pub.autoClaim[uid] = a.autoClaim === true;
     const seat = touchSeat(pub, uid, dev, now);
     if (seat.role === 'spectator') return { match: bump(m), result: { role: 'spectator' } };
+    const wasGone = !!m.presence[uid] && Policy.reconnectStatus(m.presence[uid], now, POLICY).expired;
     m.presence[uid] = { at: now, online: true };
     pub.joined[uid] = true;
+    if (wasGone && voidIfBothGone(m, now, uid)) return { match: bump(m), result: { joined: true, role: 'player', ended: true } };
     if (pub.status === 'waiting') {
       if (uid === pub.playerA && pub.ply === 0) {
         if (a.tc) {
@@ -413,7 +435,7 @@ function reduceMatch(current, uid, op, args, now, deps) {
   }
 
   if (op === 'settings') {
-    if (a.autoClaim != null) pub.autoClaim[uid] = a.autoClaim !== false;
+    if (a.autoClaim != null) pub.autoClaim[uid] = a.autoClaim === true;
     return { match: bump(m), result: { ok: true } };
   }
 

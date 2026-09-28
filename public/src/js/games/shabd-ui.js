@@ -320,6 +320,9 @@
    */
   function open(opts) {
     const o = opts || {};
+    if (Core() && !Lex() && window.PartyKit && PartyKit.ensureGameData) {
+      return PartyKit.ensureGameData('wordguess').then(() => (Lex() ? open(o) : null), () => toast(tr('loading', 'Shabd Five is still loading — try again')));
+    }
     if (!Core() || !Lex()) return toast(tr('loading', 'Shabd Five is still loading — try again'));
     const mode = o.mode || 'daily';
     const dayNo = mode === 'daily' ? today() : mode === 'archive' ? Math.max(0, Math.min(today() - 1, Math.floor(Number(o.dayNo) || 0))) : null;
@@ -431,6 +434,11 @@
       if (!gs.alive() || st.over || st.revealing >= 0 || st.recorded) return;
       if (k === '⌫') st.current = st.current.slice(0, -1);
       else if (k === '↵') {
+        // Board opened before local midnight and untouched: move to today's puzzle instead.
+        if (mode === 'daily' && !st.guesses.length && today() !== dayNo) {
+          toast(tr('newPuzzle', 'A new puzzle is ready'));
+          return reopen({ mode: 'daily' });
+        }
         const g = st.current;
         if (g.length !== 5) return rejectGuess(tr('need5', 'Not enough letters'));
         if (!Lex().isAllowed(g)) return rejectGuess(tr('notWord', 'Not in the word list'));
@@ -631,6 +639,7 @@
           if (ms < 1000) {
             clearInterval(tick);
             toast(tr('newPuzzle', 'A new puzzle is ready'));
+            if (mode === 'daily') setTimeout(() => gs.alive() && reopen({ mode: 'daily' }), 1500);
           }
         }, 1000);
       }
@@ -675,5 +684,6 @@
     });
   }
 
-  window.ShabdFive = { open, launch, openChallenge, openStats, openFriends, chatCardHtml, syncStats };
+  const lazy = (fn) => (window.PartyKit && PartyKit.withGameData ? PartyKit.withGameData('wordguess', fn) : fn);
+  window.ShabdFive = { open: lazy(open), launch: lazy(launch), openChallenge: lazy(openChallenge), openStats, openFriends, chatCardHtml, syncStats };
 })();

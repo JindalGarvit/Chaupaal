@@ -357,7 +357,9 @@ const totalCards = (st) => st.draw.length + st.discard.length + st.seats.reduce(
   for (let i = 1; i < 4; i++) room = PD.reduceRoom(clone(room), U[i], 'join', { name: 'P' + i }, now).room;
   room = PD.reduceRoom(clone(room), U[0], 'start', {}, now).room;
   const st0 = room.pub.state;
-  assert(room.pub.status === 'playing' && st0.seats.length === 4 && st0.seats.every((s) => s.count === 7), '4-player Live Oh No! deals 7 each on the server');
+  // A Draw Two as the first face-up card makes the first player draw 2 (9 cards) — standard rules.
+  const dealt = st0.seats.map((s) => s.count).sort().join();
+  assert(room.pub.status === 'playing' && st0.seats.length === 4 && (dealt === '7,7,7,7' || dealt === '7,7,7,9'), '4-player Live Oh No! deals 7 each on the server');
   const pubJson = JSON.stringify(room.pub);
   const fullHands = room.server.pub.seats.map((s) => s.hand);
   assert(!/"hand"/.test(pubJson) && !/"draw"\s*:/.test(pubJson), 'pub has no hands and no draw pile');

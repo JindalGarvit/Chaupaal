@@ -24,6 +24,7 @@
  */
 'use strict';
 
+const crypto = require('crypto');
 const Core = require('../public/src/js/games/quiz-core.js');
 const Bank = require('./quiz-bank.js');
 
@@ -166,7 +167,7 @@ async function loadRatings(db, ids) {
     (ids || []).map(async (id) => {
       try {
         const snap = await db.collection('users').doc(id).collection('gameStats').doc('quiz').get();
-        out[id] = Ratings.fromStats(snap.exists ? snap.data() : {}).rating;
+        out[id] = Ratings.fromStats(snap.exists ? snap.data() : {}).r;
       } catch (e) {
         out[id] = 1500;
       }
@@ -222,20 +223,28 @@ async function dailyIds(db, day, now) {
   const ref = db.collection('quizDaily').doc(day);
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    const ids = snap.exists && Array.isArray(snap.data().ids) ? snap.data().ids : null;
-    if (ids && ids.length) return ids;
+    const data = snap.exists ? snap.data() || {} : {};
+    const ids = Array.isArray(data.ids) && data.ids.length ? data.ids : null;
+    const salt = data.salt || crypto.randomBytes(8).toString('hex');
+    if (ids) {
+      if (!data.salt) tx.set(ref, { salt }, { merge: true });
+      return Object.assign(ids.slice(), { salt });
+    }
     const calib = await loadCalibration(db, now);
     const pool = buildPool({ calib }).filter((q) => q.source === 'bundled' && q.locale === 'global');
     const set = Core.dailySet(pool, day).map((q) => q.id);
-    tx.set(ref, { ids: set, createdAt: now });
-    return set;
+    tx.set(ref, { ids: set, salt, createdAt: now });
+    return Object.assign(set, { salt });
   });
 }
+
+/** Same order for everyone that day, but seeded by a server-only salt so the browser can't rebuild it. */
+const dailySeed = (day, ids) => 'daily:' + day + ':' + ((ids && ids.salt) || '');
 
 function dailyPublic(day, ids, qn) {
   const q = Bank.byId(ids[qn]);
   if (!q) return null;
-  return Object.assign(Core.publicQuestion(q, Core.optionOrder('daily:' + day, q.id, 4)), { n: qn + 1 });
+  return Object.assign(Core.publicQuestion(q, Core.optionOrder(dailySeed(day, ids), q.id, 4)), { n: qn + 1 });
 }
 
 /** Skip questions whose clock ran out while the player was away (one attempt — no restarts). */
@@ -263,7 +272,8 @@ async function finishDaily(db, uid, day, att, now) {
     const m = snap.exists ? snap.data() || {} : {};
     const last = Number.isFinite(m.lastDay) ? m.lastDay : null;
     let s = Number(m.streak) || 0;
-    if (last === dayNo) return m;
+    // Never move backwards (e.g. yesterday finished after tomorrow's key): keep the streak as is.
+    if (last != null && dayNo <= last) return m;
     s = last === dayNo - 1 ? s + 1 : 1;
     const next = { lastDay: dayNo, streak: s, best: Math.max(Number(m.best) || 0, s), played: (Number(m.played) || 0) + 1, lastScore: att.score, updatedAt: now };
     tx.set(metaRef, next, { merge: true });
@@ -304,7 +314,7 @@ async function dailyAnswer(db, uid, body, now) {
     if (Number(body.qn) !== a.qn) throw err('VALIDATION_ERROR', 'That question has closed');
     if (now < a.servedAt) throw err('VALIDATION_ERROR', 'Wait for the question');
     const q = Bank.byId(ids[a.qn]);
-    const order = Core.optionOrder('daily:' + day, q.id, 4);
+    const order = Core.optionOrder(dailySeed(day, ids), q.id, 4);
     const correct = Core.displayedCorrect(q, order);
     const ms = Math.max(0, now - a.servedAt - SOLO_ALLOWANCE_MS);
     const i = Number(body.i);
@@ -393,7 +403,7 @@ async function soloNext(db, uid, body, now) {
     maxPending: mode === 'news' ? 1 : sess.n % 5 === 4 ? 1 : 0,  });
   const q = picks[0];
   if (!q) return { empty: true, mode };
-  const order = Core.optionOrder(uid + ':' + now, q.id, 4);
+  const order = Core.optionOrder(crypto.randomBytes(8).toString('hex'), q.id, 4);
   const servedAt = now + 400;
   Object.assign(sess, { qid: q.id, order, servedAt, answered: false, cat, diff, region });
   await sessRef.set(sess);

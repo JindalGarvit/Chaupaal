@@ -2287,7 +2287,7 @@
         <p style="font-size:13px;color:rgba(255,255,255,.7);margin:0 0 14px;line-height:1.4;">${
           o.body || 'Progress on this run will be lost.'
         }</p>
-        <button type="button" class="btn btn--primary game-tap-target" data-leave-stay>Keep playing</button>
+        <button type="button" class="btn btn--primary game-tap-target" data-leave-stay data-overlay-dismiss>Keep playing</button>
         <button type="button" class="btn btn--secondary game-tap-target" data-leave-go>Leave</button>
       </div>`;
       const host = document.querySelector('.device') || document.body;

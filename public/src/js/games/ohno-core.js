@@ -632,6 +632,8 @@
     if (!s || s.forfeit) return false;
     s.bot = true;
     s.forfeit = true;
+    s.forfeitWhy = reason || 'left';
+    s.forfeitAt = st.forfeitCount = (Number(st.forfeitCount) || 0) + 1;
     s.level = 'normal';
     s.persona = 'honest';
     pushLog(st, { type: 'takeover', seat, reason: reason || 'left' });

@@ -161,13 +161,12 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
 
   const { ref: walletRef, data: wallet } = await ensureWallet(db, FieldValue, uid);
   let chipDelta = 0;
-  if (chipEligible) {
-    if (won) chipDelta += 25;
-    if (typeof stakeDelta === 'number') chipDelta += stakeDelta;
-    else {
-      if (stake > 0 && won) chipDelta += stake;
-      if (stake > 0 && !won && !isDraw) chipDelta -= stake;
-    }
+  // The daily cap limits the +25 win bonus only; stakes always move on both sides so they stay zero-sum.
+  if (chipEligible && won) chipDelta += 25;
+  if (typeof stakeDelta === 'number') chipDelta += stakeDelta;
+  else {
+    if (stake > 0 && won) chipDelta += stake;
+    if (stake > 0 && !won && !isDraw) chipDelta -= stake;
   }
   const nextBal = Math.max(0, (Number(wallet.balance) || 0) + chipDelta);
 
@@ -201,6 +200,8 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
       Object.assign({ gameType, bucket: statsWrite.lastBucket, totalGames: rating.rating.games, updatedAt: FieldValue.serverTimestamp() }, rating),
       { merge: true }
     );
+    // The game doc mirrors the last-played speed so the shown rating and matchmaking stay current.
+    Object.assign(statsWrite, rating);
   } else if (rating) Object.assign(statsWrite, rating);
   batch.set(statsRef, statsWrite, { merge: true });
   const txCol = db.collection('users').doc(uid).collection('chipTransactions');
@@ -318,30 +319,62 @@ async function resolveGame(db, admin, uid, body, opts) {
   const resultTag = (isComplete ? 'complete' : isDraw ? 'draw' : won ? 'win' : 'loss').slice(0, 40);
 
   const opponentUidRaw = body.opponentUid ? String(body.opponentUid).slice(0, 128) : '';
-  const opponentUid =
+  let opponentUid =
     !isComplete && isPersistableUid(opponentUidRaw) && opponentUidRaw !== uid ? opponentUidRaw : '';
-  const winnerUid = isDraw ? '' : String(body.winnerUid || (won ? uid : opponentUid || '')).slice(0, 128);
-  const stake = Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(body.stake) || 0)));
+  let stake = Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(body.stake) || 0)));
 
-  const matchId = String(body.matchId || body.sessionId || '')
+  const rawMatchId = String(body.matchId || body.sessionId || '')
     .replace(/[^\w.-]/g, '')
-    .slice(0, 120);
+    .slice(0, 116);
+  // Client reports live in their own namespace, so a client can never pre-claim a server match id.
+  const matchId = rawMatchId && !trusted ? 'c_' + rawMatchId : rawMatchId;
   const matchRef = matchId ? db.collection('dangalMatches').doc(matchId) : null;
   if (matchRef) {
     const matchSnap = await matchRef.get();
-    if (matchSnap.exists) {
-      const w = await getWallet(db, admin, uid);
-      return Object.assign({ duplicate: true, chips: w.balance, matchId }, matchSnap.data()?.payload || {});
-    }
+    if (matchSnap.exists) return duplicateFor(db, admin, uid, matchId, matchSnap.data());
   }
   const lockRef = matchId ? db.collection('users').doc(uid).collection('gameResolves').doc(matchId) : null;
   if (lockRef) {
     const lockSnap = await lockRef.get();
     if (lockSnap.exists) {
       const w = await getWallet(db, admin, uid);
-      return Object.assign({ duplicate: true, chips: w.balance }, lockSnap.data()?.result || {});
+      return Object.assign({}, lockSnap.data()?.result || {}, { duplicate: true, chips: w.balance });
     }
   }
+
+  // A client-reported head-to-head (peer-hosted Live titles): the server never saw the moves. Losing
+  // only costs the reporter, so a loss settles at once; a win or draw claim waits until the opponent's
+  // own report agrees. Nobody can take chips or rating from another player on their word alone.
+  if (!trusted && opponentUid && (won || isDraw)) {
+    if (!matchId) {
+      opponentUid = '';
+      stake = 0;
+    } else {
+      const claim = await recordClaim(db, FieldValue, matchId, uid, { result: resultTag, opp: opponentUid, stake });
+      if (!(isDraw && claim.theirs && claim.theirs.opp === uid && claim.theirs.result === 'draw')) {
+        const w = await getWallet(db, admin, uid);
+        return {
+          gameType,
+          pending: true,
+          disputed: !!(claim.theirs && claim.theirs.result !== 'loss'),
+          won: false,
+          isDraw: false,
+          eloDelta: 0,
+          chips: w.balance,
+          chipDelta: 0,
+          achievements: [],
+          matchId,
+          shared: true,
+        };
+      }
+    }
+  }
+  // The loser can only pay what they hold; the winner is credited exactly that.
+  if (opponentUid && stake > 0 && !isDraw) {
+    const loserBal = (await getWallet(db, admin, won ? opponentUid : uid)).balance;
+    stake = Math.max(0, Math.min(stake, Math.floor(loserBal)));
+  }
+  const winnerUid = isDraw ? '' : String(body.winnerUid || (won ? uid : opponentUid || '')).slice(0, 128);
 
   const bucketRaw = trusted && opts && opts.ratingBucket ? String(opts.ratingBucket) : '';
   const bucket = bucketRaw && (RATING_BUCKETS[gameType] || []).indexOf(bucketRaw) >= 0 ? bucketRaw : '';
@@ -461,10 +494,51 @@ async function resolveGame(db, admin, uid, body, opts) {
     const exists = e && (e.code === 6 || e.code === 'already-exists' || /already exists/i.test(String(e.message || '')));
     if (!exists || !matchRef) throw e;
     const again = await matchRef.get();
-    const w = await getWallet(db, admin, uid);
-    return Object.assign({ duplicate: true, chips: w.balance, matchId }, (again.exists && again.data()?.payload) || {});
+    return duplicateFor(db, admin, uid, matchId, again.exists ? again.data() : null);
+  }
+  if (!trusted && matchId && opponentUid) {
+    db.collection('dangalClaims').doc(matchId).delete().catch(() => {});
   }
   return payload;
+}
+
+/** A settled match seen again: answer from the caller's side and with the caller's own balance only. */
+async function duplicateFor(db, admin, uid, matchId, doc) {
+  const w = await getWallet(db, admin, uid);
+  const d = doc || {};
+  const p = d.payload || {};
+  const mine = !d.reporterUid || d.reporterUid === uid;
+  const side = mine ? p : p.opponent || {};
+  const out = {
+    duplicate: true,
+    gameType: p.gameType || d.gameType,
+    won: mine ? !!p.won : !p.isDraw && !p.won && d.opponentUid === uid,
+    isDraw: !!p.isDraw,
+    eloDelta: Number(side.eloDelta) || 0,
+    rated: !!p.rated,
+    chips: w.balance,
+    chipDelta: mine || d.opponentUid === uid ? Number(side.chipDelta) || 0 : 0,
+    achievements: [],
+    matchId,
+    shared: !!p.shared,
+  };
+  if (mine && p.opponent) out.opponent = { chipDelta: Number(p.opponent.chipDelta) || 0, eloDelta: Number(p.opponent.eloDelta) || 0, achievements: [] };
+  return out;
+}
+
+/** Store this player's claim on a client-reported match; returns the opponent's claim if any. */
+async function recordClaim(db, FieldValue, matchId, uid, claim) {
+  const ref = db.collection('dangalClaims').doc(matchId);
+  let theirs = null;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = (snap.exists && snap.data()) || {};
+    const claims = data.claims || {};
+    theirs = claims[claim.opp] || null;
+    claims[uid] = Object.assign({}, claim, { at: Date.now() });
+    tx.set(ref, { claims, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return { theirs };
 }
 
 /** Stake delta per finishing place (index 0 = winner). Pot = stake × players. */
@@ -503,16 +577,38 @@ async function resolvePlacement(db, admin, req) {
   const existing = await matchRef.get();
   if (existing.exists) return Object.assign({ duplicate: true }, existing.data()?.payload || {});
 
-  const ranking = (req.ranking || []).map(String).filter((id, i, a) => isPersistableUid(id) && a.indexOf(id) === i);
+  let ranking = (req.ranking || []).map(String).filter((id, i, a) => isPersistableUid(id) && a.indexOf(id) === i);
   const n = ranking.length;
-  const stake = n >= 2 ? Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(req.stake) || 0))) : 0;
-  const draw = !!req.draw;
+  let forfeits = Array.isArray(req.forfeits) ? req.forfeits.map(String) : [];
+  const stayer = req.stayer ? String(req.stayer) : '';
+  if (stayer && ranking.indexOf(stayer) >= 0) {
+    // Everyone walked out; the last to leave stayed while the others forfeited → they take first.
+    forfeits = forfeits.filter((id) => id !== stayer);
+    ranking = [stayer].concat(ranking.filter((id) => id !== stayer));
+  }
+  // Every human forfeited (both gone) → void: no stake moves.
+  const draw = !!req.draw || (n >= 2 && ranking.every((id) => forfeits.indexOf(id) >= 0));
+  let stake = n >= 2 ? Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(req.stake) || 0))) : 0;
+  if (stake && !draw) {
+    // Everyone antes the same amount, capped by the poorest seat so the pot is always covered.
+    for (const id of ranking) stake = Math.min(stake, Math.floor((await getWallet(db, admin, id)).balance));
+    stake = Math.max(0, stake);
+  }
   const teamWinners = req.teams && Array.isArray(req.teams.winners) ? req.teams.winners.map(String) : null;
   const deltas = teamWinners ? null : placementStakeDeltas(n, stake, { draw });
+  if (deltas) {
+    // A forfeited seat never profits: any share it would get goes to the best finisher who stayed.
+    const best = ranking.findIndex((id) => forfeits.indexOf(id) < 0);
+    ranking.forEach((id, k) => {
+      if (forfeits.indexOf(id) >= 0 && deltas[k] > 0 && best >= 0) {
+        deltas[best] += deltas[k];
+        deltas[k] = 0;
+      }
+    });
+  }
   const dayKey = new Date().toISOString().slice(0, 10);
   const batch = db.batch();
   const players = {};
-  const forfeits = Array.isArray(req.forfeits) ? req.forfeits.map(String) : [];
   for (let k = 0; k < n; k++) {
     const uid = ranking[k];
     const won = !draw && forfeits.indexOf(uid) < 0 && (teamWinners ? teamWinners.indexOf(uid) >= 0 : k === 0);
