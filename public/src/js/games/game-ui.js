@@ -116,7 +116,6 @@
       'Virtual stakes settle once · Rematch opens a fresh match (same version)',
     ],
     ludo: ['Roll six to enter a piece', 'Tap a glowing piece to move', 'Capture rivals by landing on them'],
-    uno: ['Match color or number', 'Tap Oh No! when you have one card', 'Wilds let you pick the next color'],
     ttt: [
       'Get three in a row · block early · center is strong',
       'Practice Easy / Medium / Hard AI',
@@ -148,8 +147,8 @@
       'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
     ],
     badminton: [
-      'BWF-lite · one game to 21 (win by 2; 29-all → 30) — not best-of-3',
-      'Arcade timing contact — not full BWF court physics',
+      'Simplified rules · one game to 21 (win by 2; 29-all → 30) — not best-of-3',
+      'Arcade timing contact — not full court physics',
       'Sweet hits tighten the rally · Easy / Normal / Sharp in Practice',
     ],
     tambola: [
@@ -158,7 +157,7 @@
       'First valid Full House ends · interim pts shown · virtual stakes on Live only',
     ],
     carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
-    uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh No!' at 1 card · Blaze hits harder · Flip switches sides"],
+    uno: ['Match colour or number to play', 'Classic has optional house-rule toggles', "Shout 'Oh, No!' at 1 card · Blaze hits harder · Flip switches sides"],
     rummy: [
       'Indian 13-card · pure sequence required · jokers + wild rank from open card',
       'Declare valid · Drop 20 first / 40 middle · Wrong show 80 · points capped at 80',
@@ -1436,7 +1435,7 @@
     return sheet;
   }
 
-  /* ── Wordle-style grid share for Shabd ── */
+  /* ── Colour-grid share for Shabd ── */
   function buildShabdGridShare(guesses, target, opts) {
     const o = opts || {};
     const emoji = { correct: '🟩', present: '🟨', absent: '⬛' };

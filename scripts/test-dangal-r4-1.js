@@ -23,14 +23,14 @@ const conventions = read('CONVENTIONS.md');
 
 assert(/function federationHonestyLine/.test(ds), 'federationHonestyLine defined');
 assert(/function federationHonestyHtml/.test(ds), 'federationHonestyHtml defined');
-assert(/law:\s*'BWF-lite'/.test(ds), 'badminton BWF-lite');
+assert(/law:\s*'Simplified rules'/.test(ds) && /BWF Laws of Badminton/.test(ds), 'badminton: simplified rules + plain attribution (P0 honesty)');
 assert(/law:\s*'Street formats'/.test(ds), 'street cricket honest law label');
 
-assert(/BWF-lite · Game to 21/.test(court), 'rally subtitle BWF-lite');
+assert(/'Game to 21'/.test(court) && !/BWF-lite/.test(court), 'rally subtitle without federation wording');
 assert(/arcade timing · Live 1v1/.test(court), 'rally registry desc honesty');
 assert(/function attachHowTo/.test(gameUi) && /GameUI[\s\S]*attachHowTo/.test(gameUi), 'GameUI.attachHowTo wired');
 assert(/federationHonestyHtml\(gameId\)/.test(registry), 'Manch prepare shows honesty chip');
-assert(/BWF-lite · one game to 21/.test(gameUi), 'coach tips BWF-lite');
+assert(/Simplified rules · one game to 21/.test(gameUi), 'coach tips: simplified rules');
 assert(/Street formats/.test(rw), 'street sports desc honesty');
 
 assert(/Math\.abs\(y - o\) >= 2/.test(court) && /bwf21/.test(court), 'BWF win-by-2 still in scorebook');

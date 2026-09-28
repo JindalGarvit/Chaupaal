@@ -580,7 +580,7 @@
 .pc-sevens{display:flex;gap:12px;font-size:13px;}
 .pc-row{display:flex;align-items:center;gap:8px;}
 
-/* ===== OH NO! (UNO) ===== */
+/* ===== OH, NO! (shedding cards) ===== */
 .uno-hand-card{display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:transform 180ms cubic-bezier(0.34,1.56,0.64,1);}
 .uno-hand-card--playable .uno-card{box-shadow:0 0 10px rgba(255,255,255,0.45),0 4px 14px rgba(0,0,0,0.4);}
 .uno-card{user-select:none;-webkit-user-select:none;}

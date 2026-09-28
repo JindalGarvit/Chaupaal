@@ -5985,7 +5985,7 @@ function shabdEvalStates(guess,answer){
 }
 /**
  * Hard Mode: greens stay fixed; present+correct letter counts from each prior row
- * require at least that many of each letter in the new guess (Wordle-class).
+ * require at least that many of each letter in the new guess (standard five-letter puzzle rule).
  * Returns null if legal, else a short reason string.
  */
 function shabdHardModeViolation(guess,priorGuesses,answer){

@@ -73,7 +73,7 @@
     tambola: { primary: '#E91E8C', secondary: '#FFD600', surface: '#1A0010', label: 'Tambola', icon: '🎫', mark: M.tambola, orientation: 'portrait' },
     carrom: { primary: '#8D6E63', secondary: '#FFF8E1', surface: '#1A0F00', label: 'Carrom', icon: '🪙', mark: M.carrom, orientation: 'portrait' },
     streetcricket: { primary: '#2E7D32', secondary: '#FFCC02', surface: '#0A1A0A', label: 'Street Cricket', icon: '🏏', mark: M.streetcricket, orientation: 'landscape', law: 'Street formats', lawHint: 'Over · Nets · Chase — not full cricket law' },
-    badminton: { primary: '#01579B', secondary: '#E1F5FE', surface: '#000D1A', label: 'Badminton', icon: '🏸', mark: M.badminton, orientation: 'landscape', law: 'BWF-lite', lawHint: 'One game to 21 (win by 2) · arcade timing' },
+    badminton: { primary: '#01579B', secondary: '#E1F5FE', surface: '#000D1A', label: 'Badminton', icon: '🏸', mark: M.badminton, orientation: 'landscape', law: 'Simplified rules', lawHint: 'One game to 21 (win by 2) · arcade timing' },
     rummy: { primary: '#6A1B9A', secondary: '#FFD54F', surface: '#100018', label: 'Rummy', icon: '🃏', mark: M.rummy, orientation: 'portrait' },
     teenpatti: { primary: '#4A148C', secondary: '#FFD700', surface: '#0D0018', label: 'Teen Patti', icon: '♠', mark: M.teenpatti, orientation: 'portrait' },
     bluff: { primary: '#37474F', secondary: '#FF1744', surface: '#0A0E10', label: 'Bluff', icon: '🎭', mark: M.bluff, orientation: 'portrait' },
@@ -90,6 +90,43 @@
     penalty: { primary: '#00A86B', secondary: '#FFFFFF', surface: '#04160F', label: 'Penalty Shootout', icon: '⚽', mark: M.penalty, orientation: 'portrait', law: 'Shootout rules', lawHint: 'Best of 5 then sudden death · kicks alternate' },
     poker: { primary: '#1B7F4B', secondary: '#F5C542', surface: '#06170F', label: "Texas Hold'em", icon: '♠', mark: M.poker, orientation: 'portrait', law: 'No-Limit Hold’em', lawHint: 'Standard rules · virtual chips only' },
   };
+
+  /**
+   * Plain rule attribution per title — never "official", never a federation logo or endorsement.
+   * Simplified adaptations say so.
+   */
+  const RULE_SOURCES = {
+    tiptap: 'Our own match-3 puzzle rules',
+    brickbreaker: 'Classic brick-breaker arcade rules',
+    ankjod: 'Classic Kakuro rules',
+    wordguess: 'Five-letter word puzzle · our own word list',
+    chess: 'Rules based on the FIDE Laws of Chess',
+    ttt: 'Classic Tic-Tac-Toe rules',
+    snakes: 'Classic Snakes & Ladders rules, plus variants',
+    ludo: 'Classic Ludo rules · simplified',
+    uno: 'Classic shedding-card rules · our own deck',
+    scribble: 'Draw-and-guess party rules · our own word list',
+    quiz: 'Timed quiz duel · our own questions',
+    carrom: 'Simplified rules based on common carrom rules',
+    rummy: 'Traditional 13-card rummy rules',
+    teenpatti: 'Traditional Teen Patti rules · virtual chips only',
+    bluff: 'Classic Bluff (Cheat) card-game rules',
+    tambola: 'Classic Tambola (Housie) rules',
+    streetcricket: 'Simplified street formats · not the full Laws of Cricket',
+    badminton: 'Simplified rules based on the BWF Laws of Badminton',
+    imposter: 'Social deduction party rules · our own word packs',
+    rajamantri: 'Traditional Raja Mantri Chor Sipahi rules',
+    charades: 'Classic charades rules',
+    mostlikely: 'Classic party rules · our own prompts',
+    werewolf: 'Classic Werewolf (Mafia) party rules',
+    penalty: 'Simplified rules based on the IFAB Laws of the Game (penalty shootout)',
+    poker: 'Standard No-Limit Texas Hold’em rules · virtual chips only',
+  };
+
+  function gameRuleSource(id) {
+    const key = typeof canonicalGameId === 'function' ? canonicalGameId(id) : String(id || '');
+    return RULE_SOURCES[key] || '';
+  }
 
   const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz', 'penalty'];
 
@@ -113,13 +150,13 @@
   }
 
   /**
-   * Short honesty line for Manch prepare / chrome — empty when no lite law.
-   * e.g. "BWF-lite · One game to 21 (win by 2) · arcade timing"
+   * Short honesty line for Manch prepare / chrome: the lite-law summary when there is one,
+   * else the plain rule source. e.g. "Simplified rules · One game to 21 (win by 2) · arcade timing"
    */
   function federationHonestyLine(gameId) {
     const ident = getGameIdentity(gameId);
-    if (!ident || !ident.law) return '';
-    return ident.lawHint ? ident.law + ' · ' + ident.lawHint : ident.law;
+    if (ident && ident.law) return ident.lawHint ? ident.law + ' · ' + ident.lawHint : ident.law;
+    return gameRuleSource(gameId);
   }
 
   /** Compact chip HTML for prepare sheets (progressive — one line). */

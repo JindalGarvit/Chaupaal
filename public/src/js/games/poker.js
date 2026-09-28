@@ -527,7 +527,7 @@
     const level = (cfg && cfg.level) || s.bots;
     const names = BOT_NAMES.slice().sort(() => Math.random() - 0.5);
     const players = [{ id: 'me', name: myName(), seat: 0, stack: PRACTICE_STACK, level: null }];
-    for (let i = 1; i < n; i++) players.push({ id: 'bot' + i, name: names[i - 1] + ' · ' + levelLabel(level), seat: i, stack: PRACTICE_STACK, level });
+    for (let i = 1; i < n; i++) players.push({ id: 'bot' + i, name: '🤖 ' + names[i - 1] + ' · ' + levelLabel(level), seat: i, stack: PRACTICE_STACK, level });
     let button = Math.floor(Math.random() * n) - 1;
     let handNo = 0;
     let h = null;

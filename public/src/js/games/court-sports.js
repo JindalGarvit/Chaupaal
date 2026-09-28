@@ -315,7 +315,7 @@
   }
 
   function rallyMatchSubtitle(spec) {
-    return rallyScoreModel(spec) === 'bwf21' ? 'BWF-lite · Game to 21' : 'Rally';
+    return rallyScoreModel(spec) === 'bwf21' ? 'Game to 21' : 'Rally';
   }
 
   function createRallyScoreState(model, serverIsMe) {
@@ -356,7 +356,7 @@
     else next.opp = (next.opp | 0) + 1;
     const y = next.you | 0;
     const o = next.opp | 0;
-    // BWF-lite: 21, win by 2 after 20-all; 29-all → next point (30) wins. Winner serves.
+    // Simplified badminton scoring: 21, win by 2 after 20-all; 29-all → next point (30) wins. Winner serves.
     next.serverIsMe = w === 'me';
     if (y >= 30 || o >= 30) {
       ended = true;
@@ -505,7 +505,7 @@
     if (typeof GameUI !== 'undefined' && GameUI.attachHowTo) {
       const howBodies = {
         badminton:
-          'BWF-lite · one game to 21, win by 2 after 20-all, 29-all → 30. Rally point; winner serves. Arcade timing — not full BWF court physics or best-of-3.',
+          'Simplified rules · one game to 21, win by 2 after 20-all, 29-all → 30. Rally point; winner serves. Arcade timing — not full court physics or best-of-3.',
       };
       GameUI.attachHowTo(shell.overlay, {
         title: spec.name || 'Rally',
@@ -584,7 +584,7 @@
         if (typeof localStorage !== 'undefined') localStorage.setItem('chaupaal_rally_coach_' + (spec.id || ''), '1');
       } catch (e) {}
       const tips = {
-        badminton: 'BWF-lite · sweet hits tighten the rally. Game to 21 (win by 2).',
+        badminton: 'Sweet hits tighten the rally. Game to 21 (win by 2).',
       };
       const tip = tips[spec.id] || 'Sweet hits tighten the rally — AI will push back.';
       if (typeof showToast === 'function') showToast(tip);
@@ -1267,7 +1267,7 @@
       courtTint: '#0a3d5c',
       projectile: 'shuttle',
       scoreModel: 'bwf21',
-      // BWF-lite: one game to 21, win by 2 after 20-all, 29-all→30. Rally point; winner serves. No best-of-3.
+      // Simplified badminton scoring: one game to 21, win by 2 after 20-all, 29-all→30. Rally point; winner serves. No best-of-3.
       windowMs: 700,
       prompt: 'Serve, then smash in the green window.',
       serveLabel: 'Serve',

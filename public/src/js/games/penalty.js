@@ -2294,7 +2294,7 @@
       ownHome: true,
       order: 22,
       meta: {
-        core: 'penalty-core.js (outcome model + IFAB-style shootout, shared with the server)',
+        core: 'penalty-core.js (outcome model + standard shootout order, shared with the server)',
         live: 'penalty_kick → server-lib/penalty-engine.js; kick + dive stay server-side until both are in',
       },
       launch: openGame,
