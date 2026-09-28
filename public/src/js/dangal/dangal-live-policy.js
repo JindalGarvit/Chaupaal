@@ -34,9 +34,11 @@
   /** Game-specific tuning. Engines keep their shipped timings here until their own P-prompt. */
   const OVERRIDES = {
     chess: { draw: true, spectate: true, afk: { action: 'clock', maxMisses: 1 } },
-    ttt: { afk: { action: 'auto_play', maxMisses: 3 } },
-    snakes: { afk: { action: 'auto_play', maxMisses: 3 } },
-    ludo: { afk: { action: 'auto_play', maxMisses: 3 } },
+    // Dangal P3 room games (server-lib/classics-rooms.js): turn clock → auto-play; after maxMisses a
+    // bot takes the seat (Ludo / Snakes) or the game is forfeited (Tic-Tac-Toe). Rematch rotates seats.
+    ttt: { turnMs: 30000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'forfeit' },
+    snakes: { turnMs: 15000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'bot_takeover' },
+    ludo: { turnMs: 20000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'bot_takeover' },
     uno: { afk: { action: 'auto_play', maxMisses: 3 } },
     scribble: { afk: { action: 'skip_turn', maxMisses: 2 }, resign: false },
     quiz: { afk: { action: 'no_answer', maxMisses: 3 }, rematch: { swapSides: false, sameVariants: true } },

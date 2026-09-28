@@ -232,7 +232,7 @@ function memDb() {
 
   // TTT: history kept, rating frozen.
   await db.collection('users').doc(A).collection('gameStats').doc('ttt').set({ elo: 1333, totalGames: 9 });
-  const ttt = await econ.resolveGame(db, db.admin, A, { gameType: 'ttt', result: 'win', won: true, opponentUid: B, matchId: 'ttt_mm_1' });
+  const ttt = await econ.resolveGame(db, db.admin, A, { gameType: 'ttt', result: 'win', won: true, opponentUid: B, matchId: 'ttt_mm_1' }, { trusted: true });
   const tStats = db.store.get('users/' + A + '/gameStats/ttt');
   assert(ttt.eloDelta === 0 && !ttt.rated && tStats.elo === 1333 && tStats.totalGames === 10 && !tStats.rating, 'TTT unrated: history kept, rating untouched');
 

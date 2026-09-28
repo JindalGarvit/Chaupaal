@@ -892,6 +892,9 @@
     werewolf: ['games/werewolf-core.js'],
     penalty: ['games/penalty-core.js'],
     poker: ['games/poker-core.js'],
+    ludo: ['games/ludo-core.js'],
+    snakes: ['games/snakes-core.js'],
+    ttt: ['games/ttt-core.js'],
   };
   const lazyLoaded = {};
   const lazyLoading = {};

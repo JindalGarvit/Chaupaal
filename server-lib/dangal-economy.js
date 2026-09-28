@@ -9,7 +9,19 @@ const Ratings = require('./dangal-ratings');
 /** Rated titles live in the ratings service (Glicko-2). Tic-Tac-Toe is unrated quick-play. */
 const RATED = Ratings.RATED;
 /** Results only the server may report (it resolved every move) — client claims are ignored. */
-const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess']);
+const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess', 'ludo', 'snakes', 'ttt']);
+/**
+ * Placement payouts for N-player staked games (Ludo, Snakes & Ladders): everyone antes the stake,
+ * the pot splits by finishing place. Teams (2v2) and 1v1 are winner-takes-the-other-stake.
+ */
+const PLACEMENT_SHARES = {
+  1: [1],
+  2: [1, 0],
+  3: [0.7, 0.3, 0],
+  4: [0.6, 0.3, 0.1, 0],
+  5: [0.5, 0.3, 0.2, 0, 0],
+  6: [0.5, 0.3, 0.2, 0, 0, 0],
+};
 /** Games whose ratings are kept per time-control bucket (gameStats/{game}_{bucket}). */
 const RATING_BUCKETS = { chess: ['bullet', 'blitz', 'rapid', 'classical', 'daily'] };
 /** Chips move only through the game's own server path — even practice results are ignored here. */
@@ -134,7 +146,7 @@ async function getWallet(db, admin, uid) {
 }
 
 async function settleSide(db, FieldValue, uid, opts, batch) {
-  const { gameType, won, isDraw, eloDelta, rating, stake, resultTag, dayKey, extra, matchId, ratingDocId } = opts;
+  const { gameType, won, isDraw, eloDelta, rating, stake, stakeDelta, resultTag, dayKey, extra, matchId, ratingDocId } = opts;
   const dailyRef = db.collection('users').doc(uid).collection('dailyCredits').doc(dayKey);
   const dailySnap = await dailyRef.get();
   const dailyCount = Number(dailySnap.data()?.resolves) || 0;
@@ -151,8 +163,11 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
   let chipDelta = 0;
   if (chipEligible) {
     if (won) chipDelta += 25;
-    if (stake > 0 && won) chipDelta += stake;
-    if (stake > 0 && !won && !isDraw) chipDelta -= stake;
+    if (typeof stakeDelta === 'number') chipDelta += stakeDelta;
+    else {
+      if (stake > 0 && won) chipDelta += stake;
+      if (stake > 0 && !won && !isDraw) chipDelta -= stake;
+    }
   }
   const nextBal = Math.max(0, (Number(wallet.balance) || 0) + chipDelta);
 
@@ -452,8 +467,106 @@ async function resolveGame(db, admin, uid, body, opts) {
   return payload;
 }
 
+/** Stake delta per finishing place (index 0 = winner). Pot = stake × players. */
+function placementStakeDeltas(n, stake, opts) {
+  const o = opts || {};
+  const s = Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(stake) || 0)));
+  if (!s || n < 2 || o.draw) return Array(Math.max(0, n)).fill(0);
+  const shares = PLACEMENT_SHARES[Math.min(6, n)] || PLACEMENT_SHARES[6];
+  const pot = s * n;
+  const out = [];
+  let paid = 0;
+  for (let k = 0; k < n; k++) {
+    const win = k === 0 ? 0 : Math.floor(pot * (shares[k] || 0));
+    out.push(win - s);
+    paid += win;
+  }
+  out[0] = pot - paid - s;
+  return out;
+}
+
+/**
+ * Server-only settlement for a finished room game (Ludo / Snakes / Tic-Tac-Toe). Idempotent by matchId.
+ * @param {{ gameType: string, matchId: string, ranking: string[], teams?: { winners: string[] } | null,
+ *           stake?: number, draw?: boolean, rolls?: Record<string, number[]> }} req — ranking = humans, best first
+ */
+async function resolvePlacement(db, admin, req) {
+  const FieldValue = admin.firestore.FieldValue;
+  const gameType = canonicalGameId(req.gameType);
+  const matchId = String(req.matchId || '').replace(/[^\w.-]/g, '').slice(0, 120);
+  if (!gameType || !matchId) {
+    const err = new Error('Invalid placement');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  const matchRef = db.collection('dangalMatches').doc(matchId);
+  const existing = await matchRef.get();
+  if (existing.exists) return Object.assign({ duplicate: true }, existing.data()?.payload || {});
+
+  const ranking = (req.ranking || []).map(String).filter((id, i, a) => isPersistableUid(id) && a.indexOf(id) === i);
+  const n = ranking.length;
+  const stake = n >= 2 ? Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(req.stake) || 0))) : 0;
+  const draw = !!req.draw;
+  const teamWinners = req.teams && Array.isArray(req.teams.winners) ? req.teams.winners.map(String) : null;
+  const deltas = teamWinners ? null : placementStakeDeltas(n, stake, { draw });
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const batch = db.batch();
+  const players = {};
+  const forfeits = Array.isArray(req.forfeits) ? req.forfeits.map(String) : [];
+  for (let k = 0; k < n; k++) {
+    const uid = ranking[k];
+    const won = !draw && forfeits.indexOf(uid) < 0 && (teamWinners ? teamWinners.indexOf(uid) >= 0 : k === 0);
+    const stakeDelta = teamWinners ? (stake ? (won ? stake : -stake) : 0) : deltas[k];
+    const side = await settleSide(
+      db,
+      FieldValue,
+      uid,
+      {
+        gameType,
+        won,
+        isDraw: draw,
+        eloDelta: 0,
+        rating: null,
+        stake,
+        stakeDelta,
+        resultTag: draw ? 'draw' : won ? 'win' : 'place_' + (k + 1),
+        dayKey,
+        matchId,
+      },
+      batch
+    );
+    players[uid] = { place: draw ? 1 : k + 1, won, chipDelta: side.chipDelta, chips: side.chips, achievements: side.achievements };
+    const rolls = (req.rolls && req.rolls[uid]) || [];
+    if (rolls.length) {
+      const inc = { total: FieldValue.increment(0), updatedAt: FieldValue.serverTimestamp() };
+      let total = 0;
+      [1, 2, 3, 4, 5, 6].forEach((f) => {
+        const c = rolls.filter((v) => Number(v) === f).length;
+        total += c;
+        if (c) inc['f' + f] = FieldValue.increment(c);
+      });
+      inc.total = FieldValue.increment(total);
+      batch.set(db.collection('users').doc(uid).collection('diceStats').doc('lifetime'), inc, { merge: true });
+    }
+  }
+  const payload = { gameType, matchId, stake, draw, players };
+  batch.create(matchRef, { gameType, ranking, stake, draw, payload, at: FieldValue.serverTimestamp() });
+  try {
+    await batch.commit();
+  } catch (e) {
+    const exists = e && (e.code === 6 || e.code === 'already-exists' || /already exists/i.test(String(e.message || '')));
+    if (!exists) throw e;
+    const again = await matchRef.get();
+    return Object.assign({ duplicate: true }, (again.exists && again.data()?.payload) || {});
+  }
+  return payload;
+}
+
 module.exports = {
   STARTING_CHIPS,
+  PLACEMENT_SHARES,
+  placementStakeDeltas,
+  resolvePlacement,
   canonicalGameId,
   isRetiredGameId,
   RETIRED_GAME_IDS,

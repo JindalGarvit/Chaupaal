@@ -19,6 +19,7 @@ const RajaMantriCore = require('../public/src/js/games/rajamantri-core.js');
 const CharadesCore = require('../public/src/js/games/charades-core.js');
 const MostLikelyCore = require('../public/src/js/games/mostlikely-core.js');
 const { createWerewolfAdapter } = require('./werewolf-engine.js');
+const { createClassicsAdapters } = require('./classics-rooms.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -533,6 +534,7 @@ const GAMES = {
   mostlikely: mostlikelyAdapter,
   werewolf: createWerewolfAdapter({ err }),
 };
+Object.assign(GAMES, createClassicsAdapters({ err }));
 
 // ------------------------------------------------------------------ room engine
 
@@ -906,13 +908,15 @@ function hydrateRoom(room) {
  * @param {string} uid
  * @param {object} body { op, game, code, name, settings, ...op args }
  */
-async function partyRoom(adminApp, uid, body) {
+async function partyRoom(adminApp, uid, body, deps) {
   const b = body || {};
   const op = String(b.op || '');
   const game = String(b.game || 'imposter');
   if (!GAMES[game]) throw err('unknown_game', 'Unknown party game');
   const rtdb = adminApp.database();
   const now = Date.now();
+
+  if (op === 'dice_stats') return diceStats(adminApp, uid);
 
   if (op === 'create') {
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -942,10 +946,65 @@ async function partyRoom(adminApp, uid, body) {
 
   const code = cleanCode(b.code);
   if (!code) throw err('bad_code', 'Check the room code');
-  const result = await transactRoom(rtdb, `games/${game}/${code}`, (current) =>
-    reduceRoom(current, uid, op, b, now, Math.random)
-  );
+  const path = `games/${game}/${code}`;
+  const g = GAMES[game];
+  const result = await transactRoom(rtdb, path, (current) => {
+    const out = reduceRoom(current, uid, op, b, now, Math.random);
+    const req = g.pendingSettlement && out.room.server ? g.pendingSettlement(out.room.server) : null;
+    if (req) out.result = Object.assign({}, out.result, { _settle: JSON.parse(JSON.stringify(req)) });
+    return out;
+  });
+  const req = result._settle;
+  delete result._settle;
+  if (req) {
+    try {
+      result.settlement = await settleRoom(adminApp, rtdb, path, req, deps);
+    } catch (e) {
+      // The request stays queued in `server`; the next op on this room retries it (idempotent by matchId).
+      console.warn('[party_room] settlement retry pending', game, e && e.message);
+    }
+  }
   return Object.assign({ code, game, serverNow: now }, result);
+}
+
+/** Placement chips for a finished classics game, then mark it settled in the room (one publish). */
+async function settleRoom(adminApp, rtdb, path, req, deps) {
+  const economy = (deps && deps.economy) || require('./dangal-economy.js');
+  const db = (deps && deps.db) || adminApp.firestore();
+  const admin = (deps && deps.admin) || adminApp;
+  const out = await economy.resolvePlacement(db, admin, {
+    gameType: req.game,
+    matchId: req.matchId,
+    ranking: req.ranking || [],
+    teams: req.teams || null,
+    stake: Number(req.stake) || 0,
+    draw: !!req.draw,
+    rolls: req.rolls || {},
+    forfeits: req.forfeits || [],
+  });
+  const results = {};
+  Object.keys((out && out.players) || {}).forEach((id) => {
+    const p = out.players[id];
+    results[id] = { place: p.place, chipDelta: p.chipDelta, won: !!p.won };
+  });
+  await transactRoom(rtdb, path, (current) => {
+    if (!current || !current.server || !current.server.settleReq || current.server.settleReq.matchId !== req.matchId) {
+      return current ? { room: current, result: {} } : null;
+    }
+    current.server.settleReq.done = true;
+    current.pub.settlement = { status: 'done', matchId: req.matchId, stake: Number(req.stake) || 0, results };
+    bump(current, Date.now());
+    return { room: current, result: {} };
+  });
+  return { status: 'done', results };
+}
+
+/** Lifetime Live dice faces for the fairness view (written at settlement). */
+async function diceStats(adminApp, uid) {
+  const snap = await adminApp.firestore().collection('users').doc(uid).collection('diceStats').doc('lifetime').get();
+  const d = (snap.exists && snap.data()) || {};
+  const counts = [1, 2, 3, 4, 5, 6].map((f) => Number(d['f' + f]) || 0);
+  return { counts, total: counts.reduce((a, c) => a + c, 0) };
 }
 
 module.exports = {
