@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-v636468';
+const CACHE = 'chaupaal-v2640f3';
 const ASSETS = [
   '/index.html',
   '/icon-charpai-v2as.png',
@@ -9,7 +9,6 @@ const ASSETS = [
   '/brand/chaupaal-mark-charpai-v2as.png',
   '/brand/chaupaal-mark-32-charpai-v2as.png',
   '/splash.png',
-  '/vendor/chess.js',
   'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap',
 ];
 

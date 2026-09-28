@@ -62,15 +62,18 @@
     chess: {
       ruleset: { name: 'Chess', source: 'Rules based on the FIDE Laws of Chess', simplified: false },
       variants: [
-        opt('time', 'Time control', '10+0', ['1+0', '2+1', '3+0', '3+2', '5+0', '5+3', '10+0', '15+10', '30+0', '60+0', 'none'], 'host'),
-        opt('chess960', 'Fischer Random (960)', false, [false, true], 'host'),
+        opt('time', 'Time control', '10+0', ['1+0', '2+1', '3+0', '3+2', '5+0', '10+0', '15+10', '30+0', 'custom', 'daily1', 'daily3', 'none'], 'host'),
+        opt('chess960', 'Chess960 (Fischer Random)', false, [false, true], 'host'),
       ],
       glance: ['Checkmate the enemy king to win', 'Each piece moves its own way; tap a piece to see its moves', 'Run out of time and you lose (if your opponent can still mate)'],
       rules: [
-        { h: 'Moves', body: 'Standard FIDE movement including castling, en passant and promotion.' },
-        { h: 'Draws', body: 'Stalemate, threefold repetition, the 50-move rule, insufficient material, or an accepted draw offer.' },
-        { h: 'Clock', body: 'Time control is "minutes + increment". "No Limit" has no clock.' },
-        { h: 'Fischer Random', body: 'Back-rank pieces are shuffled (same for both sides); all other rules are unchanged.' },
+        { h: 'Moves', body: 'Standard FIDE movement including castling, en passant and promotion to a queen, rook, bishop or knight.' },
+        { h: 'Automatic draws', body: 'Stalemate, insufficient material, fivefold repetition and the 75-move rule end the game at once.' },
+        { h: 'Claimable draws', body: 'Threefold repetition and the 50-move rule can be claimed with Claim draw. Auto-claim (on by default) claims them for you. You can offer a draw once every 10 moves.' },
+        { h: 'Clock', body: 'Minutes + increment per move. Clocks start after each side’s first move. If your time runs out you lose, unless your opponent cannot possibly checkmate — then it is a draw.' },
+        { h: 'Abort', body: 'Either player can abort before making their first move: no rating change and no chips.' },
+        { h: 'Daily', body: 'Daily games give 1 or 3 days per move. You get a notification when it is your move.' },
+        { h: 'Chess960', body: 'The server draws one of 960 back-rank setups (same for both sides). Castling ends with king and rook on the usual squares.' },
       ],
     },
     ttt: {
@@ -363,6 +366,9 @@
     if (key === 'chess') {
       if (c.timeControl || c.timeControlLabel) out.time = String(c.timeControl || c.timeControlLabel).replace('∞', 'none');
       else if (c.min || c.timeMin) out.time = (c.min || c.timeMin) + '+' + (c.inc || c.timeInc || 0);
+      if (c.days) out.time = 'daily' + c.days;
+      const tv = get('chess').variants[0];
+      if (out.time && tv.options.indexOf(out.time) < 0 && /^\d+(\.\d+)?\+\d+$/.test(out.time)) out.time = 'custom';
       if (c.chess960) out.chess960 = true;
     }
     if (key === 'ludo' && c.ludoMode) out.mode = c.ludoMode;

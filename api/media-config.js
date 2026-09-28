@@ -1021,6 +1021,32 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Dangal Chess Live + Daily: server validates every move (FIDE) and runs the clocks ──
+  if (action === 'chess_game') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'party');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+      }
+    } catch (e) {}
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    try {
+      const { chessGame } = require('../server-lib/chess-engine');
+      const out = await chessGame(adminApp, user.uid, body);
+      return sendSuccess(res, out);
+    } catch (e) {
+      const code = e && e.code ? String(e.code) : '';
+      if (code) {
+        const status = code === 'match_not_found' ? 404 : code === 'busy' ? 409 : 400;
+        return sendError(res, status, code.toUpperCase(), e.message || 'Game action failed');
+      }
+      console.warn('[media-config] chess_game', e?.message || e);
+      return sendError(res, 500, 'CHESS_ERROR', 'Game action failed');
+    }
+  }
+
   // ─── Dangal Texas Hold'em Live: server shuffles, deals, times and settles; hole cards owner-only ──
   if (action === 'poker_table') {
     try {
@@ -1409,6 +1435,7 @@ async function handlePost(req, res) {
       'dangal_ai',
       'party_room',
       'penalty_kick',
+      'chess_game',
       'poker_table',
       'referral_claim',
       'referral_activate',

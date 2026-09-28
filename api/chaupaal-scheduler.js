@@ -533,6 +533,18 @@ module.exports = async function handler(req, res) {
     } catch (e) {
       dangalQueue = { error: e?.message || String(e) };
     }
+    // Daily (correspondence) chess: flag games whose move deadline passed.
+    let chessDaily = { skipped: true };
+    try {
+      if (withinBudget()) {
+        const { sweepDailyGames } = require('../server-lib/chess-engine');
+        chessDaily = await sweepDailyGames(admin, {});
+      } else {
+        chessDaily = { skipped: true, reason: 'duration_budget' };
+      }
+    } catch (e) {
+      chessDaily = { error: e?.message || String(e) };
+    }
     try {
       if (withinBudget()) {
         const { writeMatchMetricSnapshot } = require('../server-lib/intent-weights');
@@ -592,6 +604,7 @@ module.exports = async function handler(req, res) {
       userModel,
       candidatePools,
       dangalQueue,
+      chessDaily,
       matchMetrics,
       aiEnrichment,
       retention,

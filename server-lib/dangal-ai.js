@@ -136,8 +136,32 @@ const LEVEL_STYLE = {
   hard: { aggression: 0.75, bluff: 0.5, speed: 0.8, chattiness: 0.2 },
 };
 
+/** Chess bot personas: style only, always labelled as a bot (never a fake human name). */
+const CHESS_PERSONAS = {
+  aggressive: { name: 'Aggressive Bot', style: { aggression: 0.85, bluff: 0.4, speed: 0.7, chattiness: 0.3 } },
+  solid: { name: 'Solid Bot', style: { aggression: 0.3, bluff: 0.1, speed: 0.5, chattiness: 0.2 } },
+  tricky: { name: 'Tricky Bot', style: { aggression: 0.6, bluff: 0.8, speed: 0.6, chattiness: 0.4 } },
+  friendly: { name: 'Friendly Bot', style: { aggression: 0.2, bluff: 0.1, speed: 0.4, chattiness: 0.7 } },
+};
+
+/**
+ * Chess coach grounding: every move the text mentions must be one of the engine's moves
+ * (input.allowedMoves). Anything else → the deterministic engine explanation.
+ */
+function chessGrounded(input, data) {
+  if (String(input.gameId || '') !== 'chess' || !Array.isArray(input.allowedMoves)) return true;
+  const Review = require('../public/src/js/games/chess-review.js');
+  const allowed = input.allowedMoves.map((s) => String(s).slice(0, 12)).slice(0, 24);
+  const text = [data.text].concat(data.tips || []).join(' ');
+  return Review.validateCoachText(text, allowed).ok;
+}
+
 const FALLBACKS = {
   coachExplain(input) {
+    if (String(input.gameId || '') === 'chess' && input.engineText) {
+      const tips = Array.isArray(input.engineTips) ? input.engineTips.map((t) => String(t).slice(0, 120)).slice(0, 3) : [];
+      return { text: String(input.engineText).slice(0, 280), tips };
+    }
     const g = rulesFor(input.gameId);
     const tips = g ? g.glance.slice(0, 3) : ['Take your time', 'Think one move ahead', 'Watch what your opponent wants'];
     const text = input.move ? 'You played ' + String(input.move).slice(0, 40) + '. ' + tips[0] + '.' : tips[0] + '.';
@@ -160,6 +184,8 @@ const FALLBACKS = {
     return { words: words.slice(0, n) };
   },
   botPersona(input) {
+    const cp = String(input.gameId || '') === 'chess' ? CHESS_PERSONAS[String(input.persona || '').toLowerCase()] : null;
+    if (cp) return { name: cp.name, style: Object.assign({}, cp.style) };
     const style = LEVEL_STYLE[String(input.level || 'regular').toLowerCase()] || LEVEL_STYLE.regular;
     const name = PERSONA_NAMES[hashInt(String(input.gameId || '') + ':' + (input.seed || '')) % PERSONA_NAMES.length];
     return { name, style: Object.assign({}, style) };
@@ -178,6 +204,9 @@ function clip(v, n) {
 const PROMPTS = {
   coachExplain: (i) =>
     `Game: ${clip(i.gameId, 20)}. Situation: ${clip(i.situation, 400)}. Last move: ${clip(i.move, 40)}.\n` +
+    (Array.isArray(i.allowedMoves)
+      ? `Engine facts: ${clip(i.engineText, 280)} Only mention these moves, in SAN: ${clip(i.allowedMoves.join(', '), 200)}. Never name any other move or square.\n`
+      : '') +
     'Explain briefly for a casual player. Schema: {"text": string<=280, "tips": [string<=120, max 3]}',
   commentary: (i) =>
     `Game: ${clip(i.gameId, 20)}. Event: ${clip(i.event, 30)}. Score: ${clip(i.score, 40)}.\n` +
@@ -341,7 +370,7 @@ function createDangalAI(deps) {
       return fallback(hook, inp, e && e.code === 'AI_TIMEOUT' ? 'timeout' : 'provider_error');
     }
     const data = parseJson(out && out.text);
-    if (!SCHEMAS[hook](data) || !isSafe(data)) {
+    if (!SCHEMAS[hook](data) || !isSafe(data) || (hook === 'coachExplain' && !chessGrounded(inp, data))) {
       counters[hook].rejected += 1;
       return fallback(hook, inp, 'invalid_output');
     }
@@ -379,4 +408,6 @@ module.exports = {
   parseJson,
   createDangalAI,
   sharedAI,
+  CHESS_PERSONAS,
+  chessGrounded,
 };

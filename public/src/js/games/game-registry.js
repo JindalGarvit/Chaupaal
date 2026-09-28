@@ -849,6 +849,8 @@
                     timeInc: chessTc.inc,
                     min: chessTc.min,
                     inc: chessTc.inc,
+                    days: chessTc.days || 0,
+                    rated: !!chessTc.rated,
                     chess960: !!chessTc.chess960,
                   }
                 : {}
@@ -1067,6 +1069,8 @@
                 timeInc: chessTc.inc,
                 min: chessTc.min,
                 inc: chessTc.inc,
+                days: chessTc.days || 0,
+                rated: !!chessTc.rated,
                 chess960: !!chessTc.chess960,
                 timeControlLabel: chessTc.label,
               }

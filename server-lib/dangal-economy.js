@@ -9,7 +9,9 @@ const Ratings = require('./dangal-ratings');
 /** Rated titles live in the ratings service (Glicko-2). Tic-Tac-Toe is unrated quick-play. */
 const RATED = Ratings.RATED;
 /** Results only the server may report (it resolved every move) — client claims are ignored. */
-const SERVER_SETTLED = new Set(['penalty', 'poker']);
+const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess']);
+/** Games whose ratings are kept per time-control bucket (gameStats/{game}_{bucket}). */
+const RATING_BUCKETS = { chess: ['bullet', 'blitz', 'rapid', 'classical', 'daily'] };
 /** Chips move only through the game's own server path — even practice results are ignored here. */
 const SERVER_ONLY = new Set(['poker']);
 
@@ -112,6 +114,11 @@ function evaluateNewAchievements(earnedSet, ctx) {
   return out;
 }
 
+function seedFromLegacy(legacy) {
+  const rec = Ratings.fromStats(legacy);
+  return { elo: Math.round(rec.r), totalGames: 0 };
+}
+
 function isPersistableUid(uid) {
   const s = String(uid || '');
   if (s.length < 20 || s.length > 128) return false;
@@ -127,7 +134,7 @@ async function getWallet(db, admin, uid) {
 }
 
 async function settleSide(db, FieldValue, uid, opts, batch) {
-  const { gameType, won, isDraw, eloDelta, rating, stake, resultTag, dayKey, extra, matchId } = opts;
+  const { gameType, won, isDraw, eloDelta, rating, stake, resultTag, dayKey, extra, matchId, ratingDocId } = opts;
   const dailyRef = db.collection('users').doc(uid).collection('dailyCredits').doc(dayKey);
   const dailySnap = await dailyRef.get();
   const dailyCount = Number(dailySnap.data()?.resolves) || 0;
@@ -172,7 +179,14 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
     lastResult: resultTag,
     updatedAt: FieldValue.serverTimestamp(),
   };
-  if (rating) Object.assign(statsWrite, rating);
+  if (rating && ratingDocId && ratingDocId !== gameType) {
+    statsWrite.lastBucket = ratingDocId.slice(gameType.length + 1);
+    batch.set(
+      db.collection('users').doc(uid).collection('gameStats').doc(ratingDocId),
+      Object.assign({ gameType, bucket: statsWrite.lastBucket, totalGames: rating.rating.games, updatedAt: FieldValue.serverTimestamp() }, rating),
+      { merge: true }
+    );
+  } else if (rating) Object.assign(statsWrite, rating);
   batch.set(statsRef, statsWrite, { merge: true });
   const txCol = db.collection('users').doc(uid).collection('chipTransactions');
   const ledgerAmount = chipDelta + achChips;
@@ -314,12 +328,18 @@ async function resolveGame(db, admin, uid, body, opts) {
     }
   }
 
-  const reporterStats = await db.collection('users').doc(uid).collection('gameStats').doc(gameType).get();
-  const oppStats = opponentUid
-    ? await db.collection('users').doc(opponentUid).collection('gameStats').doc(gameType).get()
-    : null;
-  const rData = reporterStats.data() || {};
-  const oData = (oppStats && oppStats.data()) || {};
+  const bucketRaw = trusted && opts && opts.ratingBucket ? String(opts.ratingBucket) : '';
+  const bucket = bucketRaw && (RATING_BUCKETS[gameType] || []).indexOf(bucketRaw) >= 0 ? bucketRaw : '';
+  const ratingDocId = bucket ? gameType + '_' + bucket : gameType;
+  async function ratingData(who) {
+    const col = db.collection('users').doc(who).collection('gameStats');
+    const snap = await col.doc(ratingDocId).get();
+    if (snap.exists || !bucket) return snap.data() || {};
+    // A new bucket starts from the player's legacy rating, fully provisional.
+    return seedFromLegacy((await col.doc(gameType).get()).data() || {});
+  }
+  const rData = await ratingData(uid);
+  const oData = opponentUid ? await ratingData(opponentUid) : {};
   let eloDelta = 0;
   let oppEloDelta = 0;
   let rated = null;
@@ -331,7 +351,7 @@ async function resolveGame(db, admin, uid, body, opts) {
       practice: !!body.practice,
       // Friend-only private tables are unrated unless the host marked them rated.
       privateTable: !!matchId && !/_mm_/.test(matchId) && !trusted,
-      rated: body.rated === true ? true : undefined,
+      rated: body.rated === true ? true : trusted && body.rated === false ? false : undefined,
     });
     if (rated) {
       eloDelta = rated.deltaA;
@@ -351,6 +371,7 @@ async function resolveGame(db, admin, uid, body, opts) {
       isDraw,
       eloDelta: isComplete ? 0 : eloDelta,
       rating: rated ? rated.a : null,
+      ratingDocId,
       stake: isComplete ? 0 : stake,
       resultTag,
       dayKey,
@@ -372,6 +393,7 @@ async function resolveGame(db, admin, uid, body, opts) {
         isDraw,
         eloDelta: oppEloDelta,
         rating: rated ? rated.b : null,
+        ratingDocId,
         stake,
         resultTag: isDraw ? 'draw' : won ? 'loss' : 'win',
         dayKey,
@@ -388,6 +410,7 @@ async function resolveGame(db, admin, uid, body, opts) {
     isDraw,
     eloDelta,
     rated: !!rated,
+    bucket: bucket || undefined,
     provisional: rated ? rated.a.provisional : undefined,
     chips: reporter.chips,
     chipDelta: reporter.chipDelta,
@@ -403,6 +426,7 @@ async function resolveGame(db, admin, uid, body, opts) {
       achievements: opponent.achievements,
     };
   }
+  Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
   // create() makes a concurrent double-report fail the whole batch instead of settling twice.
   if (lockRef) batch.create(lockRef, { result: payload, at: FieldValue.serverTimestamp() });
   if (matchRef) {
@@ -440,5 +464,6 @@ module.exports = {
   ACHIEVEMENTS,
   RATED,
   SERVER_SETTLED,
+  RATING_BUCKETS,
   weekKey,
 };
