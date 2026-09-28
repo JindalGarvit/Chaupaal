@@ -2,8 +2,9 @@
  * Admin-only feedback log + daily summaries + Peepal intent weight profiles.
  * Requires Firebase ID token with custom claim admin === true.
  *
- * GET  ?view=log|summary|errors|intent_weights|product|retention
+ * GET  ?view=log|summary|errors|intent_weights|product|retention|quiz
  * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
+ * POST { action: 'quiz_approve' | 'quiz_retire', qid }  (Quiz Muqabala moderation)
  *
  * Product feedback SOT: companionProductFeedback (sheet + companion asks).
  * Chat-classified feedback remains in chaupaalFeedback (view=log).
@@ -56,12 +57,26 @@ module.exports = async function handler(req, res) {
           throw e;
         }
       }
+      if (body.action === 'quiz_approve' || body.action === 'quiz_retire') {
+        const { quizAdminAction } = require('../server-lib/quiz-admin');
+        try {
+          return sendSuccess(res, await quizAdminAction(db, admin, body, user.uid));
+        } catch (e) {
+          if (e?.code === 'VALIDATION_ERROR') return sendError(res, 400, 'VALIDATION_ERROR', e.message);
+          throw e;
+        }
+      }
       return sendError(res, 400, 'UNKNOWN_ACTION', 'Unknown action');
     }
 
     if (!requireMethod(req, res, 'GET')) return;
 
     const view = String(req.query?.view || 'log');
+
+    if (view === 'quiz') {
+      const { quizAdminView } = require('../server-lib/quiz-admin');
+      return sendSuccess(res, await quizAdminView(db));
+    }
 
     if (view === 'intent_weights') {
       const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));

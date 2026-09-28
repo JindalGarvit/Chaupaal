@@ -535,9 +535,10 @@
       return;
     }
 
-    // Quiz: category sheet is the allowed optional step
+    // Quiz: Practice opens directly (category under Settings)
     if (gameId === 'quiz') {
-      if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
+      if (window.QuizGame) QuizGame.openPractice();
+      else if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
       else if (typeof startMuqabala === 'function') {
         startMuqabala(null, 'GK', {
           practice: true,
@@ -1127,7 +1128,8 @@
     }
 
     if (gameId === 'quiz') {
-      if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
+      if (window.QuizGame) QuizGame.openHome();
+      else if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
       return;
     }
 
@@ -1165,33 +1167,34 @@
     launchDangalWithOpponent(gameId);
   }
 
-  // Muqabala / quiz — registry launch; engine + content sources in dangal.js / baithak.js.
+  // Quiz Muqabala (P6) — QuizGame (quiz-ui.js): Daily / Duel / Party / Practice / News.
+  // Custom / AI question sets from the Baithak challenge creator stay on the classic engine (dangal.js).
   registerGame({
     id: 'quiz',
     name: 'Quiz Muqabala',
-    desc: 'GK, Sports, Tech & more — pick a category',
+    desc: 'Daily, Duel, Party & Practice — fast, fair trivia',
     icon: '🧠',
     gameType: 'dual',
     liveDuel: true,
+    liveParty: true,
     genre: 'words',
-    ratingKey: null,
+    ratingKey: 'quiz',
     dangal: true,
     chat1v1: true,
-    chatGroup: false,
+    chatGroup: true,
     selfChat: false,
+    ownHome: true,
     order: 0,
     meta: {
-      engine: 'startMuqabala → runMuqabala (dangal.js)',
-      questions: 'bank: SAMPLE_* + MUQABALA_QUESTIONS; manual/ai via opts.questions',
-      customCreator: 'baithak openChallengeCreator → same engine',
-      timers: '10/15/20/30s (default 20)',
-      aiQuiz: 'generateMuqabalaQuestionsAI via callAI; gated by isAiFeaturesEnabled',
-      session: 'createGameSession type=quiz',
-      live: 'DangalLive games/quiz/{matchId} — Phase B lockstep + Phase C stakes',
-      stakes: 'DangalEconomy.reportGameEnd once per matchId; Friendly=0',
+      core: 'quiz-core.js (scoring, timing, selection, calibration, Daily; shared with the server)',
+      live: 'party_room game quizroom → server-lib/quiz-engine.js; server-held answers, synchronized start, RTT-compensated timing',
+      solo: 'media-config action quiz → server-lib/quiz-service.js (Daily / Practice / News / report)',
+      bank: 'server-lib/quiz-bank.js (3,000+ bundled) + quizItems (AI / news, scheduler batch)',
+      customCreator: 'baithak openChallengeCreator → classic startMuqabala engine (unrated)',
     },
     launch(ctx) {
       const c = ctx || window.__dangalLaunchCtx || {};
+      if (window.QuizGame && typeof QuizGame.launch === 'function') return QuizGame.launch(c);
       const liveIntent =
         c.mode === 'live' ||
         c.source === 'challenge' ||

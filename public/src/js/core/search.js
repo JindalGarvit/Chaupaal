@@ -463,7 +463,7 @@
             score: 70,
           }))
         : [
-            { type: 'game', category: 'games', id: 'quiz', title: 'Muqabala', subtitle: 'Dangal quiz', score: 70 },
+            { type: 'game', category: 'games', id: 'quiz', title: 'Quiz Muqabala', subtitle: 'Daily Quiz, Duel & Party trivia', score: 70 },
             { type: 'game', category: 'games', id: 'chess', title: 'Chess', subtitle: 'Board', score: 60 },
           ];
     return catalog

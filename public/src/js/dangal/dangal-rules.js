@@ -175,12 +175,22 @@
       ],
     },
     quiz: {
-      ruleset: { name: 'Quiz Duel', source: 'Timed quiz duel · our own questions', simplified: false },
-      variants: [opt('category', 'Topic', 'GK', ['GK', 'Sports', 'Tech', 'Business', 'World'], 'host')],
-      glance: ['Same questions for both players', 'Answer before the timer runs out', 'Most correct answers wins'],
+      ruleset: { name: 'Quiz Muqabala', source: 'Timed multiple-choice quiz · our own questions', simplified: false },
+      variants: [
+        opt('length', 'Questions (Party)', 10, [5, 10, 15, 20], 'host'),
+        opt('questionMs', 'Time per question (Party, ms)', 20000, [10000, 15000, 20000, 30000], 'host'),
+        opt('difficulty', 'Difficulty (Party)', 0, [0, 1, 2, 3], 'host'),
+      ],
+      glance: ['Everyone gets the same question at the same moment', 'Tap one of four answers before the ring runs out', 'Correct and fast scores most'],
       rules: [
-        { h: 'Timing', body: 'Late taps do not count. Faster correct answers build combo streaks.' },
-        { h: 'Winning', body: 'Higher score after the last question wins; equal scores are a draw.' },
+        { h: 'Scoring', body: 'A correct answer scores 600 + 400 × (time left ÷ time limit): 1000 for an instant answer, 600 at the buzzer. Wrong or no answer scores 0.' },
+        { h: 'Ties', body: 'Equal scores are split by total answer time — lower wins. Unanswered questions count the full time. Exactly equal is a draw.' },
+        { h: 'Fair timing', body: 'Questions open at the same server time for everyone. Your answer time is measured on the server, minus half your measured network round trip (at most 0.25 s), so a slower connection is not punished. Answers are checked on the server; nobody sees the right answer before the reveal.' },
+        { h: 'Duel', body: 'Live 1v1, rated. 10 questions, 15 seconds each, the same questions and option order for both players, matched to your ratings. You see when your opponent has answered, never what they picked.' },
+        { h: 'Disconnects', body: 'Dropping mid-question simply counts as no answer; rejoin and carry on. Leaving a Duel, or staying away for 60 seconds, forfeits and counts as a rated loss.' },
+        { h: 'Party Quiz', body: '2–50 players in a room. The host picks categories, length, time per question and difficulty, and can run a big-screen view while everyone answers on their phone.' },
+        { h: 'Daily Quiz', body: '10 questions, the same for everyone, new at your local midnight. One attempt; leaderboards and streaks after you finish.' },
+        { h: 'Reports', body: 'Think a question is wrong, unclear or offensive? Tap Report on the reveal — flagged questions are reviewed and removed.' },
       ],
     },
     carrom: {
@@ -330,7 +340,7 @@
   };
 
   const IDS = Object.keys(GAMES);
-  const ALIASES = { tictactoe: 'ttt', kakuro: 'ankjod', muqabala: 'quiz', shabdfive: 'wordguess', ohnocards: 'uno', snakesladders: 'snakes', holdem: 'poker', penaltyshootout: 'penalty', cricket: 'streetcricket' };
+  const ALIASES = { tictactoe: 'ttt', kakuro: 'ankjod', muqabala: 'quiz', quizroom: 'quiz', shabdfive: 'wordguess', ohnocards: 'uno', snakesladders: 'snakes', holdem: 'poker', penaltyshootout: 'penalty', cricket: 'streetcricket' };
 
   function canon(id) {
     const raw = String(id || '').toLowerCase().replace(/[\s-]+/g, '');

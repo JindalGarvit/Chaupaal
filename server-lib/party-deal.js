@@ -22,6 +22,7 @@ const { createWerewolfAdapter } = require('./werewolf-engine.js');
 const { createClassicsAdapters } = require('./classics-rooms.js');
 const { createOhnoAdapter } = require('./ohno-engine.js');
 const { createScribbleAdapter } = require('./scribble-engine.js');
+const { createQuizAdapter } = require('./quiz-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -539,6 +540,7 @@ const GAMES = {
 Object.assign(GAMES, createClassicsAdapters({ err }));
 GAMES.uno = createOhnoAdapter({ err });
 GAMES.scribble = createScribbleAdapter({ err });
+GAMES.quizroom = createQuizAdapter({ err });
 
 // ------------------------------------------------------------------ room engine
 
@@ -717,7 +719,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
     }
     if (game.canJoin && !game.canJoin(room, uid)) throw err('removed', 'You were removed from this room');
     const seats = seatOrder(pub).filter((id) => !pub.players[id].left);
-    if (seats.length >= game.max) throw err('room_full', 'This room is full');
+    if (seats.length >= (game.maxFor ? game.maxFor(room) : game.max)) throw err('room_full', 'This room is full');
     const seat = seatOrder(pub).reduce((m, id) => Math.max(m, pub.players[id].seat || 0), -1) + 1;
     pub.players[uid] = { name: cleanName(a.name), seat, joinedAt: now };
     if (!(uid in pub.scores)) pub.scores[uid] = 0;
@@ -914,7 +916,8 @@ function hydrateRoom(room) {
  * @param {object} body { op, game, code, name, settings, ...op args }
  */
 async function partyRoom(adminApp, uid, body, deps) {
-  const b = body || {};
+  const b = Object.assign({}, body || {});
+  delete b.prep;
   const op = String(b.op || '');
   const game = String(b.game || 'imposter');
   if (!GAMES[game]) throw err('unknown_game', 'Unknown party game');
@@ -953,6 +956,8 @@ async function partyRoom(adminApp, uid, body, deps) {
   if (!code) throw err('bad_code', 'Check the room code');
   const path = `games/${game}/${code}`;
   const g = GAMES[game];
+  if (g.direct && g.direct[op]) return Object.assign({ code, game, serverNow: now }, await g.direct[op](adminApp, rtdb, path, uid, b));
+  if (g.prepare && op === 'start') b.prep = await g.prepare(adminApp, rtdb, path, uid, deps);
   const result = await transactRoom(rtdb, path, (current) => {
     const out = reduceRoom(current, uid, op, b, now, Math.random);
     const req = g.pendingSettlement && out.room.server ? g.pendingSettlement(out.room.server) : null;
@@ -972,26 +977,51 @@ async function partyRoom(adminApp, uid, body, deps) {
   return Object.assign({ code, game, serverNow: now }, result);
 }
 
-/** Placement chips for a finished classics game, then mark it settled in the room (one publish). */
+/**
+ * Settle a finished room game, then mark it settled in the room (one publish).
+ * Placement (default): chips by finishing place. `kind: 'h2h'`: a rated 1v1 through resolveGame.
+ */
 async function settleRoom(adminApp, rtdb, path, req, deps) {
   const economy = (deps && deps.economy) || require('./dangal-economy.js');
   const db = (deps && deps.db) || adminApp.firestore();
   const admin = (deps && deps.admin) || adminApp;
-  const out = await economy.resolvePlacement(db, admin, {
-    gameType: req.game,
-    matchId: req.matchId,
-    ranking: req.ranking || [],
-    teams: req.teams || null,
-    stake: Number(req.stake) || 0,
-    draw: !!req.draw,
-    rolls: req.rolls || {},
-    forfeits: req.forfeits || [],
-  });
   const results = {};
-  Object.keys((out && out.players) || {}).forEach((id) => {
-    const p = out.players[id];
-    results[id] = { place: p.place, chipDelta: p.chipDelta, won: !!p.won };
-  });
+  if (req.kind === 'h2h') {
+    const out = await economy.resolveGame(
+      db,
+      admin,
+      req.a,
+      { gameType: req.game, result: req.result, opponentUid: req.b, matchId: req.matchId, rated: req.rated !== false, stake: 0 },
+      { trusted: true }
+    );
+    const o = out || {};
+    const opp = o.opponent || {};
+    results[req.a] = { place: req.result === 'loss' ? 2 : 1, won: req.result === 'win', draw: req.result === 'draw', chipDelta: o.chipDelta || 0, eloDelta: o.eloDelta || 0 };
+    results[req.b] = { place: req.result === 'win' ? 2 : 1, won: req.result === 'loss', draw: req.result === 'draw', chipDelta: opp.chipDelta || 0, eloDelta: opp.eloDelta || 0 };
+  } else {
+    const out = await economy.resolvePlacement(db, admin, {
+      gameType: req.game,
+      matchId: req.matchId,
+      ranking: req.ranking || [],
+      teams: req.teams || null,
+      stake: Number(req.stake) || 0,
+      draw: !!req.draw,
+      rolls: req.rolls || {},
+      forfeits: req.forfeits || [],
+    });
+    Object.keys((out && out.players) || {}).forEach((id) => {
+      const p = out.players[id];
+      results[id] = { place: p.place, chipDelta: p.chipDelta, won: !!p.won };
+    });
+  }
+  const g = GAMES[String(path).split('/')[1]];
+  if (g && g.afterSettle) {
+    try {
+      await g.afterSettle(adminApp, req, deps);
+    } catch (e) {
+      console.warn('[party_room] afterSettle', e && e.message);
+    }
+  }
   await transactRoom(rtdb, path, (current) => {
     if (!current || !current.server || !current.server.settleReq || current.server.settleReq.matchId !== req.matchId) {
       return current ? { room: current, result: {} } : null;

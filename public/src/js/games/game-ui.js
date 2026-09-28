@@ -108,7 +108,11 @@
   }
 
   const COACH_TIPS = {
-    quiz: ['Answer before the timer ends — late taps don’t count', 'Stay correct to build combo streaks', 'Practice is free; friend challenges skip the daily match limit'],
+    quiz: [
+      'Daily Quiz: same 10 for everyone, one attempt · Duel: rated 1v1 · Party: 2–50 in a room',
+      'Correct = 600 + up to 400 for speed · ties go to the faster total time',
+      'Practice any category, unlimited and unrated · Report a question from its reveal',
+    ],
     chess: ['Tap a piece, then a highlighted square', 'Fischer Random shuffles the back rank', 'Harder AI thinks a little longer'],
     snakes: [
       'Classic · Vedic (bounce) · Speed (2 dice) · Chaos (flips) · Moksha Patam 72 exact finish',
@@ -537,7 +541,7 @@
   }
 
   function resolveGameAccent(gameId, fallback) {
-    const id = String(gameId || '').toLowerCase();
+    const id = normalizeDangalGameId(gameId);
     if (typeof getGameIdentity === 'function') {
       const ident = getGameIdentity(id);
       if (ident && ident.primary) return ident.primary;
@@ -559,7 +563,7 @@
       overlay.dataset.gameId = gameId;
       const accent = o.accent || resolveGameAccent(gameId);
       overlay.style.setProperty('--game-accent', accent);
-      if (typeof applyGameIdentity === 'function') applyGameIdentity(gameId, overlay);
+      if (typeof applyGameIdentity === 'function') applyGameIdentity(normalizeDangalGameId(gameId), overlay);
       if (o.accent) overlay.style.setProperty('--game-accent', o.accent);
       // Prefer SVG mark in chrome when callers only passed a title string
       if (typeof gameMarkHtml === 'function' && o.hideGameMark !== true) {
@@ -1644,7 +1648,7 @@
 
   function normalizeDangalGameId(gameId) {
     const id = String(gameId || '').toLowerCase();
-    if (id === 'muqabala' || id === 'quiz') return 'quiz';
+    if (id === 'muqabala' || id === 'quiz' || id === 'quizroom') return 'quiz';
     if (id === 'kakuro') return 'ankjod';
     if (id === 'tictactoe') return 'ttt';
     return id;

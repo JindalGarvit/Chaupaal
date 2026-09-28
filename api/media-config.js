@@ -984,6 +984,28 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Quiz Muqabala: Daily / Practice / News graded server-side; answers never sent before a reveal ──
+  if (action === 'quiz') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'party');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+      }
+    } catch (e) {}
+    try {
+      const adminApp = initAdmin();
+      if (!adminApp) return sendError(res, 503, 'UNAVAILABLE', 'Try again shortly');
+      const { quizAction } = require('../server-lib/quiz-service');
+      const out = await quizAction(adminApp, user.uid, body, Date.now());
+      return sendSuccess(res, out);
+    } catch (e) {
+      if (e?.code === 'VALIDATION_ERROR') return sendError(res, 400, 'VALIDATION_ERROR', e.message || 'Invalid request');
+      console.warn('[media-config] quiz', e?.message || e);
+      return sendError(res, 500, 'QUIZ_ERROR', 'Could not load that right now');
+    }
+  }
+
   // ─── Dangal party rooms (Imposter …): server-side dealing; roles never in shared state ──
   if (action === 'party_room') {
     try {

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chaupaal · Quiz moderation</title>
+  <style>
+    :root { --ink:#2B2730; --cream:#FFF8F0; --red:#E63946; --green:#2A9D8F; --line:#E8DFD4; --muted:#7A7280; --navy:#1B1F3B; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, Segoe UI, sans-serif; background:var(--cream); color:var(--ink); }
+    header { background:var(--navy); color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    h1 { font-size:18px; margin:0; }
+    h2 { font-size:15px; margin:0 0 12px; }
+    main { max-width:960px; margin:0 auto; padding:20px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    button { border:none; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer; background:var(--red); color:#fff; }
+    button.ok { background:var(--green); }
+    button.secondary { background:transparent; color:var(--ink); border:1px solid var(--line); }
+    .meta { font-size:12px; color:var(--muted); }
+    .err { color:var(--red); font-weight:600; }
+    .q { border-top:1px solid var(--line); padding:12px 0; }
+    .q:first-child { border-top:none; }
+    .prompt { font-weight:700; margin-bottom:6px; }
+    .opts { margin:0 0 6px; padding-left:18px; font-size:14px; }
+    .opts li.correct { color:var(--green); font-weight:700; }
+    .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:rgba(230,57,70,.1); color:var(--red); margin-right:4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dangal · Quiz moderation</h1>
+    <div class="row">
+      <a href="/admin/feedback.html" style="color:#fff;font-size:13px;">Feedback</a>
+      <a href="/admin/games-health.html" style="color:#fff;font-size:13px;">Games health</a>
+      <button type="button" id="btnLogin" class="secondary" style="color:#fff;border-color:rgba(255,255,255,.3)">Sign in</button>
+      <button type="button" id="btnRefresh">Refresh</button>
+    </div>
+  </header>
+  <main>
+    <div class="card">
+      <p>Player reports (wrong / unclear / offensive) and AI questions waiting for promotion. <strong>Keep</strong> dismisses reports (and activates a pending item); <strong>Retire</strong> removes the question from every mode. Requires Firebase custom claim <code>admin: true</code>.</p>
+      <div id="authStatus" class="meta">Not signed in</div>
+    </div>
+    <div class="card"><h2>Reported questions</h2><div id="reports"><p class="meta">Sign in to load.</p></div></div>
+    <div class="card"><h2>Pending AI questions</h2><div id="pending"><p class="meta">Sign in to load.</p></div></div>
+  </main>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="/src/js/config/firebase.js"></script>
+  <script>
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    async function api(method, query, body) {
+      const u = firebase.auth().currentUser;
+      if (!u) throw new Error('Not signed in');
+      const token = await u.getIdToken();
+      const res = await fetch('/api/admin-feedback' + (query || ''), {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return res.json();
+    }
+
+    function statsLine(st) {
+      if (!st) return 'No answers yet';
+      const a = st.answers || 0;
+      const rate = a ? Math.round(((st.correct || 0) / a) * 100) + '% correct' : 'no answers';
+      return `${a} answers · ${rate} · ${st.reports || 0} reports`;
+    }
+
+    function card(q, extra) {
+      return `<div class="q" data-qid="${esc(q.qid)}">
+        <div class="prompt">${esc(q.prompt)}</div>
+        <ol class="opts" start="1">${(q.options || []).map((o, i) => `<li class="${i === q.correctIndex ? 'correct' : ''}">${esc(o)}</li>`).join('')}</ol>
+        ${q.explanation ? `<div class="meta">${esc(q.explanation)}</div>` : ''}
+        ${q.quote ? `<div class="meta">Source: “${esc(q.quote)}”</div>` : ''}
+        <div class="meta">${esc(q.category || '')} · ${esc(q.source || '')} · ${esc(statsLine(q.stats))}</div>
+        ${extra || ''}
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="ok" data-act="quiz_approve">Keep</button>
+          <button type="button" data-act="quiz_retire">Retire</button>
+        </div>
+      </div>`;
+    }
+
+    function render(data) {
+      const reports = data.reports || [];
+      const pending = data.pending || [];
+      document.getElementById('reports').innerHTML = reports.length
+        ? reports.map((r) => card(r, `<div style="margin-top:4px">${Object.keys(r.reasons || {}).map((k) => `<span class="tag">${esc(k)} × ${r.reasons[k]}</span>`).join('')}${(r.notes || []).slice(0, 3).map((n) => `<div class="meta">“${esc(n)}”</div>`).join('')}</div>`)).join('')
+        : '<p class="meta">No open reports.</p>';
+      document.getElementById('pending').innerHTML = pending.length ? pending.map((p) => card(p)).join('') : '<p class="meta">Nothing pending — AI generation is off or the queue is clear.</p>';
+    }
+
+    async function refresh() {
+      document.getElementById('reports').innerHTML = '<p class="meta">Loading…</p>';
+      try {
+        const env = await api('GET', '?view=quiz');
+        if (!env || !env.ok) throw new Error((env && env.error && env.error.message) || 'Failed');
+        render(env.data || {});
+      } catch (e) {
+        document.getElementById('reports').innerHTML = `<p class="err">${esc(e.message || e)}</p>`;
+      }
+    }
+
+    document.addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('button[data-act]');
+      if (!btn) return;
+      const qid = btn.closest('[data-qid]').dataset.qid;
+      btn.disabled = true;
+      try {
+        const env = await api('POST', '', { action: btn.dataset.act, qid });
+        if (!env || !env.ok) throw new Error((env && env.error && env.error.message) || 'Failed');
+        refresh();
+      } catch (e) {
+        alert(e.message || e);
+        btn.disabled = false;
+      }
+    });
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+      await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    });
+    document.getElementById('btnRefresh').addEventListener('click', refresh);
+    firebase.auth().onAuthStateChanged(async (u) => {
+      const statusEl = document.getElementById('authStatus');
+      if (!u) {
+        statusEl.textContent = 'Not signed in';
+        return;
+      }
+      const t = await u.getIdTokenResult(true);
+      const isAdmin = t.claims && t.claims.admin === true;
+      statusEl.textContent = isAdmin ? `Signed in as ${u.email || u.uid} (admin)` : `Signed in as ${u.email || u.uid} — missing admin claim`;
+      if (isAdmin) refresh();
+    });
+  </script>
+</body>
+</html>

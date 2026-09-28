@@ -591,6 +591,20 @@ module.exports = async function handler(req, res) {
       console.warn('[scheduler] retention', e?.message || e);
     }
 
+    // Dangal P6 Quiz Muqabala — expire news / promote / retire / calibrate; AI generation when enabled
+    let quiz = { skipped: true };
+    try {
+      if (withinBudget()) {
+        const { runQuizJobs } = require('../server-lib/quiz-ai-pipeline');
+        quiz = await runQuizJobs({ db, admin, now: Date.now() });
+      } else {
+        quiz = { skipped: true, reason: 'duration_budget' };
+      }
+    } catch (e) {
+      quiz = { error: e?.message || String(e) };
+      console.warn('[scheduler] quiz', e?.message || e);
+    }
+
     return sendSuccess(res, {
       ...results,
       summary,
@@ -608,6 +622,7 @@ module.exports = async function handler(req, res) {
       matchMetrics,
       aiEnrichment,
       retention,
+      quiz,
       timing: {
         elapsedMs: Date.now() - startedAt,
         softBudgetMs: SOFT_BUDGET_MS,

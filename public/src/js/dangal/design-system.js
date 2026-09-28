@@ -106,7 +106,7 @@
     ludo: 'Standard rules',
     uno: 'Rules based on the classic shedding card game',
     scribble: 'Draw-and-guess party rules · our own word list',
-    quiz: 'Timed quiz duel · our own questions',
+    quiz: 'Timed multiple-choice quiz · our own questions',
     carrom: 'Simplified rules based on common carrom rules',
     rummy: 'Traditional 13-card rummy rules',
     teenpatti: 'Traditional Teen Patti rules · virtual chips only',

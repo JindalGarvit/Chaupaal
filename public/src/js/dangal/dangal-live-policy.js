@@ -45,7 +45,16 @@
     // Dangal P5 Scribble (server-lib/scribble-engine.js): pick timeout → auto-pick; the maxMisses-th
     // missed pick in a row skips the turn instead. Drawer disconnect / leave → turn skipped.
     scribble: { afk: { action: 'auto_pick', maxMisses: 3 }, leave: 'skip_turn', resign: false, spectate: false },
-    quiz: { afk: { action: 'no_answer', maxMisses: 3 }, rematch: { swapSides: false, sameVariants: true } },
+    // Dangal P6 Quiz Muqabala (server-lib/quiz-engine.js): a missed question is simply no answer (no
+    // forfeit while online). Duel: leaving, or offline past reconnectMs, forfeits (rated). Party plays on.
+    quiz: {
+      reconnectMs: 60000,
+      afk: { action: 'no_answer', maxMisses: 99 },
+      leave: 'forfeit',
+      abandon: { winner: 'remaining', chips: 'none', rated: true },
+      resign: true,
+      rematch: { swapSides: false, sameVariants: true },
+    },
     carrom: { afk: { action: 'pass', maxMisses: 3 } },
     rummy: { afk: { action: 'auto_play', maxMisses: 3 } },
     teenpatti: { afk: { action: 'fold', maxMisses: 2 } },
