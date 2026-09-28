@@ -73,7 +73,9 @@
     // Dangal P9 Tambola (server-lib/tambola-engine.js): no turns — the draw never waits for anyone.
     // Missing a number is on you (daubs are yours); leaving keeps your tickets in play but you can't claim.
     tambola: { reconnectMs: 120000, afk: { action: 'none', maxMisses: 99 }, leave: 'tickets_idle', abandon: { winner: 'none', chips: 'pot_shares', rated: false }, dualLeave: 'room_continues', resign: false, spectate: true, rematch: { swapSides: false, sameVariants: true } },
-    streetcricket: { afk: { action: 'auto_play', maxMisses: 3 } },
+    // Dangal P10 Street Cricket (server-lib/cricket-engine.js): 12s to pick a delivery, else the server
+    // bowls one; no swing = a miss. Three missed turns in a row (either role) or leaving forfeits.
+    streetcricket: { reconnectMs: 90000, turnMs: 12000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'forfeit', rematch: { swapSides: true, sameVariants: true } },
     badminton: { afk: { action: 'auto_play', maxMisses: 3 } },
     // Server-resolved engines (H2 / H3): shipped timings stay the policy until their tuning prompt.
     penalty: { reconnectMs: 90000, turnMs: 20000, afk: { action: 'random_pick', maxMisses: 99 }, rematch: { swapSides: true, sameVariants: true } },

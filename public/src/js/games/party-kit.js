@@ -914,6 +914,7 @@
     mostlikely: ['data/mostlikely-packs.js', 'games/mostlikely-core.js'],
     werewolf: ['games/werewolf-core.js'],
     penalty: ['games/penalty-core.js'],
+    streetcricket: ['games/cricket-engine.js'],
     poker: ['games/poker-core.js'],
     ludo: ['games/ludo-core.js'],
     snakes: ['games/snakes-core.js'],

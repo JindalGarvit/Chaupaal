@@ -2311,3 +2311,101 @@ button.rm-card{cursor:grab;touch-action:none;}
 @media (prefers-reduced-motion:reduce){
   .bl-bluff-btn,.bl-flip,.tb-ball.is-new{animation:none;}
 }
+
+/* ---- Street Cricket (P10): strip, over dots, scorecard, charts, history ---- */
+.rw-sc-pitch .sc-ball{animation:none !important;margin-left:-8px;}
+.sc-overlay > .game-chrome{align-self:stretch;}
+.sc-card-match{display:flex;flex-direction:column;gap:8px;}
+.sc-strip{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:14px;background:#12372A;color:#fff;}
+.sc-strip.is-super{background:#4A148C;}
+.sc-strip-main{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;}
+.sc-strip-team{font-size:13px;opacity:.85;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sc-strip-score{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;}
+.sc-strip-ov{font-size:13px;opacity:.8;font-variant-numeric:tabular-nums;}
+.sc-strip-fh{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:#FFD54F;color:#3E2723;}
+.sc-strip-meta{font-size:12px;opacity:.85;font-variant-numeric:tabular-nums;}
+.sc-over{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:28px;}
+.sc-over--empty{font-size:12px;opacity:.6;}
+.sc-dot{min-width:26px;height:26px;padding:0 5px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(127,127,127,.16);color:inherit;flex:0 0 auto;}
+.sc-dot--dot{background:rgba(127,127,127,.12);}
+.sc-dot--run{background:rgba(27,122,78,.16);color:#1B5E20;}
+.sc-dot--four{background:#1565C0;color:#fff;}
+.sc-dot--six{background:#6A1B9A;color:#fff;}
+.sc-dot--w{background:#C62828;color:#fff;}
+.sc-dot--wd,.sc-dot--nb{background:#FFE082;color:#4E342E;}
+.sc-dot--b,.sc-dot--lb{background:#CFD8DC;color:#263238;}
+.sc-dot--pen{background:#FFAB91;color:#3E2723;}
+.sc-hint{min-height:1.2em;margin:0;text-align:center;}
+.rw-sc-shots.sc-deliveries{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+.rw-sc-shots.sc-deliveries .rw-sc-shot{padding-left:4px;padding-right:4px;}
+.sc-del-tag{position:absolute;left:8px;top:8px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(0,0,0,.35);color:#fff;}
+.sc-links{display:flex;justify-content:center;gap:18px;}
+.sc-link{appearance:none;border:0;background:none;padding:6px 4px;font:inherit;font-size:13px;font-weight:600;color:#1B7A4E;text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+.sc-wait{text-align:center;display:flex;flex-direction:column;gap:10px;align-items:stretch;}
+.sc-sheet{display:flex;flex-direction:column;gap:12px;}
+.sc-sheet-body{max-height:62vh;overflow:auto;-webkit-overflow-scrolling:touch;}
+.sc-card{display:flex;flex-direction:column;gap:12px;}
+.sc-result{font-weight:800;font-size:15px;}
+.sc-card-meta{font-size:12px;opacity:.7;}
+.sc-inn{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:12px;background:rgba(127,127,127,.08);}
+.sc-inn-head{display:flex;justify-content:space-between;gap:8px;margin:0;font-size:14px;font-weight:800;}
+.sc-inn-head small{font-weight:500;opacity:.7;}
+.sc-table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;}
+.sc-table th{font-weight:600;opacity:.65;text-align:right;padding:4px 3px;border-bottom:1px solid rgba(127,127,127,.25);}
+.sc-table td{text-align:right;padding:5px 3px;border-bottom:1px solid rgba(127,127,127,.12);vertical-align:top;}
+.sc-table th:first-child,.sc-table td:first-child{text-align:left;width:52%;}
+.sc-name{display:block;font-weight:600;}
+.sc-how{display:block;font-size:11px;opacity:.65;}
+.sc-line{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:2px 0;}
+.sc-line--total{font-weight:800;}
+.sc-sub{font-size:12px;line-height:1.45;}
+.sc-sub--stats{opacity:.75;}
+.sc-parts{margin:4px 0 0;padding-left:18px;}
+.sc-attrib{font-size:11px;opacity:.6;text-align:center;}
+.sc-charts{display:flex;flex-direction:column;gap:6px;}
+.sc-charts h4{margin:8px 0 0;font-size:13px;}
+.sc-chart{width:100%;height:auto;display:block;}
+.sc-axis{stroke:currentColor;stroke-opacity:.3;stroke-width:1;}
+.sc-ax{fill:currentColor;fill-opacity:.6;font-size:10px;}
+.sc-field{fill:#558B2F;fill-opacity:.25;stroke:#558B2F;stroke-opacity:.5;}
+.sc-inner{fill:none;stroke:currentColor;stroke-opacity:.2;stroke-dasharray:3 3;}
+.sc-strip-rect{fill:#D7CCC8;}
+.sc-wagons{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;}
+.sc-wagon{margin:0;text-align:center;font-size:12px;}
+.sc-chart--wagon{max-width:170px;margin:0 auto;}
+.sc-legends{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;}
+.sc-legend{display:inline-flex;align-items:center;gap:5px;}
+.sc-legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.sc-timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:12.5px;}
+.sc-timeline li{display:flex;align-items:flex-start;gap:8px;}
+.sc-timeline li span:last-child{flex:1;min-width:0;padding-top:4px;}
+.sc-tl-head{font-weight:800;margin-top:8px;padding-bottom:2px;border-bottom:1px solid rgba(127,127,127,.25);}
+.sc-sum{display:flex;flex-direction:column;gap:4px;text-align:center;}
+.sc-sum-line{font-weight:700;font-variant-numeric:tabular-nums;}
+.sc-sum-top{font-size:13px;opacity:.8;}
+.sc-sum-note{font-size:12px;opacity:.75;}
+.sc-sum-note:empty{display:none;}
+.sc-banner{padding:8px 12px;border-radius:12px;background:rgba(255,213,79,.22);font-size:13px;}
+.sc-toggles{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+.sc-toggle{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;}
+.sc-toggle input{width:18px;height:18px;accent-color:#1B7A4E;}
+.sc-adv{margin:4px 0 12px;}
+.sc-adv summary{cursor:pointer;font-weight:600;padding:6px 0;}
+.sc-finding{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;}
+.sc-finding-ball{font-size:40px;animation:sc-bob 1.2s ease-in-out infinite;}
+@keyframes sc-bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+.sc-laws{display:flex;flex-direction:column;gap:4px;}
+.sc-laws h4{margin:10px 0 2px;font-size:13px;}
+.sc-laws ul{margin:0;padding-left:18px;font-size:12.5px;}
+.sc-hist{display:flex;flex-direction:column;gap:6px;}
+.sc-hist-head{font-weight:700;font-size:13px;margin-bottom:2px;}
+.sc-hist--profile{margin-top:14px;}
+.sc-hist-row{appearance:none;display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border-radius:12px;border:1px solid rgba(127,127,127,.2);background:rgba(127,127,127,.06);color:inherit;font:inherit;cursor:pointer;}
+.sc-hist-tag{flex:0 0 auto;min-width:40px;text-align:center;font-size:11px;font-weight:800;padding:3px 6px;border-radius:999px;background:rgba(127,127,127,.2);}
+.sc-hist-tag--w{background:#2E7D32;color:#fff;}
+.sc-hist-tag--l{background:#C62828;color:#fff;}
+.sc-hist-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.sc-hist-title{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sc-hist-sub{font-size:12px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sc-hist-when{flex:0 0 auto;font-size:11px;opacity:.6;}
+@media (prefers-reduced-motion:reduce){.sc-finding-ball{animation:none;}}

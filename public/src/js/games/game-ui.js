@@ -146,9 +146,9 @@
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: [
-      'Street formats — Over, Nets, Chase (not full cricket law)',
-      'Live: one friend bowls, the other bats — then swap innings for a fair duel',
-      'Leave = forfeit · Rematch = new match · virtual stakes (not real money)',
+      'Based on the MCC Laws of Cricket, adapted for street play — pick a delivery, time your shot',
+      'Wides and no-balls cost an extra · a no-ball earns a free hit (only a run out counts)',
+      'Standard is rated · Gully and Backyard rules are unrated · Live is resolved by our server',
     ],
     badminton: [
       'Simplified rules · one game to 21 (win by 2; 29-all → 30) — not best-of-3',

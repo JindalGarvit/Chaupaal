@@ -311,12 +311,32 @@
       ],
     },
     streetcricket: {
-      ruleset: { name: 'Street Cricket', source: 'Simplified street formats · not the full Laws of Cricket', simplified: true },
-      variants: [opt('format', 'Format', 'over', ['over', 'nets', 'chase'], 'host')],
-      glance: ['Time your swing to score runs', 'Get out and your innings ends', 'Live: bat, then swap and bowl'],
+      ruleset: { name: 'Street Cricket', source: 'Based on the MCC Laws of Cricket, adapted for street play', simplified: true },
+      variants: [
+        opt('format', 'Format', 'standard', ['superquick', 'quick', 'standard', 'long'], 'host', {
+          labels: { superquick: 'Super Quick · 1 over, 1 wicket', quick: 'Quick · 2 overs, 2 wickets', standard: 'Standard · 5 overs, 3 wickets', long: 'Long · 10 overs, 5 wickets' },
+        }),
+        opt('preset', 'Rules', 'standard', ['standard', 'gully', 'backyard'], 'host', {
+          labels: { standard: 'Standard (rated)', gully: 'Gully rules (unrated)', backyard: 'Backyard rules (unrated)' },
+        }),
+        opt('sixOut', 'Six and out (Gully)', true, [true, false], 'host'),
+        opt('lastManStands', 'Last man stands (Gully)', true, [true, false], 'host'),
+        opt('tipAndRun', 'Tip and run (Backyard)', true, [true, false], 'host'),
+        opt('bounceCatch', 'One-bounce catch (Backyard)', true, [true, false], 'host'),
+        opt('tie', 'If scores are level', 'superover', ['superover', 'shared', 'boundaries'], 'host', {
+          labels: { superover: 'Super Over', shared: 'Shared tie', boundaries: 'Boundary count' },
+        }),
+      ],
+      glance: ['Bowl a delivery, or time your shot to score runs', 'Wides and no-balls cost an extra; a no-ball earns a free hit', 'Most runs after both innings wins'],
       rules: [
-        { h: 'Formats', body: 'Over: score in a short over. Nets: clean hits in a row. Chase: reach a target.' },
-        { h: 'Live', body: 'One player bowls while the other bats, then innings swap. Higher score wins.' },
+        { h: 'Innings', body: 'Each side bats once. An innings ends when the overs run out, the wickets fall, or the chasing side passes the target. Super Quick is 1 over and 1 wicket, Quick 2 and 2, Standard 5 and 3, Long 10 and 5. In 1v1 you bat every "life" yourself: each wicket brings you back as the next batter.' },
+        { h: 'Overs and extras', body: 'An over is 6 legal balls. A wide is 1 extra plus any runs; it is re-bowled and isn’t a ball faced. A no-ball is 1 extra plus the runs off the bat, is re-bowled, and the next ball is a free hit. Byes and leg-byes go to extras, not the bowler.' },
+        { h: 'Getting out', body: 'Bowled, caught, LBW, run out, stumped or hit wicket. Off a no-ball or a free hit you can only be run out. Off a wide you can be stumped, run out or hit wicket. A free hit carries over if the next ball is a wide or another no-ball.' },
+        { h: 'Batting and bowling', body: 'The bowler picks Medium, Quick, Flight or Spin. The batter arms Defend, Push or Loft and taps Hit as the ball arrives: early, perfect, late or a miss decides the outcome. In 1v1 one bowler bowls every over (the consecutive-overs law is waived).' },
+        { h: 'Result', body: 'The side that bats second wins by the wickets it has left (and the balls to spare); otherwise the side batting first wins by the runs between them. Level scores go to a Super Over (the chasing side bats first; repeat once, then boundary count), a shared tie, or boundary count, as the host picks.' },
+        { h: 'Gully rules', body: 'No LBW. One tip one hand: a one-handed catch after one bounce is out. Six and out: clearing the wall is out (toggle). Last man stands: the last batter bats on alone (toggle). A free hit still protects you from six and out. Unrated.' },
+        { h: 'Backyard rules', body: 'No LBW. You can’t be out first ball. Tip and run: if the bat touches the ball you must run (toggle). A one-bounce catch counts (toggle). Unrated.' },
+        { h: 'Live', body: 'Our server resolves every ball: the bowler sends a delivery, the batter sends a shot and the moment they tapped, and the server decides the outcome. Neither phone can send runs or a wicket. Only Standard is rated; virtual chips only.' },
       ],
     },
     badminton: {
@@ -444,6 +464,7 @@
   }
 
   function display(v, value) {
+    if (v.labels && v.labels[String(value)] != null) return v.labels[String(value)];
     if (value === true) return 'On';
     if (value === false) return 'Off';
     return String(value);

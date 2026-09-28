@@ -24,7 +24,7 @@ const conventions = read('CONVENTIONS.md');
 assert(/function federationHonestyLine/.test(ds), 'federationHonestyLine defined');
 assert(/function federationHonestyHtml/.test(ds), 'federationHonestyHtml defined');
 assert(/law:\s*'Simplified rules'/.test(ds) && /BWF Laws of Badminton/.test(ds), 'badminton: simplified rules + plain attribution (P0 honesty)');
-assert(/law:\s*'Street formats'/.test(ds), 'street cricket honest law label');
+assert(/law:\s*'MCC-based laws'/.test(ds) && /Based on the MCC Laws of Cricket, adapted for street play/.test(ds), 'street cricket honest law label (P10: MCC-based, adapted)');
 
 assert(/'Game to 21'/.test(court) && !/BWF-lite/.test(court), 'rally subtitle without federation wording');
 assert(/arcade timing · Live 1v1/.test(court), 'rally registry desc honesty');

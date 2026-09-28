@@ -9,7 +9,7 @@ const Ratings = require('./dangal-ratings');
 /** Rated titles live in the ratings service (Glicko-2). Tic-Tac-Toe is unrated quick-play. */
 const RATED = Ratings.RATED;
 /** Results only the server may report (it resolved every move) — client claims are ignored. */
-const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess', 'ludo', 'snakes', 'ttt', 'uno', 'scribble', 'quiz', 'carrom', 'rummy', 'teenpatti', 'bluff', 'tambola']);
+const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess', 'ludo', 'snakes', 'ttt', 'uno', 'scribble', 'quiz', 'carrom', 'rummy', 'teenpatti', 'bluff', 'tambola', 'streetcricket']);
 /**
  * Placement payouts for N-player staked games (Ludo, Snakes & Ladders): everyone antes the stake,
  * the pot splits by finishing place. Teams (2v2) and 1v1 are winner-takes-the-other-stake.
@@ -62,6 +62,7 @@ const ACHIEVEMENTS = {
   penalty_panenka: { label: 'Panenka', desc: 'Score a soft chip down the middle', chips: 150 },
   poker_royal_flush: { label: 'Royal Flush', desc: 'Make a royal flush at Texas Hold’em', chips: 250 },
   poker_bluff_master: { label: 'Bluff Master', desc: 'Win 10 pots without a showdown at public tables', chips: 200 },
+  cricket_three_sixes: { label: 'Maximum', desc: 'Hit three sixes in one Live Street Cricket innings', chips: 150 },
 };
 
 function canonicalGameId(id) {

@@ -87,6 +87,14 @@
       }
     };
     await load();
+    const own = typeof getCurrentUid === 'function' && getCurrentUid() === uid;
+    const SC = window.StreetCricketGame;
+    if (own && SC && typeof SC.historyCount === 'function' && SC.historyCount() > 0) {
+      const box = document.createElement('div');
+      box.className = 'dangal-profile__cricket';
+      containerEl.appendChild(box);
+      SC.mountHistory(box);
+    }
   }
 
   window.renderDangalProfileSection = renderDangalProfileSection;
