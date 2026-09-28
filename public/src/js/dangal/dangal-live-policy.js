@@ -42,7 +42,9 @@
     // Dangal P4 Oh No! (server-lib/ohno-engine.js): turn clock → auto-draw then pass; after
     // maxMisses (or on leave) a bot finishes the seat so the table can play on.
     uno: { turnMs: 20000, afk: { action: 'auto_draw', maxMisses: 3 }, leave: 'bot_takeover' },
-    scribble: { afk: { action: 'skip_turn', maxMisses: 2 }, resign: false },
+    // Dangal P5 Scribble (server-lib/scribble-engine.js): pick timeout → auto-pick; the maxMisses-th
+    // missed pick in a row skips the turn instead. Drawer disconnect / leave → turn skipped.
+    scribble: { afk: { action: 'auto_pick', maxMisses: 3 }, leave: 'skip_turn', resign: false, spectate: false },
     quiz: { afk: { action: 'no_answer', maxMisses: 3 }, rematch: { swapSides: false, sameVariants: true } },
     carrom: { afk: { action: 'pass', maxMisses: 3 } },
     rummy: { afk: { action: 'auto_play', maxMisses: 3 } },

@@ -37,9 +37,11 @@ const UNSAFE = [
   /\b(gamble|casino|real money|bet with cash|crypto)\b/i,
 ];
 
+const WordSafety = require('../public/src/js/dangal/word-safety.js');
+
 function isSafeText(s) {
   const t = String(s == null ? '' : s);
-  return !UNSAFE.some((re) => re.test(t));
+  return !UNSAFE.some((re) => re.test(t)) && !WordSafety.isBlocked(t);
 }
 
 function allStrings(v, out) {

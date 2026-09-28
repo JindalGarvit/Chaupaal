@@ -52,11 +52,13 @@
     wordguess: {
       ruleset: { name: 'Shabd Five', source: 'Five-letter word puzzle · our own word list', simplified: false },
       variants: [opt('hard', 'Hard mode', false, [false, true], 'solo')],
-      glance: ['Guess the five-letter word in six tries', 'Green: right letter, right spot · Amber: right letter, wrong spot', 'One Daily puzzle per day'],
+      glance: ['Guess the five-letter word in six tries', 'Green: right letter, right spot · Amber: right letter, wrong spot', 'One Daily puzzle per day — the same for everyone'],
       rules: [
-        { h: 'Guesses', body: 'Each guess must be a real five-letter word from our list.' },
-        { h: 'Hard mode', body: 'Revealed greens must stay in place and ambers must be reused in later guesses.' },
-        { h: 'Daily vs Practice', body: 'The Daily counts for your streak. Practice never touches streak or stats.' },
+        { h: 'Guesses', body: 'Each guess must be a real five-letter word from our list. Letters that appear twice are only marked as often as they are in the answer.' },
+        { h: 'Hard mode', body: 'Revealed greens must stay in place and ambers must be reused in later guesses. Choose it before your first guess.' },
+        { h: 'Daily', body: 'A new puzzle at your local midnight. It counts for your streak, which follows your account on every device. Past puzzles can be replayed from the archive.' },
+        { h: 'Practice', body: 'Unlimited random words with their own stats — never touches your Daily streak.' },
+        { h: 'Friends', body: 'See how the people you follow did today — only after you finish, so nothing is spoiled. Challenge a friend with your own word; it is encrypted in the link.' },
       ],
     },
     chess: {
@@ -158,12 +160,18 @@
     },
     scribble: {
       ruleset: { name: 'Scribble', source: 'Draw-and-guess party rules · our own word list', simplified: false },
-      variants: [range('rounds', 'Rounds', 3, 1, 5, 'host')],
-      glance: ['One player draws a secret word', 'Everyone else races to guess it', 'Faster guesses score more'],
+      variants: [
+        range('rounds', 'Rounds', 3, 2, 10, 'host'),
+        range('drawTime', 'Draw time (s)', 80, 30, 180, 'host'),
+        range('hints', 'Letter hints', 2, 0, 3, 'host'),
+      ],
+      glance: ['The drawer picks 1 of 3 words and draws it', 'Everyone else types guesses in the chat', 'Faster guesses score more'],
       rules: [
-        { h: 'Scoring', body: '100 / 75 / 50 points by guess order. The drawer gets +50 when someone scores.' },
-        { h: 'Clues', body: 'Drawings only — no letters or numbers. Close guesses show "close!".' },
-        { h: 'Players', body: 'Live 1v1 or a party of 3–6. A party continues while 2 or more players remain.' },
+        { h: 'Turns', body: 'Each round everyone draws once. The drawer has 15 seconds to pick an easy, medium or hard word (one is picked for them if time runs out).' },
+        { h: 'Scoring', body: 'A correct guess scores 50 + 250 × (time left ÷ draw time), so 300 at the start down to 50 at the buzzer. The drawer earns 200 ÷ (players guessing) per correct guesser, at least 10 each.' },
+        { h: 'Hints', body: 'Letters are revealed at even points through the draw time (0–3 hints, at least two letters stay hidden). Guesses one or two letters off show a private "So close!".' },
+        { h: 'Fair play', body: 'Correct guesses are hidden from the chat. The drawer and players who already guessed cannot type the word. Players can vote to kick, hosts can remove, and any drawing or player can be reported.' },
+        { h: 'Players', body: '2–12 players in a Live room. If the drawer leaves, their turn is skipped; if the host leaves, another player takes over.' },
       ],
     },
     quiz: {

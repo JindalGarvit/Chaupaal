@@ -878,6 +878,12 @@
       // /party/{CODE} or /party/{game}-{CODE} — join a party-kit room (Imposter …)
       switchTab('dangal');
       const raw = String(route.id || '');
+      const sf = raw.match(/^shabd-([0-9a-z]{10})$/i);
+      if (sf) {
+        // /party/shabd-{token} — a friend's Shabd Five word (encrypted in the token)
+        if (window.ShabdFive) setTimeout(() => ShabdFive.openChallenge(sf[1]), 250);
+        return true;
+      }
       const m = raw.match(/^([a-z]+)-([A-Za-z0-9]{6})$/);
       const game = m ? m[1] : 'imposter';
       const code = m ? m[2] : raw;

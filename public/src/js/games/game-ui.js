@@ -122,14 +122,14 @@
       'Live 1v1: virtual stakes settle once per board · Rematch = fresh match',
     ],
     wordguess: [
-      'One Daily puzzle per local day — progress saves; finished days stay locked',
-      'Hard Mode reuses greens & ambers · Stats show bars, streak, and a month calendar',
-      'Practice is a sealed sandbox — never touches streak or Daily stats',
+      'One Daily puzzle per local day, the same for everyone — streak follows your account',
+      'Hard mode reuses greens & ambers · archive of past puzzles · friends’ results after you finish',
+      'Practice has its own stats — never touches your Daily streak',
     ],
     scribble: [
-      'Live 1v1 or party 3–6 — one drawer, everyone else races to guess',
-      'Word stays secret until reveal · near-miss says “close!” · drawer +50 if someone scores',
-      '100 / 75 / 50 by guess order · 3 rounds · group lobby min 3 · party continues while 2+ remain',
+      'Live room for 2–12 — the drawer picks 1 of 3 words, everyone else guesses in chat',
+      'Faster guesses score more (300 → 50) · letter hints over time · “So close!” is private',
+      'Host sets rounds, draw time, hints and packs · custom words under Advanced',
     ],
     tiptap: [
       'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',
@@ -1217,262 +1217,7 @@
     }
   }
 
-  /* ── Shabd Five daily stats (Prompt 4) — local YYYY-MM-DD, single source of truth ── */
-  const SHABD_STATS_KEY = 'chaupaal_shabd_stats_v1';
-  const SHABD_STREAK_LEGACY = 'chaupaal_shabd_streak';
-
-  function shabdLocalDayKey() {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return y + '-' + m + '-' + day;
-  }
-
-  function emptyShabdStats() {
-    return {
-      played: 0,
-      wins: 0,
-      losses: 0,
-      streak: 0,
-      bestStreak: 0,
-      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
-      last: '',
-      days: {},
-    };
-  }
-
-  function normalizeShabdStats(raw) {
-    const base = emptyShabdStats();
-    const o = raw && typeof raw === 'object' ? raw : {};
-    const dist = Object.assign({}, base.distribution, o.distribution || {});
-    for (let i = 1; i <= 6; i++) dist[i] = Math.max(0, Number(dist[i]) || 0);
-    const days = o.days && typeof o.days === 'object' ? o.days : {};
-    return {
-      played: Math.max(0, Number(o.played) || 0),
-      wins: Math.max(0, Number(o.wins) || 0),
-      losses: Math.max(0, Number(o.losses) || 0),
-      streak: Math.max(0, Number(o.streak) || 0),
-      bestStreak: Math.max(0, Number(o.bestStreak != null ? o.bestStreak : o.best) || 0),
-      distribution: dist,
-      last: typeof o.last === 'string' ? o.last : '',
-      days,
-    };
-  }
-
-  function syncShabdStreakLegacy(stats) {
-    try {
-      localStorage.setItem(
-        SHABD_STREAK_LEGACY,
-        JSON.stringify({
-          streak: stats.streak || 0,
-          best: stats.bestStreak || 0,
-          last: stats.last || '',
-        })
-      );
-    } catch (e) {}
-  }
-
-  function loadShabdStats() {
-    try {
-      const raw = localStorage.getItem(SHABD_STATS_KEY);
-      if (raw) return normalizeShabdStats(JSON.parse(raw));
-    } catch (e) {}
-    // Migrate legacy streak without wiping
-    let legacy = { streak: 0, last: '', best: 0 };
-    try {
-      legacy = JSON.parse(localStorage.getItem(SHABD_STREAK_LEGACY) || '{}') || legacy;
-    } catch (e) {}
-    const migrated = emptyShabdStats();
-    migrated.streak = Math.max(0, Number(legacy.streak) || 0);
-    migrated.bestStreak = Math.max(0, Number(legacy.best) || 0);
-    migrated.last = typeof legacy.last === 'string' ? legacy.last : '';
-    try {
-      localStorage.setItem(SHABD_STATS_KEY, JSON.stringify(migrated));
-    } catch (e) {}
-    return migrated;
-  }
-
-  function saveShabdStats(stats) {
-    const data = normalizeShabdStats(stats);
-    try {
-      localStorage.setItem(SHABD_STATS_KEY, JSON.stringify(data));
-    } catch (e) {}
-    syncShabdStreakLegacy(data);
-    return data;
-  }
-
-  /**
-   * Record one Daily finish (win/loss). Idempotent per local day.
-   * @param {boolean} won
-   * @param {{ guesses?: number, hard?: boolean }} [meta]
-   */
-  function recordShabdDailyResult(won, meta) {
-    const today = shabdLocalDayKey();
-    const data = loadShabdStats();
-    if (data.last === today || (data.days && data.days[today])) {
-      // Already recorded today — keep streak chip in sync and bail
-      syncShabdStreakLegacy(data);
-      return data;
-    }
-    const m = meta || {};
-    data.played = (data.played || 0) + 1;
-    if (won) {
-      const y = new Date();
-      y.setDate(y.getDate() - 1);
-      const yesterday =
-        y.getFullYear() +
-        '-' +
-        String(y.getMonth() + 1).padStart(2, '0') +
-        '-' +
-        String(y.getDate()).padStart(2, '0');
-      data.streak = data.last === yesterday ? (data.streak || 0) + 1 : 1;
-      data.bestStreak = Math.max(data.bestStreak || 0, data.streak);
-      data.wins = (data.wins || 0) + 1;
-      const g = Math.min(6, Math.max(1, Number(m.guesses) || 0));
-      if (g >= 1 && g <= 6) {
-        data.distribution[g] = (data.distribution[g] || 0) + 1;
-      }
-    } else {
-      data.streak = 0;
-      data.losses = (data.losses || 0) + 1;
-    }
-    data.last = today;
-    data.days = data.days || {};
-    data.days[today] = {
-      won: !!won,
-      guesses: won ? Math.min(6, Math.max(1, Number(m.guesses) || 0)) : 0,
-      hard: !!m.hard,
-    };
-    return saveShabdStats(data);
-  }
-
-  function getShabdStats() {
-    return loadShabdStats();
-  }
-
-  function getShabdStreak() {
-    const s = loadShabdStats();
-    return { streak: s.streak || 0, best: s.bestStreak || 0, last: s.last || '' };
-  }
-
-  function shabdWinPct(stats) {
-    const s = stats || loadShabdStats();
-    if (!s.played) return 0;
-    return Math.round((100 * (s.wins || 0)) / s.played);
-  }
-
-  function openShabdStatsSheet(opts) {
-    const o = opts || {};
-    const host = o.host || document.querySelector('.game-overlay, .device') || document.body;
-    document.getElementById('shabdStatsSheet')?.remove();
-    const stats = loadShabdStats();
-    const highlight = o.highlightGuess != null ? Number(o.highlightGuess) : null;
-    const played = stats.played || 0;
-    const winPct = shabdWinPct(stats);
-    const dist = stats.distribution || {};
-    const maxBar = Math.max(1, ...[1, 2, 3, 4, 5, 6].map((n) => Number(dist[n]) || 0));
-    const bars = [1, 2, 3, 4, 5, 6]
-      .map((n) => {
-        const count = Number(dist[n]) || 0;
-        const pct = Math.round((100 * count) / maxBar);
-        const on = highlight === n ? ' is-today' : '';
-        return `<div class="shabd-stat-bar-row${on}"><span class="shabd-stat-bar-label">${n}</span><div class="shabd-stat-bar-track"><div class="shabd-stat-bar-fill" style="width:${count ? Math.max(8, pct) : 0}%"></div></div><span class="shabd-stat-bar-count">${count}</span></div>`;
-      })
-      .join('');
-
-    // Light current-month calendar
-    const now = new Date();
-    const y = now.getFullYear();
-    const mo = now.getMonth();
-    const daysInMonth = new Date(y, mo + 1, 0).getDate();
-    const startDow = new Date(y, mo, 1).getDay(); // 0 Sun
-    const monthLabel = now.toLocaleString(undefined, { month: 'short', year: 'numeric' });
-    let calCells = '';
-    for (let i = 0; i < startDow; i++) calCells += '<span class="shabd-cal-cell is-empty"></span>';
-    for (let d = 1; d <= daysInMonth; d++) {
-      const key =
-        y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-      const entry = stats.days && stats.days[key];
-      let cls = 'shabd-cal-cell';
-      let title = key;
-      if (entry) {
-        cls += entry.won ? ' is-win' : ' is-loss';
-        if (entry.hard) cls += ' is-hard';
-        title = entry.won
-          ? key + ' · ' + entry.guesses + '/6' + (entry.hard ? ' Hard' : '')
-          : key + ' · X' + (entry.hard ? ' Hard' : '');
-      }
-      if (key === shabdLocalDayKey()) cls += ' is-today';
-      calCells += `<span class="${cls}" title="${title}">${d}</span>`;
-    }
-
-    const empty = !played
-      ? `<p class="shabd-stats-empty">Finish your first Daily to build stats.</p>`
-      : '';
-    const sheet = document.createElement('div');
-    sheet.id = 'shabdStatsSheet';
-    sheet.className = 'game-friend-sheet shabd-stats-sheet';
-    sheet.innerHTML = `
-      <div class="shabd-stats-backdrop" data-shabd-stats-close></div>
-      <div class="shabd-stats-panel" role="dialog" aria-label="Shabd Five statistics">
-        <div class="shabd-stats-head">
-          <strong>Statistics</strong>
-          <button type="button" class="game-chrome-action" data-shabd-stats-close aria-label="Close">✕</button>
-        </div>
-        ${empty}
-        <div class="shabd-stats-grid" aria-label="Summary">
-          <div class="shabd-stats-metric"><b>${played}</b><span>Played</span></div>
-          <div class="shabd-stats-metric"><b>${played ? winPct : 0}</b><span>Win %</span></div>
-          <div class="shabd-stats-metric"><b>${stats.streak || 0}</b><span>Current</span></div>
-          <div class="shabd-stats-metric"><b>${stats.bestStreak || 0}</b><span>Max streak</span></div>
-        </div>
-        <div class="shabd-stats-section-title">Guess distribution</div>
-        <div class="shabd-stat-bars">${bars}</div>
-        <div class="shabd-stats-section-title">${monthLabel}</div>
-        <div class="shabd-cal" aria-label="Month calendar">${calCells}</div>
-        <p class="shabd-stats-foot">Green = win · grey = miss · gold ring = Hard</p>
-      </div>`;
-    host.appendChild(sheet);
-    const close = () => sheet.remove();
-    sheet.querySelectorAll('[data-shabd-stats-close]').forEach((el) => el.addEventListener('click', close));
-    return sheet;
-  }
-
-  /* ── Colour-grid share for Shabd ── */
-  function buildShabdGridShare(guesses, target, opts) {
-    const o = opts || {};
-    const emoji = { correct: '🟩', present: '🟨', absent: '⬛' };
-    const lines = (guesses || []).map((guess) => {
-      const targetArr = String(target).split('');
-      const guessArr = String(guess).split('');
-      const states = Array(5).fill('absent');
-      guessArr.forEach((l, i) => {
-        if (l === targetArr[i]) {
-          states[i] = 'correct';
-          targetArr[i] = null;
-          guessArr[i] = null;
-        }
-      });
-      guessArr.forEach((l, i) => {
-        if (l == null) return;
-        const idx = targetArr.indexOf(l);
-        if (idx !== -1) {
-          states[i] = 'present';
-          targetArr[idx] = null;
-        }
-      });
-      return states.map((s) => emoji[s]).join('');
-    });
-    const day = (() => {
-      if (typeof shabdDailySeed === 'function') return shabdDailySeed();
-      if (typeof shabdLocalDayKey === 'function') return Number(String(shabdLocalDayKey()).replace(/-/g, ''));
-      const d = new Date();
-      return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-    })();
-    const hardMark = o.hard ? ' Hard' : '';
-    return `Chaupaal Shabd Five ${day} ${guesses.length}/6${hardMark}\n\n${lines.join('\n')}`;
-  }
+  /* Shabd Five stats, share grid and stats sheet live in shabd-core.js + shabd-ui.js (Dangal P5). */
 
   /** Upload share-card PNG when Cloudinary is available (for story media). */
   async function uploadShareCardMedia(gameId, stats) {
@@ -2698,12 +2443,6 @@
   window.gameBrandMarkHtml = gameBrandMarkHtml;
   window.recordDuelStreak = recordDuelStreak;
   window.getDuelStreak = getDuelStreak;
-  window.recordShabdDailyResult = recordShabdDailyResult;
-  window.getShabdStreak = getShabdStreak;
-  window.getShabdStats = getShabdStats;
-  window.openShabdStatsSheet = openShabdStatsSheet;
-  window.shabdLocalDayKey = shabdLocalDayKey;
-  window.buildShabdGridShare = buildShabdGridShare;
   window.postGameScoreStory = postGameScoreStory;
   window.wireGameResultActions = wireGameResultActions;
   window.markGamePlayed = markGamePlayed;

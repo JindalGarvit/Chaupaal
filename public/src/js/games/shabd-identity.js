@@ -1,73 +1,47 @@
 /**
- * Shabd Five identity helpers (Prompt 5) — reveal voice + local gloss.
+ * Shabd Five result voice + gloss (Dangal P5). Gloss keys are ShabdCore.wordHash(word).
  */
 (function (g) {
   'use strict';
 
+  const tr = (key, fallback) => (typeof g.t === 'function' ? g.t('shabd.' + key, fallback) : fallback);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
   function getShabdGloss(word) {
     const map = g.SHABD_GLOSS || {};
-    const w = String(word || '')
-      .trim()
-      .toUpperCase();
-    const line = map[w];
-    if (!line) return '';
-    return String(line).trim().slice(0, 80);
+    const key = g.ShabdCore ? g.ShabdCore.wordHash(word) : '';
+    const line = map[key];
+    return line ? String(line).trim().slice(0, 80) : '';
   }
 
+  const WIN = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
   function shabdWinTitle(guesses) {
-    const n = Number(guesses) || 0;
-    if (n === 1) return 'Ek shot!';
-    if (n === 2) return 'Shaandar!';
-    if (n === 3) return 'Wah!';
-    if (n === 4) return 'Brilliant!';
-    if (n === 5) return 'Got there!';
-    return 'Just in time!';
+    const n = Math.max(1, Math.min(6, Number(guesses) || 6));
+    return tr('win' + n, WIN[n - 1]);
   }
 
-  function shabdLoseTitle() {
-    return 'Kal phir try';
-  }
-
-  /**
-   * Build reveal bits for result sheet.
-   * @returns {{ title: string, wordLine: string, gloss: string, voice: string }}
-   */
+  /** @returns {{ title, wordLine, gloss, voice, word, won }} */
   function buildShabdReveal(opts) {
     const o = opts || {};
     const won = !!o.won;
-    const word = String(o.word || '')
-      .trim()
-      .toUpperCase();
+    const word = String(o.word || '').trim().toUpperCase();
     const guesses = Number(o.guesses) || 0;
-    const hard = !!o.hard;
-    const daily = o.daily !== false;
+    const mode = o.mode || (o.daily === false ? 'practice' : 'daily');
     const gloss = getShabdGloss(word);
-    const title = won ? shabdWinTitle(guesses) : shabdLoseTitle();
-    const wordLine = won
-      ? 'The shabd was ' + word + (hard ? ' · Hard' : '')
-      : 'The shabd was ' + word + (hard ? ' · Hard' : '');
-    let voice = '';
-    if (won) {
-      if (guesses <= 2) voice = daily ? 'That Daily folded quick.' : 'Clean solve.';
-      else if (guesses <= 4) voice = daily ? 'Nice read of today’s grid.' : 'Solid practice solve.';
-      else voice = daily ? 'Clutch finish — streak stays honest.' : 'You hung in there.';
-    } else {
-      voice = daily
-        ? 'Tomorrow brings a fresh five. No shame in this board.'
-        : 'Practice is for learning — try another when ready.';
-    }
+    const title = won ? shabdWinTitle(guesses) : tr('lose', 'Out of guesses');
+    const wordLine = tr('wordWas', 'The word was') + ' ' + word + (o.hard ? ' · ' + tr('hard', 'Hard') : '');
+    let voice;
+    if (won) voice = guesses <= 2 ? tr('voiceFast', 'Lightning read.') : guesses <= 4 ? tr('voiceMid', 'Nicely solved.') : tr('voiceLate', 'Clutch finish.');
+    else voice = mode === 'daily' ? tr('voiceDailyLose', 'A fresh puzzle arrives at midnight.') : tr('voicePracticeLose', 'Try another — practice makes perfect.');
     return { title, wordLine, gloss, voice, word, won };
   }
 
   function shabdRevealHtml(opts) {
     const r = buildShabdReveal(opts);
-    const glossBit = r.gloss
-      ? `<p class="shabd-reveal-gloss">${r.gloss.replace(/</g, '&lt;')}</p>`
-      : '';
     return `<div class="shabd-reveal" role="status">
-      <p class="shabd-reveal-word">${r.wordLine.replace(/</g, '&lt;')}</p>
-      ${glossBit}
-      <p class="shabd-reveal-voice">${r.voice.replace(/</g, '&lt;')}</p>
+      <p class="shabd-reveal-word">${esc(r.wordLine)}</p>
+      ${r.gloss ? `<p class="shabd-reveal-gloss">${esc(r.gloss)}</p>` : ''}
+      <p class="shabd-reveal-voice">${esc(r.voice)}</p>
     </div>`;
   }
 

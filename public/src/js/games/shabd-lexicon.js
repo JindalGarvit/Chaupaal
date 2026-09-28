@@ -1,121 +1,49 @@
 /**
- * Shabd Five lexicon API (Prompt 1).
- * Banks live in data/shabd-answers.js + data/shabd-allowed.js.
- * Daily / Practice pick from answers; validation uses allowed Set.
+ * Shabd Five lexicon API (Dangal P5).
+ * - Guesses: data/shabd-allowed.js (large dictionary) → Set.
+ * - Answers: data/shabd-answers.js ships an encoded, shuffled schedule (SHABD_ANSWERS_ENC); it is
+ *   decoded here into a closure. Only functions are exported, never the list.
  */
 (function (g) {
   'use strict';
 
+  const Core = g.ShabdCore;
+
   function parseAllowedRaw(raw) {
     const set = new Set();
-    if (!raw) return set;
-    const parts = String(raw).split('\n');
-    for (let i = 0; i < parts.length; i++) {
-      const w = parts[i].trim().toUpperCase();
-      if (w.length !== 5) continue;
-      let ok = true;
-      for (let j = 0; j < 5; j++) {
-        const c = w.charCodeAt(j);
-        if (c < 65 || c > 90) {
-          ok = false;
-          break;
-        }
-      }
-      if (ok) set.add(w);
-    }
+    String(raw || '')
+      .split('\n')
+      .forEach((w) => {
+        const u = w.trim().toUpperCase();
+        if (/^[A-Z]{5}$/.test(u)) set.add(u);
+      });
     return set;
   }
 
-  function normalizeAnswers(list) {
-    const out = [];
-    const seen = new Set();
-    const src = Array.isArray(list) ? list : [];
-    for (let i = 0; i < src.length; i++) {
-      const w = String(src[i] || '')
-        .trim()
-        .toUpperCase();
-      if (!/^[A-Z]{5}$/.test(w) || seen.has(w)) continue;
-      seen.add(w);
-      out.push(w);
-    }
-    return out;
-  }
-
-  const answers = normalizeAnswers(g.SHABD_ANSWERS);
+  const schedule = Core ? Core.decodeSchedule(g.SHABD_ANSWERS_ENC) : [];
+  const answerSet = new Set(schedule);
   const allowedSet = parseAllowedRaw(g.SHABD_ALLOWED_RAW);
-  for (let i = 0; i < answers.length; i++) {
-    if (!allowedSet.has(answers[i])) allowedSet.add(answers[i]);
+  schedule.forEach((w) => allowedSet.add(w));
+  if (!schedule.length) console.warn('[Shabd] answer schedule empty');
+  try {
+    delete g.SHABD_ANSWERS_ENC;
+  } catch (e) {
+    g.SHABD_ANSWERS_ENC = undefined;
   }
 
-  // Dev / console assert — never throw in production UI
-  (function assertBanks() {
-    if (!answers.length) {
-      console.warn('[Shabd] answer bank empty');
-      return;
-    }
-    if (!allowedSet.size) {
-      console.warn('[Shabd] allowed bank empty');
-      return;
-    }
-    let missing = 0;
-    for (let i = 0; i < answers.length; i++) {
-      if (!allowedSet.has(answers[i])) missing++;
-    }
-    if (missing) console.warn('[Shabd] answers missing from allowed:', missing);
-  })();
+  const norm = (w) => String(w || '').trim().toUpperCase();
 
-  function shabdDailySeed() {
-    const key =
-      typeof g.shabdLocalDayKey === 'function'
-        ? g.shabdLocalDayKey()
-        : (function () {
-            const d = new Date();
-            return (
-              d.getFullYear() +
-              '-' +
-              String(d.getMonth() + 1).padStart(2, '0') +
-              '-' +
-              String(d.getDate()).padStart(2, '0')
-            );
-          })();
-    return Number(String(key).replace(/-/g, ''));
-  }
-
-  function pickShabdAnswer(rng) {
-    if (!answers.length) return 'HOUSE';
-    const r = typeof rng === 'function' ? rng() : Math.random();
-    const x = Math.max(0, Math.min(0.999999, Number(r) || 0));
-    return answers[Math.floor(x * answers.length)];
-  }
-
-  function shabdPickDaily() {
-    const seed = shabdDailySeed();
-    let x = Math.sin(seed * 12.9898) * 43758.5453;
-    x = x - Math.floor(x);
-    return pickShabdAnswer(() => x);
-  }
-
-  function isAllowedShabd(word) {
-    const w = String(word || '')
-      .trim()
-      .toUpperCase();
-    if (w.length !== 5) return false;
-    return allowedSet.has(w);
-  }
-
-  function normalizeShabdGuess(word) {
-    return String(word || '')
-      .trim()
-      .toUpperCase();
-  }
-
-  g.SHABD_ANSWERS = answers;
-  g.SHABD_ALLOWED_SET = allowedSet;
-  g.SHABD_ANSWER_COUNT = answers.length;
-  g.SHABD_ALLOWED_COUNT = allowedSet.size;
-  g.isAllowedShabd = isAllowedShabd;
-  g.pickShabdAnswer = pickShabdAnswer;
-  g.shabdDailySeed = shabdDailySeed;
-  g.shabdPickDaily = shabdPickDaily;
-  g.normalizeShabdGuess = normalizeShabdGuess;
+  g.ShabdLexicon = {
+    answerCount: schedule.length,
+    allowedCount: allowedSet.size,
+    isAllowed: (w) => allowedSet.has(norm(w)),
+    isAnswer: (w) => answerSet.has(norm(w)),
+    daily: (n) => (Core ? Core.dailyAnswer(n, schedule) : null),
+    random(rng) {
+      if (!schedule.length) return 'HOUSE';
+      const r = typeof rng === 'function' ? rng() : Math.random();
+      return schedule[Math.floor(Math.max(0, Math.min(0.999999, Number(r) || 0)) * schedule.length)];
+    },
+  };
+  g.isAllowedShabd = g.ShabdLexicon.isAllowed;
 })(typeof window !== 'undefined' ? window : globalThis);

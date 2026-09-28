@@ -622,7 +622,7 @@
   };
 
   /** Server messages that are already plain, specific copy ("Need at least 4 players"). */
-  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING'];
+  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING', 'REMOVED', 'BLOCKED', 'WORD_BLOCKED', 'TOO_FEW', 'BAD_TARGET', 'NOT_DRAWER'];
 
   function roomErrorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
@@ -896,6 +896,7 @@
     snakes: ['games/snakes-core.js'],
     ttt: ['games/ttt-core.js'],
     uno: ['games/ohno-core.js'],
+    scribble: ['games/scribble-core.js'],
   };
   const lazyLoaded = {};
   const lazyLoading = {};

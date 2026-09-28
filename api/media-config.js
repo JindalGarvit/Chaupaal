@@ -969,6 +969,21 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Shabd Five: stats sync across devices, friends' Daily leaderboard ──
+  if (action === 'shabd') {
+    try {
+      const adminApp = initAdmin();
+      if (!adminApp) return sendError(res, 503, 'UNAVAILABLE', 'Try again shortly');
+      const { shabdAction } = require('../server-lib/shabd-daily');
+      const out = await shabdAction(adminApp.firestore(), user.uid, body, Date.now());
+      return sendSuccess(res, out);
+    } catch (e) {
+      if (e?.code === 'VALIDATION_ERROR') return sendError(res, 400, 'VALIDATION_ERROR', e.message || 'Invalid request');
+      console.warn('[media-config] shabd', e?.message || e);
+      return sendError(res, 500, 'SHABD_ERROR', 'Could not load that right now');
+    }
+  }
+
   // ─── Dangal party rooms (Imposter …): server-side dealing; roles never in shared state ──
   if (action === 'party_room') {
     try {
@@ -1433,6 +1448,7 @@ async function handlePost(req, res) {
       'dangal_wallet_get',
       'dangal_game_resolve',
       'dangal_ai',
+      'shabd',
       'party_room',
       'penalty_kick',
       'chess_game',

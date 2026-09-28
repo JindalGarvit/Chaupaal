@@ -21,6 +21,7 @@ const MostLikelyCore = require('../public/src/js/games/mostlikely-core.js');
 const { createWerewolfAdapter } = require('./werewolf-engine.js');
 const { createClassicsAdapters } = require('./classics-rooms.js');
 const { createOhnoAdapter } = require('./ohno-engine.js');
+const { createScribbleAdapter } = require('./scribble-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -537,6 +538,7 @@ const GAMES = {
 };
 Object.assign(GAMES, createClassicsAdapters({ err }));
 GAMES.uno = createOhnoAdapter({ err });
+GAMES.scribble = createScribbleAdapter({ err });
 
 // ------------------------------------------------------------------ room engine
 
@@ -713,6 +715,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
       room.presence[uid] = { at: now, online: true };
       return { room, result: { rejoined: true } };
     }
+    if (game.canJoin && !game.canJoin(room, uid)) throw err('removed', 'You were removed from this room');
     const seats = seatOrder(pub).filter((id) => !pub.players[id].left);
     if (seats.length >= game.max) throw err('room_full', 'This room is full');
     const seat = seatOrder(pub).reduce((m, id) => Math.max(m, pub.players[id].seat || 0), -1) + 1;

@@ -1265,6 +1265,11 @@ function renderMsgBubble(m, isGroup){
       ?PartyKit.inviteCardHtml(att,m)
       :`<div class="party-invite-card"><strong>${chatEsc(m.text||'Join the game')}</strong></div>`;
     rich=true;
+  } else if(att && (att.type==='shabd_result'||att.type==='shabd_challenge')){
+    body=typeof ShabdFive!=='undefined'&&ShabdFive.chatCardHtml
+      ?ShabdFive.chatCardHtml(att,m)
+      :`<div class="sf-card"><strong>${chatEsc(m.text||'Shabd Five')}</strong></div>`;
+    rich=true;
   } else if(att && att.type==='duniya_post'){
     const thumb = att.thumb || att.url || '';
     const cap = att.caption || m.text || 'Post';

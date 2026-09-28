@@ -600,7 +600,7 @@
         const entry = getPracticeEntryClass(g.id);
         const solo = entry === 'soloPractice';
         let rowDesc = solo ? 'Practice · Solo' : 'Practice vs AI';
-        if (g.id === 'scribble') rowDesc = 'Practice vs AI · you draw, AI guesses';
+        if (g.id === 'scribble') rowDesc = 'Doodle pad · rooms with friends';
         return {
           id: g.id,
           emoji: g.icon,
@@ -608,7 +608,8 @@
           desc: rowDesc,
           practiceSolo: solo,
           fn: () => {
-            if (solo) launchSoloPractice(g.id, 'self');
+            if (g.id === 'scribble') g.launch({ chat, source: 'self' });
+            else if (solo) launchSoloPractice(g.id, 'self');
             else launchPracticeVsAi(g.id, 'self');
           },
         };
@@ -617,7 +618,7 @@
       subtitle = 'Practice vs AI or Solo — same paths as Manch';
       emptyHint = 'No Practice games here yet — try Manch.';
     } else if (isGroup) {
-      // Hard allowlist — party Live titles only (Scribble = 1v1 or party 3–6).
+      // Hard allowlist — party Live titles only.
       const allow = new Set(GROUP_PARTY_IDS);
       pickerGames = getGames({ chatGroup: true })
         .filter((g) => allow.has(g.id))
@@ -641,12 +642,12 @@
         const entry = getPracticeEntryClass(g.id);
         const solo = entry === 'soloPractice';
         let rowDesc;
-        if (liveCapable) {
+        if (g.id === 'scribble') {
+          rowDesc = 'Draw & guess room with ' + friendName;
+        } else if (liveCapable) {
           rowDesc = 'Practice vs AI · Challenge for Live';
         } else if (solo) {
           rowDesc = 'Practice · Solo';
-        } else if (g.id === 'scribble') {
-          rowDesc = 'Practice vs AI · you draw, AI guesses';
         } else {
           rowDesc = 'Practice vs AI';
         }
@@ -657,10 +658,11 @@
           desc: rowDesc,
           liveCapable,
           practiceSolo: solo,
-          showChallenge: liveCapable,
+          showChallenge: liveCapable && g.id !== 'scribble',
           fn: () => {
             // Never launch with the friend chat as AI seat / Live wait.
-            if (solo) launchSoloPractice(g.id, 'chat');
+            if (g.id === 'scribble') g.launch({ chat, source: 'chat' });
+            else if (solo) launchSoloPractice(g.id, 'chat');
             else launchPracticeVsAi(g.id, 'chat');
           },
         };

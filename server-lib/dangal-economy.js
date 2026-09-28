@@ -9,7 +9,7 @@ const Ratings = require('./dangal-ratings');
 /** Rated titles live in the ratings service (Glicko-2). Tic-Tac-Toe is unrated quick-play. */
 const RATED = Ratings.RATED;
 /** Results only the server may report (it resolved every move) — client claims are ignored. */
-const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess', 'ludo', 'snakes', 'ttt', 'uno']);
+const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess', 'ludo', 'snakes', 'ttt', 'uno', 'scribble']);
 /**
  * Placement payouts for N-player staked games (Ludo, Snakes & Ladders): everyone antes the stake,
  * the pot splits by finishing place. Teams (2v2) and 1v1 are winner-takes-the-other-stake.
