@@ -163,9 +163,22 @@ function chessGrounded(input, data) {
   return Review.validateCoachText(text, allowed).ok;
 }
 
+/**
+ * Rummy coach grounding: every card the text names must be one of the review's cards
+ * (input.allowedCards, labels like "9♥"). Anything else → the deterministic review.
+ */
+function cardsGrounded(input, data) {
+  if (String(input.gameId || '') !== 'rummy') return true;
+  if (!Array.isArray(input.allowedCards)) return false;
+  const Rummy = require('../public/src/js/games/rummy-core.js');
+  const allowed = input.allowedCards.map((s) => String(s).slice(0, 4)).slice(0, 12);
+  const text = [data.text].concat(data.tips || []).join(' ');
+  return Rummy.validateCoachText(text, allowed).ok;
+}
+
 const FALLBACKS = {
   coachExplain(input) {
-    if (String(input.gameId || '') === 'chess' && input.engineText) {
+    if ((String(input.gameId || '') === 'chess' || String(input.gameId || '') === 'rummy') && input.engineText) {
       const tips = Array.isArray(input.engineTips) ? input.engineTips.map((t) => String(t).slice(0, 120)).slice(0, 3) : [];
       return { text: String(input.engineText).slice(0, 280), tips };
     }
@@ -214,6 +227,9 @@ const PROMPTS = {
     `Game: ${clip(i.gameId, 20)}. Situation: ${clip(i.situation, 400)}. Last move: ${clip(i.move, 40)}.\n` +
     (Array.isArray(i.allowedMoves)
       ? `Engine facts: ${clip(i.engineText, 280)} Only mention these moves, in SAN: ${clip(i.allowedMoves.join(', '), 200)}. Never name any other move or square.\n`
+      : '') +
+    (Array.isArray(i.allowedCards)
+      ? `Review facts: ${clip(i.engineText, 280)} ${clip((i.engineTips || []).join(' '), 360)} Only mention these cards, written like 9♥: ${clip(i.allowedCards.join(', '), 80)}. Never name any other card or invent numbers.\n`
       : '') +
     'Explain briefly for a casual player. Schema: {"text": string<=280, "tips": [string<=120, max 3]}',
   commentary: (i) =>
@@ -378,7 +394,7 @@ function createDangalAI(deps) {
       return fallback(hook, inp, e && e.code === 'AI_TIMEOUT' ? 'timeout' : 'provider_error');
     }
     const data = parseJson(out && out.text);
-    if (!SCHEMAS[hook](data) || !isSafe(data) || (hook === 'coachExplain' && !chessGrounded(inp, data))) {
+    if (!SCHEMAS[hook](data) || !isSafe(data) || (hook === 'coachExplain' && (!chessGrounded(inp, data) || !cardsGrounded(inp, data)))) {
       counters[hook].rejected += 1;
       return fallback(hook, inp, 'invalid_output');
     }
@@ -418,4 +434,5 @@ module.exports = {
   sharedAI,
   CHESS_PERSONAS,
   chessGrounded,
+  cardsGrounded,
 };

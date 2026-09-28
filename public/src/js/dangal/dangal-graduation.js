@@ -42,8 +42,9 @@
     // Classics + court — Live 1v1 state sync (snapshot / score events)
     // Dangal P7 — server physics + ICF rules (server-lib/carrom-engine.js); singles rated, doubles 2v2 unrated
     carrom: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1 · 2v2' },
-    rummy: { grade: 'live', sync: 'live1v1', stakes: true },
-    teenpatti: { grade: 'live', sync: 'live1v1', stakes: true },
+    // Dangal P8 — server deal + rules (server-lib/rummy-engine.js, teenpatti-engine.js); 2–6 / 3–7 player tables
+    rummy: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 2–6' },
+    teenpatti: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 3–7' },
     bluff: { grade: 'live', sync: 'live1v1', stakes: true },
     tambola: { grade: 'live', sync: 'live1v1', stakes: true },
     streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
@@ -341,6 +342,7 @@
            <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-age-yes>I confirm I’m 18 or older</button>
            <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-age-no>Not now</button>`;
       let done = false;
+      let confirmed = false;
       const finish = (v) => {
         if (done) return;
         done = true;
@@ -360,14 +362,16 @@
           el.querySelector('[data-age-ok]')?.addEventListener('click', () => close());
           el.querySelector('[data-age-no]')?.addEventListener('click', () => close());
           el.querySelector('[data-age-yes]')?.addEventListener('click', async (ev) => {
-            ev.currentTarget.disabled = true;
+            const btn = ev.currentTarget;
+            btn.disabled = true;
             try {
               await confirmAdult();
-              done = true;
+              // Resolve from onClose: close() may pop history asynchronously, and the caller
+              // must not open its next layer until this sheet is really gone.
+              confirmed = true;
               close();
-              resolve(true);
             } catch (e) {
-              ev.currentTarget.disabled = false;
+              btn.disabled = false;
               if (String(e.code).toUpperCase() === 'AGE_GATE') {
                 if (typeof showToast === 'function') showToast(label + ' is for players 18 and over');
                 close();
@@ -375,7 +379,7 @@
             }
           });
         },
-        onClose: () => finish(false),
+        onClose: () => finish(confirmed),
       });
     });
   }

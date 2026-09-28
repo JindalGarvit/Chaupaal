@@ -7871,8 +7871,6 @@
   if (typeof registerGame === 'function') {
     const games = [
       { id: 'tambola', name: 'Tambola', desc: 'Housie · rival ticket · Live claims', icon: '🎫', genre: 'party', launch: openTambola, order: 30 },
-      { id: 'rummy', name: 'Rummy', desc: 'Indian 13-card · jokers · points', icon: '🃏', genre: 'cards', launch: openRummy, order: 33 },
-      { id: 'teenpatti', name: 'Teen Patti', desc: 'Boot, chaal, side-show · virtual chips', icon: '♠', genre: 'cards', launch: openTeenPatti, order: 34 },
       { id: 'bluff', name: 'Bluff', desc: 'Pile claims · call · empty hand', icon: '🎭', genre: 'cards', launch: openBluff, order: 35 },
     ];
     games.forEach((g) => {
@@ -7894,9 +7892,5 @@
   }
 
   window.openTambola = openTambola;
-  window.openRummy = openRummy;
-  window.evaluateRummyHand = evaluateRummyHand;
-  window.scoreRummyDeadwood = scoreRummyDeadwood;
-  window.openTeenPatti = openTeenPatti;
   window.openBluff = openBluff;
 })();

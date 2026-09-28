@@ -9,7 +9,7 @@ const Ratings = require('./dangal-ratings');
 /** Rated titles live in the ratings service (Glicko-2). Tic-Tac-Toe is unrated quick-play. */
 const RATED = Ratings.RATED;
 /** Results only the server may report (it resolved every move) — client claims are ignored. */
-const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess', 'ludo', 'snakes', 'ttt', 'uno', 'scribble', 'quiz', 'carrom']);
+const SERVER_SETTLED = new Set(['penalty', 'poker', 'chess', 'ludo', 'snakes', 'ttt', 'uno', 'scribble', 'quiz', 'carrom', 'rummy', 'teenpatti']);
 /**
  * Placement payouts for N-player staked games (Ludo, Snakes & Ladders): everyone antes the stake,
  * the pot splits by finishing place. Teams (2v2) and 1v1 are winner-takes-the-other-stake.
@@ -658,11 +658,115 @@ async function resolvePlacement(db, admin, req) {
   return payload;
 }
 
+/**
+ * Pure zero-sum ledger: each loss is capped by MAX_STAKE and the loser's balance; winners share
+ * exactly what was paid, pro rata (the remainder to the biggest winner).
+ * @param {Record<string, number>} raw uid → requested delta
+ * @param {Record<string, number>} balances uid → wallet balance
+ */
+function ledgerDeltas(raw, balances) {
+  const ids = Object.keys(raw || {});
+  const out = {};
+  let paid = 0;
+  ids.forEach((id) => {
+    const d = Math.trunc(Number(raw[id]) || 0);
+    if (d < 0) {
+      const loss = Math.min(-d, MAX_STAKE, Math.max(0, Math.floor(Number(balances[id]) || 0)));
+      out[id] = -loss;
+      paid += loss;
+    } else out[id] = 0;
+  });
+  const winners = ids.filter((id) => Math.trunc(Number(raw[id]) || 0) > 0);
+  const want = winners.reduce((a, id) => a + Math.trunc(Number(raw[id])), 0);
+  if (!want || !paid) {
+    ids.forEach((id) => (out[id] = 0));
+    return out;
+  }
+  let given = 0;
+  winners.forEach((id) => {
+    const g = Math.floor((Math.trunc(Number(raw[id])) * paid) / want);
+    out[id] = g;
+    given += g;
+  });
+  const top = winners.slice().sort((a, b) => Number(raw[b]) - Number(raw[a]))[0];
+  out[top] += paid - given;
+  return out;
+}
+
+/**
+ * Server-only settlement with explicit per-player deltas (Rummy Points / Pool / Deals with 3+
+ * humans, Teen Patti stacks). Zero-sum after capping; idempotent by matchId.
+ * @param {{ gameType: string, matchId: string, deltas: Record<string, number>, ranking?: string[], winners?: string[] }} req
+ */
+async function resolveLedger(db, admin, req) {
+  const FieldValue = admin.firestore.FieldValue;
+  const gameType = canonicalGameId(req.gameType);
+  const matchId = String(req.matchId || '').replace(/[^\w.-]/g, '').slice(0, 120);
+  if (!gameType || !matchId) {
+    const err = new Error('Invalid ledger');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  const matchRef = db.collection('dangalMatches').doc(matchId);
+  const existing = await matchRef.get();
+  if (existing.exists) return Object.assign({ duplicate: true }, existing.data()?.payload || {});
+  const raw = {};
+  Object.keys(req.deltas || {}).forEach((id) => {
+    if (isPersistableUid(id)) raw[id] = Math.trunc(Number(req.deltas[id]) || 0);
+  });
+  const ids = Object.keys(raw);
+  const balances = {};
+  for (const id of ids) balances[id] = raw[id] < 0 ? (await getWallet(db, admin, id)).balance : 0;
+  const deltas = ledgerDeltas(raw, balances);
+  const ranking = (req.ranking || []).map(String).filter((id) => ids.indexOf(id) >= 0);
+  ids.forEach((id) => ranking.indexOf(id) < 0 && ranking.push(id));
+  const winners = new Set((req.winners || []).map(String));
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const batch = db.batch();
+  const players = {};
+  for (let k = 0; k < ranking.length; k++) {
+    const uid = ranking[k];
+    const won = winners.size ? winners.has(uid) : deltas[uid] > 0;
+    const side = await settleSide(
+      db,
+      FieldValue,
+      uid,
+      {
+        gameType,
+        won,
+        isDraw: false,
+        eloDelta: 0,
+        rating: null,
+        stake: Math.abs(deltas[uid]),
+        stakeDelta: deltas[uid],
+        resultTag: won ? 'win' : 'place_' + (k + 1),
+        dayKey,
+        matchId,
+      },
+      batch
+    );
+    players[uid] = { place: k + 1, won, chipDelta: side.chipDelta, chips: side.chips, stakeDelta: deltas[uid], achievements: side.achievements };
+  }
+  const payload = { gameType, matchId, ledger: true, players };
+  batch.create(matchRef, { gameType, ranking, deltas, payload, at: FieldValue.serverTimestamp() });
+  try {
+    await batch.commit();
+  } catch (e) {
+    const exists = e && (e.code === 6 || e.code === 'already-exists' || /already exists/i.test(String(e.message || '')));
+    if (!exists) throw e;
+    const again = await matchRef.get();
+    return Object.assign({ duplicate: true }, (again.exists && again.data()?.payload) || {});
+  }
+  return payload;
+}
+
 module.exports = {
   STARTING_CHIPS,
   PLACEMENT_SHARES,
   placementStakeDeltas,
   resolvePlacement,
+  ledgerDeltas,
+  resolveLedger,
   canonicalGameId,
   isRetiredGameId,
   RETIRED_GAME_IDS,

@@ -622,7 +622,7 @@
   };
 
   /** Server messages that are already plain, specific copy ("Need at least 4 players"). */
-  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING', 'REMOVED', 'BLOCKED', 'WORD_BLOCKED', 'TOO_FEW', 'BAD_TARGET', 'NOT_DRAWER', 'NO_QUESTIONS', 'TOO_EARLY'];
+  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING', 'REMOVED', 'BLOCKED', 'WORD_BLOCKED', 'TOO_FEW', 'BAD_TARGET', 'NOT_DRAWER', 'NO_QUESTIONS', 'TOO_EARLY', 'AGE_GATE', 'AGE_CONFIRM', 'INSUFFICIENT_CHIPS', 'NOT_SEATED'];
 
   function roomErrorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
@@ -917,6 +917,8 @@
     scribble: ['games/scribble-core.js'],
     quizroom: ['games/quiz-core.js'],
     carrom: ['games/carrom-physics.js', 'games/carrom-core.js'],
+    rummy: ['games/rummy-core.js'],
+    teenpatti: ['games/teenpatti-core.js'],
     wordguess: ['games/data/shabd-answers.js', 'games/data/shabd-allowed.js', 'games/data/shabd-gloss.js', 'games/shabd-lexicon.js'],
   };
   const lazyLoaded = {};

@@ -59,8 +59,13 @@
     // aiming). A missed shot is a foul (Law 64 — penalty man + turn passes); 3 misses in a row forfeit.
     // Leaving forfeits (ICF Law XVII); in doubles the whole team loses.
     carrom: { turnMs: 20000, placeMs: 15000, afk: { action: 'foul', maxMisses: 3 }, leave: 'forfeit' },
-    rummy: { afk: { action: 'auto_play', maxMisses: 3 } },
-    teenpatti: { afk: { action: 'fold', maxMisses: 2 } },
+    // Dangal P8 Rummy (server-lib/rummy-engine.js): 30s turn + a 30s extra-time bank per match; 45s to
+    // show groups after a declaration (then the server groups for you). A missed turn auto-plays
+    // (draw + throw); the second in a row auto-drops (Deals has no drop → full count; Gin → forfeit).
+    rummy: { reconnectMs: 90000, turnMs: 30000, bankMs: 30000, meldMs: 45000, afk: { action: 'auto_drop', maxMisses: 2 }, leave: 'full_count', rematch: { swapSides: false, sameVariants: true } },
+    // Dangal P8 Teen Patti (server-lib/teenpatti-engine.js): 20s turn + 20s bank; timeout packs. Two
+    // timeouts in a row sit you out (auto-pack) until you tap I'm back.
+    teenpatti: { reconnectMs: 90000, turnMs: 20000, bankMs: 20000, afk: { action: 'fold', maxMisses: 2 }, leave: 'pack', abandon: { winner: 'none', chips: 'stack_returns', rated: false }, dualLeave: 'table_continues', resign: false, rematch: { swapSides: false, sameVariants: true } },
     bluff: { afk: { action: 'pass', maxMisses: 3 } },
     tambola: { afk: { action: 'auto_play', maxMisses: 99 }, resign: true },
     streetcricket: { afk: { action: 'auto_play', maxMisses: 3 } },

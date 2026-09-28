@@ -108,7 +108,7 @@
     scribble: 'Draw-and-guess party rules · our own word list',
     quiz: 'Timed multiple-choice quiz · our own questions',
     carrom: 'Rules based on the ICF Laws of Carrom',
-    rummy: 'Traditional 13-card rummy rules',
+    rummy: 'Standard 13-card (Indian) Rummy and classic Gin Rummy rules',
     teenpatti: 'Traditional Teen Patti rules · virtual chips only',
     bluff: 'Classic Bluff (Cheat) card-game rules',
     tambola: 'Classic Tambola (Housie) rules',

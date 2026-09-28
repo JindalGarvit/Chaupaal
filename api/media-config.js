@@ -1024,7 +1024,16 @@ async function handlePost(req, res) {
     } catch (e) {
       const code = e && e.code ? String(e.code) : '';
       if (code) {
-        const status = code === 'room_not_found' ? 404 : code === 'busy' ? 409 : 400;
+        const status =
+          code === 'room_not_found'
+            ? 404
+            : code === 'busy'
+              ? 409
+              : code === 'age_gate' || code === 'age_confirm'
+                ? 403
+                : code === 'insufficient_chips'
+                  ? 402
+                  : 400;
         return sendError(res, status, code.toUpperCase(), e.message || 'Party room action failed');
       }
       console.warn('[media-config] party_room', e?.message || e);

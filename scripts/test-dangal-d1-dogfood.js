@@ -113,19 +113,20 @@ function memDb() {
   {
     const db = memDb();
     await seasoned(db, [A, B]);
-    const win = await econ.resolveGame(db, db.admin, A, { gameType: 'rummy', result: 'win', won: true, opponentUid: B, stake: 500, matchId: 'rummy_x1' });
+    // Client-settled rated game (Rummy moved to server settlement in P8).
+    const win = await econ.resolveGame(db, db.admin, A, { gameType: 'badminton', result: 'win', won: true, opponentUid: B, stake: 500, matchId: 'badminton_x1' });
     assert(win.pending && win.chipDelta === 0 && bal(db, B) === 1000, 'client win claim alone moves nobody’s chips (was: take chips from any uid)');
-    const noId = await econ.resolveGame(db, db.admin, A, { gameType: 'rummy', result: 'win', won: true, opponentUid: B, stake: 500 });
+    const noId = await econ.resolveGame(db, db.admin, A, { gameType: 'badminton', result: 'win', won: true, opponentUid: B, stake: 500 });
     assert(!noId.shared && bal(db, B) === 1000 && noId.chipDelta === 25, 'claim without a match id is solo-only');
-    const loss = await econ.resolveGame(db, db.admin, B, { gameType: 'rummy', result: 'loss', won: false, opponentUid: A, stake: 100, matchId: 'rummy_x1' });
+    const loss = await econ.resolveGame(db, db.admin, B, { gameType: 'badminton', result: 'loss', won: false, opponentUid: A, stake: 100, matchId: 'badminton_x1' });
     assert(!loss.pending && loss.chipDelta === -100 && bal(db, B) === 900, 'the loser’s own report settles the match');
-    const dup = await econ.resolveGame(db, db.admin, A, { gameType: 'rummy', result: 'win', won: true, opponentUid: B, stake: 500, matchId: 'rummy_x1' });
+    const dup = await econ.resolveGame(db, db.admin, A, { gameType: 'badminton', result: 'win', won: true, opponentUid: B, stake: 500, matchId: 'badminton_x1' });
     assert(dup.duplicate && dup.won === true && dup.chips === bal(db, A) && dup.chipDelta === 125, 'duplicate answers from the caller’s side with only their own balance');
-    const draw1 = await econ.resolveGame(db, db.admin, A, { gameType: 'rummy', result: 'draw', isDraw: true, opponentUid: B, matchId: 'rummy_d1' });
-    const draw2 = await econ.resolveGame(db, db.admin, B, { gameType: 'rummy', result: 'draw', isDraw: true, opponentUid: A, matchId: 'rummy_d1' });
+    const draw1 = await econ.resolveGame(db, db.admin, A, { gameType: 'badminton', result: 'draw', isDraw: true, opponentUid: B, matchId: 'badminton_d1' });
+    const draw2 = await econ.resolveGame(db, db.admin, B, { gameType: 'badminton', result: 'draw', isDraw: true, opponentUid: A, matchId: 'badminton_d1' });
     assert(draw1.pending && !draw2.pending && draw2.isDraw, 'a draw settles when both sides report it');
-    const disputed = await econ.resolveGame(db, db.admin, B, { gameType: 'rummy', result: 'win', won: true, opponentUid: A, matchId: 'rummy_w2' });
-    const disputed2 = await econ.resolveGame(db, db.admin, A, { gameType: 'rummy', result: 'win', won: true, opponentUid: B, matchId: 'rummy_w2' });
+    const disputed = await econ.resolveGame(db, db.admin, B, { gameType: 'badminton', result: 'win', won: true, opponentUid: A, matchId: 'badminton_w2' });
+    const disputed2 = await econ.resolveGame(db, db.admin, A, { gameType: 'badminton', result: 'win', won: true, opponentUid: B, matchId: 'badminton_w2' });
     assert(disputed.pending && disputed2.pending && disputed2.disputed, 'two win claims = disputed, nothing settles');
 
     // Client ids are namespaced: a client can't pre-burn a server match id.

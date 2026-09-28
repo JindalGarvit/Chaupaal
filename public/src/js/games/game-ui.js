@@ -163,14 +163,14 @@
     carrom: ['Pocket your own men from your baseline', 'Queen after one of yours, then cover it', 'Striker in the pocket = foul + due'],
     uno: ['Match colour, number or symbol to play', 'Tap "Oh No!" as you play your second-to-last card', 'Think a Draw Four was a bluff? Challenge it'],
     rummy: [
-      'Indian 13-card · pure sequence required · jokers + wild rank from open card',
-      'Declare valid · Drop 20 first / 40 middle · Wrong show 80 · points capped at 80',
-      'Live hides hands mid-table · Practice AI · virtual stakes only — not real money',
+      'Draw a card, throw a card — group your hand into sequences and sets',
+      '13-card: declare with 2+ sequences, one pure · Gin: knock at 10 or less deadwood',
+      'Points, Pool or Deals · bots Easy to Expert · coach in practice · virtual chips only',
     ],
     teenpatti: [
-      'Boot each hand — stacks carry across the ring (virtual chips)',
-      'Blind chaal = S, seen = 2S; side-show compares — loser packs',
-      'Show when both seen · Live hides hole cards mid-hand · virtual stakes only',
+      'Everyone pays the boot · three cards each',
+      'Bet blind, or look and bet double · raise, pack, side show',
+      'Show when two are left · pot limit shows everyone · 18+ · virtual chips only',
     ],
     bluff: [
       'Play 1–3 face-down onto the pile — first claim locks the rank',

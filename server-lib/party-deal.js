@@ -24,6 +24,8 @@ const { createOhnoAdapter } = require('./ohno-engine.js');
 const { createScribbleAdapter } = require('./scribble-engine.js');
 const { createQuizAdapter } = require('./quiz-engine.js');
 const { createCarromAdapter } = require('./carrom-engine.js');
+const { createRummyAdapter } = require('./rummy-engine.js');
+const { createTeenPattiAdapter } = require('./teenpatti-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -543,6 +545,18 @@ GAMES.uno = createOhnoAdapter({ err });
 GAMES.scribble = createScribbleAdapter({ err });
 GAMES.quizroom = createQuizAdapter({ err });
 GAMES.carrom = createCarromAdapter({ err });
+GAMES.rummy = createRummyAdapter({ err });
+GAMES.teenpatti = createTeenPattiAdapter({ err });
+
+/** Ops where an 18+ game re-checks the caller's server-side age status. */
+const AGE_OPS = new Set(['create', 'join', 'settings', 'start']);
+
+/** 18+ status from the user's own profile doc ('ok' | 'confirm' | 'under_18'); never from the request. */
+async function adultStatus(adminApp, uid, deps) {
+  const db = (deps && deps.db) || adminApp.firestore();
+  const snap = await db.collection('users').doc(uid).get();
+  return require('./poker-engine.js').ageGate(snap.exists ? snap.data() : {});
+}
 
 // ------------------------------------------------------------------ room engine
 
@@ -670,7 +684,7 @@ function dealRound(room, now, rng, args) {
   setDeadline(room, now);
 }
 
-function newRoom({ game, uid, name, settings, chatId, now }) {
+function newRoom({ game, uid, name, settings, chatId, now, adult }) {
   const g = GAMES[game];
   if (!g) throw err('unknown_game', 'Unknown party game');
   const room = {
@@ -698,6 +712,10 @@ function newRoom({ game, uid, name, settings, chatId, now }) {
     secrets: {},
     server: null,
   };
+  if (g.ageGated) {
+    room.pub.players[uid].adult = adult === 'ok';
+    g.ageCheck(room, uid, 'create', adult);
+  }
   if (g.onJoinLobby) g.onJoinLobby(room, uid);
   return room;
 }
@@ -723,6 +741,7 @@ function reduceRoom(room, uid, op, args, now, rng) {
   if (op === 'join') {
     if (me && !me.left) {
       room.presence[uid] = { at: now, online: true };
+      if (game.ageGated) me.adult = a.adult === 'ok';
       return { room, result: { rejoined: true } };
     }
     if (game.canJoin && !game.canJoin(room, uid)) throw err('removed', 'You were removed from this room');
@@ -730,6 +749,10 @@ function reduceRoom(room, uid, op, args, now, rng) {
     if (seats.length >= (game.maxFor ? game.maxFor(room) : game.max)) throw err('room_full', 'This room is full');
     const seat = seatOrder(pub).reduce((m, id) => Math.max(m, pub.players[id].seat || 0), -1) + 1;
     pub.players[uid] = { name: cleanName(a.name), seat, joinedAt: now };
+    if (game.ageGated) {
+      pub.players[uid].adult = a.adult === 'ok';
+      game.ageCheck(room, uid, 'join', a.adult);
+    }
     if (!(uid in pub.scores)) pub.scores[uid] = 0;
     room.presence[uid] = { at: now, online: true };
     const playing = pub.status === 'playing' && room.server && room.server.pub;
@@ -790,6 +813,10 @@ function reduceRoom(room, uid, op, args, now, rng) {
       if (!isHost) throw err('host_only', 'Only the host can change settings');
       if (inRound && !game.betweenRounds(s, room)) throw err('phase', 'Change settings between rounds');
       pub.settings = game.mergeSettings(Object.assign({}, pub.settings, a.settings || {}));
+      if (game.ageGated) {
+        pub.players[uid].adult = a.adult === 'ok';
+        game.ageCheck(room, uid, 'settings', a.adult);
+      }
       bump(room, now);
       return { room, result: { settings: pub.settings } };
     }
@@ -799,6 +826,10 @@ function reduceRoom(room, uid, op, args, now, rng) {
       if (!isHost) throw err('host_only', 'Only the host can start');
       if (op === 'next' && !(inRound && game.canNext(s, room))) throw err('phase', 'Finish this round first');
       if (op === 'start' && inRound && !game.betweenRounds(s, room)) throw err('phase', 'Round in progress');
+      if (game.ageGated) {
+        pub.players[uid].adult = a.adult === 'ok';
+        game.ageCheck(room, uid, 'start', a.adult);
+      }
       if (op === 'start' && (pub.status === 'lobby' || game.newGameOnStart(room))) {
         Object.keys(pub.scores).forEach((id) => (pub.scores[id] = 0));
         pub.roundNo = 0;
@@ -930,11 +961,13 @@ function hydrateRoom(room) {
 async function partyRoom(adminApp, uid, body, deps) {
   const b = Object.assign({}, body || {});
   delete b.prep;
+  delete b.adult;
   const op = String(b.op || '');
   const game = String(b.game || 'imposter');
   if (!GAMES[game]) throw err('unknown_game', 'Unknown party game');
   const rtdb = adminApp.database();
   const now = Date.now();
+  if (GAMES[game].ageGated && AGE_OPS.has(op)) b.adult = await adultStatus(adminApp, uid, deps);
 
   if (op === 'dice_stats') return diceStats(adminApp, uid);
   if ((op === 'quick' || op === 'quick_cancel') && GAMES[game].quick) {
@@ -953,7 +986,7 @@ async function partyRoom(adminApp, uid, body, deps) {
               throw err('code_taken');
             }
             return {
-              room: newRoom({ game, uid, name: b.name, settings: b.settings, chatId: b.chatId, now }),
+              room: newRoom({ game, uid, name: b.name, settings: b.settings, chatId: b.chatId, now, adult: b.adult }),
               result: {},
             };
           },
@@ -995,6 +1028,7 @@ async function partyRoom(adminApp, uid, body, deps) {
 /**
  * Settle a finished room game, then mark it settled in the room (one publish).
  * Placement (default): chips by finishing place. `kind: 'h2h'`: a rated 1v1 through resolveGame.
+ * `kind: 'ledger'`: explicit zero-sum per-player deltas (Rummy points / pots, Teen Patti stacks).
  */
 async function settleRoom(adminApp, rtdb, path, req, deps) {
   const economy = (deps && deps.economy) || require('./dangal-economy.js');
@@ -1016,6 +1050,19 @@ async function settleRoom(adminApp, rtdb, path, req, deps) {
     const opp = o.opponent || {};
     results[req.a] = { place: req.result === 'loss' ? 2 : 1, won: req.result === 'win', draw: req.result === 'draw', chipDelta: o.chipDelta || 0, eloDelta: o.eloDelta || 0 };
     results[req.b] = { place: req.result === 'win' ? 2 : 1, won: req.result === 'loss', draw: req.result === 'draw', chipDelta: opp.chipDelta || 0, eloDelta: opp.eloDelta || 0 };
+  } else if (req.kind === 'ledger') {
+    const out = await economy.resolveLedger(db, admin, {
+      gameType: req.game,
+      matchId: req.matchId,
+      deltas: req.deltas || {},
+      ranking: req.ranking || [],
+      winners: req.winners || [],
+    });
+    settledBefore = !!(out && out.duplicate);
+    Object.keys((out && out.players) || {}).forEach((id) => {
+      const p = out.players[id];
+      results[id] = { place: p.place, chipDelta: p.chipDelta, won: !!p.won };
+    });
   } else {
     const out = await economy.resolvePlacement(db, admin, {
       gameType: req.game,
