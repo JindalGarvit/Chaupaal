@@ -973,19 +973,14 @@
     const wowPlays = lastWeek ? weekPlays - (lastWeek.plays || 0) : null;
     const wowWins = lastWeek ? weekWins - (lastWeek.wins || 0) : null;
     const wowBit = (n) => (n == null ? '—' : n > 0 ? '+' + n : String(n));
-    const rated = ['chess', 'ttt', 'quiz', 'streetcricket', 'penalty'];
+    const rated = window.DANGAL_RATED_GAMES || ['chess', 'streetcricket', 'quiz', 'penalty', 'carrom', 'badminton', 'rummy'];
     const eloBits = rated
       .map((id) => {
-        let elo = null;
-        try {
-          const ratings =
-            (typeof userProfile !== 'undefined' && userProfile && userProfile.gameRatings) ||
-            JSON.parse(localStorage.getItem('chaupaal_game_ratings') || '{}');
-          if (ratings && ratings[id] != null) elo = ratings[id];
-        } catch (e) {}
-        if (elo == null) return '';
+        const r = typeof getDangalRating === 'function' ? getDangalRating(id) : null;
+        if (!r) return '';
         const meta = byId[id] || { name: id, icon: '🎮' };
-        return `<div class="cp-perf-elo"><span>${escHtml(meta.icon)} ${escHtml(meta.name || id)}</span><strong>${Math.round(Number(elo) || 1200)}</strong></div>`;
+        const prov = r.provisional ? ` <small>${escHtml(tt('dangal_rating_provisional', 'Provisional'))}</small>` : '';
+        return `<div class="cp-perf-elo"><span>${escHtml(meta.icon)} ${escHtml(meta.name || id)}</span><strong>${Math.round(r.rating)}${prov}</strong></div>`;
       })
       .filter(Boolean)
       .join('');

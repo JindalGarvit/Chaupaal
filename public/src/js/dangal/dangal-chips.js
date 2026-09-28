@@ -63,6 +63,9 @@
         result: String(result || (won ? 'win' : isDraw ? 'draw' : 'loss')),
         sessionId: o.sessionId || o.matchId || '',
         matchId: o.matchId || o.sessionId || '',
+        vsBot: !!o.vsBot,
+        practice: !!o.practice,
+        rated: o.rated === true,
       });
       cached = { balance: data.chips, lifetimeEarned: cached?.lifetimeEarned };
       if (key !== ':' + gameType) lastByKey.set(key, data);

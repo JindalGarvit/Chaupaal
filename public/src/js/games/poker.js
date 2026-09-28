@@ -16,7 +16,7 @@
   const HISTORY_MAX = 20;
   const PRACTICE_STACK = 2000;
   const PRACTICE_BLINDS = [10, 20];
-  const ACTION_MS = 20000;
+  const ACTION_MS = window.DangalLivePolicy ? window.DangalLivePolicy.policyFor('poker').turnMs : 20000;
   const BIG_WIN_BB = 20;
   const BOT_NAMES = ['Ava', 'Leo', 'Maya', 'Kai', 'Zoe', 'Omar', 'Nina', 'Sam', 'Iris', 'Theo'];
 

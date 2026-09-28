@@ -1145,6 +1145,10 @@
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (o.gameId && !o.body && window.DangalRules && window.DangalRules.get(o.gameId)) {
+        window.DangalRules.openSheet(o.gameId, { title: title });
+        return;
+      }
       if (typeof openHalfSheet === 'function') {
         openHalfSheet({
           id: 'gameHowToSheet',
@@ -2374,8 +2378,8 @@
     // Self
     try {
       const mine =
-        (typeof userProfile !== 'undefined' && userProfile?.gameRatings?.[key]) ||
         (typeof getGameRating === 'function' ? getGameRating(key) : null) ||
+        (typeof userProfile !== 'undefined' && userProfile?.gameRatings?.[key]) ||
         1200;
       rows.push({
         name: (typeof userProfile !== 'undefined' && userProfile?.name?.split(' ')[0]) || 'You',

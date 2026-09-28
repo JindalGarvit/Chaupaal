@@ -128,7 +128,9 @@
     return RULE_SOURCES[key] || '';
   }
 
-  const RATED_GAMES = ['chess', 'ttt', 'streetcricket', 'quiz', 'penalty'];
+  const RATED_GAMES =
+    (window.DangalRatingMath && window.DangalRatingMath.RATED.slice()) ||
+    ['chess', 'streetcricket', 'quiz', 'penalty', 'carrom', 'badminton', 'rummy'];
 
   function escAttr(s) {
     return String(s == null ? '' : s)

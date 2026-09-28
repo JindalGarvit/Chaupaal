@@ -92,7 +92,7 @@ files.forEach((rel) => {
 });
 assert(hits.length === 0, 'no banned claim / brand strings in Dangal surfaces' + (hits.length ? ' — ' + hits.join('; ') : ''));
 const fedMentions = files.filter((rel) => /\b(FIDE|BWF|IFAB)\b/.test(stripComments(read(rel))));
-assert(fedMentions.every((rel) => /design-system\.js$/.test(rel)), 'federation names appear only in the plain rule-source attribution');
+assert(fedMentions.every((rel) => /(design-system|dangal-rules)\.js$/.test(rel)), 'federation names appear only in the plain rule-source attribution');
 const rules = read('public/src/js/dangal/design-system.js');
 assert(/Rules based on the FIDE Laws of Chess/.test(rules) && /Simplified rules based on the BWF Laws of Badminton/.test(rules), 'rule sources use plain attribution ("Rules based on …", "Simplified …")');
 assert(!/<image|xlink:href|\.png|\.jpg/.test(rules.slice(0, rules.indexOf('const GAME_IDENTITY'))), 'R4 marks are our own inline vector marks (no embedded logos)');

@@ -940,7 +940,32 @@ async function handlePost(req, res) {
       return sendSuccess(res, resolved);
     } catch (e) {
       console.warn('[media-config] dangal', e?.message || e);
-      return sendError(res, 500, 'DANGAL_ERROR', e?.message || 'Dangal action failed');
+      if (e?.code === 'VALIDATION_ERROR') return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid game result');
+      return sendError(res, 500, 'DANGAL_ERROR', 'Could not save that result — try again');
+    }
+  }
+
+  // ─── Dangal AI hooks: deterministic fallback whenever AI is off / capped / invalid ──
+  if (action === 'dangal_ai') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'dangal');
+      if (rate && rate.ok === false) {
+        return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+      }
+    } catch (e) {}
+    try {
+      const { sharedAI, HOOKS } = require('../server-lib/dangal-ai');
+      const hook = String(body.hook || '');
+      if (HOOKS.indexOf(hook) < 0) return sendError(res, 400, 'VALIDATION_ERROR', 'Unknown hook');
+      const adminApp = initAdmin();
+      const ai = sharedAI(adminApp ? { db: adminApp.firestore(), admin: adminApp } : {});
+      const input = body.input && typeof body.input === 'object' ? body.input : {};
+      const out = await ai.run(hook, input, { uid: user.uid });
+      return sendSuccess(res, { data: out.data, source: out.source });
+    } catch (e) {
+      console.warn('[media-config] dangal_ai', e?.message || e);
+      return sendError(res, 500, 'DANGAL_AI_ERROR', 'Could not load that right now');
     }
   }
 
@@ -1381,6 +1406,7 @@ async function handlePost(req, res) {
       'request_account_deletion',
       'dangal_wallet_get',
       'dangal_game_resolve',
+      'dangal_ai',
       'party_room',
       'penalty_kick',
       'poker_table',

@@ -15,8 +15,9 @@
   const KEY_NAMES = 'chaupaal_penalty_names';
   const KEY_MUTED = 'chaupaal_penalty_muted';
   const KEY_RECORD = 'chaupaal_penalty_record';
-  const KICK_MS = 20000;
-  const RECONNECT_MS = 90000;
+  const LIVE_POLICY = window.DangalLivePolicy ? window.DangalLivePolicy.policyFor('penalty') : { turnMs: 20000, reconnectMs: 90000 };
+  const KICK_MS = LIVE_POLICY.turnMs;
+  const RECONNECT_MS = LIVE_POLICY.reconnectMs;
   const HOLD_FULL_MS = 1200;
 
   const Core = () => window.PenaltyCore;

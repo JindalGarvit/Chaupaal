@@ -1325,3 +1325,18 @@ button.pk-lobby-row{cursor:pointer;}
 .dangal-age-gate__text{font-size:14px;line-height:1.45;margin:0 0 12px;}
 @media (max-width:380px){.pkr-seat{width:72px;}.pkr-card--lg{width:54px;height:76px;font-size:22px;}.pkr-card--lg i{font-size:22px;}.pkr-act{font-size:14px;min-height:48px;}.pkr-hand{min-height:84px;}}
 @media (prefers-reduced-motion:reduce){.pkr-clock span{transition:none;}}
+
+/* ── P1 shared contracts: Live reconnect banner + Rules sheet ── */
+.dangal-reconnect-banner{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 56px);transform:translateX(-50%);z-index:260;background:rgba(21,25,46,0.92);color:#fff;font-size:13px;font-weight:600;padding:8px 14px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,0.25);pointer-events:none;white-space:nowrap;}
+.dangal-reconnect-banner[hidden]{display:none;}
+.dangal-rules{font-size:14px;line-height:1.5;color:var(--ink);padding:2px 2px 12px;}
+.dangal-rules__glance{margin:0 0 12px;padding-left:18px;}
+.dangal-rules__glance li{margin:0 0 6px;}
+.dangal-rules__full summary{cursor:pointer;font-weight:700;margin:4px 0 8px;color:var(--ink);}
+.dangal-rules__full p{margin:0 0 10px;}
+.dangal-rules__source{font-size:12px;color:var(--muted);}
+.dangal-rules__tag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:rgba(232,93,4,0.12);color:#b54700;font-size:11px;font-weight:700;}
+.dangal-rules__house{background:rgba(232,93,4,0.08);border-radius:12px;padding:8px 12px;margin:0 0 12px;}
+.dangal-rules__house ul{margin:4px 0 0;padding-left:18px;}
+.dangal-rules__label{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);}
+.dangal-profile__prov{font-size:10px;opacity:0.7;margin-left:4px;}

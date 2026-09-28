@@ -443,7 +443,7 @@ function rtdbTrip(v) {
     const grad = read('public/src/js/dangal/dangal-graduation.js');
     assert(/penalty: \{ grade: 'live', sync: 'live1v1', stakes: true \}/.test(grad) && /\{ id: 'penalty', genre: 'rw_sports' \}/.test(grad), 'graduation live1v1 + stakes; roster (Sports)');
     const ds = read('public/src/js/dangal/design-system.js');
-    assert(/penalty: \{ primary: '#00A86B'[^}]*mark: M\.penalty[^}]*orientation: 'portrait'/.test(ds) && /RATED_GAMES = \[[^\]]*'penalty'/.test(ds), 'identity (portrait, mark) + rated');
+    assert(/penalty: \{ primary: '#00A86B'[^}]*mark: M\.penalty[^}]*orientation: 'portrait'/.test(ds) && require(path.join(root, 'public/src/js/dangal/dangal-rating-math.js')).isRated('penalty'), 'identity (portrait, mark) + rated');
     const ui = read('public/src/js/games/game-ui.js');
     assert(/penalty: '#00A86B'/.test(ui) && /penalty: 'Penalty Shootout'/.test(ui) && /penalty: \[/.test(ui), 'accent, label, coach tips');
     const ach = read('public/src/js/dangal/dangal-achievements.js');

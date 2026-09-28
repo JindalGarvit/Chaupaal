@@ -156,7 +156,8 @@ async function recordDangalGameLike(gameId, btn) {
 }
 
 function dangalTileHtml(g) {
-  const rating = typeof getGameRating === 'function' ? getGameRating(g.ratingKey) : null;
+  const r = typeof getDangalRating === 'function' ? getDangalRating(g.ratingKey || g.id) : null;
+  const rating = r ? r.rating + (r.provisional ? ' · Provisional' : '') : null;
   const honesty =
     typeof dangalHonestyBadgeHtml === 'function'
       ? dangalHonestyBadgeHtml(g)
@@ -351,6 +352,16 @@ function renderDangalGamesGrid() {
   }
 
   const library = typeof getGames === 'function' ? getGames({ dangal: true }) : [];
+  loadDangalRatings().then(() => {
+    grid.querySelectorAll('.dangal-game-tile[data-game]').forEach((tile) => {
+      const r = getDangalRating(tile.dataset.game);
+      if (!r || tile.querySelector('.dangal-game-rating-pill')) return;
+      const pill = document.createElement('div');
+      pill.className = 'dangal-game-rating-pill';
+      pill.textContent = '★ ' + r.rating + (r.provisional ? ' · Provisional' : '');
+      tile.querySelector('.dangal-game-desc')?.after(pill);
+    });
+  });
 
   grid.innerHTML = '';
   renderDangalContinueAndChips(grid);
@@ -765,29 +776,46 @@ function wireDangalSwipe() {
   });
 }
 
-function getGameRating(key){
-  if(!key)return null;
-  const ratings=userProfile?.gameRatings||JSON.parse(localStorage.getItem('chaupaal_game_ratings')||'{}');
-  return ratings[key]||1200;
+/* Ratings are server-authoritative (server-lib/dangal-ratings.js writes users/{uid}/gameStats).
+   The client only caches what the server wrote; unrated titles (incl. Tic-Tac-Toe) show no rating. */
+const _dangalRatingCache={};
+let _dangalRatingLoad=null;
+
+function loadDangalRatings(force){
+  if(_dangalRatingLoad&&!force) return _dangalRatingLoad;
+  const uid=typeof currentUser!=='undefined'?currentUser?.uid:null;
+  if(typeof db==='undefined'||!db||!uid) return Promise.resolve(_dangalRatingCache);
+  _dangalRatingLoad=db.collection('users').doc(uid).collection('gameStats').limit(40).get()
+    .then((snap)=>{
+      const M=window.DangalRatingMath;
+      snap.docs.forEach((d)=>{
+        if(!M||!M.isRated(d.id)) return;
+        const rec=M.fromStats(d.data()||{});
+        if(!rec.games) return;
+        _dangalRatingCache[d.id]={rating:Math.round(rec.r),games:rec.games,provisional:M.isProvisional(rec)};
+      });
+      return _dangalRatingCache;
+    })
+    .catch(()=>_dangalRatingCache);
+  return _dangalRatingLoad;
 }
+
+function getDangalRating(key){
+  const M=window.DangalRatingMath;
+  if(!key||!M||!M.isRated(key)) return null;
+  return _dangalRatingCache[key]||null;
+}
+
+function getGameRating(key){
+  const r=getDangalRating(key);
+  return r?r.rating:null;
+}
+window.getDangalRating=getDangalRating;
+window.loadDangalRatings=loadDangalRatings;
 
 async function recordGameResult(key,won,drew,extra){
   if(!key)return;
-  const ratings=JSON.parse(localStorage.getItem('chaupaal_game_ratings')||'{}');
-  const cur=ratings[key]||1200;
-  const delta=won?16:drew?2:-12;
-  ratings[key]=Math.max(800,cur+delta);
-  ratings[key+'_lastPlayed']=Date.now();
-  localStorage.setItem('chaupaal_game_ratings',JSON.stringify(ratings));
-  try{
-    let u=typeof currentUser!=='undefined'?currentUser:null;
-    if(!u&&window.ChaupaalEnv?.whenAuthReady){
-      u=await window.ChaupaalEnv.whenAuthReady(10000);
-    }
-    if(db&&u){
-      await db.collection('users').doc(u.uid).update({[`gameRatings.${key}`]:ratings[key]});
-    }
-  }catch(e){}
+  if(window.DangalRatingMath&&DangalRatingMath.isRated(key)) setTimeout(()=>loadDangalRatings(true),4000);
   if(typeof recordDangalSession==='function'){
     const e=extra&&typeof extra==='object'?extra:{};
     const scoreOnly=!!e.scoreOnly;

@@ -39,6 +39,72 @@
     return rtdb.ref(path);
   }
 
+  const Policy = () => (typeof window !== 'undefined' && window.DangalLivePolicy) || null;
+  const FINISHED = ['over', 'forfeit', 'timeout', 'checkmate', 'aborted', 'draw', 'stalemate', 'resign', 'void'];
+  let serverOffset = 0;
+  let offsetWatched = false;
+
+  /** Server time (RTDB offset) — presence and forfeit decisions never trust the phone clock. */
+  function watchServerOffset() {
+    if (offsetWatched) return;
+    const r = rtdbRef('.info/serverTimeOffset');
+    if (!r) return;
+    offsetWatched = true;
+    try {
+      r.on('value', (s) => {
+        serverOffset = Number(s && s.val()) || 0;
+      });
+    } catch (e) {}
+  }
+  function sNow() {
+    return Date.now() + serverOffset;
+  }
+  function deviceId() {
+    try {
+      return typeof getOrCreateDeviceId === 'function' ? String(getOrCreateDeviceId() || '') : '';
+    } catch (e) {
+      return '';
+    }
+  }
+  function livePolicy(gameType) {
+    const P = Policy();
+    if (P) return P.policyFor(gameType);
+    return { reconnectMs: PRESENCE_FORFEIT_MS, warnMs: PRESENCE_WARN_MS, heartbeatMs: PRESENCE_HEARTBEAT_MS, singleSeat: false, dualLeave: 'void_refund' };
+  }
+  function presenceState(p, pol) {
+    const P = Policy();
+    if (P) return P.reconnectStatus(p, sNow(), pol);
+    const at = Number(p && p.at) || 0;
+    const online = !p || p.online !== false;
+    const offlineMs = !online && at ? Math.max(0, sNow() - at) : 0;
+    return { online, offlineMs, warn: offlineMs >= pol.warnMs, msLeft: Math.max(0, pol.reconnectMs - offlineMs), expired: !online && offlineMs > pol.reconnectMs };
+  }
+
+  /** Default "opponent reconnecting 0:42" banner for games that don't paint their own. */
+  function reconnectBanner(show, msLeft) {
+    if (typeof document === 'undefined') return;
+    let el = document.querySelector('[data-dangal-reconnect]');
+    if (!show) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'dangal-reconnect-banner';
+      el.setAttribute('data-dangal-reconnect', '');
+      el.setAttribute('role', 'status');
+      (document.querySelector('.device') || document.body).appendChild(el);
+    }
+    const P = Policy();
+    const t = typeof window.t === 'function' ? window.t : null;
+    const label = (t && t('dangal.reconnecting')) || 'Opponent reconnecting';
+    el.textContent = label + ' · ' + (P ? P.countdownText(msLeft) : Math.ceil(msLeft / 1000) + 's');
+  }
+
+  function liveNotice(msg) {
+    if (typeof showToast === 'function') showToast(msg);
+  }
+
   function isPersistableSeatUid(uid) {
     const u = String(uid || '').trim();
     if (!u || /^(ai|practice|random|you)$/i.test(u)) return false;
@@ -175,20 +241,71 @@
     if (!ref || !matchId || !playerA || !playerB) return null;
     const me = o.me;
     const stake = Number(o.stake) || Number(window.__dangalLaunchCtx?.stake) || 0;
-    const now = Date.now();
+    watchServerOffset();
+    const pol = livePolicy(gameType);
+    const P = Policy();
+    const PROTOCOL = P ? P.PROTOCOL : 1;
+    const dev = deviceId();
+    const now = sNow();
     let presenceWatch = null;
     let presenceHeartbeat = null;
     let visibilityHandler = null;
     let forfeited = false;
     let detached = false;
+    let role = 'pending';
+    let claimedRole = 'player';
+    let versionBlocked = false;
+    let voidNoticed = false;
+    let houseNoticed = false;
     o.playerA = playerA;
     o.playerB = playerB;
 
-    function bumpPresence(online) {
-      if (!me || detached) return;
+    /** Variants lock when the match record is created; later joiners read the stored copy. */
+    function lockedVariants() {
+      const R = typeof window !== 'undefined' ? window.DangalRules : null;
+      if (!R || !R.get(gameType)) return null;
+      const ctx = Object.assign({}, window.__dangalLaunchCtx || {}, {
+        ludoMode: o.ludoMode,
+        timeControl: o.timeControl && o.timeControl.label ? o.timeControl.label : o.timeControl,
+        variants: o.variants,
+      });
+      return Object.assign({}, R.lockVariants(gameType, R.fromLaunchCtx(gameType, ctx)).values);
+    }
+
+    function publishVariants(val) {
+      if (!val || !val.variants) return;
       try {
-        ref.child('presence/' + me).set({ at: Date.now(), online: online !== false });
+        window.__dangalLiveVariants = Object.assign({}, window.__dangalLiveVariants || {}, { [gameType]: val.variants });
       } catch (e) {}
+      const R = window.DangalRules;
+      if (houseNoticed || !R) return;
+      houseNoticed = true;
+      const house = R.nonDefault(gameType, val.variants);
+      if (house.length) liveNotice('House rules: ' + house.map((h) => h.text).join(' · '));
+    }
+
+    function bumpPresence(online) {
+      if (!me || detached || role !== 'player') return;
+      try {
+        ref.child('presence/' + me).set({ at: sNow(), online: online !== false });
+        if (dev && pol.singleSeat) ref.child('seats/' + me).set({ dev, at: sNow() });
+      } catch (e) {}
+    }
+
+    function becomeSpectator(reason) {
+      if (role === 'spectator') return;
+      if (reason === 'version') versionBlocked = true;
+      role = 'spectator';
+      liveNotice(
+        reason === 'version'
+          ? 'Chaupaal updated — refresh to keep playing this match'
+          : 'This match is open on another device — watching here'
+      );
+      if (typeof o.onSpectator === 'function') {
+        try {
+          o.onSpectator({ reason });
+        } catch (e) {}
+      }
     }
 
     function seedPlayersMap() {
@@ -207,9 +324,31 @@
 
     ref.transaction((cur) => {
       if (cur) {
+        if (P && pol.versionCheck !== false && P.versionMismatch(cur.protocol)) {
+          versionBlocked = true;
+          return;
+        }
+        versionBlocked = false;
+        const prevMine = me && cur.presence ? cur.presence[me] : null;
+        const claim = P && me && dev ? P.claimSeat(cur.seats && cur.seats[me], dev, now, pol) : { role: 'player', seat: dev ? { dev, at: now } : null };
+        claimedRole = claim.role;
+        if (claimedRole === 'spectator') return;
         const next = Object.assign({}, cur);
+        next.protocol = cur.protocol || PROTOCOL;
+        if (me && claim.seat && pol.singleSeat) next.seats = Object.assign({}, cur.seats || {}, { [me]: claim.seat });
         next.players = Object.assign({}, cur.players || {}, seedPlayersMap());
         next.presence = Object.assign({}, cur.presence || {});
+        // Both players gone past the reconnect window → void + refund (stakes never moved).
+        if (me && !partyOn && cur.status === 'playing' && prevMine && pol.dualLeave === 'void_refund') {
+          const oppUid = me === cur.playerA ? cur.playerB : cur.playerA;
+          const opp = presenceState(cur.presence && cur.presence[oppUid], pol);
+          const mine = presenceState(prevMine, pol);
+          if (opp.expired && mine.expired) {
+            next.status = 'void';
+            next.winner = null;
+            next.voidReason = 'both_left';
+          }
+        }
         if (me) next.presence[me] = { at: now, online: true };
         if (!next.playerA) next.playerA = playerA;
         if (!next.playerB) next.playerB = playerB;
@@ -264,7 +403,7 @@
         next.lastMoveAt = next.lastMoveAt || now;
         next.version = Number(next.version || next.seq) || 0;
         // Do not resurrect a finished match
-        if (cur.status === 'over' || cur.status === 'forfeit' || cur.status === 'timeout' || cur.status === 'checkmate' || cur.status === 'aborted' || cur.status === 'draw' || cur.status === 'stalemate') {
+        if (FINISHED.indexOf(cur.status) >= 0) {
           next.status = cur.status;
           next.winner = cur.winner || null;
         }
@@ -281,6 +420,9 @@
         playerB,
         players,
         presence,
+        protocol: PROTOCOL,
+        variants: lockedVariants(),
+        seats: me && dev && pol.singleSeat ? { [me]: { dev, at: now } } : null,
         party: partyOn || undefined,
         partySeats: partyOn && seatList.length >= 3 ? seatList.slice() : undefined,
         turn: playerA,
@@ -302,6 +444,15 @@
         lastMoveAt: now,
         updatedAt: now,
       };
+    }).then(() => {
+      if (versionBlocked) becomeSpectator('version');
+      else if (claimedRole === 'spectator') becomeSpectator('device');
+      else {
+        role = 'player';
+        bumpPresence(true);
+      }
+    }).catch(() => {
+      if (role === 'pending') role = 'player';
     });
 
     let handler = null;
@@ -311,8 +462,16 @@
       gameType,
       party: partyOn,
       seats: seatList.length >= 2 ? seatList.slice() : [playerA, playerB],
+      policy: pol,
+      get role() {
+        return role;
+      },
+      get spectator() {
+        return role === 'spectator';
+      },
+      serverNow: sNow,
       push(patch) {
-        if (detached) return Promise.resolve(null);
+        if (detached || role === 'spectator' || versionBlocked) return Promise.resolve(null);
         return ref.transaction((cur) => {
           if (!cur) return cur;
           const patchObj = patch || {};
@@ -322,15 +481,8 @@
             return;
           }
           // Finished matches: allow status/winner/presence only, not fen/state rewinds
-          const finished =
-            cur.status === 'over' ||
-            cur.status === 'forfeit' ||
-            cur.status === 'timeout' ||
-            cur.status === 'checkmate' ||
-            cur.status === 'stalemate' ||
-            cur.status === 'draw' ||
-            cur.status === 'aborted' ||
-            cur.status === 'resign';
+          const finished = FINISHED.indexOf(cur.status) >= 0;
+
           if (finished && patchObj.fen && patchObj.fen !== cur.fen) {
             return;
           }
@@ -353,13 +505,13 @@
           }
           next.seq = curVer + 1;
           next.version = next.seq;
-          next.updatedAt = Date.now();
-          next.lastMoveAt = Date.now();
+          next.updatedAt = sNow();
+          next.lastMoveAt = sNow();
           if (me) {
             next.players = Object.assign({}, cur.players || {});
             next.players[me] = true;
             next.presence = Object.assign({}, cur.presence || {});
-            next.presence[me] = { at: Date.now(), online: true };
+            next.presence[me] = { at: sNow(), online: true };
           }
           return next;
         });
@@ -408,7 +560,7 @@
           detached = true;
           if (me) {
             try {
-              ref.child('presence/' + me).set({ at: Date.now(), online: false });
+              ref.child('presence/' + me).set({ at: sNow(), online: false });
             } catch (e) {}
           }
           if (handler) {
@@ -426,43 +578,63 @@
       },
     };
 
+    function presenceInfo(val) {
+      const oppUid = me === val.playerA ? val.playerB : val.playerA;
+      const p = (val.presence && val.presence[oppUid]) || {};
+      const st = presenceState(p, pol);
+      return {
+        oppUid,
+        online: st.online,
+        at: Number(p.at) || 0,
+        msOffline: st.offlineMs,
+        warn: st.warn,
+        forfeitSoon: !st.online && st.warn && !st.expired,
+        forfeitMsLeft: st.msLeft,
+        expired: st.expired,
+      };
+    }
+
+    function reportPresence(info) {
+      if (typeof o.onPresence === 'function') {
+        try {
+          o.onPresence(info);
+        } catch (e) {}
+      } else {
+        reconnectBanner(!info.online && info.warn && !info.expired, info.forfeitMsLeft);
+      }
+    }
+
     if (typeof o.onSnap === 'function') {
       handler = ref.on('value', (snap) => {
         if (detached) return;
         try {
           const val = snap.val() || null;
-          o.onSnap(val, api);
-          if (val && me && typeof o.onPresence === 'function' && !detached) {
-            const oppUid = me === val.playerA ? val.playerB : val.playerA;
-            const p = (val.presence && val.presence[oppUid]) || {};
-            const online = p.online !== false;
-            const at = Number(p.at) || 0;
-            const msOffline = !online && at ? Math.max(0, Date.now() - at) : 0;
-            try {
-              o.onPresence({
-                oppUid,
-                online,
-                at,
-                msOffline,
-                warn: !online && msOffline >= PRESENCE_WARN_MS,
-                forfeitSoon: !online && msOffline >= PRESENCE_WARN_MS && msOffline < PRESENCE_FORFEIT_MS,
-                forfeitMsLeft: !online ? Math.max(0, PRESENCE_FORFEIT_MS - msOffline) : PRESENCE_FORFEIT_MS,
-              });
-            } catch (e) {}
+          // Another device took this seat (reconnect window passed) → this one only watches.
+          if (val && me && dev && role === 'player' && val.seats && val.seats[me] && val.seats[me].dev && val.seats[me].dev !== dev) {
+            becomeSpectator('device');
           }
+          publishVariants(val);
+          if (val && val.status === 'void' && !voidNoticed) {
+            voidNoticed = true;
+            reconnectBanner(false);
+            liveNotice('Both players left — match void, stakes returned');
+          }
+          o.onSnap(val, api);
+          if (val && me && !partyOn && !detached && val.status === 'playing') reportPresence(presenceInfo(val));
+          else reconnectBanner(false);
         } catch (e) {
           console.warn('[dangal-live]', e);
         }
       });
     }
 
-    // Keep own presence fresh so brief tab blips don't look like a leave
+    // Keep own presence fresh; a hidden tab / locked screen is a soft disconnect (online:false).
     if (me) {
       bumpPresence(true);
       presenceHeartbeat = setInterval(() => {
         if (detached || forfeited) return;
         bumpPresence(typeof document === 'undefined' || document.visibilityState !== 'hidden');
-      }, PRESENCE_HEARTBEAT_MS);
+      }, pol.heartbeatMs || PRESENCE_HEARTBEAT_MS);
       visibilityHandler = () => {
         if (detached) return;
         bumpPresence(document.visibilityState !== 'hidden');
@@ -472,33 +644,19 @@
       } catch (e) {}
     }
 
-    // Soft presence forfeit: dual only. Party leave is handled by the game (continue if ≥2).
+    // Reconnect window (policy): dual only. Party leave is handled by the game (continue if ≥2).
     if (o.watchForfeit !== false && me && !partyOn) {
       presenceWatch = setInterval(() => {
-        if (detached || forfeited) return;
+        if (detached || forfeited || role !== 'player') return;
         ref.once('value', (snap) => {
           if (detached || forfeited) return;
           const val = snap.val();
           if (!val || val.status !== 'playing') return;
-          const oppUid = me === val.playerA ? val.playerB : val.playerA;
-          const p = (val.presence && val.presence[oppUid]) || {};
-          const msOffline =
-            p.online === false && p.at ? Date.now() - Number(p.at) : 0;
-          if (typeof o.onPresence === 'function' && p.online === false && msOffline >= PRESENCE_WARN_MS) {
-            try {
-              o.onPresence({
-                oppUid,
-                online: false,
-                at: Number(p.at) || 0,
-                msOffline,
-                warn: true,
-                forfeitSoon: msOffline < PRESENCE_FORFEIT_MS,
-                forfeitMsLeft: Math.max(0, PRESENCE_FORFEIT_MS - msOffline),
-              });
-            } catch (e) {}
-          }
-          if (p.online === false && p.at && msOffline > PRESENCE_FORFEIT_MS) {
+          const info = presenceInfo(val);
+          if (!info.online && info.warn) reportPresence(info);
+          if (info.expired) {
             forfeited = true;
+            reconnectBanner(false);
             api.setStatus('forfeit', me).then(() => {
               if (typeof o.onForfeit === 'function') {
                 try {
@@ -579,6 +737,8 @@
     requestLeave,
     mergeQuiz,
     normalizePartySeats,
+    policyFor: livePolicy,
+    serverNow: sNow,
     PRESENCE_FORFEIT_MS,
     PRESENCE_WARN_MS,
     QUIZ_SEED_TIMEOUT_MS,

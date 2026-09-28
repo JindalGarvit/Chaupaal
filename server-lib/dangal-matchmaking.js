@@ -12,17 +12,22 @@ const { canonicalGameId, RATED, isRetiredGameId } = (() => {
     const econ = require('./dangal-economy');
     return {
       canonicalGameId: econ.canonicalGameId,
-      RATED: econ.RATED || new Set(['chess', 'ttt', 'streetcricket', 'quiz']),
+      RATED: econ.RATED || require('./dangal-ratings').RATED,
       isRetiredGameId: econ.isRetiredGameId || (() => false),
     };
   } catch (e) {
     return {
       canonicalGameId: (id) => String(id || '').toLowerCase(),
-      RATED: new Set(['chess', 'ttt', 'streetcricket', 'quiz']),
+      RATED: require('./dangal-ratings').RATED,
       isRetiredGameId: () => false,
     };
   }
 })();
+const Ratings = require('./dangal-ratings');
+
+/** Rematch spam guard: rated stranger pairings with the same opponent per rolling window. */
+const REPEAT_WINDOW_MS = 60 * 60 * 1000;
+const REPEAT_MAX = 3;
 
 const QUEUE_TTL_MS = 90 * 1000; // prune waiting older than 90s
 const MATCH_TIMEOUT_MS = 20 * 1000;
@@ -49,13 +54,14 @@ function isRatedGame(gameId) {
   return RATED.has(id);
 }
 
-function pickBestOpponent(myUid, myElo, waiters, { now = Date.now(), waitMs = 0 } = {}) {
+function pickBestOpponent(myUid, myElo, waiters, { now = Date.now(), waitMs = 0, avoid = null } = {}) {
   const band = eloBandForWaitMs(waitMs);
   const rated = true;
   let best = null;
   let bestDelta = Infinity;
   for (const w of waiters || []) {
     if (!w || w.uid === myUid || w.claimedBy) continue;
+    if (avoid && avoid.has(w.uid)) continue;
     if (w.tsMs && now - Number(w.tsMs) > QUEUE_TTL_MS) continue;
     const elo = Number(w.elo);
     if (!Number.isFinite(elo)) {
@@ -73,15 +79,48 @@ function pickBestOpponent(myUid, myElo, waiters, { now = Date.now(), waitMs = 0 
 }
 
 async function loadGameElo(db, uid, gameId) {
-  const id = canonicalGameId(gameId);
+  return Ratings.matchmakingRating(db, uid, canonicalGameId(gameId));
+}
+
+/** Opponents seen ≥ REPEAT_MAX times in the window: { oppUid: [tsMs…] } → Set of uids to skip. */
+function repeatAvoidSet(pairs, now = Date.now()) {
+  const out = new Set();
+  Object.keys(pairs || {}).forEach((opp) => {
+    const recent = (pairs[opp] || []).filter((t) => now - Number(t) < REPEAT_WINDOW_MS);
+    if (recent.length >= REPEAT_MAX) out.add(opp);
+  });
+  return out;
+}
+
+function recentRef(db, uid, game) {
+  return db.collection('users').doc(uid).collection('matchmakingRecent').doc(game);
+}
+
+async function loadAvoid(db, uid, game, now) {
   try {
-    const snap = await db.collection('users').doc(uid).collection('gameStats').doc(id).get();
-    if (snap.exists) {
-      const d = snap.data() || {};
-      return Number(d.elo) || 1200;
-    }
-  } catch (e) {}
-  return 1200;
+    const snap = await recentRef(db, uid, game).get();
+    return repeatAvoidSet(snap.exists ? (snap.data() || {}).pairs : null, now);
+  } catch (e) {
+    return new Set();
+  }
+}
+
+async function recordPairing(db, a, b, game, now) {
+  const bump = async (uid, opp) => {
+    try {
+      const ref = recentRef(db, uid, game);
+      const snap = await ref.get();
+      const pairs = (snap.exists && (snap.data() || {}).pairs) || {};
+      const next = {};
+      Object.keys(pairs).forEach((k) => {
+        const kept = (pairs[k] || []).filter((t) => now - Number(t) < REPEAT_WINDOW_MS);
+        if (kept.length) next[k] = kept;
+      });
+      next[opp] = (next[opp] || []).concat(now).slice(-REPEAT_MAX);
+      await ref.set({ pairs: next, updatedAt: now });
+    } catch (e) {}
+  };
+  await Promise.all([bump(a, b), bump(b, a)]);
 }
 
 /** Shared Live match id — written into the claimed waiter doc so both phones join the same match. */
@@ -114,6 +153,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
   const elo = rated ? await loadGameElo(db, uid, game) : null;
   const col = waitingCol(db, cat);
   const now = Date.now();
+  const avoid = rated ? await loadAvoid(db, uid, game, now) : null;
   const mmId = mintMatchId(game, now);
 
   // If already waiting, check claim / try widen band claim
@@ -159,7 +199,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
       .filter((w) => w.uid && w.uid !== uid && !w.claimedBy);
 
     if (rated && elo != null) {
-      const { opponent, band, delta } = pickBestOpponent(uid, elo, waiters, { now, waitMs });
+      const { opponent, band, delta } = pickBestOpponent(uid, elo, waiters, { now, waitMs, avoid });
       if (opponent) {
         try {
           await db.runTransaction(async (tx) => {
@@ -182,6 +222,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
           try {
             await myRef.delete();
           } catch (e) {}
+          await recordPairing(db, uid, opponent.uid, game, now);
           return {
             status: 'matched',
             simulated: false,
@@ -255,7 +296,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
     .filter((w) => w.uid && w.uid !== uid && !w.claimedBy);
 
   if (rated && elo != null) {
-    const { opponent, band, delta } = pickBestOpponent(uid, elo, waiters, { now, waitMs: 0 });
+    const { opponent, band, delta } = pickBestOpponent(uid, elo, waiters, { now, waitMs: 0, avoid });
     if (opponent) {
       try {
         await db.runTransaction(async (tx) => {
@@ -274,6 +315,7 @@ async function dangalMatchStep(db, admin, { uid, name, category, gameId, filters
         try {
           await opponent.ref.delete();
         } catch (e) {}
+        await recordPairing(db, uid, opponent.uid, game, now);
         return {
           status: 'matched',
           simulated: false,
@@ -386,6 +428,9 @@ module.exports = {
   isRatedGame,
   pickBestOpponent,
   loadGameElo,
+  repeatAvoidSet,
+  REPEAT_MAX,
+  REPEAT_WINDOW_MS,
   dangalMatchStep,
   dangalMatchCancel,
   pruneStaleDangalQueues,

@@ -22,7 +22,7 @@ const { createWerewolfAdapter } = require('./werewolf-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
-const OFFLINE_MS = 45000;
+const OFFLINE_MS = require('../public/src/js/dangal/dangal-live-policy.js').policyFor('party').reconnectMs;
 const REVEAL_MS = 60000;
 const STEAL_MS = 45000;
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000;

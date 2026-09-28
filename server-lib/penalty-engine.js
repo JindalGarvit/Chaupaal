@@ -24,7 +24,7 @@ const INTRO_MS = 2500;
 /** Challenged friend must join within this or the match voids (no chips move). */
 const JOIN_MS = 10 * 60 * 1000;
 /** Same reconnect window as DangalLive.PRESENCE_FORFEIT_MS. */
-const RECONNECT_MS = 90000;
+const RECONNECT_MS = require('../public/src/js/dangal/dangal-live-policy.js').policyFor('penalty').reconnectMs;
 const MAX_STAKE = 500;
 const SETTLE_LEASE_MS = 30000;
 /** settle_claim / settle_done are internal to maybeSettle — never callable from a phone. */

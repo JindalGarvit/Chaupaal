@@ -15,7 +15,8 @@
   'use strict';
 
   const games = {};
-  const PRESENCE_MS = 20000;
+  const LIVE_POLICY = window.DangalLivePolicy ? window.DangalLivePolicy.policyFor('party') : null;
+  const PRESENCE_MS = LIVE_POLICY ? LIVE_POLICY.heartbeatMs : 20000;
   const TICK_MIN_GAP_MS = 2500;
 
   function esc(s) {
@@ -696,17 +697,20 @@
     secretRef.on('value', onSecret, later(() => handlers.onSecret(null)));
     presenceRef.on('value', onPresence, () => {});
 
-    const beat = () => {
+    const serverNow = () => Date.now() + offset;
+    const beat = (online) => {
       if (stopped) return;
-      myPresence.set({ at: Date.now(), online: true }).catch(() => {});
+      myPresence.set({ at: serverNow(), online: online !== false }).catch(() => {});
     };
     try {
-      myPresence.onDisconnect().set({ at: Date.now(), online: false });
-    } catch (e) {}
+      myPresence.onDisconnect().set({ at: firebase.database.ServerValue.TIMESTAMP, online: false });
+    } catch (e) {
+      try {
+        myPresence.onDisconnect().set({ at: Date.now(), online: false });
+      } catch (err) {}
+    }
     beat();
     const hb = setInterval(beat, PRESENCE_MS);
-
-    const serverNow = () => Date.now() + offset;
     const maybeTick = (force) => {
       if (stopped || !pub || pub.status !== 'playing') return;
       const now = Date.now();
@@ -720,8 +724,9 @@
     const ticker = setInterval(() => maybeTick(false), 1000);
     // Slow nudge so dropped players' turns are skipped and a missing host is replaced.
     const nudge = setInterval(() => maybeTick(true), 15000);
+    // Backgrounded phone = soft disconnect: the seat is kept until heartbeats go quiet.
     const onVis = () => {
-      if (document.visibilityState === 'visible') beat();
+      if (document.visibilityState === 'visible') beat(true);
     };
     document.addEventListener('visibilitychange', onVis);
     setTimeout(() => {
@@ -765,10 +770,10 @@
     };
   }
 
-  function isOnline(presence, uid) {
+  function isOnline(presence, uid, now) {
     const p = presence && presence[uid];
     if (!p || p.online === false) return false;
-    return Date.now() - (Number(p.at) || 0) < 45000;
+    return (now || Date.now()) - (Number(p.at) || 0) < (LIVE_POLICY ? LIVE_POLICY.reconnectMs : 45000);
   }
 
   function roomLink(game, code) {

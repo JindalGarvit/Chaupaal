@@ -5,7 +5,9 @@
 const STARTING_CHIPS = 1000;
 const MAX_STAKE = 500;
 const DAILY_CHIP_RESOLVES = 60;
-const RATED = new Set(['chess', 'ttt', 'streetcricket', 'quiz', 'penalty']);
+const Ratings = require('./dangal-ratings');
+/** Rated titles live in the ratings service (Glicko-2). Tic-Tac-Toe is unrated quick-play. */
+const RATED = Ratings.RATED;
 /** Results only the server may report (it resolved every move) — client claims are ignored. */
 const SERVER_SETTLED = new Set(['penalty', 'poker']);
 /** Chips move only through the game's own server path — even practice results are ignored here. */
@@ -60,13 +62,13 @@ function isRetiredGameId(id) {
   return RETIRED_GAME_IDS.has(canonicalGameId(id));
 }
 
-function kFactor(games) {
-  return (Number(games) || 0) < 30 ? 20 : 10;
-}
-
+/** Pure head-to-head rating delta for A (display points), via the ratings service. */
 function computeEloDelta(eloA, gamesA, eloB, gamesB, scoreA) {
-  const expA = 1 / (1 + Math.pow(10, ((eloB || 1200) - (eloA || 1200)) / 400));
-  return Math.round(kFactor(gamesA) * (scoreA - expA));
+  return Ratings.rateMatch(
+    Ratings.fromStats({ elo: eloA, totalGames: gamesA }),
+    Ratings.fromStats({ elo: eloB, totalGames: gamesB }),
+    scoreA
+  ).deltaA;
 }
 
 function weekKey(d = new Date()) {
@@ -125,7 +127,7 @@ async function getWallet(db, admin, uid) {
 }
 
 async function settleSide(db, FieldValue, uid, opts, batch) {
-  const { gameType, won, isDraw, eloDelta, stake, resultTag, dayKey, extra } = opts;
+  const { gameType, won, isDraw, eloDelta, rating, stake, resultTag, dayKey, extra, matchId } = opts;
   const dailyRef = db.collection('users').doc(uid).collection('dailyCredits').doc(dayKey);
   const dailySnap = await dailyRef.get();
   const dailyCount = Number(dailySnap.data()?.resolves) || 0;
@@ -136,7 +138,6 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
   const stats = statsSnap.data() || {};
   const totalBefore = Number(stats.totalGames) || 0;
   const winsBefore = Number(stats.wins) || 0;
-  const eloBefore = Number(stats.elo) || 1200;
   const isFirstWin = won && winsBefore === 0;
 
   const { ref: walletRef, data: wallet } = await ensureWallet(db, FieldValue, uid);
@@ -164,17 +165,36 @@ async function settleSide(db, FieldValue, uid, opts, batch) {
     achChips += ACHIEVEMENTS[k].chips;
   });
 
-  batch.set(
-    statsRef,
-    {
-      totalGames: totalEver,
-      wins: winsBefore + (won ? 1 : 0),
-      elo: RATED.has(gameType) ? eloBefore + eloDelta : eloBefore,
-      lastResult: resultTag,
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const statsWrite = {
+    gameType,
+    totalGames: totalEver,
+    wins: winsBefore + (won ? 1 : 0),
+    lastResult: resultTag,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (rating) Object.assign(statsWrite, rating);
+  batch.set(statsRef, statsWrite, { merge: true });
+  const txCol = db.collection('users').doc(uid).collection('chipTransactions');
+  const ledgerAmount = chipDelta + achChips;
+  if (matchId) {
+    batch.set(txCol.doc('m_' + matchId), {
+      amount: ledgerAmount,
+      reason: 'dangal_match',
+      gameType,
+      matchId,
+      result: resultTag,
+      stake: stake || 0,
+      at: FieldValue.serverTimestamp(),
+    });
+  } else if (ledgerAmount) {
+    batch.set(txCol.doc(), {
+      amount: ledgerAmount,
+      reason: 'dangal_game',
+      gameType,
+      result: resultTag,
+      at: FieldValue.serverTimestamp(),
+    });
+  }
   batch.set(
     walletRef,
     {
@@ -302,16 +322,21 @@ async function resolveGame(db, admin, uid, body, opts) {
   const oData = (oppStats && oppStats.data()) || {};
   let eloDelta = 0;
   let oppEloDelta = 0;
-  if (RATED.has(gameType) && opponentUid && !isComplete) {
-    const scoreA = isDraw ? 0.5 : won ? 1 : 0;
-    eloDelta = computeEloDelta(
-      Number(rData.elo) || 1200,
-      Number(rData.totalGames) || 0,
-      Number(oData.elo) || 1200,
-      Number(oData.totalGames) || 0,
-      scoreA
-    );
-    oppEloDelta = -eloDelta;
+  let rated = null;
+  if (!isComplete) {
+    rated = Ratings.rateHeadToHead(rData, oData, isDraw ? 0.5 : won ? 1 : 0, {
+      gameType,
+      opponentUid,
+      vsBot: !!body.vsBot,
+      practice: !!body.practice,
+      // Friend-only private tables are unrated unless the host marked them rated.
+      privateTable: !!matchId && !/_mm_/.test(matchId) && !trusted,
+      rated: body.rated === true ? true : undefined,
+    });
+    if (rated) {
+      eloDelta = rated.deltaA;
+      oppEloDelta = rated.deltaB;
+    }
   }
 
   const dayKey = new Date().toISOString().slice(0, 10);
@@ -325,9 +350,11 @@ async function resolveGame(db, admin, uid, body, opts) {
       won,
       isDraw,
       eloDelta: isComplete ? 0 : eloDelta,
+      rating: rated ? rated.a : null,
       stake: isComplete ? 0 : stake,
       resultTag,
       dayKey,
+      matchId,
       extra: trusted ? flags[uid] : null,
     },
     batch
@@ -344,9 +371,11 @@ async function resolveGame(db, admin, uid, body, opts) {
         won: !isDraw && !won,
         isDraw,
         eloDelta: oppEloDelta,
+        rating: rated ? rated.b : null,
         stake,
         resultTag: isDraw ? 'draw' : won ? 'loss' : 'win',
         dayKey,
+        matchId,
         extra: trusted ? flags[opponentUid] : null,
       },
       batch
@@ -358,6 +387,8 @@ async function resolveGame(db, admin, uid, body, opts) {
     won,
     isDraw,
     eloDelta,
+    rated: !!rated,
+    provisional: rated ? rated.a.provisional : undefined,
     chips: reporter.chips,
     chipDelta: reporter.chipDelta,
     achievements: reporter.achievements,
@@ -372,9 +403,10 @@ async function resolveGame(db, admin, uid, body, opts) {
       achievements: opponent.achievements,
     };
   }
-  if (lockRef) batch.set(lockRef, { result: payload, at: FieldValue.serverTimestamp() });
+  // create() makes a concurrent double-report fail the whole batch instead of settling twice.
+  if (lockRef) batch.create(lockRef, { result: payload, at: FieldValue.serverTimestamp() });
   if (matchRef) {
-    batch.set(matchRef, {
+    batch.create(matchRef, {
       gameType,
       reporterUid: uid,
       opponentUid: opponentUid || null,
@@ -384,7 +416,15 @@ async function resolveGame(db, admin, uid, body, opts) {
       at: FieldValue.serverTimestamp(),
     });
   }
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (e) {
+    const exists = e && (e.code === 6 || e.code === 'already-exists' || /already exists/i.test(String(e.message || '')));
+    if (!exists || !matchRef) throw e;
+    const again = await matchRef.get();
+    const w = await getWallet(db, admin, uid);
+    return Object.assign({ duplicate: true, chips: w.balance, matchId }, (again.exists && again.data()?.payload) || {});
+  }
   return payload;
 }
 

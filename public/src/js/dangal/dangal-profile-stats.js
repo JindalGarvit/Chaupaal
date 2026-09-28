@@ -22,11 +22,22 @@
       }
       const totalGames = played.reduce((s, x) => s + (x.totalGames || 0), 0);
       const totalWins = played.reduce((s, x) => s + (x.wins || 0), 0);
-      const top = played.filter((s) => s.elo).sort((a, b) => (b.elo || 0) - (a.elo || 0))[0];
+      const M = window.DangalRatingMath;
+      const ratedView = (s) => {
+        if (!M || !M.isRated(s.gameType) || !s.elo) return null;
+        const rec = M.fromStats(s);
+        return { rating: Math.round(rec.r), provisional: M.isProvisional(rec) };
+      };
+      const provTag = (v) => (v && v.provisional ? ' <small class="dangal-profile__prov">Provisional</small>' : '');
+      const top = played
+        .map((s) => Object.assign({ view: ratedView(s) }, s))
+        .filter((s) => s.view)
+        .sort((a, b) => b.view.rating - a.view.rating)[0];
       const cards = played
         .slice(0, 8)
         .map((stats) => {
           const id = typeof getGameIdentity === 'function' ? getGameIdentity(stats.gameType) || {} : {};
+          const view = ratedView(stats);
           return (
             '<div class="dangal-profile__game-card" style="--game-primary:' +
             (id.primary || '#888') +
@@ -37,7 +48,7 @@
             '</span><span>' +
             (id.label || stats.gameType) +
             '</span>' +
-            (stats.elo ? '<span>♟ ' + stats.elo + '</span>' : '') +
+            (view ? '<span>★ ' + view.rating + provTag(view) + '</span>' : '') +
             '<span>' +
             (stats.wins || 0) +
             'W · ' +
@@ -54,10 +65,11 @@
         '</strong><span>Wins</span></div>' +
         (top
           ? '<div><strong>' +
-            top.elo +
+            top.view.rating +
             '</strong><span>' +
             ((typeof getGameIdentity === 'function' && getGameIdentity(top.gameType)?.label) || '') +
-            ' ELO</span></div>'
+            (top.view.provisional ? ' rating · Provisional' : ' rating') +
+            '</span></div>'
           : '') +
         '</div><div class="dangal-profile__games-grid">' +
         cards +

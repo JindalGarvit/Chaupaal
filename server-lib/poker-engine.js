@@ -25,15 +25,16 @@
 const crypto = require('crypto');
 const Core = require('../public/src/js/games/poker-core.js');
 
-const ACTION_MS = 20000;
-const BANK_MS = 30000;
+const LIVE_POLICY = require('../public/src/js/dangal/dangal-live-policy.js').policyFor('poker');
+
+const ACTION_MS = LIVE_POLICY.turnMs;
+const BANK_MS = LIVE_POLICY.bankMs;
 const BANK_REFILL_MS = 5000;
 const AWAY_ACTION_MS = 4000;
 const HAND_GAP_MS = 4000;
 const SHOWDOWN_GAP_MS = 7000;
 const START_DELAY_MS = 3000;
-/** Same reconnect window as DangalLive / Penalty. */
-const RECONNECT_MS = 90000;
+const RECONNECT_MS = LIVE_POLICY.reconnectMs;
 const SIT_OUT_MAX_MS = 15 * 60 * 1000;
 const BUST_GRACE_MS = 2 * 60 * 1000;
 const IDLE_CLOSE_MS = 10 * 60 * 1000;

@@ -317,7 +317,13 @@
       } catch (e) {}
     }
 
-    return rawLaunch(ctx);
+    const launched = rawLaunch(ctx);
+    if (typeof window !== 'undefined' && window.DangalRules) {
+      try {
+        window.DangalRules.ensureRulesButton(gameId);
+      } catch (e) {}
+    }
+    return launched;
   }
 
   /**
