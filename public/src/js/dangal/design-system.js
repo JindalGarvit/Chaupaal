@@ -107,7 +107,7 @@
     uno: 'Rules based on the classic shedding card game',
     scribble: 'Draw-and-guess party rules · our own word list',
     quiz: 'Timed multiple-choice quiz · our own questions',
-    carrom: 'Simplified rules based on common carrom rules',
+    carrom: 'Rules based on the ICF Laws of Carrom',
     rummy: 'Traditional 13-card rummy rules',
     teenpatti: 'Traditional Teen Patti rules · virtual chips only',
     bluff: 'Classic Bluff (Cheat) card-game rules',

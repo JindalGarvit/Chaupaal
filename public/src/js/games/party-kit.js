@@ -916,6 +916,7 @@
     uno: ['games/ohno-core.js'],
     scribble: ['games/scribble-core.js'],
     quizroom: ['games/quiz-core.js'],
+    carrom: ['games/carrom-physics.js', 'games/carrom-core.js'],
     wordguess: ['games/data/shabd-answers.js', 'games/data/shabd-allowed.js', 'games/data/shabd-gloss.js', 'games/shabd-lexicon.js'],
   };
   const lazyLoaded = {};
@@ -1382,7 +1383,7 @@
       const st = pub.status === 'playing' && pub.state ? spec.hydrate(pub.state) : null;
       const key = JSON.stringify([
         pub.status, pub.roundNo, pub.host, !!pub.paused, pub.over, pub.players, pub.scores, pub.seen,
-        pub.settings, pub.teamPick || null, pub.state || null, view.secret,
+        pub.settings, pub.teamPick || null, pub.state || null, view.secret, pub.settlement || null,
       ]);
       if (key === view.key) return;
       view.key = key;

@@ -222,19 +222,19 @@ function memDb() {
 
   // Existing ratings preserved + Glicko fields written on first rated match.
   const db = memDb();
-  await db.collection('users').doc(A).collection('gameStats').doc('carrom').set({ elo: 1480, totalGames: 35, wins: 20 });
-  await db.collection('users').doc(B).collection('gameStats').doc('carrom').set({ elo: 1450, totalGames: 30, wins: 15 });
-  const body = { gameType: 'carrom', result: 'win', won: true, opponentUid: B, stake: 50, matchId: 'carrom_mm_abc' };
+  await db.collection('users').doc(A).collection('gameStats').doc('rummy').set({ elo: 1480, totalGames: 35, wins: 20 });
+  await db.collection('users').doc(B).collection('gameStats').doc('rummy').set({ elo: 1450, totalGames: 30, wins: 15 });
+  const body = { gameType: 'rummy', result: 'win', won: true, opponentUid: B, stake: 50, matchId: 'rummy_mm_abc' };
   const [r1, r2] = await Promise.all([econ.resolveGame(db, db.admin, A, body), econ.resolveGame(db, db.admin, B, Object.assign({}, body, { won: false, result: 'loss', opponentUid: A }))]);
   assert(r1.pending && !r1.chipDelta && !r2.duplicate && !r2.pending, 'client win claim waits; the loser’s report settles');
   const r3 = await econ.resolveGame(db, db.admin, B, Object.assign({}, body, { won: false, result: 'loss', opponentUid: A }));
   assert(r3.duplicate, 'double report settles once (create() guard)');
-  const aStats = db.store.get('users/' + A + '/gameStats/carrom');
+  const aStats = db.store.get('users/' + A + '/gameStats/rummy');
   assert(aStats.elo > 1480 && aStats.elo < 1500 && aStats.rating && aStats.rating.games === 36 && aStats.rating.v === 2, 'rated win: Elo number continues, Glicko record added');
   const again = await econ.resolveGame(db, db.admin, A, body);
-  assert(again.duplicate && db.store.get('users/' + A + '/gameStats/carrom').totalGames === 36, 'retry is idempotent');
-  const ledger = [...db.store.keys()].filter((k) => /chipTransactions\/m_c_carrom_mm_abc$/.test(k));
-  assert(ledger.length === 2 && db.store.get(ledger[0]).matchId === 'c_carrom_mm_abc', 'one ledger entry per side, keyed by (client-namespaced) matchId');
+  assert(again.duplicate && db.store.get('users/' + A + '/gameStats/rummy').totalGames === 36, 'retry is idempotent');
+  const ledger = [...db.store.keys()].filter((k) => /chipTransactions\/m_c_rummy_mm_abc$/.test(k));
+  assert(ledger.length === 2 && db.store.get(ledger[0]).matchId === 'c_rummy_mm_abc', 'one ledger entry per side, keyed by (client-namespaced) matchId');
 
   // TTT: history kept, rating frozen.
   await db.collection('users').doc(A).collection('gameStats').doc('ttt').set({ elo: 1333, totalGames: 9 });
@@ -243,16 +243,16 @@ function memDb() {
   assert(ttt.eloDelta === 0 && !ttt.rated && tStats.elo === 1333 && tStats.totalGames === 10 && !tStats.rating, 'TTT unrated: history kept, rating untouched');
 
   // Friend-only private table: unrated unless marked rated; bots never rated.
-  const priv = await econ.resolveGame(db, db.admin, B, { gameType: 'carrom', result: 'loss', won: false, opponentUid: A, matchId: 'carrom_friend_1' });
+  const priv = await econ.resolveGame(db, db.admin, B, { gameType: 'rummy', result: 'loss', won: false, opponentUid: A, matchId: 'rummy_friend_1' });
   assert(!priv.rated && priv.eloDelta === 0, 'private friend table unrated by default');
-  const privRated = await econ.resolveGame(db, db.admin, B, { gameType: 'carrom', result: 'loss', won: false, opponentUid: A, matchId: 'carrom_friend_2', rated: true });
+  const privRated = await econ.resolveGame(db, db.admin, B, { gameType: 'rummy', result: 'loss', won: false, opponentUid: A, matchId: 'rummy_friend_2', rated: true });
   assert(privRated.rated && privRated.eloDelta < 0, 'private table rated when marked');
-  const bot = await econ.resolveGame(db, db.admin, A, { gameType: 'carrom', result: 'win', won: true, vsBot: true, matchId: 'carrom_bot_1' });
+  const bot = await econ.resolveGame(db, db.admin, A, { gameType: 'rummy', result: 'win', won: true, vsBot: true, matchId: 'rummy_bot_1' });
   assert(!bot.rated && bot.eloDelta === 0, 'no rating change vs bots');
 
   // Matchmaking reads migrated ratings + rematch spam guard.
   const mm = require(path.join(root, 'server-lib/dangal-matchmaking.js'));
-  assert((await mm.loadGameElo(db, A, 'carrom')) === db.store.get('users/' + A + '/gameStats/carrom').elo, 'matchmaking reads the rating service');
+  assert((await mm.loadGameElo(db, A, 'rummy')) === db.store.get('users/' + A + '/gameStats/rummy').elo, 'matchmaking reads the rating service');
   assert(!mm.isRatedGame('ttt') && mm.isRatedGame('badminton'), 'matchmaking rated set');
   const nowMs = Date.now();
   const avoid = mm.repeatAvoidSet({ x: [nowMs - 1000, nowMs - 2000, nowMs - 3000], y: [nowMs - 1000], z: [nowMs - 2 * 3600e3, nowMs - 2 * 3600e3, nowMs - 2 * 3600e3] }, nowMs);

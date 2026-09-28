@@ -194,13 +194,27 @@
       ],
     },
     carrom: {
-      ruleset: { name: 'Carrom', source: 'Simplified rules based on common carrom rules', simplified: true },
-      variants: [],
-      glance: ['Flick the striker to pocket your coins', 'Pocket the Queen, then cover it with one of yours', 'Pocketing the striker is a foul'],
+      ruleset: { name: 'Carrom', source: 'Rules based on the ICF Laws of Carrom', simplified: false },
+      variants: [
+        opt('variant', 'Rules', 'icf', ['icf', 'quick', 'freestyle'], 'host', {
+          labels: { icf: 'Standard (to 25 points)', quick: 'Quick (one board)', freestyle: 'Freestyle (casual)' },
+        }),
+        opt('mode', 'Players', 'singles', ['singles', 'doubles'], 'host'),
+      ],
+      glance: ['Flick the striker from your baseline to pocket your own men', 'Pocket the Queen after one of yours, then cover it on the same or next shot', 'Clear your men first — you score one point for each of theirs left'],
       rules: [
-        { h: 'Turns', body: 'Pocket one of your coins to shoot again; otherwise the turn passes.' },
-        { h: 'Queen', body: 'The Queen counts only if you pocket one of your own coins right after it (cover).' },
-        { h: 'Fouls', body: 'Pocketing the striker returns one of your pocketed coins to the board.' },
+        { h: 'Setup and break', body: 'Men start in the centre with the Queen on the red spot. A toss decides who breaks; the breaker plays white. The break must touch a man — three tries, then the turn passes. No due is taken on the break.' },
+        { h: 'Striker', body: 'Place the striker on your baseline, touching both lines, either covering a base circle completely or clear of it, and not touching the arrow line or any man.' },
+        { h: 'Your turn', body: 'Pocket one of your men (or cover the Queen) and you shoot again. Otherwise the turn passes to your right. Pocketing an opponent’s man counts for them and ends your turn.' },
+        { h: 'Queen', body: 'You may only pocket the Queen after you have pocketed one of your own men and while you owe no due. Cover it by pocketing one of yours on the same stroke or the very next one; otherwise it goes back to the centre.' },
+        { h: 'Fouls and dues', body: 'Pocketing the striker is a foul: one of your pocketed men comes back as a due (plus any man pocketed on that stroke), and the turn passes unless you also pocketed one of yours. The opponent places dues inside the outer circle, off the centre spot, touching no other man. If you have none pocketed, the due waits until you do. A pending Queen goes back.' },
+        { h: 'Shot clock', body: '20 seconds per stroke in Live (the ICF allows 15; we add five for touch aiming). Running out of time is a foul: one man back and the turn passes. Three in a row forfeits. Placing a due has 15 seconds.' },
+        { h: 'Last men', body: 'Pocketing your opponent’s last man, or your last man while the Queen is still on the board, loses the board. Finishing with the striker brings those men back with a due.' },
+        { h: 'Board score', body: 'The board winner scores one point for each opponent man left, plus 3 for the Queen if they covered it — only while their score is 21 or less. A board is worth at most 12.' },
+        { h: 'Game', body: 'First to 25 points, or the leader after 8 boards. Level after 8: one extra board, with a toss for the break. Quick plays one board.' },
+        { h: 'Doubles', body: 'Partners sit opposite and play the same colour. Turns go to the right, so partners alternate with opponents. The break moves to the right each board. Dues are placed by the player on the shooter’s right.' },
+        { h: 'Freestyle', body: 'Casual: any man is yours. White 20, black 10, Queen 50 (it still needs a cover). First to 160 wins. Unrated.' },
+        { h: 'Live', body: 'Singles Standard and Quick are rated; Freestyle and doubles are not. Leaving forfeits the game (a whole team in doubles). Optional virtual-chip stake, never with bots.' },
       ],
     },
     rummy: {

@@ -160,7 +160,7 @@
       'Practice races a real rival ticket · Live shares one bag; claim before the next call',
       'First valid Full House ends · interim pts shown · virtual stakes on Live only',
     ],
-    carrom: ['Pocket your colour', 'Queen then cover', 'Striker pocket is a foul'],
+    carrom: ['Pocket your own men from your baseline', 'Queen after one of yours, then cover it', 'Striker in the pocket = foul + due'],
     uno: ['Match colour, number or symbol to play', 'Tap "Oh No!" as you play your second-to-last card', 'Think a Draw Four was a bluff? Challenge it'],
     rummy: [
       'Indian 13-card · pure sequence required · jokers + wild rank from open card',

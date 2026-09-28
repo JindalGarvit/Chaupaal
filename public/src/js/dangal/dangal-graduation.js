@@ -40,7 +40,8 @@
     werewolf: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
 
     // Classics + court — Live 1v1 state sync (snapshot / score events)
-    carrom: { grade: 'live', sync: 'live1v1', stakes: true },
+    // Dangal P7 — server physics + ICF rules (server-lib/carrom-engine.js); singles rated, doubles 2v2 unrated
+    carrom: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1 · 2v2' },
     rummy: { grade: 'live', sync: 'live1v1', stakes: true },
     teenpatti: { grade: 'live', sync: 'live1v1', stakes: true },
     bluff: { grade: 'live', sync: 'live1v1', stakes: true },

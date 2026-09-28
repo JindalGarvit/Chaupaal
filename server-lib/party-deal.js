@@ -23,6 +23,7 @@ const { createClassicsAdapters } = require('./classics-rooms.js');
 const { createOhnoAdapter } = require('./ohno-engine.js');
 const { createScribbleAdapter } = require('./scribble-engine.js');
 const { createQuizAdapter } = require('./quiz-engine.js');
+const { createCarromAdapter } = require('./carrom-engine.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -541,6 +542,7 @@ Object.assign(GAMES, createClassicsAdapters({ err }));
 GAMES.uno = createOhnoAdapter({ err });
 GAMES.scribble = createScribbleAdapter({ err });
 GAMES.quizroom = createQuizAdapter({ err });
+GAMES.carrom = createCarromAdapter({ err });
 
 // ------------------------------------------------------------------ room engine
 
@@ -935,6 +937,9 @@ async function partyRoom(adminApp, uid, body, deps) {
   const now = Date.now();
 
   if (op === 'dice_stats') return diceStats(adminApp, uid);
+  if ((op === 'quick' || op === 'quick_cancel') && GAMES[game].quick) {
+    return Object.assign({ game, serverNow: now }, await GAMES[game].quick(adminApp, uid, op, b, now, partyRoom));
+  }
 
   if (op === 'create') {
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -1003,7 +1008,7 @@ async function settleRoom(adminApp, rtdb, path, req, deps) {
       db,
       admin,
       req.a,
-      { gameType: req.game, result: req.result, opponentUid: req.b, matchId: req.matchId, rated: req.rated !== false, stake: 0 },
+      { gameType: req.game, result: req.result, opponentUid: req.b, matchId: req.matchId, rated: req.rated !== false, stake: Number(req.stake) || 0 },
       { trusted: true }
     );
     const o = out || {};
@@ -1068,4 +1073,5 @@ module.exports = {
   reduceRoom,
   dealRound,
   partyRoom,
+  settleRoom,
 };

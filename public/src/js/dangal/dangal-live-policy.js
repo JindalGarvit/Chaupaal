@@ -55,7 +55,10 @@
       resign: true,
       rematch: { swapSides: false, sameVariants: true },
     },
-    carrom: { afk: { action: 'pass', maxMisses: 3 } },
+    // Dangal P7 Carrom (server-lib/carrom-engine.js): 20s shot clock (ICF Law 50 is 15s; +5s for touch
+    // aiming). A missed shot is a foul (Law 64 — penalty man + turn passes); 3 misses in a row forfeit.
+    // Leaving forfeits (ICF Law XVII); in doubles the whole team loses.
+    carrom: { turnMs: 20000, placeMs: 15000, afk: { action: 'foul', maxMisses: 3 }, leave: 'forfeit' },
     rummy: { afk: { action: 'auto_play', maxMisses: 3 } },
     teenpatti: { afk: { action: 'fold', maxMisses: 2 } },
     bluff: { afk: { action: 'pass', maxMisses: 3 } },
