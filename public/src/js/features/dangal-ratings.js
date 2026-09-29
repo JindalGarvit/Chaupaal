@@ -218,7 +218,7 @@ function renderDangalContinueAndChips(host) {
         ? 'Akhbaar'
         : ((typeof getGame === 'function' && getGame(pending.game)?.name) || pending.game);
     const chipEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const chipScore = Number.isFinite(pending.score) ? pending.score : 'their score';
+    const chipScore = (pending.params && pending.params.label) || (Number.isFinite(pending.score) ? pending.score : 'their score');
     challengeChip = `<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
       <div><strong>${chipEsc(pending.challenger)} challenged you</strong><span>Beat ${chipEsc(chipScore)} on ${chipEsc(gName)}</span></div>
       <span>Play →</span>
@@ -260,7 +260,7 @@ function renderDangalContinueAndChips(host) {
       if (typeof startMuqabala === 'function') startMuqabala(pending.challenger, pending.cat || 'GK');
     } else if (typeof getGame === 'function') {
       const g = getGame(pending.game);
-      if (g) g.launch({ source: 'challenge', beatScore: pending.score, challenger: pending.challenger });
+      if (g) g.launch({ source: 'challenge', beatScore: pending.score, challenger: pending.challenger, params: pending.params || {} });
     }
   });
   wrap.querySelector('#dangalContinueChip')?.addEventListener('click', (e) => {

@@ -136,14 +136,15 @@
       'Host sets rounds, draw time, hints and packs · custom words under Advanced',
     ],
     tiptap: [
-      'Match 4 → Line · 5 or L/T → Bomb · 6+ one colour → Prism',
-      'Swap specials to fire them · finish every goal before moves run out',
-      'Continue your campaign · replay cleared levels anytime',
+      'Match 4 → Line · L or T → Bomb · 5 in a row → Prism · swap two specials for a combo',
+      'Finish every goal before moves (or the clock) run out · 150 levels, up to three stars',
+      'Daily Challenge: same board for everyone, first try counts · no lives, no timers to wait out',
     ],
     ankjod: [
       'Kakuro: each run of white cells must add up to its clue — digits 1–9, no repeats in a run',
-      'Pencil notes · Check finds conflicts · Hint teaches when stuck · long-press Pencil for auto-notes',
-      'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
+      'Every puzzle has exactly one answer · Easy to Expert, graded by the logic it needs',
+      'Pencil notes · Auto-notes · Sums helper · Hint explains the next step · Continue mid-puzzle',
+      'Daily Kakuro: same puzzle for everyone, fastest time wins (+30 s per hint) · archive of past days',
     ],
     streetcricket: [
       'Based on the MCC Laws of Cricket, adapted for street play — bowl line, length and ball; tap one of 8 shots on time',
@@ -223,10 +224,10 @@
       'Virtual chips only — they can’t be bought or cashed out · 18+',
     ],
     brickbreaker: [
-      'Campaign or Score Attack — pick before you Serve',
-      'Steel takes two hits · Gold scores big · Bombs clear neighbours',
-      'Moving bricks shift while you play — pause freezes them',
-      'Catch Magnet for one sticky serve · Multi caps at three balls',
+      'Campaign (60 levels), Endless or the Daily — drag to move the paddle',
+      'Where the ball hits the paddle sets its angle · numbered bricks take that many hits',
+      'Steel can’t break · Bombs clear neighbours · moving bricks slide side to side',
+      'Power-ups: Wide, Multi-ball, Slow, Sticky, Laser, Extra ball — odds in How to play',
     ],
   };
 
@@ -237,6 +238,7 @@
     ankjod_easy: { key: 'chaupaal_pb_ankjod_easy', label: 's', higherBetter: false },
     ankjod_medium: { key: 'chaupaal_pb_ankjod_medium', label: 's', higherBetter: false },
     ankjod_hard: { key: 'chaupaal_pb_ankjod_hard', label: 's', higherBetter: false },
+    ankjod_expert: { key: 'chaupaal_pb_ankjod_expert', label: 's', higherBetter: false },
     ankjod_daily: { key: 'chaupaal_pb_ankjod_daily', label: 's', higherBetter: false },
     quiz: { key: 'chaupaal_pb_quiz', label: '/10', higherBetter: true },
     streetcricket: { key: 'chaupaal_pb_streetcricket', label: ' runs', higherBetter: true },
@@ -668,7 +670,7 @@
   /** Kakuro per-difficulty PB ids (id stays `ankjod`; legacy overall key is `ankjod`). */
   function ankJodPbGameId(difficulty) {
     const d = String(difficulty || '').toLowerCase();
-    if (d === 'easy' || d === 'medium' || d === 'hard' || d === 'daily') return 'ankjod_' + d;
+    if (d === 'easy' || d === 'medium' || d === 'hard' || d === 'expert' || d === 'daily') return 'ankjod_' + d;
     return 'ankjod';
   }
 
@@ -2251,11 +2253,17 @@
       if (typeof isRetiredGameId === 'function' && isRetiredGameId(game)) return null;
       const score = params.get('score');
       const cat = params.get('cat') || 'GK';
+      const extra = {};
+      ['board', 'lv', 'mode', 'diff', 'day', 'seed', 'n', 'label'].forEach((k) => {
+        const v = params.get(k);
+        if (v != null && v !== '') extra[k] = String(v).slice(0, 60);
+      });
       return {
         challenger: challenger ? decodeURIComponent(challenger) : 'Someone',
         game,
         score: score != null ? Number(score) : null,
         cat,
+        params: extra,
       };
     } catch (e) {
       return null;

@@ -984,6 +984,30 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Solo pro pass (Tip Tap, Brick Breaker, Kakuro): progress sync, Daily, plausibility-checked boards ──
+  if (action === 'solo') {
+    if (body.op === 'submit' || body.op === 'daily_start') {
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'dangal');
+        if (rate && rate.ok === false) {
+          return sendError(res, 429, 'RATE_LIMITED', 'Too many game actions. Try again shortly.');
+        }
+      } catch (e) {}
+    }
+    try {
+      const adminApp = initAdmin();
+      if (!adminApp) return sendError(res, 503, 'UNAVAILABLE', 'Try again shortly');
+      const { soloAction } = require('../server-lib/solo-scores');
+      const out = await soloAction(adminApp.firestore(), user.uid, body, Date.now());
+      return sendSuccess(res, out);
+    } catch (e) {
+      if (e?.code === 'VALIDATION_ERROR') return sendError(res, 400, 'VALIDATION_ERROR', e.message || 'Invalid request');
+      console.warn('[media-config] solo', e?.message || e);
+      return sendError(res, 500, 'SOLO_ERROR', 'Could not load that right now');
+    }
+  }
+
   // ─── Quiz Muqabala: Daily / Practice / News graded server-side; answers never sent before a reveal ──
   if (action === 'quiz') {
     try {
@@ -1532,6 +1556,7 @@ async function handlePost(req, res) {
       'dangal_game_resolve',
       'dangal_ai',
       'shabd',
+      'solo',
       'party_room',
       'penalty_kick',
       'cricket_match',

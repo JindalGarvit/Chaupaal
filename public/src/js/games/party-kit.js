@@ -928,6 +928,8 @@
     teenpatti: ['games/teenpatti-core.js'],
     bluff: ['games/bluff-core.js'],
     tambola: ['games/tambola-core.js'],
+    ankjod: ['games/kakuro-core.js', 'games/data/kakuro-bank.js'],
+    tiptap: ['games/tiptap-levels.js'],
     wordguess: ['games/data/shabd-answers.js', 'games/data/shabd-allowed.js', 'games/data/shabd-gloss.js', 'games/shabd-lexicon.js'],
   };
   const lazyLoaded = {};

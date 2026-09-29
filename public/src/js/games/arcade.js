@@ -1,1175 +1,710 @@
-// ===================== TIP TAP (Match-3 juice) =====================
-function openTipTap(){
-  const COLS=8,ROWS=8;
-  const PALETTE=[
-    {id:0,name:'Red',fill:'#E63946',glow:'#FF6B6B'},
-    {id:1,name:'Amber',fill:'#F4A261',glow:'#FFD166'},
-    {id:2,name:'Teal',fill:'#2A9D8F',glow:'#5EEAD4'},
-    {id:3,name:'Blue',fill:'#4C75D9',glow:'#93C5FD'},
-    {id:4,name:'Violet',fill:'#9B5DE5',glow:'#D8B4FE'},
-    {id:5,name:'Coral',fill:'#E76F51',glow:'#FDBA74'},
+// ===================== TIP TAP (solo match-3) =====================
+/**
+ * Tip Tap (Dangal P14). Rules, cascades, specials and scoring: tiptap-engine.js (deterministic, also
+ * replayed by the server). 150 validated levels: tiptap-levels.js (lazy). Progress sync, the Daily,
+ * leaderboards, challenge links and share: solo-hub.js. Solo only — no Live, no chips, no lives.
+ */
+function openTipTap(ctx) {
+  const toast = (msg) => { if (typeof showToast === 'function' && msg) showToast(msg); };
+  const TT = window.TipTapEngine;
+  const Hub = window.SoloHub;
+  const Core = window.SoloCore;
+  if (!TT || !Hub || !Core) return toast('Tip Tap is still loading — try again');
+  if (!window.TipTapLevels) {
+    if (window.PartyKit && PartyKit.ensureGameData) {
+      return PartyKit.ensureGameData('tiptap').then(
+        () => (window.TipTapLevels ? openTipTap(ctx) : toast('Couldn’t load Tip Tap — try again')),
+        () => toast('Couldn’t load Tip Tap — check your connection and try again')
+      );
+    }
+    return toast('Tip Tap is still loading — try again');
+  }
+  const LV = window.TipTapLevels;
+  const GAME = 'tiptap';
+  const N_LEVELS = LV.count;
+  const PALETTE = [
+    { name: 'Red', fill: '#E63946', glow: '#FF6B6B', shape: '●' },
+    { name: 'Amber', fill: '#F4A261', glow: '#FFD166', shape: '▲' },
+    { name: 'Teal', fill: '#2A9D8F', glow: '#5EEAD4', shape: '■' },
+    { name: 'Blue', fill: '#4C75D9', glow: '#93C5FD', shape: '◆' },
+    { name: 'Violet', fill: '#9B5DE5', glow: '#D8B4FE', shape: '★' },
+    { name: 'Coral', fill: '#E76F51', glow: '#FDBA74', shape: '✚' },
   ];
-  const SPECIAL={bomb:'bomb',rainbow:'rainbow',line:'line'};
-  const TIER={rainbow:3,bomb:2,line:1};
-  const reduceMotion=typeof shouldReduceGameMotion==='function'&&shouldReduceGameMotion();
-  const T={
-    pop:reduceMotion?100:220,
-    swap:reduceMotion?90:160,
-    swapBack:reduceMotion?110:180,
-    cascade:reduceMotion?90:240,
-    fx:reduceMotion?380:650,
-  };
+  const SP = TT.SP;
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+  const fmt = (n) => Number(n || 0).toLocaleString();
 
-  let level=1; // set from hub / continue
-  let board=[],score=0,moves=0,targetScore=0,maxMoves=0;
-  let selected=null,animating=false,gameOver=false;
-  let combo=0,cascadeTimer=null,cascadeResume=null,fxLayer=null;
-  let cellSize=40;
-  let pauseCtrl=null;
-  let hintPair=null;
-  let suppressClickUntil=0;
-  let lastSwapCell=null;
-  let goals=[];
-  let goalProgress=[];
-
-  const ACT_LABELS = {
-    1: 'Act 1 · Basics',
-    2: 'Act 2 · Specials',
-    3: 'Act 3 · Dual goals',
-    4: 'Act 4 · Master',
-  };
-  function actOfLevel(n) {
-    if (n <= 20) return 1;
-    if (n <= 50) return 2;
-    if (n <= 80) return 3;
-    return 4;
-  }
-  function actLabel(n) {
-    return ACT_LABELS[actOfLevel(n)] || '';
+  let settings = Hub.settings(GAME);
+  let T = timings();
+  function timings() {
+    const rm = Hub.reducedMotion(GAME);
+    return { swap: rm ? 60 : 150, pop: rm ? 90 : 230, fall: rm ? 80 : 260, notice: rm ? 700 : 1100, idle: 5000 };
   }
 
-  /** Campaign: Acts 1–2 authored; Acts 3–4 templated rotations (Prompt 3). */
-  const LEVELS = [{"level":1,"moves":28,"goals":[{"type":"score","amount":400}],"target":400,"board":8},{"level":2,"moves":26,"goals":[{"type":"score","amount":550}],"target":550,"board":8},{"level":3,"moves":26,"goals":[{"type":"score","amount":700}],"target":700,"board":8},{"level":4,"moves":28,"goals":[{"type":"collect","color":0,"amount":10}],"target":0,"board":8},{"level":5,"moves":28,"goals":[{"type":"collect","color":2,"amount":12}],"target":0,"board":8},{"level":6,"moves":26,"goals":[{"type":"collect","color":3,"amount":12}],"target":0,"board":8},{"level":7,"moves":28,"goals":[{"type":"score","amount":800},{"type":"collect","color":1,"amount":8}],"target":800,"board":8},{"level":8,"moves":28,"goals":[{"type":"collect","color":4,"amount":14}],"target":0,"board":8},{"level":9,"moves":26,"goals":[{"type":"score","amount":1000}],"target":1000,"board":8},{"level":10,"moves":30,"goals":[{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":11,"moves":28,"goals":[{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":12,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":13,"moves":30,"goals":[{"type":"collect","color":0,"amount":10},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":14,"moves":28,"goals":[{"type":"score","amount":1100},{"type":"collect","color":5,"amount":10}],"target":1100,"board":8},{"level":15,"moves":30,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":2,"amount":8}],"target":0,"board":8},{"level":16,"moves":30,"goals":[{"type":"specials","kind":"rainbow","amount":1}],"target":0,"board":8},{"level":17,"moves":28,"goals":[{"type":"collect","color":1,"amount":16}],"target":0,"board":8},{"level":18,"moves":26,"goals":[{"type":"score","amount":1200}],"target":1200,"board":8},{"level":19,"moves":30,"goals":[{"type":"collect","color":3,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":20,"moves":28,"goals":[{"type":"score","amount":1000},{"type":"collect","color":0,"amount":8}],"target":1000,"board":8},{"level":21,"moves":28,"goals":[{"type":"collect","color":0,"amount":18}],"target":0,"board":8},{"level":22,"moves":28,"goals":[{"type":"collect","color":2,"amount":18}],"target":0,"board":8},{"level":23,"moves":26,"goals":[{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":24,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":25,"moves":28,"goals":[{"type":"score","amount":1400}],"target":1400,"board":8},{"level":26,"moves":30,"goals":[{"type":"collect","color":4,"amount":16},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":27,"moves":28,"goals":[{"type":"collect","color":5,"amount":20}],"target":0,"board":8},{"level":28,"moves":30,"goals":[{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":29,"moves":26,"goals":[{"type":"score","amount":1600}],"target":1600,"board":8},{"level":30,"moves":30,"goals":[{"type":"collect","color":1,"amount":14},{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":31,"moves":28,"goals":[{"type":"specials","kind":"rainbow","amount":1}],"target":0,"board":8},{"level":32,"moves":28,"goals":[{"type":"collect","color":3,"amount":22}],"target":0,"board":8},{"level":33,"moves":30,"goals":[{"type":"specials","kind":"line","amount":3}],"target":0,"board":8},{"level":34,"moves":28,"goals":[{"type":"score","amount":1500},{"type":"collect","color":2,"amount":12}],"target":1500,"board":8},{"level":35,"moves":30,"goals":[{"type":"collect","color":0,"amount":15},{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":36,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":37,"moves":26,"goals":[{"type":"collect","color":4,"amount":24}],"target":0,"board":8},{"level":38,"moves":30,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":1,"amount":10}],"target":0,"board":8},{"level":39,"moves":28,"goals":[{"type":"score","amount":1800}],"target":1800,"board":8},{"level":40,"moves":30,"goals":[{"type":"collect","color":5,"amount":16},{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":41,"moves":28,"goals":[{"type":"specials","kind":"line","amount":2},{"type":"collect","color":3,"amount":12}],"target":0,"board":8},{"level":42,"moves":26,"goals":[{"type":"score","amount":1700}],"target":1700,"board":8},{"level":43,"moves":30,"goals":[{"type":"specials","kind":"bomb","amount":2},{"type":"collect","color":0,"amount":10}],"target":0,"board":8},{"level":44,"moves":28,"goals":[{"type":"collect","color":2,"amount":20}],"target":0,"board":8},{"level":45,"moves":30,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":46,"moves":28,"goals":[{"type":"score","amount":1900},{"type":"collect","color":4,"amount":10}],"target":1900,"board":8},{"level":47,"moves":30,"goals":[{"type":"collect","color":1,"amount":18},{"type":"specials","kind":"bomb","amount":1}],"target":0,"board":8},{"level":48,"moves":28,"goals":[{"type":"specials","kind":"line","amount":3}],"target":0,"board":8},{"level":49,"moves":30,"goals":[{"type":"collect","color":5,"amount":14},{"type":"specials","kind":"rainbow","amount":1}],"target":0,"board":8},{"level":50,"moves":28,"goals":[{"type":"score","amount":2000}],"target":2000,"board":8},{"level":51,"moves":32,"goals":[{"type":"score","amount":2000}],"target":2000,"board":8},{"level":52,"moves":32,"goals":[{"type":"collect","color":1,"amount":18},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":53,"moves":32,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":5,"amount":12}],"target":0,"board":8},{"level":54,"moves":32,"goals":[{"type":"score","amount":1980},{"type":"specials","kind":"line","amount":2}],"target":1980,"board":8},{"level":55,"moves":31,"goals":[{"type":"collect","color":4,"amount":14},{"type":"collect","color":1,"amount":10}],"target":0,"board":8},{"level":56,"moves":31,"goals":[{"type":"score","amount":2000},{"type":"collect","color":5,"amount":13}],"target":2000,"board":8},{"level":57,"moves":31,"goals":[{"type":"collect","color":0,"amount":21},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":58,"moves":31,"goals":[{"type":"score","amount":2280}],"target":2280,"board":8},{"level":59,"moves":30,"goals":[{"type":"score","amount":2280},{"type":"specials","kind":"line","amount":2}],"target":2280,"board":8},{"level":60,"moves":30,"goals":[{"type":"collect","color":3,"amount":14},{"type":"collect","color":0,"amount":10}],"target":0,"board":8},{"level":61,"moves":30,"goals":[{"type":"score","amount":2400},{"type":"collect","color":4,"amount":15}],"target":2400,"board":8},{"level":62,"moves":30,"goals":[{"type":"collect","color":5,"amount":23},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":63,"moves":29,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":3,"amount":12}],"target":0,"board":8},{"level":64,"moves":29,"goals":[{"type":"score","amount":2580},{"type":"specials","kind":"line","amount":2}],"target":2580,"board":8},{"level":65,"moves":29,"goals":[{"type":"score","amount":2560}],"target":2560,"board":8},{"level":66,"moves":29,"goals":[{"type":"score","amount":2800},{"type":"collect","color":3,"amount":17}],"target":2800,"board":8},{"level":67,"moves":28,"goals":[{"type":"collect","color":4,"amount":26},{"type":"specials","kind":"line","amount":2}],"target":0,"board":8},{"level":68,"moves":28,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":2,"amount":12}],"target":0,"board":8},{"level":69,"moves":28,"goals":[{"type":"score","amount":2880},{"type":"specials","kind":"line","amount":2}],"target":2880,"board":8},{"level":70,"moves":28,"goals":[{"type":"collect","color":1,"amount":14},{"type":"collect","color":4,"amount":10}],"target":0,"board":8},{"level":71,"moves":27,"goals":[{"type":"score","amount":3200},{"type":"collect","color":2,"amount":18}],"target":3200,"board":8},{"level":72,"moves":27,"goals":[{"type":"score","amount":2840}],"target":2840,"board":8},{"level":73,"moves":27,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":1,"amount":12}],"target":0,"board":8},{"level":74,"moves":27,"goals":[{"type":"score","amount":3180},{"type":"specials","kind":"line","amount":2}],"target":3180,"board":8},{"level":75,"moves":26,"goals":[{"type":"collect","color":0,"amount":14},{"type":"collect","color":3,"amount":10}],"target":0,"board":8},{"level":76,"moves":26,"goals":[{"type":"score","amount":3600},{"type":"collect","color":1,"amount":20}],"target":3600,"board":8},{"level":77,"moves":26,"goals":[{"type":"collect","color":2,"amount":31},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":78,"moves":26,"goals":[{"type":"specials","kind":"bomb","amount":1},{"type":"collect","color":0,"amount":12}],"target":0,"board":8},{"level":79,"moves":25,"goals":[{"type":"score","amount":3120}],"target":3120,"board":8},{"level":80,"moves":25,"goals":[{"type":"collect","color":5,"amount":14},{"type":"collect","color":2,"amount":10}],"target":0,"board":8},{"level":81,"moves":28,"goals":[{"type":"score","amount":2400},{"type":"collect","color":0,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":2400,"board":8},{"level":82,"moves":28,"goals":[{"type":"collect","color":1,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":83,"moves":28,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":4,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":84,"moves":27,"goals":[{"type":"score","amount":2840},{"type":"collect","color":3,"amount":12},{"type":"collect","color":5,"amount":10}],"target":2840,"board":8},{"level":85,"moves":27,"goals":[{"type":"score","amount":2800},{"type":"collect","color":4,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":2800,"board":8},{"level":86,"moves":27,"goals":[{"type":"collect","color":5,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":87,"moves":26,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":2,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":88,"moves":26,"goals":[{"type":"score","amount":3160},{"type":"collect","color":1,"amount":12},{"type":"collect","color":3,"amount":10}],"target":3160,"board":8},{"level":89,"moves":26,"goals":[{"type":"score","amount":3200},{"type":"collect","color":2,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":3200,"board":8},{"level":90,"moves":25,"goals":[{"type":"score","amount":2650}],"target":2650,"board":8},{"level":91,"moves":25,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":0,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":92,"moves":25,"goals":[{"type":"score","amount":3480},{"type":"collect","color":5,"amount":12},{"type":"collect","color":1,"amount":10}],"target":3480,"board":8},{"level":93,"moves":24,"goals":[{"type":"score","amount":3600},{"type":"collect","color":0,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":3600,"board":8},{"level":94,"moves":24,"goals":[{"type":"collect","color":1,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":95,"moves":24,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":4,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":96,"moves":24,"goals":[{"type":"score","amount":3800},{"type":"collect","color":3,"amount":12},{"type":"collect","color":5,"amount":10}],"target":3800,"board":8},{"level":97,"moves":24,"goals":[{"type":"score","amount":4000},{"type":"collect","color":4,"amount":14},{"type":"specials","kind":"line","amount":1}],"target":4000,"board":8},{"level":98,"moves":24,"goals":[{"type":"collect","color":5,"amount":16},{"type":"specials","kind":"bomb","amount":2}],"target":0,"board":8},{"level":99,"moves":24,"goals":[{"type":"specials","kind":"rainbow","amount":1},{"type":"collect","color":2,"amount":12},{"type":"specials","kind":"line","amount":1}],"target":0,"board":8},{"level":100,"moves":26,"goals":[{"type":"score","amount":2800},{"type":"collect","color":0,"amount":10}],"target":2800,"board":8}].map((cfg) => ({
-    level: cfg.level,
-    moves: cfg.moves,
-    goals: (cfg.goals || []).map((g) => ({ ...g })),
-    target: cfg.target || 0,
-    board: cfg.board || ROWS,
-    act: actOfLevel(cfg.level),
-  }));
+  let run = null;
+  let view = null;
+  let shownScore = 0;
+  let selected = -1;
+  let animating = false;
+  let hintPair = null;
+  let previewCells = null;
+  let hintTimer = null;
+  let clockTimer = null;
+  let cellSize = 40;
+  let pauseCtrl = null;
+  let suppressClickUntil = 0;
 
-  const SAVE_NEXT = 'tiptap_level';
-  const SAVE_BEST_LVL = 'tiptap_best_level';
-  const SAVE_LEGACY = 'candyburst_level';
-
-  function readNextLevel() {
-    let n = parseInt(localStorage.getItem(SAVE_NEXT) || localStorage.getItem(SAVE_LEGACY) || '1', 10) || 1;
-    if (n < 1) n = 1;
-    if (n > LEVELS.length) n = LEVELS.length;
-    return n;
-  }
-  function readBestCleared() {
-    return Math.max(0, parseInt(localStorage.getItem(SAVE_BEST_LVL) || '0', 10) || 0);
-  }
-  function persistUnlock(clearedLevel) {
-    try {
-      const nextWanted = Math.min(LEVELS.length + 1, clearedLevel + 1);
-      const stored = parseInt(localStorage.getItem(SAVE_NEXT) || localStorage.getItem(SAVE_LEGACY) || '1', 10) || 1;
-      const next = Math.max(stored, nextWanted);
-      localStorage.setItem(SAVE_NEXT, String(Math.min(next, LEVELS.length + 1)));
-      const prevBest = readBestCleared();
-      if (clearedLevel > prevBest) localStorage.setItem(SAVE_BEST_LVL, String(clearedLevel));
-    } catch (e) {}
-  }
-  function canPlayLevel(n) {
-    return n >= 1 && n <= readNextLevel() && n <= LEVELS.length;
-  }
-
-  const overlay=document.createElement('div');
-  overlay.style.cssText='position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
-
-  const begin=typeof beginGameOverlaySession==='function'?beginGameOverlaySession:null;
-  const gs=begin?begin({
-    type:'tiptap',title:'Tip Tap',mode:'solo',overlay,
-    cleanup(){
-      clearCascadeTimers();
-      if(pauseCtrl){pauseCtrl.destroy();pauseCtrl=null;}
-    },
-  }):null;
-  if(begin&&(!gs||!gs.alive()))return;
-  if(!begin){
-    const device=document.querySelector('.device');
-    if(!device){if(typeof showToast==='function')showToast('Game container not found');return;}
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
+  const begin = typeof beginGameOverlaySession === 'function' ? beginGameOverlaySession : null;
+  const gs = begin
+    ? begin({
+        type: 'tiptap',
+        title: 'Tip Tap',
+        mode: 'solo',
+        overlay,
+        cleanup() {
+          stopTimers();
+          document.removeEventListener('visibilitychange', onVisibility);
+          if (pauseCtrl) {
+            pauseCtrl.destroy();
+            pauseCtrl = null;
+          }
+        },
+      })
+    : null;
+  if (begin && (!gs || !gs.alive())) return;
+  if (!begin) {
+    const device = document.querySelector('.device');
+    if (!device) return toast('Game container not found');
     device.appendChild(overlay);
   }
-  if(typeof prepareGameOverlay==='function')prepareGameOverlay(overlay,{theme:'dark',gameId:'tiptap'});
+  if (typeof prepareGameOverlay === 'function') prepareGameOverlay(overlay, { theme: 'dark', gameId: 'tiptap' });
 
-  const alive=()=>gs?gs.alive():true;
-  const schedule=(fn,ms)=>{
-    if(gs)return gs.schedule(fn,ms);
-    return setTimeout(fn,ms);
+  const alive = () => (gs ? gs.alive() : overlay.isConnected);
+  const schedule = (fn, ms) => (gs ? gs.schedule(fn, ms) : setTimeout(fn, ms));
+  const wait = (ms) => new Promise((r) => schedule(r, ms));
+  const $ = (id) => overlay.querySelector('#' + id);
+  const isPaused = () => !!(pauseCtrl && pauseCtrl.isPaused && pauseCtrl.isPaused());
+  const close = () => {
+    stopTimers();
+    if (pauseCtrl) {
+      pauseCtrl.destroy();
+      pauseCtrl = null;
+    }
+    if (gs) gs.close();
+    else overlay.remove();
   };
-  function clearCascadeTimers(){
-    if(cascadeTimer){
-      try{clearTimeout(cascadeTimer);}catch(e){}
-      cascadeTimer=null;
-    }
-    cascadeResume=null;
-  }
-  const close=()=>{
-    clearCascadeTimers();
-    if(pauseCtrl){pauseCtrl.destroy();pauseCtrl=null;}
-    if(gs)gs.close();else overlay.remove();
-  };
-  const buzz=(a)=>{if(typeof gameFeedback==='function')gameFeedback(a);};
-  const isPaused=()=>!!(pauseCtrl&&pauseCtrl.isPaused&&pauseCtrl.isPaused());
-  const toast=(msg)=>{if(typeof showToast==='function'&&msg)showToast(msg);};
 
-  function scheduleCascade(fn,ms){
-    if(cascadeTimer){
-      try{clearTimeout(cascadeTimer);}catch(e){}
-      cascadeTimer=null;
-    }
-    const run=()=>{
-      cascadeTimer=null;
-      if(!alive()||gameOver)return;
-      if(isPaused()){cascadeResume=fn;return;}
-      fn();
-    };
-    cascadeTimer=schedule(run,ms);
-  }
+  // ---------------- clock ----------------
 
-  let _uid=1;function uid(){return _uid++;}
-
-  function randomPiece(allowSpecial){
-    // Rare refill specials only — goals must not trivialize
-    if(allowSpecial&&Math.random()<0.012){
-      const kind=Math.random()<0.65?SPECIAL.line:SPECIAL.bomb;
-      return {color:null,special:kind,axis:Math.random()<0.5?'h':'v',id:uid()};
-    }
-    const c=PALETTE[Math.floor(Math.random()*PALETTE.length)];
-    return {color:c.id,special:null,axis:null,id:uid()};
+  function elapsed() {
+    if (!run) return 0;
+    return run.activeMs + (run.tickFrom ? Date.now() - run.tickFrom : 0);
   }
-
-  function swapCells(r1,c1,r2,c2){
-    const tmp=board[r1][c1];board[r1][c1]=board[r2][c2];board[r2][c2]=tmp;
+  function clockStart() {
+    if (!run || run.over || run.tickFrom || isPaused()) return;
+    run.tickFrom = Date.now();
+    if (!clockTimer) clockTimer = setInterval(onClock, 250);
   }
-
-  function findMatches(){
-    const matches=new Set();
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS-2;c++){
-      const p=board[r][c];if(p?.color==null)continue;
-      if(board[r][c+1]?.color===p.color&&board[r][c+2]?.color===p.color){
-        let len=3;while(c+len<COLS&&board[r][c+len]?.color===p.color)len++;
-        for(let i=0;i<len;i++)matches.add(`${r},${c+i}`);
-      }
-    }
-    for(let c=0;c<COLS;c++) for(let r=0;r<ROWS-2;r++){
-      const p=board[r][c];if(p?.color==null)continue;
-      if(board[r+1][c]?.color===p.color&&board[r+2][c]?.color===p.color){
-        let len=3;while(r+len<ROWS&&board[r+len][c]?.color===p.color)len++;
-        for(let i=0;i<len;i++)matches.add(`${r+i},${c}`);
-      }
-    }
-    return [...matches].map(k=>{const[r,c]=k.split(',').map(Number);return{r,c};});
-  }
-
-  /** Creation rules: 4→line, 5 or L/T→bomb, 6+ same colour→rainbow. Highest tier once. */
-  function classifySpawn(matchCells){
-    if(!matchCells||!matchCells.length)return null;
-    const byColor=new Map();
-    for(const {r,c} of matchCells){
-      const p=board[r]?.[c];
-      if(!p||p.color==null)continue;
-      if(!byColor.has(p.color))byColor.set(p.color,[]);
-      byColor.get(p.color).push({r,c});
-    }
-    let best=null;
-    for(const[color,cells] of byColor){
-      const set=new Set(cells.map(x=>`${x.r},${x.c}`));
-      let maxH=0,maxV=0,bestHCells=[],bestVCells=[];
-      const rowMap=new Map();
-      const colMap=new Map();
-      cells.forEach(({r,c})=>{
-        if(!rowMap.has(r))rowMap.set(r,[]);
-        rowMap.get(r).push(c);
-        if(!colMap.has(c))colMap.set(c,[]);
-        colMap.get(c).push(r);
-      });
-      for(const[r,cols] of rowMap){
-        cols.sort((a,b)=>a-b);
-        let i=0;
-        while(i<cols.length){
-          let j=i;
-          while(j+1<cols.length&&cols[j+1]===cols[j]+1)j++;
-          const len=j-i+1;
-          if(len>maxH){
-            maxH=len;
-            bestHCells=[];
-            for(let k=i;k<=j;k++)bestHCells.push({r,c:cols[k]});
-          }
-          i=j+1;
-        }
-      }
-      for(const[c,rows] of colMap){
-        rows.sort((a,b)=>a-b);
-        let i=0;
-        while(i<rows.length){
-          let j=i;
-          while(j+1<rows.length&&rows[j+1]===rows[j]+1)j++;
-          const len=j-i+1;
-          if(len>maxV){
-            maxV=len;
-            bestVCells=[];
-            for(let k=i;k<=j;k++)bestVCells.push({r:rows[k],c});
-          }
-          i=j+1;
-        }
-      }
-      let hasLT=false;
-      for(const {r,c} of cells){
-        let hl=1,vl=1;
-        for(let cc=c-1;cc>=0&&set.has(`${r},${cc}`);cc--)hl++;
-        for(let cc=c+1;cc<COLS&&set.has(`${r},${cc}`);cc++)hl++;
-        for(let rr=r-1;rr>=0&&set.has(`${rr},${c}`);rr--)vl++;
-        for(let rr=r+1;rr<ROWS&&set.has(`${rr},${c}`);rr++)vl++;
-        if(hl>=3&&vl>=3){hasLT=true;break;}
-      }
-      const n=cells.length;
-      let kind=null,axis=null,anchorCells=cells;
-      if(n>=6||maxH>=6||maxV>=6){
-        kind=SPECIAL.rainbow;
-        anchorCells=cells;
-      }else if(maxH===5||maxV===5||hasLT){
-        kind=SPECIAL.bomb;
-        anchorCells=hasLT?cells:(maxH===5?bestHCells:bestVCells);
-      }else if(maxH===4&&maxV<4){
-        kind=SPECIAL.line;axis='h';anchorCells=bestHCells;
-      }else if(maxV===4&&maxH<4){
-        kind=SPECIAL.line;axis='v';anchorCells=bestVCells;
-      }
-      if(!kind)continue;
-      const cand={kind,axis,color,cells:anchorCells,tier:TIER[kind]};
-      if(!best||cand.tier>best.tier)best=cand;
-    }
-    if(!best)return null;
-    let anchor=best.cells[Math.floor(best.cells.length/2)]||best.cells[0];
-    if(lastSwapCell&&best.cells.some(x=>x.r===lastSwapCell.r&&x.c===lastSwapCell.c)){
-      anchor=lastSwapCell;
-    }
-    return {kind:best.kind,axis:best.axis||null,anchor,color:best.color};
-  }
-
-  function teachSpecial(kind){
-    const key='tiptap_teach_'+kind;
-    try{if(localStorage.getItem(key))return;}catch(e){return;}
-    try{localStorage.setItem(key,'1');}catch(e){}
-    const msgs={
-      line:'Line: match 4 in a row — swap it to clear that row or column',
-      bomb:'Bomb: match 5 or an L/T — swap to blast a 3×3',
-      rainbow:'Prism: match 6+ of one colour — swap onto a gem to clear that colour',
-    };
-    toast(msgs[kind]||'');
-  }
-
-  function noteColorCleared(color,n){
-    if(color==null)return;
-    const add=n||1;
-    goals.forEach((g,i)=>{
-      if(g.type==='collect'&&g.color===color){
-        goalProgress[i]=Math.min(g.amount,(goalProgress[i]||0)+add);
-      }
-    });
-  }
-  function noteSpecialDetonated(kind){
-    goals.forEach((g,i)=>{
-      if(g.type==='specials'&&g.kind===kind){
-        goalProgress[i]=Math.min(g.amount,(goalProgress[i]||0)+1);
-      }
-    });
-  }
-  function syncScoreGoals(){
-    goals.forEach((g,i)=>{
-      if(g.type==='score')goalProgress[i]=Math.min(g.amount,score);
-    });
-  }
-  function goalsComplete(){
-    if(!goals.length)return score>=targetScore;
-    return goals.every((g,i)=>(goalProgress[i]||0)>=g.amount);
-  }
-  function addScore(pts){
-    if(pts<=0)return;
-    score+=pts;
-    syncScoreGoals();
-    spawnScorePop(pts);
-  }
-
-  function clearCellAt(r,c){
-    if(r<0||r>=ROWS||c<0||c>=COLS)return;
-    const p=board[r][c];
-    if(p==null)return;
-    if(p.color!=null)noteColorCleared(p.color);
-    board[r][c]=null;
-  }
-
-  function clearRow(r){
-    if(r<0||r>=ROWS)return;
-    for(let c=0;c<COLS;c++)clearCellAt(r,c);
-  }
-  function clearCol(c){
-    if(c<0||c>=COLS)return;
-    for(let r=0;r<ROWS;r++)clearCellAt(r,c);
-  }
-  function clearCross(r,c){
-    clearRow(r);clearCol(c);
-  }
-  function countColorsOnBoard(){
-    const counts=new Array(PALETTE.length).fill(0);
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-      const p=board[r][c];
-      if(p&&p.color!=null)counts[p.color]++;
-    }
-    return counts;
-  }
-  function clearColour(color){
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-      if(board[r][c]?.color===color)clearCellAt(r,c);
+  function clockStop() {
+    if (run && run.tickFrom) {
+      run.activeMs += Date.now() - run.tickFrom;
+      run.tickFrom = 0;
     }
   }
-
-  function detonateBomb(r,c){
-    noteSpecialDetonated(SPECIAL.bomb);
-    spawnFx(r,c,'bomb');
-    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)clearCellAt(r+dr,c+dc);
+  function stopTimers() {
+    clockStop();
+    if (clockTimer) clearInterval(clockTimer);
+    clockTimer = null;
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = null;
   }
-  function detonateLine(r,c,axis){
-    noteSpecialDetonated(SPECIAL.line);
-    spawnFx(r,c,'line');
-    if(axis==='v')clearCol(c);
-    else clearRow(r);
-  }
-  function detonateRainbow(r,c,color){
-    noteSpecialDetonated(SPECIAL.rainbow);
-    spawnFx(r,c,'rainbow');
-    board[r][c]=null;
-    if(color==null){
-      const counts=countColorsOnBoard();
-      let best=0,bestN=-1;
-      counts.forEach((n,i)=>{if(n>bestN){bestN=n;best=i;}});
-      color=best;
-    }
-    clearColour(color);
-  }
-
-  /** Activate special at its current cell; otherPiece is the swapped partner (may be null). */
-  function activateSpecialAt(r,c,kind,piece,otherPiece){
-    if(!board[r]||board[r][c]==null)return;
-    const axis=piece?.axis||'h';
-    if(kind===SPECIAL.bomb)detonateBomb(r,c);
-    else if(kind===SPECIAL.line)detonateLine(r,c,axis);
-    else if(kind===SPECIAL.rainbow){
-      const col=otherPiece&&otherPiece.color!=null?otherPiece.color:null;
-      detonateRainbow(r,c,col);
-      if(otherPiece&&!otherPiece.special){
-        // partner gem may still sit adjacent — clear it if same colour already wiped
-        const or=otherPiece._atR,oc=otherPiece._atC;
-        if(or!=null&&board[or]?.[oc])clearCellAt(or,oc);
+  function onClock() {
+    if (!alive()) return stopTimers();
+    if (!run || run.over) return;
+    if (run.level.time) {
+      hud();
+      if (!animating && elapsed() >= run.level.time * 1000) {
+        TT.endByTime(run.s);
+        finish();
       }
     }
   }
+  function onVisibility() {
+    if (document.hidden) clockStop();
+    else if (run && !run.over && !isPaused() && !overlayOpen()) clockStart();
+  }
+  document.addEventListener('visibilitychange', onVisibility);
 
-  function resolveSpecialCombo(r1,c1,r2,c2,sa,sb,pa,pb){
-    // After swap: pa is at (r2,c2), pb at (r1,c1)
-    const aPos={r:r2,c:c2,kind:sa,piece:pa};
-    const bPos={r:r1,c:c1,kind:sb,piece:pb};
+  // ---------------- board view ----------------
 
-    if(sa===SPECIAL.line&&sb===SPECIAL.line){
-      toast('Cross clear!');
-      noteSpecialDetonated(SPECIAL.line);
-      noteSpecialDetonated(SPECIAL.line);
-      spawnFx(r1,c1,'line');spawnFx(r2,c2,'line');
-      clearCross(r1,c1);clearCross(r2,c2);
-      return;
-    }
-    if((sa===SPECIAL.bomb&&sb===SPECIAL.line)||(sa===SPECIAL.line&&sb===SPECIAL.bomb)){
-      toast('Bomb cross!');
-      const linePos=sa===SPECIAL.line?aPos:bPos;
-      const bombPos=sa===SPECIAL.bomb?aPos:bPos;
-      noteSpecialDetonated(SPECIAL.line);
-      noteSpecialDetonated(SPECIAL.bomb);
-      spawnFx(linePos.r,linePos.c,'line');
-      spawnFx(bombPos.r,bombPos.c,'bomb');
-      const axis=linePos.piece?.axis||'h';
-      if(axis==='v'){
-        for(let cc=linePos.c-1;cc<=linePos.c+1;cc++)clearCol(cc);
-      }else{
-        for(let rr=linePos.r-1;rr<=linePos.r+1;rr++)clearRow(rr);
-      }
-      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)clearCellAt(bombPos.r+dr,bombPos.c+dc);
-      return;
-    }
-    if(sa===SPECIAL.rainbow&&sb===SPECIAL.rainbow){
-      toast('Board clear!');
-      noteSpecialDetonated(SPECIAL.rainbow);
-      noteSpecialDetonated(SPECIAL.rainbow);
-      spawnFx(r1,c1,'rainbow');spawnFx(r2,c2,'rainbow');
-      for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)clearCellAt(r,c);
-      return;
-    }
-    if((sa===SPECIAL.rainbow&&sb===SPECIAL.bomb)||(sa===SPECIAL.bomb&&sb===SPECIAL.rainbow)){
-      toast('Colour blast!');
-      noteSpecialDetonated(SPECIAL.rainbow);
-      noteSpecialDetonated(SPECIAL.bomb);
-      spawnFx(r1,c1,'rainbow');spawnFx(r2,c2,'bomb');
-      board[r1][c1]=null;board[r2][c2]=null;
-      const counts=countColorsOnBoard();
-      const ranked=counts.map((n,i)=>({i,n})).sort((a,b)=>b.n-a.n);
-      clearColour(ranked[0].i);
-      if(ranked[1]&&ranked[1].n>0)clearColour(ranked[1].i);
-      return;
-    }
-    // Fallback: fire both (no half-wired rainbow+line toast)
-    pb._atR=r1;pb._atC=c1;pa._atR=r2;pa._atC=c2;
-    activateSpecialAt(r2,c2,sa,pa,pb);
-    activateSpecialAt(r1,c1,sb,pb,pa);
+  const viewOf = (s) => ({ col: s.col.slice(), sp: s.sp.slice(), id: s.id.slice(), lock: s.lock.slice(), tile: s.tile.slice(), score: s.score });
+  const rowOf = (i) => Math.floor(i / run.s.cols);
+
+  function pieceHtml(k, sp) {
+    if (k === -1) return '';
+    if (sp === SP.ITEM || k === TT.ITEM_COL) return '<span class="tt-item" aria-hidden="true">🍒</span>';
+    if (sp === SP.RAINBOW || k === TT.RAINBOW_COL) return '<span class="tt-gem tt-gem--rainbow" aria-hidden="true"></span>';
+    const pal = PALETTE[k] || PALETTE[0];
+    const cls = sp === SP.H ? ' tt-sp-h' : sp === SP.V ? ' tt-sp-v' : sp === SP.BOMB ? ' tt-sp-bomb' : '';
+    const shape = settings.colorblind ? `<i class="tt-shape">${pal.shape}</i>` : '';
+    return `<span class="tt-gem${cls}" style="--tt-fill:${pal.fill};--tt-glow:${pal.glow}" aria-hidden="true">${shape}</span>`;
+  }
+  function ariaOf(i) {
+    const k = view.col[i];
+    const sp = view.sp[i];
+    if (k === -1) return 'empty';
+    let base;
+    if (sp === SP.ITEM) base = 'fruit';
+    else if (sp === SP.RAINBOW) base = 'prism';
+    else base = (PALETTE[k] ? PALETTE[k].name : 'gem') + (sp === SP.H ? ' row line' : sp === SP.V ? ' column line' : sp === SP.BOMB ? ' bomb' : '');
+    if (view.lock[i]) base += ', chained';
+    if (view.tile[i]) base += ', jelly';
+    return base;
+  }
+  function neighbours(i) {
+    const C = run.s.cols;
+    const out = [];
+    if (i % C > 0) out.push(i - 1);
+    if (i % C < C - 1) out.push(i + 1);
+    if (i - C >= 0) out.push(i - C);
+    if (i + C < run.s.col.length) out.push(i + C);
+    return out;
   }
 
-  function findHintMove(){
-    for(let r=0;r<ROWS;r++){
-      for(let c=0;c<COLS;c++){
-        const dirs=[[0,1],[1,0]];
-        for(const[dr,dc] of dirs){
-          const r2=r+dr,c2=c+dc;
-          if(r2>=ROWS||c2>=COLS)continue;
-          if(!board[r][c]||!board[r2][c2])continue;
-          if(board[r][c].special||board[r2][c2].special)return{r1:r,c1:c,r2,c2};
-          swapCells(r,c,r2,c2);
-          const ok=findMatches().length>0;
-          swapCells(r,c,r2,c2);
-          if(ok)return{r1:r,c1:c,r2,c2};
-        }
+  function render(o) {
+    const opts = o || {};
+    const grid = $('cbGrid');
+    if (!grid || !view || !run) return;
+    const C = run.s.cols;
+    grid.style.gridTemplateColumns = `repeat(${C},1fr)`;
+    const targets = selected >= 0 && !animating ? neighbours(selected).filter((j) => TT.validSwap(run.s, selected, j)) : [];
+    let html = '';
+    for (let i = 0; i < view.col.length; i++) {
+      const cls = ['tt-cell', 'game-tap-target'];
+      if (view.tile[i]) cls.push('tt-jelly', 'tt-jelly-' + view.tile[i]);
+      if (view.lock[i]) cls.push('is-locked');
+      if (i === selected) cls.push('is-selected');
+      if (targets.indexOf(i) !== -1) cls.push('is-target');
+      if (hintPair && (hintPair[0] === i || hintPair[1] === i)) cls.push('is-hint');
+      else if (previewCells && previewCells.indexOf(i) !== -1) cls.push('is-preview');
+      if (opts.pop && opts.pop.has(i)) cls.push('tt-piece--pop');
+      if (opts.nope && opts.nope.indexOf(i) !== -1) cls.push('tt-piece--nope');
+      if (opts.enter) cls.push('tt-piece--enter');
+      let style = '';
+      if (opts.fall && opts.fall.has(i)) {
+        cls.push('tt-piece--fall');
+        style = `--tt-fall:${Math.min(12, opts.fall.get(i)) * cellSize}px;`;
       }
+      if (opts.slide && opts.slide.has(i)) {
+        const d = opts.slide.get(i);
+        cls.push('tt-piece--slide');
+        style += `--tt-dx:${d[0] * cellSize}px;--tt-dy:${d[1] * cellSize}px;`;
+      }
+      html += `<button type="button" class="${cls.join(' ')}" data-i="${i}" aria-label="${esc(ariaOf(i))}"${style ? ` style="${style}"` : ''}>${pieceHtml(view.col[i], view.sp[i])}${view.lock[i] ? '<span class="tt-chain" aria-hidden="true"></span>' : ''}</button>`;
     }
-    return null;
+    grid.innerHTML = html;
+    grid.classList.toggle('is-calm', Hub.reducedMotion(GAME));
+    const sample = grid.querySelector('.tt-cell');
+    if (sample) cellSize = sample.getBoundingClientRect().height || cellSize;
+    hud();
   }
 
-  function fillRandomBoard(){
-    board=Array(ROWS).fill(null).map(()=>Array(COLS).fill(null).map(()=>randomPiece(false)));
+  function goalChip(g) {
+    const done = g.done ? ' is-done' : '';
+    if (g.t === 'score') return `<span class="tt-goal-chip${done}">Score ${fmt(g.have)}/${fmt(g.need)}</span>`;
+    if (g.t === 'color') {
+      const p = PALETTE[g.c] || PALETTE[0];
+      return `<span class="tt-goal-chip${done}"><span class="tt-goal-swatch" style="--tt-fill:${p.fill};--tt-glow:${p.glow}"></span>${settings.colorblind ? p.shape + ' ' : ''}${g.have}/${g.need}</span>`;
+    }
+    if (g.t === 'tiles') return `<span class="tt-goal-chip${done}"><span class="tt-goal-jelly"></span>Jelly ${g.have}/${g.need}</span>`;
+    if (g.t === 'locks') return `<span class="tt-goal-chip${done}">⛓ Chains ${g.have}/${g.need}</span>`;
+    if (g.t === 'items') return `<span class="tt-goal-chip${done}">🍒 ${g.have}/${g.need}</span>`;
+    return '';
+  }
+  function goalText(g) {
+    if (g.t === 'score') return 'Score ' + fmt(g.n);
+    if (g.t === 'color') return 'Clear ' + g.n + ' ' + (PALETTE[g.c] ? PALETTE[g.c].name : '') + (settings.colorblind && PALETTE[g.c] ? ' ' + PALETTE[g.c].shape : '');
+    if (g.t === 'tiles') return 'Clear all ' + g.n + ' jelly tiles';
+    if (g.t === 'locks') return 'Break all ' + g.n + ' chains';
+    if (g.t === 'items') return 'Bring ' + g.n + ' fruit to the bottom';
+    return '';
   }
 
-  function ensurePlayableStart(){
-    let guard=0;
-    do{
-      fillRandomBoard();
-      guard++;
-    }while((findMatches().length>0||!findHintMove())&&guard<60);
-    if(findMatches().length||!findHintMove()){
-      guard=0;
-      while((findMatches().length>0||!findHintMove())&&guard++<40)shuffleGems(true);
-    }
-  }
-
-  function shuffleGems(silent){
-    const colors=[];
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-      const p=board[r][c];
-      if(p&&!p.special&&p.color!=null)colors.push(p.color);
-    }
-    for(let i=colors.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1));
-      const t=colors[i];colors[i]=colors[j];colors[j]=t;
-    }
-    let k=0;
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-      const p=board[r][c];
-      if(p&&!p.special&&p.color!=null){
-        board[r][c]={color:colors[k++],special:null,axis:null,id:uid()};
-      }
-    }
-    let guard=0;
-    while(findMatches().length&&guard++<30){
-      for(let i=colors.length-1;i>0;i--){
-        const j=Math.floor(Math.random()*(i+1));
-        const t=colors[i];colors[i]=colors[j];colors[j]=t;
-      }
-      k=0;
-      for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-        const p=board[r][c];
-        if(p&&!p.special&&p.color!=null)board[r][c]={color:colors[k++],special:null,axis:null,id:uid()};
+  function hud() {
+    if (!run) return;
+    const s = run.s;
+    const score = animating ? shownScore : s.score;
+    const scoreEl = $('cbScore');
+    if (scoreEl) scoreEl.textContent = fmt(score);
+    const movesEl = $('cbMoves');
+    if (movesEl) {
+      if (run.level.time) {
+        const left = Math.max(0, run.level.time * 1000 - elapsed());
+        movesEl.innerHTML = `⏱ <strong class="${left < 10000 ? 'tt-low' : ''}">${Hub.fmtMs(left + 999)}</strong>`;
+      } else {
+        const left = Math.max(0, s.movesLimit - s.movesUsed);
+        movesEl.innerHTML = `Moves <strong class="${left <= 3 ? 'tt-low' : ''}">${left}</strong>`;
       }
     }
-    if(!silent)toast('No moves — shuffled');
-    buzz('turn');
-  }
-
-  function startLevel(lvl){
-    if(!alive())return;
-    clearCascadeTimers();
-    level=Math.min(Math.max(1,lvl|0),LEVELS.length);
-    const cfg=LEVELS[level-1];
-    goals=(cfg.goals||[{type:'score',amount:cfg.target||500}]).map(g=>({...g}));
-    goalProgress=goals.map(()=>0);
-    const scoreGoal=goals.find(g=>g.type==='score');
-    targetScore=scoreGoal?scoreGoal.amount:(cfg.target||0);
-    maxMoves=cfg.moves;moves=cfg.moves;score=0;combo=0;
-    gameOver=false;selected=null;animating=false;hintPair=null;lastSwapCell=null;
-    ensurePlayableStart();
-    const hub=document.getElementById('ttHub');
-    if(hub)hub.hidden=true;
-    const play=document.getElementById('ttPlay');
-    if(play)play.hidden=false;
-    const pick=document.getElementById('ttPicker');
-    if(pick)pick.hidden=true;
-    const sub=document.getElementById('cbSub');
-    if(sub)sub.textContent='Level '+level+' · '+actLabel(level);
-    const pauseBtn=document.getElementById('cbPause');
-    if(pauseBtn)pauseBtn.style.visibility='';
-    const hintBtn=document.getElementById('cbHint');
-    if(hintBtn)hintBtn.style.visibility='';
-    updateGoalsHud();
-    updateComboHud();
-    render({fresh:true});
-  }
-
-  function updateComboHud(){
-    const el=document.getElementById('cbCombo');
-    if(!el)return;
-    if(combo>1){
-      el.hidden=false;
-      el.textContent='Combo ×'+combo;
-    }else{
-      el.hidden=true;
-      el.textContent='';
+    const goalsEl = $('cbGoals');
+    if (goalsEl) goalsEl.innerHTML = run.kind === 'daily' ? '<span class="tt-goal-chip">Daily · highest score wins</span>' : TT.goalStatus(s).map(goalChip).join('');
+    const fill = $('cbProgress');
+    if (fill) {
+      const st = run.level.stars || [];
+      const top = st[2] || Math.max(1, score);
+      fill.style.width = Math.min(100, Math.round((100 * score) / top)) + '%';
+      const marks = $('cbStarMarks');
+      if (marks && st[2]) marks.innerHTML = st.map((v, k) => `<i style="left:${Math.min(100, (100 * v) / top)}%" class="${score >= v ? 'is-on' : ''}" title="${k + 1}★ ${fmt(v)}">★</i>`).join('');
+      else if (marks) marks.innerHTML = '';
     }
   }
 
-  function updateGoalsHud(){
-    syncScoreGoals();
-    const host=document.getElementById('cbGoals');
-    if(host){
-      host.innerHTML=goals.map((g,i)=>{
-        const cur=goalProgress[i]||0;
-        const done=cur>=g.amount?' is-done':'';
-        if(g.type==='score'){
-          return `<span class="tt-goal-chip${done}">Score ${cur.toLocaleString()}/${g.amount.toLocaleString()}</span>`;
-        }
-        if(g.type==='collect'){
-          const pal=PALETTE[g.color]||PALETTE[0];
-          return `<span class="tt-goal-chip${done}"><i class="tt-goal-swatch" style="--tt-fill:${pal.fill};--tt-glow:${pal.glow}"></i>${pal.name} ${cur}/${g.amount}</span>`;
-        }
-        if(g.type==='specials'){
-          const label=g.kind==='line'?'Lines':g.kind==='bomb'?'Bombs':'Prisms';
-          return `<span class="tt-goal-chip${done}">${label} ${cur}/${g.amount}</span>`;
-        }
-        return '';
-      }).join('');
+  // ---------------- hints + preview ----------------
+
+  function clearHint() {
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = null;
+    if (hintPair || previewCells) {
+      hintPair = null;
+      previewCells = null;
+      return true;
     }
-    const scoreGoal=goals.find(g=>g.type==='score');
-    const progEl=document.getElementById('cbProgress');
-    const track=document.getElementById('cbProgressTrack');
-    if(scoreGoal&&progEl){
-      if(track)track.hidden=false;
-      progEl.style.width=Math.min(100,(score/Math.max(1,scoreGoal.amount))*100)+'%';
-    }else if(track&&progEl){
-      const total=goals.reduce((s,g)=>s+g.amount,0)||1;
-      const got=goalProgress.reduce((s,n)=>s+(n||0),0);
-      progEl.style.width=Math.min(100,(got/total)*100)+'%';
-      track.hidden=false;
-    }
-    const movesEl=document.getElementById('cbMoves');
-    if(movesEl)movesEl.textContent=String(moves);
-    const scoreEl=document.getElementById('cbScore');
-    if(scoreEl)scoreEl.textContent=score.toLocaleString();
-  }
-
-  function spawnFx(r,c,type){
-    if(!fxLayer||(reduceMotion&&type==='spark'))return;
-    const grid=document.getElementById('cbGrid');
-    if(!grid)return;
-    const cell=grid.querySelector(`[data-r="${r}"][data-c="${c}"]`);
-    const host=cell||grid;
-    const rect=host.getBoundingClientRect();
-    const layerRect=fxLayer.getBoundingClientRect();
-    const el=document.createElement('div');
-    el.className='tt-fx tt-fx--'+type+(reduceMotion?' tt-fx--short':'');
-    el.style.left=(rect.left-layerRect.left+rect.width/2)+'px';
-    el.style.top=(rect.top-layerRect.top+rect.height/2)+'px';
-    fxLayer.appendChild(el);
-    schedule(()=>{el.remove();},T.fx);
-  }
-
-  function spawnScorePop(pts){
-    if(reduceMotion||!fxLayer||pts<=0)return;
-    const grid=document.getElementById('cbGrid');
-    if(!grid)return;
-    const rect=grid.getBoundingClientRect();
-    const layerRect=fxLayer.getBoundingClientRect();
-    const el=document.createElement('div');
-    el.className='tt-score-pop';
-    el.textContent='+'+pts;
-    el.style.left=(rect.left-layerRect.left+rect.width/2)+'px';
-    el.style.top=(rect.top-layerRect.top+rect.height*0.38)+'px';
-    fxLayer.appendChild(el);
-    schedule(()=>{el.remove();},900);
-  }
-
-  function clearMatches(matches){
-    if(!alive()||!matches||!matches.length)return;
-    animating=true;
-    combo++;
-    updateComboHud();
-
-    // Detonate specials sitting on or orthogonally touching the match
-    const clearSet=new Set(matches.map(m=>`${m.r},${m.c}`));
-    const expanded=matches.slice();
-    const tryAdd=(r,c)=>{
-      const key=`${r},${c}`;
-      if(clearSet.has(key))return;
-      const p=board[r]?.[c];
-      if(!p?.special)return;
-      clearSet.add(key);
-      expanded.push({r,c});
-    };
-    matches.forEach(({r,c})=>{
-      tryAdd(r,c);
-      tryAdd(r-1,c);tryAdd(r+1,c);tryAdd(r,c-1);tryAdd(r,c+1);
-    });
-
-    const pts=expanded.length*10*combo;
-    addScore(pts);
-    if(combo>1)buzz('valid');else buzz('place');
-
-    expanded.forEach(({r,c})=>{
-      const cell=document.querySelector(`#cbGrid [data-r="${r}"][data-c="${c}"]`);
-      if(cell)cell.classList.add('tt-piece--pop');
-      spawnFx(r,c,'spark');
-    });
-
-    const spawn=classifySpawn(matches);
-
-    scheduleCascade(()=>{
-      if(!alive())return;
-      const snap=expanded.map(({r,c})=>({r,c,p:board[r]?.[c]}));
-      snap.forEach(({r,c,p})=>{
-        if(!p)return;
-        if(p.special===SPECIAL.bomb)detonateBomb(r,c);
-        else if(p.special===SPECIAL.line)detonateLine(r,c,p.axis||'h');
-        else if(p.special===SPECIAL.rainbow){
-          const rainColor=snap.find(x=>x.p&&x.p.color!=null)?.p?.color ?? 0;
-          detonateRainbow(r,c,rainColor);
-        }else{
-          clearCellAt(r,c);
-        }
-      });
-      if(spawn&&spawn.anchor){
-        const {r,c}=spawn.anchor;
-        board[r][c]={color:null,special:spawn.kind,axis:spawn.axis,id:uid()};
-        teachSpecial(spawn.kind);
-      }
-      updateGoalsHud();
-      dropPieces();
-    },T.pop);
-  }
-
-  function dropPieces(){
-    if(!alive())return;
-    animating=true;
-    const fell=[];
-    for(let c=0;c<COLS;c++){
-      let write=ROWS-1;
-      for(let r=ROWS-1;r>=0;r--){
-        if(board[r][c]!==null){
-          if(write!==r){
-            board[write][c]=board[r][c];
-            board[r][c]=null;
-            fell.push({r:write,c,from:r});
-          }
-          write--;
-        }
-      }
-      for(let r=write;r>=0;r--){
-        board[r][c]=randomPiece(true);
-        fell.push({r,c,from:-1});
-      }
-    }
-    render({fall:fell});
-    const newMatches=findMatches();
-    if(newMatches.length){
-      scheduleCascade(()=>clearMatches(newMatches),T.cascade);
-    }else{
-      finishCascade();
-    }
-  }
-
-  function finishCascade(){
-    combo=0;
-    updateComboHud();
-    animating=false;
-    hintPair=null;
-    lastSwapCell=null;
-    updateGoalsHud();
-    if(checkGameOver())return;
-    if(!findHintMove()){
-      shuffleGems(false);
-      let g=0;
-      while(!findHintMove()&&g++<12)shuffleGems(true);
-      render({fresh:true});
-      checkGameOver();
-    }
-  }
-
-  function trySwap(r1,c1,r2,c2){
-    if(!alive()||animating||gameOver||isPaused())return;
-    if(Math.abs(r1-r2)+Math.abs(c1-c2)!==1)return;
-    const a=board[r1]?.[c1],b=board[r2]?.[c2];
-    if(!a||!b)return;
-    hintPair=null;
-    animating=true;
-    selected=null;
-    const sa=a.special,sb=b.special;
-    swapCells(r1,c1,r2,c2);
-    lastSwapCell={r:r2,c:c2};
-    render({swap:[[r1,c1],[r2,c2]]});
-
-    // Special activation / combo — costs a move
-    if(sa&&sb){
-      moves--;
-      updateGoalsHud();
-      combo=0;
-      scheduleCascade(()=>{
-        if(!alive())return;
-        combo=1;updateComboHud();
-        const before=countFilled();
-        resolveSpecialCombo(r1,c1,r2,c2,sa,sb,a,b);
-        const cleared=Math.max(0,before-countFilled());
-        addScore(Math.max(cleared,1)*12);
-        buzz('valid');
-        updateGoalsHud();
-        dropPieces();
-      },T.swap);
-      return;
-    }
-    if(sa||sb){
-      moves--;
-      updateGoalsHud();
-      combo=0;
-      scheduleCascade(()=>{
-        if(!alive())return;
-        combo=1;updateComboHud();
-        // After swap: a at (r2,c2), b at (r1,c1)
-        b._atR=r1;b._atC=c1;a._atR=r2;a._atC=c2;
-        const before=countFilled();
-        if(sa)activateSpecialAt(r2,c2,sa,a,b);
-        else activateSpecialAt(r1,c1,sb,b,a);
-        const cleared=Math.max(0,before-countFilled());
-        addScore(Math.max(cleared,1)*12);
-        buzz('valid');
-        updateGoalsHud();
-        dropPieces();
-      },T.swap);
-      return;
-    }
-
-    const matches=findMatches();
-    if(matches.length){
-      moves--;
-      updateGoalsHud();
-      if(combo<=0)toast('Match!');
-      scheduleCascade(()=>clearMatches(matches),T.swap);
-    }else{
-      scheduleCascade(()=>{
-        swapCells(r1,c1,r2,c2);
-        lastSwapCell=null;
-        render({swap:[[r1,c1],[r2,c2]]});
-        animating=false;
-        buzz('invalid');
-        const grid=document.getElementById('cbGrid');
-        if(typeof shakeInvalidMove==='function')shakeInvalidMove(grid,{toast:'No match'});
-        else toast('No match');
-      },T.swapBack);
-    }
-  }
-
-  function countFilled(){
-    let n=0;
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(board[r][c]!=null)n++;
-    return n;
-  }
-
-  function updateHudMeters(){
-    updateGoalsHud();
-  }
-
-  function checkGameOver(){
-    syncScoreGoals();
-    if(goalsComplete()){showLevelComplete();return true;}
-    if(moves<=0){showGameOver();return true;}
     return false;
   }
-
-  function applyHint(){
-    if(animating||gameOver||isPaused())return;
-    const move=findHintMove();
-    if(!move){
-      shuffleGems(false);
-      render({fresh:true});
-      return;
-    }
-    hintPair=move;
-    selected=null;
-    buzz('select');
+  function armIdleHint() {
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = null;
+    if (!settings.hints || !run || run.over) return;
+    hintTimer = schedule(() => {
+      hintTimer = null;
+      if (!run || run.over || animating || isPaused() || selected >= 0) return;
+      showHint();
+    }, T.idle);
+  }
+  function showHint() {
+    if (!run || run.over || animating) return;
+    const m = TT.hintMove(run.s);
+    if (!m) return;
+    hintPair = m;
+    const pv = TT.previewSwap(run.s, m[0], m[1]);
+    previewCells = pv ? pv.cells : null;
     render();
   }
 
-  function goalSummaryLine(){
-    return goals.map((g,i)=>{
-      const cur=goalProgress[i]||0;
-      if(g.type==='score')return `${cur}/${g.amount} pts`;
-      if(g.type==='collect')return `${(PALETTE[g.color]||{}).name||'Gem'} ${cur}/${g.amount}`;
-      if(g.type==='specials')return `${g.kind} ${cur}/${g.amount}`;
-      return '';
-    }).filter(Boolean).join(' · ');
-  }
+  // ---------------- moves ----------------
 
-  function goalsChecklistHtml(){
-    return '<ul class="tt-goals-check">' + goals.map((g, i) => {
-      const cur = goalProgress[i] || 0;
-      const ok = cur >= g.amount;
-      let label = '';
-      if (g.type === 'score') label = 'Score ' + cur.toLocaleString() + '/' + g.amount.toLocaleString();
-      else if (g.type === 'collect') label = ((PALETTE[g.color] || {}).name || 'Gem') + ' ' + cur + '/' + g.amount;
-      else if (g.type === 'specials') label = (g.kind === 'line' ? 'Lines' : g.kind === 'bomb' ? 'Bombs' : 'Prisms') + ' ' + cur + '/' + g.amount;
-      return '<li class="' + (ok ? 'is-done' : 'is-miss') + '">' + (ok ? '✓ ' : '· ') + label + '</li>';
-    }).join('') + '</ul>';
-  }
-
-  function hideResult(){
-    const div = document.getElementById('cbOverlay');
-    if (div) { div.style.display = 'none'; div.innerHTML = ''; }
-  }
-
-  function shareHandlers(shareStats){
-    return {
-      share: () => { if (typeof shareGameResult === 'function') shareGameResult('tiptap', shareStats); },
-      challenge: async () => {
-        if (typeof openFriendPickerSheet === 'function') {
-          const f = await openFriendPickerSheet({ title: 'Challenge · Tip Tap' });
-          if (f && typeof openFriendShareFollowup === 'function') {
-            await openFriendShareFollowup(f, 'tiptap', { ...shareStats, friendText: 'Hey ' + f.name + ' — beat my Tip Tap score!' });
-          } else if (f && typeof shareGameResult === 'function') {
-            shareGameResult('tiptap', { ...shareStats, text: 'Hey ' + f.name + ' — beat my Tip Tap score!' });
-          } else if (typeof shareGameResult === 'function') shareGameResult('tiptap', shareStats);
-        } else if (typeof shareGameResult === 'function') shareGameResult('tiptap', shareStats);
-      },
-      story: () => { if (typeof postGameScoreStory === 'function') postGameScoreStory('tiptap', { ...shareStats, score }); },
-    };
-  }
-
-  function showLevelComplete(){
-    gameOver = true;
+  async function doSwap(a, b) {
+    if (animating || !run || run.over || isPaused()) return;
+    clearHint();
+    if (!TT.validSwap(run.s, a, b)) {
+      selected = -1;
+      render({ nope: [a, b] });
+      Hub.feedback(GAME, 'invalid');
+      armIdleHint();
+      return;
+    }
+    animating = true;
+    selected = -1;
+    shownScore = run.s.score;
+    const t = Math.round(elapsed());
+    const C = run.s.cols;
+    const dx = (b % C) - (a % C);
+    const dy = Math.floor(b / C) - Math.floor(a / C);
+    ['col', 'sp', 'id'].forEach((k) => {
+      const x = view[k][a];
+      view[k][a] = view[k][b];
+      view[k][b] = x;
+    });
+    render({ slide: new Map([[a, [dx, dy]], [b, [-dx, -dy]]]) });
+    Hub.feedback(GAME, 'move');
+    await wait(T.swap);
+    const res = TT.swap(run.s, a, b);
+    if (!res.ok) {
+      view = viewOf(run.s);
+      animating = false;
+      render();
+      return;
+    }
+    run.log.push([a, b, t]);
+    await playEvents(res.events);
+    if (!alive()) return;
+    view = viewOf(run.s);
     animating = false;
-    clearCascadeTimers();
-    persistUnlock(level);
-    const prevPb = typeof getGamePB === 'function' ? getGamePB('tiptap') : null;
-    const vsBestRaw = typeof formatVsBest === 'function' ? formatVsBest('tiptap', score) : '';
-    const isNewBest = score > 0 && (prevPb == null || score > prevPb);
-    if (typeof setGamePB === 'function') setGamePB('tiptap', score);
-    const vsBest = isNewBest
-      ? ('New best · ' + score.toLocaleString() + ' pts' + (prevPb != null ? ' (was ' + prevPb.toLocaleString() + ')' : ''))
-      : vsBestRaw;
-    if (gs) gs.setOutcome('won');
-    if (typeof recordGameResult === 'function') {
-      recordGameResult('tiptap', true, false, { score, level, goals: goalSummaryLine(), scoreOnly: true });
-    }
-    buzz('complete');
-    if (isNewBest) toast('New best · ' + score.toLocaleString() + ' pts');
-    const div = document.getElementById('cbOverlay');
-    if (!div) return;
-    div.style.display = 'flex';
-    const nextExists = level < LEVELS.length;
-    const shareStats = {
-      scoreLine: score.toLocaleString() + ' pts',
-      score,
-      meta: 'Level ' + level + ' cleared · ' + (vsBest || ''),
-      text: 'Cleared Tip Tap level ' + level + ' with ' + score.toLocaleString() + ' on Chaupaal!',
-    };
-    const shareCard = typeof buildGameShareCard === 'function' ? buildGameShareCard('tiptap', shareStats) : '';
-    const actions = [];
-    if (nextExists) actions.push({ label: 'Next level', primary: true, id: 'again' });
-    else actions.push({ label: 'Campaign complete', primary: true, id: 'hub' });
-    actions.push({ label: 'Replay', primary: false, id: 'replay' });
-    actions.push({ label: 'Levels', primary: false, id: 'levels' });
-    if (typeof shareGameResult === 'function') actions.push({ label: 'Share', primary: false, id: 'share' });
-    if (typeof openFriendPickerSheet === 'function') actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
-    if (typeof postGameScoreStory === 'function') actions.push({ label: 'Post to story', primary: false, id: 'story' });
-    const subBits = [
-      'Score ' + score.toLocaleString(),
-      moves + ' moves left',
-      goalSummaryLine(),
-    ].filter(Boolean).join(' · ');
-    div.innerHTML =
-      (typeof gameResultHtml === 'function'
-        ? gameResultHtml({
-            gameId: 'tiptap',
-            glyph: '✓',
-            title: 'Level ' + level + ' complete',
-            subtitle: subBits,
-            vsBest: vsBest || undefined,
-            shareCardHtml: shareCard + (isNewBest ? '<div class="tt-new-best" role="status">New personal best</div>' : '') + goalsChecklistHtml(),
-            actions,
-            hideStats: false,
-          })
-        : '<div><button type="button" id="cbNext">Next</button></div>');
-    const sh = shareHandlers(shareStats);
-    if (typeof wireGameResultActions === 'function') {
-      wireGameResultActions(div, {
-        ...sh,
-        again: () => {
-          hideResult();
-          if (nextExists) startLevel(level + 1);
-          else showHub();
-        },
-        hub: () => { hideResult(); showHub(); },
-        replay: () => { hideResult(); startLevel(level); },
-        levels: () => { hideResult(); openLevelPicker(); },
-      });
-    } else {
-      (div.querySelector('[data-result-action]') || document.getElementById('cbNext'))?.addEventListener('click', () => {
-        hideResult();
-        if (nextExists) startLevel(level + 1);
-        else showHub();
-      });
-    }
+    render();
+    afterMove();
   }
 
-  function showGameOver(){
-    gameOver = true;
-    animating = false;
-    clearCascadeTimers();
-    const prevPb = typeof getGamePB === 'function' ? getGamePB('tiptap') : null;
-    const vsBestRaw = typeof formatVsBest === 'function' ? formatVsBest('tiptap', score) : '';
-    const isNewBest = score > 0 && (prevPb == null || score > prevPb);
-    if (typeof setGamePB === 'function') setGamePB('tiptap', score);
-    const vsBest = isNewBest
-      ? ('New best · ' + score.toLocaleString() + ' pts' + (prevPb != null ? ' (was ' + prevPb.toLocaleString() + ')' : ''))
-      : vsBestRaw;
-    if (gs) gs.setOutcome('lost');
-    if (typeof recordGameResult === 'function') {
-      recordGameResult('tiptap', false, false, { score, level, goals: goalSummaryLine(), scoreOnly: true });
-    }
-    buzz('lose');
-    if (isNewBest) toast('New best · ' + score.toLocaleString() + ' pts');
-    const div = document.getElementById('cbOverlay');
-    if (!div) return;
-    div.style.display = 'flex';
-    const unmet = goals
-      .map((g, i) => {
-        const cur = goalProgress[i] || 0;
-        if (cur >= g.amount) return null;
-        if (g.type === 'score') return 'Score ' + cur + '/' + g.amount;
-        if (g.type === 'collect') return ((PALETTE[g.color] || {}).name || 'Gem') + ' ' + cur + '/' + g.amount;
-        if (g.type === 'specials') return g.kind + ' ' + cur + '/' + g.amount;
-        return null;
-      })
-      .filter(Boolean)
-      .join(', ');
-    const shareStats = {
-      scoreLine: score.toLocaleString() + ' pts',
-      score,
-      meta: 'Level ' + level + ' attempt · ' + (vsBest || ''),
-      text: 'Tried Tip Tap level ' + level + ' — scored ' + score.toLocaleString() + ' on Chaupaal. Can you clear it?',
-    };
-    const shareCard = typeof buildGameShareCard === 'function' ? buildGameShareCard('tiptap', shareStats) : '';
-    const actions = [
-      { label: 'Retry', primary: true, id: 'again' },
-      { label: 'Levels', primary: false, id: 'levels' },
-    ];
-    if (typeof shareGameResult === 'function') actions.push({ label: 'Share', primary: false, id: 'share' });
-    if (typeof openFriendPickerSheet === 'function') actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
-    if (typeof postGameScoreStory === 'function') actions.push({ label: 'Post to story', primary: false, id: 'story' });
-    div.innerHTML =
-      (typeof gameResultHtml === 'function'
-        ? gameResultHtml({
-            gameId: 'tiptap',
-            glyph: '·',
-            title: 'Out of moves',
-            subtitle: (unmet ? 'Still need: ' + unmet : goalSummaryLine()) + ' · Level ' + level,
-            vsBest: vsBest || undefined,
-            shareCardHtml: shareCard + (isNewBest ? '<div class="tt-new-best" role="status">New personal best</div>' : '') + goalsChecklistHtml(),
-            actions,
-          })
-        : '<div><button type="button" id="cbRetry">Retry</button></div>');
-    const sh = shareHandlers(shareStats);
-    if (typeof wireGameResultActions === 'function') {
-      wireGameResultActions(div, {
-        ...sh,
-        again: () => { hideResult(); startLevel(level); },
-        levels: () => { hideResult(); openLevelPicker(); },
-      });
-    } else {
-      (div.querySelector('[data-result-action]') || document.getElementById('cbRetry'))?.addEventListener('click', () => {
-        hideResult();
-        startLevel(level);
-      });
-    }
-  }
-
-  function pieceHtml(p){
-    if(!p)return '';
-    if(p.special===SPECIAL.bomb)return '<span class="tt-gem tt-gem--bomb" aria-hidden="true"></span>';
-    if(p.special===SPECIAL.rainbow)return '<span class="tt-gem tt-gem--rainbow" aria-hidden="true"></span>';
-    if(p.special===SPECIAL.line){
-      const ax=p.axis==='v'?'tt-gem--line-v':'tt-gem--line-h';
-      return `<span class="tt-gem tt-gem--line ${ax}" aria-hidden="true"></span>`;
-    }
-    const pal=PALETTE[p.color]||PALETTE[0];
-    return `<span class="tt-gem" style="--tt-fill:${pal.fill};--tt-glow:${pal.glow}" aria-hidden="true"></span>`;
-  }
-
-  function isHintCell(r,c){
-    if(!hintPair)return false;
-    return(hintPair.r1===r&&hintPair.c1===c)||(hintPair.r2===r&&hintPair.c2===c);
-  }
-
-  function render(opts){
-    if(!alive())return;
-    const o=opts||{};
-    const grid=document.getElementById('cbGrid');if(!grid)return;
-    updateHudMeters();
-    updateComboHud();
-
-    grid.innerHTML='';
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const cell=document.createElement('button');
-      cell.type='button';
-      const p=board[r][c];
-      const isSel=selected&&selected[0]===r&&selected[1]===c;
-      const isHint=isHintCell(r,c);
-      cell.className='tt-cell game-tap-target'+(isSel?' is-selected':'')+(isHint?' is-hint':'')+(hintPair&&!isHint?' is-dim':'');
-      cell.dataset.r=r;cell.dataset.c=c;
-      cell.setAttribute('aria-label',p?(p.special||('gem '+(p.color+1))):'empty');
-      cell.innerHTML=pieceHtml(p);
-      if(o.fresh)cell.classList.add('tt-piece--enter');
-      if(o.fall){
-        const f=o.fall.find(x=>x.r===r&&x.c===c);
-        if(f){
-          cell.classList.add('tt-piece--fall');
-          const dist=f.from<0?(r+1):(r-f.from);
-          cell.style.setProperty('--tt-fall',Math.min(12,Math.max(1,dist))*cellSize+'px');
-        }
+  async function playEvents(events) {
+    let lastFall = null;
+    for (let k = 0; k < events.length; k++) {
+      if (!alive()) return;
+      const ev = events[k];
+      if (ev.t === 'clear') {
+        const pop = new Set(ev.cells.concat(ev.broke || []));
+        render({ pop });
+        clearFx(ev);
+        await wait(T.pop);
+      } else if (ev.t === 'fall') lastFall = ev;
+      else if (ev.t === 'board') {
+        view = ev;
+        shownScore = ev.score;
+        if (lastFall) {
+          const fall = new Map();
+          lastFall.moves.forEach((m) => fall.set(m[1], rowOf(m[1]) - rowOf(m[0])));
+          lastFall.spawned.forEach((x) => fall.set(x.i, x.drop));
+          lastFall = null;
+          render({ fall });
+          await wait(T.fall);
+        } else render();
+      } else if (ev.t === 'collect') {
+        ev.cells.forEach((i) => scorePop(i, '🍒 +' + fmt(500)));
+        Hub.feedback(GAME, 'coin');
+        await wait(T.pop);
+      } else if (ev.t === 'bonus') {
+        notice(`${ev.moves} moves left → +${fmt(ev.gained)}`);
+        shownScore += ev.gained;
+        hud();
+        await wait(T.notice);
+      } else if (ev.t === 'shuffle') {
+        notice('No moves left — shuffled the board');
+        await wait(T.notice);
       }
-      if(o.swap&&o.swap.some(p=>p[0]===r&&p[1]===c))cell.classList.add('tt-piece--swap');
-      cell.addEventListener('click',(ev)=>{
-        ev.preventDefault();
-        if(Date.now()<suppressClickUntil)return;
-        if(animating||gameOver||isPaused())return;
-        const nr=+cell.dataset.r,nc=+cell.dataset.c;
-        if(!selected){selected=[nr,nc];hintPair=null;buzz('select');render();}
-        else if(selected[0]===nr&&selected[1]===nc){selected=null;render();}
-        else if(Math.abs(selected[0]-nr)+Math.abs(selected[1]-nc)===1){
-          const sr=selected[0],sc=selected[1];
-          selected=null;
-          trySwap(sr,sc,nr,nc);
-        }else{
-          selected=[nr,nc];hintPair=null;buzz('select');render();
-        }
-      });
-      grid.appendChild(cell);
     }
-    const sample=grid.querySelector('.tt-cell');
-    if(sample)cellSize=sample.getBoundingClientRect().height||40;
   }
 
-  function showHub(){
-    gameOver = true;
+  function cellCenter(i) {
+    const grid = $('cbGrid');
+    const fx = $('cbFx');
+    const el = grid && grid.querySelector(`[data-i="${i}"]`);
+    if (!el || !fx) return null;
+    const a = el.getBoundingClientRect();
+    const b = fx.getBoundingClientRect();
+    return { x: a.left - b.left + a.width / 2, y: a.top - b.top + a.height / 2 };
+  }
+  function spawnFx(i, type) {
+    if (Hub.reducedMotion(GAME) && type === 'spark') return;
+    const p = cellCenter(i);
+    const fx = $('cbFx');
+    if (!p || !fx) return;
+    const el = document.createElement('div');
+    el.className = 'tt-fx tt-fx--' + type + (Hub.reducedMotion(GAME) ? ' tt-fx--short' : '');
+    el.style.left = p.x + 'px';
+    el.style.top = p.y + 'px';
+    fx.appendChild(el);
+    schedule(() => el.remove(), 700);
+  }
+  function scorePop(i, text) {
+    const p = cellCenter(i);
+    const fx = $('cbFx');
+    if (!p || !fx || Hub.reducedMotion(GAME)) return;
+    const el = document.createElement('div');
+    el.className = 'tt-score-pop';
+    el.textContent = text;
+    el.style.left = p.x + 'px';
+    el.style.top = p.y + 'px';
+    fx.appendChild(el);
+    schedule(() => el.remove(), 950);
+  }
+  function clearFx(ev) {
+    (ev.fired || []).forEach((f) => spawnFx(f.i, f.sp === SP.BOMB ? 'bomb' : f.sp === SP.RAINBOW ? 'rainbow' : 'line'));
+    if (ev.cells.length) {
+      const mid = ev.cells[Math.floor(ev.cells.length / 2)];
+      spawnFx(mid, 'spark');
+      scorePop(mid, '+' + fmt(ev.gained));
+    }
+    if (ev.combo) notice(ev.combo);
+    else if (ev.step >= 2) notice(['', '', 'Nice!', 'Great!', 'Superb!', 'Incredible!'][Math.min(5, ev.step)] || 'Incredible!');
+    Hub.feedback(GAME, ev.fired && ev.fired.length ? 'capture' : ev.step ? 'coin' : 'valid');
+  }
+  function notice(text) {
+    const el = $('ttNotice');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('is-on');
+    void el.offsetWidth;
+    el.classList.add('is-on');
+  }
+
+  function afterMove() {
+    const s = run.s;
+    if (run.level.time && s.status === 'play' && elapsed() >= run.level.time * 1000) TT.endByTime(s);
+    if (s.status !== 'play') return finish();
+    armIdleHint();
+  }
+
+  // ---------------- screens ----------------
+
+  const overlayOpen = () => $('cbOverlay') && $('cbOverlay').style.display === 'flex';
+  function showOverlay(html) {
+    const el = $('cbOverlay');
+    el.innerHTML = `<div class="tt-result-card">${html}</div>`;
+    el.style.display = 'flex';
+    return el;
+  }
+  function hideOverlay() {
+    const el = $('cbOverlay');
+    if (el) {
+      el.style.display = 'none';
+      el.innerHTML = '';
+    }
+  }
+  function screen(name) {
+    ['ttHub', 'ttPicker', 'ttPlay'].forEach((id) => {
+      const el = $(id);
+      if (el) el.hidden = id !== name;
+    });
+    const inPlay = name === 'ttPlay';
+    const pauseBtn = $('cbPause');
+    if (pauseBtn) pauseBtn.style.visibility = inPlay ? 'visible' : 'hidden';
+    const hintBtn = $('cbHint');
+    if (hintBtn) hintBtn.style.visibility = inPlay ? 'visible' : 'hidden';
+    const sc = $('cbScore');
+    if (sc) sc.style.visibility = inPlay ? 'visible' : 'hidden';
+  }
+  function setSub(text) {
+    const sub = overlay.querySelector('.game-chrome-subtitle');
+    if (sub) sub.textContent = text;
+  }
+
+  function starTotal(p) {
+    return Object.keys(p.stars).reduce((a, k) => a + (p.stars[k] || 0), 0);
+  }
+
+  function showHub() {
+    stopTimers();
+    run = null;
     animating = false;
-    clearCascadeTimers();
-    hideResult();
-    const hub = document.getElementById('ttHub');
-    const play = document.getElementById('ttPlay');
-    const pick = document.getElementById('ttPicker');
-    if (play) play.hidden = true;
-    if (pick) pick.hidden = true;
-    if (hub) hub.hidden = false;
-    const cont = readNextLevel();
-    const bestLvl = readBestCleared();
-    const pb = typeof getGamePB === 'function' ? getGamePB('tiptap') : null;
-    const sub = document.getElementById('cbSub');
-    if (sub) sub.textContent = 'Campaign · 100 levels';
-    const pauseBtn = document.getElementById('cbPause');
-    if (pauseBtn) pauseBtn.style.visibility = 'hidden';
-    const hintBtn = document.getElementById('cbHint');
-    if (hintBtn) hintBtn.style.visibility = 'hidden';
-    const contBtn = document.getElementById('ttContinue');
-    if (contBtn) {
-      contBtn.textContent = bestLvl >= LEVELS.length ? 'Replay level ' + LEVELS.length : 'Continue · Level ' + cont;
-    }
-    const meta = document.getElementById('ttHubMeta');
-    if (meta) {
-      meta.textContent =
-        (pb != null ? 'Best ' + Number(pb).toLocaleString() + ' pts' : 'No PB yet') +
-        (bestLvl ? ' · Cleared Lv ' + bestLvl : '') +
-        ' · ' + actLabel(cont);
+    hideOverlay();
+    screen('ttHub');
+    setSub('Solo · ' + N_LEVELS + ' levels · Daily');
+    const p = Hub.load(GAME);
+    const cont = Math.min(N_LEVELS, p.level);
+    const contBtn = $('ttContinue');
+    if (contBtn) contBtn.textContent = p.best >= N_LEVELS ? 'Replay level ' + N_LEVELS : 'Play level ' + cont;
+    const meta = $('ttHubMeta');
+    if (meta) meta.textContent = `★ ${starTotal(p)} / ${N_LEVELS * 3}` + (p.best ? ` · ${p.best} cleared` : '');
+    const d = $('ttDaily');
+    if (d) {
+      const ds = Hub.dailyState(GAME);
+      const st = Hub.streak(GAME);
+      d.innerHTML = `Daily Challenge <small>${ds.done ? 'Played ✓' : ds.started ? 'Practice' : 'New today'}${st ? ' · 🔥 ' + st : ''}</small>`;
     }
   }
 
-  function openLevelPicker(){
-    const hub = document.getElementById('ttHub');
-    const play = document.getElementById('ttPlay');
-    const pick = document.getElementById('ttPicker');
-    if (hub) hub.hidden = true;
-    if (play) play.hidden = true;
-    if (!pick) return;
-    pick.hidden = false;
-    hideResult();
-    const unlocked = readNextLevel();
-    const bestLvl = readBestCleared();
-    const grid = document.getElementById('ttPickerGrid');
+  function openPicker() {
+    hideOverlay();
+    screen('ttPicker');
+    setSub('Choose a level');
+    const p = Hub.load(GAME);
+    const grid = $('ttPickerGrid');
     if (!grid) return;
-    grid.innerHTML = '';
-    for (let n = 1; n <= LEVELS.length; n++) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      const locked = n > unlocked;
-      const cleared = n <= bestLvl || n < unlocked;
-      const current = n === unlocked && bestLvl < n;
-      btn.className =
-        'tt-pick-cell game-tap-target' +
-        (locked ? ' is-locked' : '') +
-        (cleared ? ' is-cleared' : '') +
-        (current ? ' is-current' : '');
-      btn.textContent = locked ? '·' : String(n);
-      btn.disabled = locked;
-      btn.setAttribute('aria-label', locked ? 'Level ' + n + ' locked' : 'Level ' + n);
-      if (!locked) {
-        btn.addEventListener('click', () => {
-          pick.hidden = true;
-          startLevel(n);
-        });
-      }
-      grid.appendChild(btn);
+    let html = '';
+    for (let n = 1; n <= N_LEVELS; n++) {
+      const locked = n > p.level;
+      const stars = p.stars[n] || 0;
+      const lv = LV.get(n);
+      const cls = 'tt-pick-cell game-tap-target' + (locked ? ' is-locked' : '') + (stars ? ' is-cleared' : '') + (n === p.level && !stars ? ' is-current' : '');
+      html += `<button type="button" class="${cls}" data-n="${n}" ${locked ? 'disabled' : ''} aria-label="Level ${n}${locked ? ' locked' : stars ? ', ' + stars + ' stars' : ''}"><b>${locked ? '·' : n}</b><small>${locked ? '' : stars ? '★'.repeat(stars) : lv && lv.time ? '⏱' : ''}</small></button>`;
     }
-    const sub = document.getElementById('cbSub');
-    if (sub) sub.textContent = 'Choose a level';
+    grid.innerHTML = html;
+    const cur = grid.querySelector('.is-current') || grid.querySelector(`[data-n="${Math.min(N_LEVELS, p.level)}"]`);
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'center' });
   }
+
+  function showIntro(n, challenge) {
+    const lv = LV.get(n);
+    if (!lv) return showHub();
+    const p = Hub.load(GAME);
+    const stars = p.stars[n] || 0;
+    const best = p.bests[n] || 0;
+    const limit = lv.time ? `⏱ ${lv.time} seconds` : `${lv.moves} moves`;
+    const goals = lv.goals.map((g) => `<li>${esc(goalText(g))}</li>`).join('');
+    const target = challenge ? Hub.targetHtml(challenge) : '';
+    const el = showOverlay(`<div class="solo-res">
+      <div class="solo-res-title">Level ${n}</div>
+      ${target}
+      <ul class="tt-goals-check">${goals}</ul>
+      <div class="solo-res-line">${esc(limit)} · 3★ at ${fmt(lv.stars[2])}</div>
+      ${best ? `<div class="solo-res-line">Your best: ${'★'.repeat(stars)} ${fmt(best)}</div>` : ''}
+      <div class="solo-actions"><button type="button" class="solo-btn solo-btn--primary" data-go="play">Play</button></div>
+      <div class="solo-actions solo-actions--quiet"><button type="button" class="solo-link" data-go="board">Friends’ scores</button><button type="button" class="solo-link" data-go="back">Back</button></div></div>`);
+    el.querySelector('[data-go="play"]').addEventListener('click', () => {
+      hideOverlay();
+      startRun('level', { n, challenge });
+    });
+    el.querySelector('[data-go="board"]').addEventListener('click', () => Hub.openBoard(GAME, Core.boardId(GAME, 'level', n), { title: 'Level ' + n }));
+    el.querySelector('[data-go="back"]').addEventListener('click', () => {
+      hideOverlay();
+      if (!run || run.over) showHub();
+    });
+  }
+
+  function openDailyFlow() {
+    Hub.openDaily(GAME, {
+      title: 'Tip Tap Daily',
+      detail: '20 moves · highest score wins',
+      onPlay: async (fresh) => {
+        if (!fresh) return startRun('daily', { practice: true });
+        const r = await Hub.startDaily(GAME);
+        if (!alive()) return;
+        if (!r.scored) toast('You’ve already played today’s Daily on another device — this one is practice');
+        startRun('daily', { practice: !r.scored });
+      },
+    });
+  }
+
+  function startRun(kind, o) {
+    const opts = o || {};
+    let level;
+    let boardId;
+    let day = null;
+    if (kind === 'level') {
+      level = LV.get(opts.n);
+      boardId = Core.boardId(GAME, 'level', opts.n);
+    } else {
+      day = Hub.today();
+      level = TT.dailyLevel(day);
+      boardId = Core.boardId(GAME, 'daily', day);
+    }
+    const s = TT.createGame(level, level.seed);
+    s.snap = true;
+    run = { kind, n: opts.n || 0, level, s, log: [], activeMs: 0, tickFrom: 0, over: false, boardId, practice: !!opts.practice, day, challenge: opts.challenge || null };
+    view = viewOf(s);
+    shownScore = 0;
+    selected = -1;
+    animating = false;
+    clearHint();
+    hideOverlay();
+    screen('ttPlay');
+    setSub(kind === 'daily' ? (run.practice ? 'Daily · practice' : 'Daily Challenge') : 'Level ' + opts.n + (level.time ? ' · timed' : ''));
+    const tg = $('ttTarget');
+    if (tg) tg.innerHTML = run.challenge ? Hub.targetHtml(run.challenge) : '';
+    render({ enter: true });
+    clockStart();
+    armIdleHint();
+  }
+
+  async function finish() {
+    if (!run || run.over) return;
+    run.over = true;
+    clockStop();
+    clearHint();
+    const s = run.s;
+    const ms = Math.round(elapsed());
+    const payload = { moves: run.log, score: s.score, ms };
+    if (typeof setGamePB === 'function') setGamePB('tiptap', s.score);
+    if (run.kind === 'daily') return finishDaily(payload);
+    const n = run.n;
+    const won = s.status === 'won';
+    const stars = TT.starsFor(s);
+    const before = Hub.load(GAME);
+    const prevBest = before.bests[n] || 0;
+    if (won) {
+      const p = Hub.update(GAME, (x) => {
+        if (n <= x.level) {
+          x.level = Math.max(x.level, Math.min(N_LEVELS, n + 1));
+          x.best = Math.max(x.best, n);
+        }
+        x.stars[n] = Math.max(x.stars[n] || 0, stars);
+        x.bests[n] = Math.max(x.bests[n] || 0, s.score);
+        x.pb.tiptap = Math.max(x.pb.tiptap || 0, s.score);
+        return x;
+      });
+      try {
+        localStorage.setItem('tiptap_level', String(p.level));
+        localStorage.setItem('tiptap_best_level', String(p.best));
+      } catch (e) {}
+    }
+    try {
+      if (typeof recordGameResult === 'function') recordGameResult('tiptap', won, false, { score: s.score, level: n, scoreOnly: true });
+    } catch (e) {}
+    Hub.feedback(GAME, won ? 'win' : 'lose');
+    if (won && typeof launchConfetti === 'function' && !Hub.reducedMotion(GAME) && stars === 3) launchConfetti();
+    const beat = run.challenge && Number.isFinite(run.challenge.beatScore) ? (s.score > run.challenge.beatScore ? 'You beat the challenge! 🎯' : 'Challenge not beaten this time') : '';
+    const status = won ? [beat, s.score > prevBest && prevBest ? 'New best for this level' : ''].filter(Boolean).join(' · ') : '';
+    const goalsList = TT.goalStatus(s)
+      .map((g) => `<li class="${g.done ? 'is-done' : 'is-miss'}">${g.done ? '✓' : '✗'} ${esc(goalText(Object.assign({ n: g.need }, g)))}</li>`)
+      .join('');
+    const html = Hub.resultHtml({
+      title: won ? `Level ${n} cleared` : run.level.time ? 'Time’s up' : 'Out of moves',
+      stars: won ? stars : null,
+      lines: [`<b>${fmt(s.score)}</b> points`, won ? '' : `<ul class="tt-goals-check">${goalsList}</ul>`],
+      status,
+      primary: won ? (n < N_LEVELS ? 'Next level' : 'Replay') : 'Try again',
+      secondary: won ? 'Replay' : 'Levels',
+      share: won,
+      board: true,
+    });
+    const el = showOverlay(html + '<p class="solo-note" data-note></p>');
+    Hub.wireResult(el, {
+      primary: () => (won && n < N_LEVELS ? showIntro(n + 1) : startRun('level', { n, challenge: run.challenge })),
+      secondary: () => (won ? startRun('level', { n, challenge: run.challenge }) : openPicker()),
+      share: () => Hub.share(GAME, { title: 'Level ' + n, line: `${'★'.repeat(stars)} ${fmt(s.score)} pts`, score: s.score, params: { lv: n } }),
+      board: () => Hub.openBoard(GAME, run.boardId, { title: 'Level ' + n }),
+      close: () => showHub(),
+    });
+    if (won && s.score > prevBest) {
+      const note = el.querySelector('[data-note]');
+      if (Hub.signedIn() && note) note.textContent = 'Checking your score…';
+      const res = Hub.signedIn() ? await Hub.submit(GAME, run.boardId, payload) : null;
+      if (note && note.isConnected) note.textContent = Hub.submitNote(res);
+    }
+  }
+
+  async function finishDaily(payload) {
+    const s = run.s;
+    Hub.feedback(GAME, 'complete');
+    const el = showOverlay(
+      Hub.resultHtml({
+        title: run.practice ? 'Daily · practice' : 'Daily Challenge',
+        lines: [`<b>${fmt(s.score)}</b> points`, `🔥 ${Hub.streak(GAME)} day streak`],
+        primary: 'Practice again',
+        share: true,
+        board: true,
+      }) + '<p class="solo-note" data-note></p>'
+    );
+    const dayNo = run.day;
+    const shareInfo = { title: 'Daily ' + Core.dayKeyOf(dayNo), line: fmt(s.score) + ' pts', score: s.score, params: { mode: 'daily' } };
+    Hub.wireResult(el, {
+      primary: () => startRun('daily', { practice: true }),
+      share: () => Hub.share(GAME, shareInfo),
+      board: () => Hub.openBoard(GAME, run.boardId, { title: 'Tip Tap Daily' }),
+      close: () => showHub(),
+    });
+    const note = el.querySelector('[data-note]');
+    if (run.practice) {
+      if (note) note.textContent = 'Practice run — only your first try today counts.';
+      return;
+    }
+    if (note && Hub.signedIn()) note.textContent = 'Checking your score…';
+    const res = await Hub.finishDaily(GAME, payload, { score: s.score, line: fmt(s.score) + ' pts' });
+    if (note && note.isConnected) note.textContent = Hub.submitNote(res.scored ? res : { ranked: false, reason: 'practice' }) || '';
+    const streakLine = el.querySelectorAll('.solo-res-line')[1];
+    if (streakLine) streakLine.textContent = `🔥 ${Hub.streak(GAME)} day streak`;
+  }
+
+  // ---------------- chrome ----------------
 
   overlay.innerHTML = `
     ${gameChromeHtml({
       title: 'Tip Tap',
-      subtitle: 'Practice · Solo · Campaign · 100 levels',
+      subtitle: 'Solo · Match-3',
       backId: 'cbBack',
       pauseId: 'cbPause',
       rightHtml:
-        '<button type="button" id="cbLevels" class="game-chrome-action game-tap-target" aria-label="Levels">Levels</button>' +
-        '<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="Hint" style="visibility:hidden">Hint</button>' +
-        '<span class="game-chrome-metric" id="cbScore">0</span>',
+        '<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="Show a hint" style="visibility:hidden">Hint</button>' +
+        '<span class="game-chrome-metric" id="cbScore" style="visibility:hidden">0</span>',
     })}
     <div id="ttHub" class="tt-hub">
       <div class="tt-hub-title">Tip Tap</div>
-      <div class="tt-hub-sub">Solo match-3 · 100 levels · no Live</div>
+      <div class="tt-hub-sub">Match 3 or more · clear the goals</div>
       <div id="ttHubMeta" class="tt-hub-meta"></div>
-      <button type="button" id="ttContinue" class="tt-hub-cta game-tap-target">Continue</button>
-      <button type="button" id="ttOpenLevels" class="tt-hub-secondary game-tap-target">Level select</button>
+      <button type="button" id="ttContinue" class="tt-hub-cta game-tap-target">Play</button>
+      <button type="button" id="ttDaily" class="tt-hub-secondary game-tap-target">Daily Challenge</button>
+      <button type="button" id="ttOpenLevels" class="tt-hub-secondary game-tap-target">All levels</button>
+      <div class="solo-hub-row"><button type="button" class="solo-link" id="ttRules">How to play</button><button type="button" class="solo-link" id="ttSettings">Settings</button></div>
     </div>
     <div id="ttPicker" class="tt-picker" hidden>
       <div class="tt-picker-head">Levels</div>
@@ -1178,151 +713,157 @@ function openTipTap(){
     </div>
     <div id="ttPlay" class="tt-play" hidden>
       <div class="tt-meter">
-        <div class="tt-meter-row">
-          <span>Moves: <strong id="cbMoves">0</strong></span>
-          <span id="cbCombo" class="tt-combo" hidden></span>
-        </div>
+        <div id="ttTarget"></div>
+        <div class="tt-meter-row"><span id="cbMoves"></span></div>
         <div id="cbGoals" class="tt-goals" aria-live="polite"></div>
-        <div id="cbProgressTrack" class="tt-meter-track"><div id="cbProgress" class="tt-meter-fill"></div></div>
+        <div class="tt-meter-track tt-meter-track--stars"><div id="cbProgress" class="tt-meter-fill"></div><div id="cbStarMarks" class="tt-star-marks"></div></div>
       </div>
       <div class="tt-board-wrap">
-        <div id="cbGrid" class="tt-grid" style="grid-template-columns:repeat(${COLS},1fr)"></div>
+        <div id="cbGrid" class="tt-grid"></div>
         <div id="cbFx" class="tt-fx-layer" aria-hidden="true"></div>
+        <div id="ttNotice" class="tt-notice" aria-live="polite"></div>
       </div>
     </div>
     <div id="cbOverlay" class="tt-result-overlay"></div>
   `;
-  const subEl = overlay.querySelector('.game-chrome-subtitle');
-  if (subEl) subEl.id = 'cbSub';
 
-  fxLayer = document.getElementById('cbFx');
-  document.getElementById('cbBack').addEventListener('click', () => {
-    const hub = document.getElementById('ttHub');
-    const pick = document.getElementById('ttPicker');
-    const play = document.getElementById('ttPlay');
-    if (pick && !pick.hidden) {
-      showHub();
-      return;
-    }
-    if (hub && !hub.hidden) {
-      close();
-      return;
-    }
-    if (gameOver) {
-      showHub();
-      return;
-    }
+  $('cbBack').addEventListener('click', () => {
+    if (overlayOpen() && !run) return hideOverlay();
+    if (!$('ttPicker').hidden) return showHub();
+    if (!$('ttHub').hidden) return close();
+    if (!run || run.over) return showHub();
+    clockStop();
     const ask =
       typeof confirmLeaveGame === 'function'
-        ? confirmLeaveGame({ title: 'Leave Tip Tap?', body: 'Level progress for this run will be lost.' })
-        : Promise.resolve(window.confirm('Leave Tip Tap?'));
+        ? confirmLeaveGame({ title: 'Leave this level?', body: run.kind === 'daily' && !run.practice ? 'Your Daily try ends here and won’t count.' : 'This run won’t be saved.' })
+        : Promise.resolve(window.confirm('Leave this level?'));
     Promise.resolve(ask).then((ok) => {
       if (ok) showHub();
+      else clockStart();
     });
   });
-  document.getElementById('cbHint')?.addEventListener('click', (e) => {
+  $('cbHint').addEventListener('click', (e) => {
     e.stopPropagation();
-    applyHint();
+    if (!clearHint()) showHint();
+    else render();
   });
-  document.getElementById('cbLevels')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const hubEl = document.getElementById('ttHub');
-    const playEl = document.getElementById('ttPlay');
-    if (hubEl && !hubEl.hidden) {
-      openLevelPicker();
-      return;
-    }
-    if (playEl && !playEl.hidden && !gameOver) {
-      const ask =
-        typeof confirmLeaveGame === 'function'
-          ? confirmLeaveGame({ title: 'Leave this level?', body: 'Open level select — this run will be lost.' })
-          : Promise.resolve(window.confirm('Leave this level for level select?'));
-      Promise.resolve(ask).then((ok) => {
-        if (!ok) return;
-        clearCascadeTimers();
-        animating = false;
-        openLevelPicker();
-      });
-      return;
-    }
-    openLevelPicker();
+  $('ttContinue').addEventListener('click', () => showIntro(Math.min(N_LEVELS, Hub.load(GAME).level)));
+  $('ttDaily').addEventListener('click', openDailyFlow);
+  $('ttOpenLevels').addEventListener('click', openPicker);
+  $('ttPickerBack').addEventListener('click', showHub);
+  $('ttPickerGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-n]');
+    if (b && !b.disabled) showIntro(Number(b.dataset.n));
   });
-  document.getElementById('ttContinue')?.addEventListener('click', () => startLevel(readNextLevel()));
-  document.getElementById('ttOpenLevels')?.addEventListener('click', () => openLevelPicker());
-  document.getElementById('ttPickerBack')?.addEventListener('click', () => showHub());
+  $('ttRules').addEventListener('click', () => {
+    if (window.DangalRules && DangalRules.openSheet) DangalRules.openSheet(GAME, { variants: { mode: 'campaign' } });
+  });
+  $('ttSettings').addEventListener('click', () =>
+    Hub.openSettings(GAME, ['sound', 'haptics', 'reducedMotion', 'hints', 'colorblind'], (ns) => {
+      settings = ns;
+      T = timings();
+    })
+  );
 
   if (typeof createGamePauseController === 'function') {
     pauseCtrl = createGamePauseController({
       host: overlay,
       pauseBtnId: 'cbPause',
       onPause() {
-        clearCascadeTimers();
+        clockStop();
       },
       onResume() {
-        if (cascadeResume) {
-          const fn = cascadeResume;
-          cascadeResume = null;
-          scheduleCascade(fn, 40);
-        }
+        clockStart();
       },
       onQuit: close,
     });
   }
 
-  const gridEl = document.getElementById('cbGrid');
-  let sx = 0,
-    sy = 0,
-    sCell = null,
-    pointerSwiping = false;
-  function beginSwipe(clientX, clientY, el) {
-    if (!el || animating || gameOver || isPaused()) return;
-    sx = clientX;
-    sy = clientY;
-    sCell = el;
-    pointerSwiping = true;
-  }
-  function endSwipe(clientX, clientY) {
-    if (!sCell || !pointerSwiping) {
-      sCell = null;
-      pointerSwiping = false;
-      return;
+  // ---------------- input: tap-select or swipe ----------------
+
+  const gridEl = $('cbGrid');
+  gridEl.addEventListener('click', (ev) => {
+    const cell = ev.target.closest('.tt-cell');
+    if (!cell || !run || run.over || animating || isPaused() || Date.now() < suppressClickUntil) return;
+    const i = Number(cell.dataset.i);
+    clearHint();
+    if (selected < 0) {
+      selected = i;
+      Hub.feedback(GAME, 'select');
+      render();
+    } else if (selected === i) {
+      selected = -1;
+      render();
+    } else if (neighbours(selected).indexOf(i) !== -1) {
+      doSwap(selected, i);
+    } else {
+      selected = i;
+      Hub.feedback(GAME, 'select');
+      render();
     }
-    const dx = clientX - sx,
-      dy = clientY - sy;
-    const r = +sCell.dataset.r,
-      c = +sCell.dataset.c;
-    sCell = null;
-    pointerSwiping = false;
-    if (animating || gameOver || isPaused()) return;
-    if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
-    let nr = r,
-      nc = c;
-    if (Math.abs(dx) > Math.abs(dy)) nc += dx > 0 ? 1 : -1;
-    else nr += dy > 0 ? 1 : -1;
-    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return;
-    suppressClickUntil = Date.now() + 350;
-    selected = null;
-    hintPair = null;
-    trySwap(r, c, nr, nc);
-  }
+    armIdleHint();
+  });
+  let sx = 0;
+  let sy = 0;
+  let sCell = -1;
   gridEl.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    const el = e.target.closest?.('.tt-cell');
-    if (!el) return;
-    beginSwipe(e.clientX, e.clientY, el);
+    const el = e.target.closest && e.target.closest('.tt-cell');
+    if (!el || animating || !run || run.over || isPaused()) return;
+    sx = e.clientX;
+    sy = e.clientY;
+    sCell = Number(el.dataset.i);
     try {
       gridEl.setPointerCapture(e.pointerId);
     } catch (err) {}
   });
   gridEl.addEventListener('pointerup', (e) => {
-    endSwipe(e.clientX, e.clientY);
+    if (sCell < 0 || !run) return;
+    const a = sCell;
+    sCell = -1;
+    const dx = e.clientX - sx;
+    const dy = e.clientY - sy;
+    if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+    const C = run.s.cols;
+    let b = a;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0 && a % C < C - 1) b = a + 1;
+      else if (dx < 0 && a % C > 0) b = a - 1;
+    } else if (dy > 0 && a + C < run.s.col.length) b = a + C;
+    else if (dy < 0 && a - C >= 0) b = a - C;
+    if (b === a) return;
+    suppressClickUntil = Date.now() + 350;
+    doSwap(a, b);
   });
-  gridEl.addEventListener('pointercancel', () => {
-    sCell = null;
-    pointerSwiping = false;
+  gridEl.addEventListener('pointercancel', () => (sCell = -1));
+  overlay.addEventListener('keydown', (e) => {
+    if (!run || run.over || animating || $('ttPlay').hidden) return;
+    const C = run.s.cols;
+    const N = run.s.col.length;
+    const cur = selected >= 0 ? selected : 0;
+    const dirs = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -C, ArrowDown: C };
+    if (dirs[e.key] == null) return;
+    e.preventDefault();
+    const b = cur + dirs[e.key];
+    if (b < 0 || b >= N || (Math.abs(dirs[e.key]) === 1 && Math.floor(b / C) !== Math.floor(cur / C))) return;
+    if (e.shiftKey && selected >= 0) return doSwap(cur, b);
+    selected = b;
+    render();
+    const el = gridEl.querySelector(`[data-i="${b}"]`);
+    if (el) el.focus();
   });
 
   showHub();
+  Hub.sync(GAME).then(() => {
+    if (alive() && !$('ttHub').hidden) showHub();
+  });
+
+  const p = ctx && ctx.params ? ctx.params : null;
+  if (p && p.mode === 'daily') openDailyFlow();
+  else if (p && p.lv) {
+    const n = Math.max(1, Math.min(N_LEVELS, parseInt(p.lv, 10) || 1));
+    showIntro(n, ctx.source === 'challenge' ? ctx : null);
+  }
 }
 
 // --- Game registry self-registration (arcade.js) ---
@@ -1330,7 +871,7 @@ if (typeof registerGame === 'function') {
   registerGame({
     id: 'tiptap',
     name: 'Tip Tap',
-    desc: 'Match-3 campaign · 100 levels · Solo',
+    desc: 'Match-3 · 150 levels + a Daily · Solo',
     icon: '✨',
     ratingKey: 'tiptap',
     gameType: 'solo',
@@ -1339,7 +880,8 @@ if (typeof registerGame === 'function') {
     selfChat: true,
     order: 110,
     meta: { graduated: true, phase: 1 },
-    launch() { openTipTap(); },
+    launch(ctx) {
+      openTipTap(ctx);
+    },
   });
 }
-

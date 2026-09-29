@@ -1,17 +1,33 @@
 /**
- * Kakuro — solo cross-sum puzzle (Phase 2B). Internal id stays `ankjod` (saves, PBs, leaderboards);
+ * Kakuro — solo cross-sum puzzle. Internal id stays `ankjod` (saves, PBs, leaderboards);
  * `kakuro` is a permanent alias. Digits 1–9, no repeats in a run; each clue is the sum of its run.
- * Ships verified puzzle banks + light unique-solution generator.
+ * Puzzles (Dangal P14): the verified bank in data/kakuro-bank.js — every puzzle has exactly one
+ * solution and is graded by the techniques it needs (kakuro-core.js), numbered per difficulty,
+ * plus one Daily per day (same for everyone) with an archive. The older built-in bank + generator
+ * below stay as an offline fallback. Progress, Daily, leaderboards and share: solo-hub.js.
  */
 (function () {
   'use strict';
 
   const DIFFS = [
-    { id: 'easy', label: 'Easy', desc: 'Short runs · small connected grid', emoji: '🌱' },
-    { id: 'medium', label: 'Medium', desc: 'Mid grid · connected runs', emoji: '🔥' },
-    { id: 'hard', label: 'Hard', desc: 'Denser whites · longer runs', emoji: '💀' },
-    { id: 'daily', label: 'Daily', desc: 'One seeded puzzle for today', emoji: '📅' },
+    { id: 'easy', label: 'Easy', desc: 'Small grids · unique sums', emoji: '🌱' },
+    { id: 'medium', label: 'Medium', desc: 'Crossing runs narrow it down', emoji: '🔥' },
+    { id: 'hard', label: 'Hard', desc: 'Where can each digit go?', emoji: '💀' },
+    { id: 'expert', label: 'Expert', desc: 'Big grids · “what if” eliminations', emoji: '🧠' },
+    { id: 'daily', label: 'Daily', desc: 'One puzzle for everyone today', emoji: '📅' },
   ];
+  const NUMBERED = ['easy', 'medium', 'hard', 'expert'];
+  const GAME = 'ankjod';
+  const Hub = () => window.SoloHub;
+  const SC = () => window.SoloCore;
+  const KB = () => window.KakuroBank;
+  const KC = () => window.KakuroCore;
+  const FB_KIND = { place: 'valid', win: 'win', invalid: 'invalid', valid: 'valid', select: 'select' };
+  /** Sound / haptics through the solo settings toggles. */
+  function fb(kind) {
+    if (Hub()) Hub().feedback(GAME, FB_KIND[kind] || 'select');
+    else if (typeof gameFeedback === 'function') gameFeedback(kind);
+  }
 
   /** @type {Map<string, number[][]>} sum|len → combinations (sorted ascending) */
   const COMBO_CACHE = new Map();
@@ -1124,7 +1140,66 @@
     return h >>> 0;
   }
 
-  function pickDailyPuzzle() {
+  // ─── Verified bank (data/kakuro-bank.js) ───────────────────────────────────
+
+  function bankList(diff) {
+    const b = KB();
+    return b && Array.isArray(b[diff]) ? b[diff] : [];
+  }
+  function puzzleKey(diff, n) {
+    return diff + '-' + n;
+  }
+  function loadProgress() {
+    return Hub() ? Hub().load(GAME) : { stars: {}, bests: {}, stats: {}, pb: {} };
+  }
+  function solvedCount(p, diff) {
+    const L = bankList(diff).length;
+    let k = 0;
+    for (let i = 1; i <= L; i++) if (p.stars[puzzleKey(diff, i)]) k++;
+    return k;
+  }
+  /** First unsolved puzzle number for a difficulty (1-based); wraps to 1 once all are solved. */
+  function nextNumber(diff, p) {
+    const prog = p || loadProgress();
+    const L = bankList(diff).length;
+    for (let i = 1; i <= L; i++) if (!prog.stars[puzzleKey(diff, i)]) return i;
+    return 1;
+  }
+  function bankPuzzle(diff, n) {
+    const list = bankList(diff);
+    if (!list.length) return null;
+    const num = Math.max(1, Math.min(list.length, Math.floor(Number(n) || 1)));
+    const parsed = parseBankString(String(list[num - 1]).split('/'));
+    return { board: parsed.board, solution: parsed.solution, source: 'bank', difficulty: diff, id: 'kk_' + puzzleKey(diff, num), n: num };
+  }
+  function todayNo() {
+    return SC() ? SC().dayNumber(new Date()) : 0;
+  }
+  /** Same indexing as server-lib/solo-scores.js kakuroRows('daily', day). */
+  function dailyEntry(dayNo) {
+    const b = KB();
+    if (!b || !Array.isArray(b.daily) || !b.daily.length) return null;
+    const len = b.daily.length;
+    const i = (((dayNo - (b.dailyStart || 0)) % len) + len) % len;
+    const raw = String(b.daily[i]);
+    const at = raw.indexOf(':');
+    return { grade: raw.slice(0, at), rows: raw.slice(at + 1).split('/') };
+  }
+  function dailyBankPuzzle(dayNo) {
+    const e = dailyEntry(dayNo);
+    if (!e) return null;
+    const parsed = parseBankString(e.rows);
+    const key = SC() ? SC().dayKeyOf(dayNo) : dateSeedKey();
+    return { board: parsed.board, solution: parsed.solution, source: 'daily', difficulty: 'daily', grade: e.grade, id: 'daily_' + key, dailyKey: key, dayNo };
+  }
+  function firstDay() {
+    const b = KB();
+    return b ? Math.max(0, b.dailyStart || 0) : 0;
+  }
+
+  function pickDailyPuzzle(dayNo) {
+    const fromBank = dailyBankPuzzle(dayNo == null ? todayNo() : dayNo);
+    if (fromBank) return fromBank;
     const key = dateSeedKey();
     const seed = hashSeed('ankjod-daily-' + key);
     const pool = [...(BANK.medium || []), ...(BANK.easy || []), ...(BANK.hard || [])];
@@ -1173,9 +1248,11 @@
     };
   }
 
-  function pickPuzzle(difficulty) {
+  function pickPuzzle(difficulty, n) {
     if (difficulty === 'daily') return pickDailyPuzzle();
-    const diff = DIFFS.some((d) => d.id === difficulty) ? difficulty : 'easy';
+    let diff = DIFFS.some((d) => d.id === difficulty) ? difficulty : 'easy';
+    if (bankList(diff).length) return bankPuzzle(diff, n || nextNumber(diff));
+    if (diff === 'expert') diff = 'hard';
     // Prefer unused bank for variety, then fresh generation, then any bank
     const fromBank = pickFromBank(diff);
     const preferGen = Math.random() < 0.35;
@@ -1369,8 +1446,12 @@
         clearAnkSave(diff);
         return null;
       }
-      const qualityDiff = data.difficulty === 'daily' ? 'medium' : data.difficulty || diff;
-      if (!whitesConnected(parsed.board) || !structuralOk(parsed.board, (QUALITY[qualityDiff] || QUALITY.easy).minWhites)) {
+      if (!whitesConnected(parsed.board) || !extractRuns(parsed.board).length) {
+        clearAnkSave(diff);
+        return null;
+      }
+      // Yesterday's Daily is gone at local midnight — a new board replaces it.
+      if (diff === 'daily' && SC() && data.dailyKey !== SC().dayKeyOf(todayNo())) {
         clearAnkSave(diff);
         return null;
       }
@@ -1397,7 +1478,15 @@
       difficulty: data.difficulty || 'easy',
       id: data.id || 'resume',
       dailyKey: data.dailyKey,
+      n: data.n || null,
+      grade: data.grade || null,
+      dayNo: data.dayNo == null ? null : data.dayNo,
+      archive: !!data.archive,
     };
+  }
+
+  function diffLabel(id) {
+    return (DIFFS.find((d) => d.id === id) || {}).label || (id === 'archive' ? 'Archive' : id);
   }
 
   function formatPbBestLine(diff) {
@@ -1408,17 +1497,23 @@
     return 'Best ' + formatTime(pb * 1000);
   }
 
-  function offerContinueOrNew(ctx, diff, save, onDone) {
+  function savedTitle(save, diff) {
+    if (diff === 'daily') return 'Today’s Daily';
+    if (diff === 'archive') return 'Daily ' + (save.dailyKey || '');
+    return diffLabel(diff) + (save.n ? ' #' + save.n : '');
+  }
+
+  /** onNew(): start the same slot over (defaults to a fresh board for that difficulty). */
+  function offerContinueOrNew(ctx, diff, save, onDone, onNew) {
     const sheet = document.createElement('div');
     sheet.className = 'game-pause-scrim';
     sheet.style.zIndex = '90';
-    const label = (DIFFS.find((d) => d.id === diff) || {}).label || diff;
     const elapsed = formatTime(Math.max(0, Number(save.elapsedMs) || 0));
     sheet.innerHTML = `<div class="game-pause-card" role="dialog" aria-label="Continue puzzle">
-      <h3 class="game-pause-title">${label} in progress</h3>
-      <p style="font-size:13px;color:var(--muted,#8A7F72);margin:0 0 16px;line-height:1.4;">Saved at ${elapsed}. Continue where you left off, or start a new board.</p>
+      <h3 class="game-pause-title">${savedTitle(save, diff)} in progress</h3>
+      <p style="font-size:13px;color:var(--muted,#8A7F72);margin:0 0 16px;line-height:1.4;">Saved at ${elapsed}. Continue where you left off, or start this board again.</p>
       <button type="button" class="game-result-btn game-result-btn--primary" data-aj-cont>Continue</button>
-      <button type="button" class="game-result-btn" data-aj-new style="margin-top:8px;">New puzzle</button>
+      <button type="button" class="game-result-btn" data-aj-new style="margin-top:8px;">Start over</button>
       <button type="button" class="game-result-btn" data-aj-cancel style="margin-top:8px;">Cancel</button>
     </div>`;
     const device = document.querySelector('.device') || document.body;
@@ -1433,7 +1528,14 @@
       clearAnkSave(diff);
       close();
       if (onDone) onDone();
-      startAnkJodGame(ctx, diff);
+      if (onNew) onNew();
+      else if (diff === 'daily' && save.scored) {
+        // The scored Daily keeps its clock and hint count — only the digits are wiped.
+        const blank = Object.assign({}, save, { values: save.values.map((row) => row.map(() => 0)), pencil: [], selected: null });
+        startAnkJodGame(ctx, 'daily', { resume: blank });
+      } else if (diff === 'daily') startAnkJodGame(ctx, 'daily', { scored: false });
+      else if (diff === 'archive') startAnkJodGame(ctx, 'daily', { dayNo: save.dayNo, archive: true });
+      else startAnkJodGame(ctx, diff, { n: save.n || undefined });
     });
     sheet.querySelector('[data-aj-cancel]')?.addEventListener('click', close);
     sheet.addEventListener('click', (e) => {
@@ -1452,32 +1554,54 @@
       lastDiff = localStorage.getItem(SAVE_LAST_KEY);
     } catch (e) {}
     const lastSave = lastDiff ? readAnkSave(lastDiff) : null;
+    const prog = loadProgress();
     const continueBanner = lastSave
-      ? `<button type="button" id="kkContinueLast" class="kk-diff-btn" style="width:100%;padding:14px 16px;background:var(--white,#fff);border:2px solid var(--line,#E8E0D4);border-radius:16px;margin-bottom:14px;text-align:left;cursor:pointer;">
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;">Continue last puzzle</div>
-          <div style="font-size:12px;color:var(--muted,#8A7F72);margin-top:2px;">${(DIFFS.find((d) => d.id === lastDiff) || {}).label || lastDiff} · ${formatTime(Math.max(0, Number(lastSave.elapsedMs) || 0))}</div>
+      ? `<button type="button" id="kkContinueLast" class="kk-diff-btn kk-diff-btn--continue">
+          <span class="kk-diff-ico">▶</span>
+          <span class="kk-diff-txt"><b>Continue</b><small>${savedTitle(lastSave, lastDiff)} · ${formatTime(Math.max(0, Number(lastSave.elapsedMs) || 0))}</small></span>
         </button>`
       : '';
+    const day = todayNo();
+    const dEntry = dailyEntry(day);
+    const ds = Hub() ? Hub().dailyState(GAME) : null;
+    const streak = Hub() ? Hub().streak(GAME) : 0;
+    const dailyMeta = [
+      dEntry ? diffLabel(dEntry.grade) : 'One puzzle for everyone',
+      ds && ds.done && ds.result ? 'Done · ' + ds.result.line : ds && ds.started ? 'Scored try used' : 'Your first try counts',
+      streak ? '🔥 ' + streak : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const diffRow = (d) => {
+      const L = bankList(d.id).length;
+      const st = prog.stats[d.id];
+      const bits = L
+        ? ['#' + nextNumber(d.id, prog), solvedCount(prog, d.id) + '/' + L + ' solved', st && st.bestMs ? 'Best ' + formatTime(st.bestMs) : '']
+        : [d.desc, formatPbBestLine(d.id)];
+      if (readAnkSave(d.id)) bits.push('In progress');
+      return `<button type="button" data-diff="${d.id}" class="kk-diff-btn">
+          <span class="kk-diff-ico">${d.emoji}</span>
+          <span class="kk-diff-txt"><b>${d.label}</b><small>${bits.filter(Boolean).join(' · ')}</small></span>
+          <span class="kk-diff-go">›</span>
+        </button>`;
+    };
     overlay.innerHTML = `
-      ${gameChromeHtml({ title: 'Kakuro', subtitle: 'Choose difficulty', backId: 'kkDiffBack' })}
-      <div style="flex:1;overflow-y:auto;padding:20px 16px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;margin-bottom:6px;">Pick a challenge</div>
-        <div style="font-size:13px;color:var(--muted,#8A7F72);margin-bottom:18px;line-height:1.4;">Fill white cells with 1–9. No repeats in a run — each clue is that run’s sum. Progress saves per difficulty.</div>
+      ${gameChromeHtml({ title: 'Kakuro', subtitle: 'Solo', backId: 'kkDiffBack' })}
+      <div class="kk-hub">
+        <p class="kk-hub-lead">Fill the white cells with 1–9. Each clue is the sum of its run, with no digit repeated in a run.</p>
         ${continueBanner}
-        ${DIFFS.map((d) => {
-          const save = readAnkSave(d.id);
-          const best = formatPbBestLine(d.id);
-          const metaBits = [d.desc, best, save ? 'In progress' : ''].filter(Boolean).join(' · ');
-          return `
-          <button data-diff="${d.id}" class="kk-diff-btn" style="width:100%;padding:16px;background:var(--white,#fff);border:2px solid var(--line,#E8E0D4);border-radius:16px;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:14px;cursor:pointer;">
-            <span style="font-size:28px;flex-shrink:0;">${d.emoji}</span>
-            <span style="flex:1;">
-              <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;">${d.label}</div>
-              <div style="font-size:12px;color:var(--muted,#8A7F72);margin-top:2px;">${metaBits}</div>
-            </span>
-            <span style="font-size:18px;color:var(--muted,#8A7F72);">›</span>
-          </button>`;
-        }).join('')}
+        <button type="button" data-diff="daily" class="kk-diff-btn kk-diff-btn--daily">
+          <span class="kk-diff-ico">📅</span>
+          <span class="kk-diff-txt"><b>Daily Kakuro</b><small>${dailyMeta}</small></span>
+          <span class="kk-diff-go">›</span>
+        </button>
+        ${DIFFS.filter((d) => d.id !== 'daily').map(diffRow).join('')}
+        <div class="solo-hub-row">
+          ${KB() ? '<button type="button" class="solo-link" id="kkArchive">Archive</button>' : ''}
+          <button type="button" class="solo-link" id="kkStats">Stats</button>
+          <button type="button" class="solo-link" id="kkRules">How to play</button>
+          <button type="button" class="solo-link" id="kkSettings">Settings</button>
+        </div>
       </div>`;
 
     const device = document.querySelector('.device');
@@ -1520,9 +1644,113 @@
           offerContinueOrNew(ctx, diff, save, close);
           return;
         }
+        if (diff === 'daily') {
+          openDailyFlow(ctx, close);
+          return;
+        }
         close();
         startAnkJodGame(ctx, diff);
       });
+    });
+    overlay.querySelector('#kkArchive')?.addEventListener('click', () => openArchive(ctx, close));
+    overlay.querySelector('#kkStats')?.addEventListener('click', openStats);
+    overlay.querySelector('#kkRules')?.addEventListener('click', () => openRules('easy'));
+    overlay.querySelector('#kkSettings')?.addEventListener('click', () => openKakuroSettings());
+  }
+
+  function openRules(diff) {
+    if (window.DangalRules && DangalRules.openSheet) DangalRules.openSheet(GAME, { variants: { difficulty: diff === 'daily' || diff === 'archive' ? 'medium' : diff || 'easy' } });
+  }
+
+  function openKakuroSettings(onChange) {
+    if (Hub()) Hub().openSettings(GAME, ['sound', 'haptics', 'timer', 'errors'], onChange);
+  }
+
+  /** Daily entry: first start of the day is the scored try (server token); later plays are practice. */
+  function openDailyFlow(ctx, closeHub) {
+    const H = Hub();
+    const e = dailyEntry(todayNo());
+    if (!H) {
+      if (closeHub) closeHub();
+      return startAnkJodGame(ctx, 'daily', { scored: false });
+    }
+    H.openDaily(GAME, {
+      title: 'Daily Kakuro',
+      detail: (e ? diffLabel(e.grade) + ' · ' : '') + 'fastest time wins · +30 s per hint',
+      boardTitle: 'Daily Kakuro',
+      onPlay: async (fresh) => {
+        if (closeHub) closeHub();
+        if (!fresh) return startAnkJodGame(ctx, 'daily', { scored: false, challenge: ctx && ctx.source === 'challenge' ? ctx : null });
+        const r = await H.startDaily(GAME);
+        if (!r.scored && typeof showToast === 'function') showToast('You’ve already played today’s Daily on another device — this one is practice');
+        startAnkJodGame(ctx, 'daily', { scored: !!r.scored, challenge: ctx && ctx.source === 'challenge' ? ctx : null });
+      },
+    });
+  }
+
+  function shortDate(dayNo) {
+    const key = SC() ? SC().dayKeyOf(dayNo) : '';
+    const parts = key.split('-').map(Number);
+    if (parts.length !== 3) return key;
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    try {
+      return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+    } catch (err) {
+      return key;
+    }
+  }
+
+  /** Past Dailies (practice — they're no longer ranked). Last 60 days, newest first. */
+  function openArchive(ctx, closeHub) {
+    if (!window.PartyKit || !PartyKit.openSheet) return;
+    const prog = loadProgress();
+    const today = todayNo();
+    const from = Math.max(firstDay(), today - 60);
+    const items = [];
+    for (let d = today - 1; d >= from; d--) {
+      const e = dailyEntry(d);
+      if (!e) continue;
+      const solved = !!prog.stars['d' + d];
+      const best = prog.bests['d' + d];
+      items.push(`<button type="button" class="kk-arch-row" data-day="${d}">
+        <span class="kk-arch-date">${shortDate(d)}</span>
+        <span class="kk-arch-meta">${diffLabel(e.grade)}${solved ? ' · ✓ ' + (best ? formatTime(best) : 'solved') : ''}</span>
+      </button>`);
+    }
+    const x = PartyKit.openSheet({
+      title: 'Daily archive',
+      bodyHtml: `<div class="kk-arch">${items.length ? items.join('') : '<div class="solo-empty">The archive fills up as the days go by.</div>'}<p class="solo-note">Past Dailies are practice — only today’s counts for the leaderboard.</p></div>`,
+    });
+    if (!x || !x.el) return;
+    x.el.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-day]');
+      if (!b) return;
+      const dayNo = Number(b.dataset.day);
+      x.close();
+      const save = readAnkSave('archive');
+      if (save && save.dayNo === dayNo) return offerContinueOrNew(ctx, 'archive', save, closeHub);
+      if (closeHub) closeHub();
+      startAnkJodGame(ctx, 'daily', { dayNo, archive: true });
+    });
+  }
+
+  function openStats() {
+    if (!window.PartyKit || !PartyKit.openSheet) return;
+    const prog = loadProgress();
+    const rows = NUMBERED.concat(['daily'])
+      .map((id) => {
+        const s = prog.stats[id] || { played: 0, solved: 0, bestMs: 0, totalMs: 0 };
+        const avg = s.solved ? formatTime(s.totalMs / s.solved) : '—';
+        return `<tr><th>${diffLabel(id)}</th><td>${s.solved}/${s.played}</td><td>${s.bestMs ? formatTime(s.bestMs) : '—'}</td><td>${avg}</td></tr>`;
+      })
+      .join('');
+    const st = Hub() ? Hub().streak(GAME) : 0;
+    PartyKit.openSheet({
+      title: 'Your Kakuro stats',
+      bodyHtml: `<div class="kk-stats">
+        <table class="kk-stats-table"><thead><tr><th></th><th>Solved</th><th>Best</th><th>Average</th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="solo-note">Daily streak: ${st} ${st === 1 ? 'day' : 'days'} · best ${prog.daily.best}</p>
+      </div>`,
     });
   }
 
@@ -1533,7 +1761,6 @@
     let resumeValues = null;
     let resumePencil = null;
     let resumeSelected = null;
-    let resumeLive = false;
     let resumePencilMode = false;
     let resumeHints = 0;
 
@@ -1544,7 +1771,6 @@
         resumeValues = options.resume.values;
         resumePencil = options.resume.pencil;
         resumeSelected = Array.isArray(options.resume.selected) ? options.resume.selected : null;
-        resumeLive = !!options.resume.liveConflict;
         resumePencilMode = !!options.resume.pencilMode;
         resumeHints = Math.max(0, Number(options.resume.hintsUsed) || 0);
       } catch (e) {
@@ -1554,10 +1780,28 @@
     }
     if (!puzzle) {
       try {
-        puzzle = pickPuzzle(difficulty);
+        puzzle = difficulty === 'daily' ? pickDailyPuzzle(options.dayNo) : pickPuzzle(difficulty, options.n);
       } catch (e) {
         puzzle = pickPuzzle('easy');
       }
+      if (options.archive) puzzle.archive = true;
+    }
+    const isDaily = puzzle.difficulty === 'daily';
+    // Only today's first Daily start is scored; archive days and replays are practice.
+    const scored = isDaily && !puzzle.archive && (options.resume ? !!options.resume.scored : !!options.scored) && puzzle.dayNo === todayNo();
+    const challenge = options.challenge && options.challenge.source === 'challenge' ? options.challenge : null;
+    const statKey = isDaily ? 'daily' : puzzle.difficulty;
+    let prefs = Hub() ? Hub().settings(GAME) : { timer: true, errors: 'mistake' };
+    let pendingHint = null;
+    let hintWrong = null;
+    let winInfo = null;
+    if (!options.resume && Hub()) {
+      Hub().update(GAME, (p) => {
+        const s = p.stats[statKey] || { played: 0, solved: 0, bestMs: 0, totalMs: 0 };
+        s.played++;
+        p.stats[statKey] = s;
+        return p;
+      });
     }
     const board = puzzle.board;
     const rows = board.length;
@@ -1571,7 +1815,6 @@
     let pencil = resumePencil ? pencilFromJSON(resumePencil, rows, cols) : Array.from({ length: rows }, () => Array.from({ length: cols }, () => new Set()));
     let selected = null; // [r,c]
     let showMistakes = false;
-    let liveConflict = resumeLive; // default OFF — Check remains the hardcore gate
     let pencilMode = resumePencilMode;
     let statusMsg = options.resume ? 'Resumed' : '';
     let won = false;
@@ -1598,7 +1841,15 @@
     if (typeof prepareGameOverlay === 'function') prepareGameOverlay(root, { theme: 'light', gameId: 'ankjod', coach: false });
 
     const diffMeta = DIFFS.find((d) => d.id === puzzle.difficulty) || DIFFS[0];
-    const saveDiff = puzzle.difficulty || difficulty || 'easy';
+    const saveDiff = puzzle.archive ? 'archive' : puzzle.difficulty || difficulty || 'easy';
+    const puzzleTitle = isDaily
+      ? puzzle.archive
+        ? 'Daily ' + (puzzle.dailyKey || '')
+        : 'Daily Kakuro'
+      : diffMeta.label + (puzzle.n ? ' #' + puzzle.n : '');
+    const subtitle = isDaily
+      ? (puzzle.archive ? 'Archive' : scored ? 'Daily · counts' : 'Daily · practice') + (puzzle.grade ? ' · ' + diffLabel(puzzle.grade) : '')
+      : puzzleTitle;
 
     function getPlayElapsed() {
       return session ? session.getElapsedMs() : resumeElapsed;
@@ -1612,13 +1863,17 @@
         difficulty: saveDiff,
         id: puzzle.id || fingerprintRowsSafe(rowsPack),
         dailyKey: puzzle.dailyKey || null,
+        dayNo: puzzle.dayNo == null ? null : puzzle.dayNo,
+        n: puzzle.n || null,
+        grade: puzzle.grade || null,
+        archive: !!puzzle.archive,
+        scored,
         source: puzzle.source || 'play',
         rows: rowsPack,
         values: values.map((row) => row.slice()),
         pencil: pencilToJSON(pencil),
         elapsedMs: getPlayElapsed(),
         selected: selected ? [selected[0], selected[1]] : null,
-        liveConflict,
         pencilMode,
         hintsUsed,
         savedAt: Date.now(),
@@ -1706,7 +1961,7 @@
       entry.cells.forEach(applyCellSnap);
       restoreMeta(entry);
       updateUndoButtons();
-      if (typeof gameFeedback === 'function') gameFeedback('select');
+      fb('select');
       scheduleSave();
       refreshPlay();
     }
@@ -1727,7 +1982,7 @@
       entry.cells.forEach(applyCellSnap);
       restoreMeta(entry);
       updateUndoButtons();
-      if (typeof gameFeedback === 'function') gameFeedback('select');
+      fb('select');
       scheduleSave();
       refreshPlay();
     }
@@ -1766,6 +2021,7 @@
       }
 
       if (hintFocusRun != null && runs[hintFocusRun]) addRun(runs[hintFocusRun], true);
+      if (pendingHint) hintKeys.add(pendingHint.r + ',' + pendingHint.c);
       if (selected) {
         const [sr, sc] = selected;
         (runIdx[sr][sc] || []).forEach((i) => addRun(runs[i], false));
@@ -1811,7 +2067,64 @@
       return null;
     }
 
+    /**
+     * Hint (kakuro-core nextHint): first tap flags a wrong digit or explains the next logical step in
+     * plain words and highlights the cell; tapping Hint again fills that cell in. One hint per explanation.
+     */
     function applyHint() {
+      if (won) return;
+      const K = KC();
+      if (!K || !puzzle.solution) return legacyHint();
+      if (pendingHint && !values[pendingHint.r][pendingHint.c]) {
+        const h = pendingHint;
+        pendingHint = null;
+        pushHistory([snapCell(h.r, h.c)]);
+        values[h.r][h.c] = h.n;
+        pencil[h.r][h.c].clear();
+        hintFilled.add(h.r + ',' + h.c);
+        selected = [h.r, h.c];
+        hintFocusRun = null;
+        showMistakes = false;
+        statusMsg = 'Filled in ' + h.n + '.';
+        fb('valid');
+        const a = analyzeMistakes(board, values);
+        if (a.won) finishWin();
+        else {
+          scheduleSave();
+          refreshPlay();
+        }
+        return;
+      }
+      pendingHint = null;
+      let h = null;
+      try {
+        h = K.nextHint(packBoardRows(board, puzzle.solution), values.flat());
+      } catch (e) {
+        return legacyHint();
+      }
+      if (!h || h.kind === 'none' || h.cell < 0) {
+        statusMsg = h ? h.text : 'No hint available right now';
+        refreshPlay();
+        return;
+      }
+      hintsUsed++;
+      const r = Math.floor(h.cell / cols);
+      const c = h.cell % cols;
+      selected = [r, c];
+      hintFocusRun = null;
+      if (h.kind === 'wrong') {
+        hintWrong = r + ',' + c;
+        statusMsg = h.text;
+      } else {
+        pendingHint = { r, c, n: h.digit };
+        statusMsg = h.text + ' Tap Hint again to fill it in.';
+      }
+      fb('select');
+      scheduleSave();
+      refreshPlay();
+    }
+
+    function legacyHint() {
       if (won) return;
       hintsUsed++;
       const forced = findForcedCell();
@@ -1826,7 +2139,7 @@
         selected = [forced.r, forced.c];
         showMistakes = false;
         statusMsg = 'Hint: only ' + forced.n + ' fits here';
-        if (typeof gameFeedback === 'function') gameFeedback('valid');
+        fb('valid');
         const a = analyzeMistakes(board, values);
         if (a.won) finishWin();
         else {
@@ -1860,7 +2173,7 @@
             ' combo set' +
             (tight.rem.length === 1 ? '' : 's') +
             ' left';
-          if (typeof gameFeedback === 'function') gameFeedback('select');
+          fb('select');
           refreshPlay();
           return;
         }
@@ -1900,7 +2213,7 @@
       selected = [pick.r, pick.c];
       showMistakes = false;
       statusMsg = 'Hint: revealed a correct digit';
-      if (typeof gameFeedback === 'function') gameFeedback('valid');
+      fb('valid');
       const a = analyzeMistakes(board, values);
       if (a.won) finishWin();
       else refreshPlay();
@@ -1943,7 +2256,7 @@
       }
       pushHistory(before);
       statusMsg = scope === 'run' ? 'Auto-notes on this run' : 'Auto-notes on empty cells';
-      if (typeof gameFeedback === 'function') gameFeedback('place');
+      fb('place');
       scheduleSave();
       refreshPlay();
     }
@@ -1988,7 +2301,7 @@
       }
       pushHistory(before);
       statusMsg = 'Cleaned impossible pencil notes';
-      if (typeof gameFeedback === 'function') gameFeedback('select');
+      fb('select');
       scheduleSave();
       refreshPlay();
     }
@@ -2012,7 +2325,8 @@
           <ul class="kk-coach-tips">
             <li>Fill each run of white cells with digits 1–9 — no repeats inside a run</li>
             <li>A clue is the sum of the run to its right (across) or below it (down)</li>
-            <li>Pencil for notes · Check finds conflicts · Hint when stuck · long-press Pencil for auto-notes</li>
+            <li>Pencil for notes · Auto-notes fills them in · Sums lists the digit sets for a run</li>
+            <li>Hint explains the next step — tap it again to fill the cell in</li>
             <li>Leave anytime — Continue restores your board and timer</li>
           </ul>
           <button type="button" class="kk-coach-dismiss game-tap-target" data-kk-coach-ok>Got it</button>
@@ -2065,10 +2379,21 @@
         buildShell();
         shellBuilt = true;
       }
-      const analysis = analyzeMistakes(board, values);
-      const showBad = showMistakes || liveConflict || won;
-      const bad = showBad ? analysis.bad : new Set();
-      const softBad = liveConflict && !showMistakes && !won;
+      const bad = new Set();
+      const errMode = prefs.errors || 'mistake';
+      if (!won) {
+        if (errMode === 'mistake') wrongCells().forEach((k) => bad.add(k));
+        if (showMistakes && errMode !== 'off') {
+          analyzeMistakes(board, values).bad.forEach((k) => bad.add(k));
+          wrongCells().forEach((k) => bad.add(k));
+        }
+        if (hintWrong) {
+          const [hr, hc] = hintWrong.split(',').map(Number);
+          if (values[hr][hc] && puzzle.solution && values[hr][hc] !== puzzle.solution[hr][hc]) bad.add(hintWrong);
+          else hintWrong = null;
+        }
+      }
+      const softBad = false;
       const { runKeys, clueMeta, hintKeys } = highlightSets();
       const digitFs = Math.max(14, Math.floor(cellSize * 0.42));
       const pencilFs = Math.max(7, Math.floor(cellSize * 0.22));
@@ -2123,12 +2448,73 @@
         pen.classList.toggle('is-active', pencilMode);
         pen.textContent = pencilMode ? 'Pencil on' : 'Pencil';
       }
-      const liveBtn = root.querySelector('#kkLive');
-      if (liveBtn) {
-        liveBtn.classList.toggle('is-active', liveConflict);
-        liveBtn.textContent = liveConflict ? 'Live on' : 'Live';
-      }
+      const timerEl = root.querySelector('#kkTimer');
+      if (timerEl) timerEl.hidden = !prefs.timer;
       updateUndoButtons();
+    }
+
+    /** Filled cells that disagree with the (unique) solution, as "r,c" keys. */
+    function wrongCells() {
+      const out = [];
+      const sol = puzzle.solution;
+      if (!sol) return out;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c].kind === 'cell' && values[r][c] && sol[r][c] && values[r][c] !== sol[r][c]) out.push(r + ',' + c);
+        }
+      }
+      return out;
+    }
+
+    /** Combination helper: digit sets for the selected cell's runs, plus a lookup for any sum. */
+    function openSums() {
+      if (!window.PartyKit || !PartyKit.openSheet) return;
+      const K = KC();
+      const combosOf = (sum, len, must) =>
+        K ? K.combos(sum, len, must) : combosFor(sum, len).filter((cb) => must.every((m) => cb.indexOf(m) !== -1));
+      const listHtml = (sum, len, must) => {
+        const all = combosOf(sum, len, []);
+        const fits = new Set(combosOf(sum, len, must).map((cb) => cb.join('')));
+        if (!all.length) return '<div class="solo-empty">No digit set makes that sum.</div>';
+        return `<div class="kk-sums-list">${all
+          .map((cb) => `<span class="${fits.has(cb.join('')) ? '' : 'is-out'}">${cb.join(' ')}</span>`)
+          .join('')}</div>`;
+      };
+      let sections = '';
+      if (selected) {
+        (runIdx[selected[0]][selected[1]] || []).forEach((i) => {
+          const run = runs[i];
+          const filled = run.cells.map(([r, c]) => values[r][c]).filter(Boolean);
+          sections += `<div class="kk-sums-run"><b>${run.dir === 'across' ? 'Across' : 'Down'} ${run.sum} in ${run.cells.length} cells</b>${
+            filled.length ? `<small>Already placed: ${filled.join(', ')} — sets without them are greyed out</small>` : ''
+          }${listHtml(run.sum, run.cells.length, filled)}</div>`;
+        });
+      }
+      const lenOpts = [2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<option value="${n}">${n} cells</option>`).join('');
+      const x = PartyKit.openSheet({
+        title: 'Sums helper',
+        bodyHtml: `<div class="kk-sums">${sections || '<p class="solo-note">Select a cell to see the digit sets for its runs.</p>'}
+          <div class="kk-sums-run"><b>Look up any sum</b>
+            <div class="kk-sums-pick"><select data-k="len" aria-label="Cells">${lenOpts}</select><select data-k="sum" aria-label="Sum"></select></div>
+            <div data-k="out"></div></div></div>`,
+      });
+      if (!x || !x.el) return;
+      const lenSel = x.el.querySelector('[data-k="len"]');
+      const sumSel = x.el.querySelector('[data-k="sum"]');
+      const out = x.el.querySelector('[data-k="out"]');
+      const fillSums = () => {
+        const L = Number(lenSel.value);
+        const lo = (L * (L + 1)) / 2;
+        const hi = (L * (19 - L)) / 2;
+        const keep = Number(sumSel.value);
+        let opts = '';
+        for (let s = lo; s <= hi; s++) opts += `<option value="${s}"${s === keep ? ' selected' : ''}>sum ${s}</option>`;
+        sumSel.innerHTML = opts;
+        out.innerHTML = listHtml(Number(sumSel.value), L, []);
+      };
+      lenSel.addEventListener('change', fillSums);
+      sumSel.addEventListener('change', () => (out.innerHTML = listHtml(Number(sumSel.value), Number(lenSel.value), [])));
+      fillSums();
     }
 
     function paint() {
@@ -2169,14 +2555,15 @@
       root.innerHTML = `
         ${gameChromeHtml({
           title: 'Kakuro',
-          subtitle: 'Practice · ' + diffMeta.label,
+          subtitle,
           backId: 'kkBack',
           pauseId: 'kkPause',
-          rightHtml: `<button type="button" id="kkHelp" class="game-chrome-action game-tap-target" aria-label="How to play">?</button><button type="button" id="kkNew" class="game-chrome-action">New</button>`,
+          rightHtml: `<button type="button" id="kkHelp" class="game-chrome-action game-tap-target" aria-label="How to play">?</button><button type="button" id="kkGear" class="game-chrome-action game-tap-target" aria-label="Settings">⚙</button><button type="button" id="kkNew" class="game-chrome-action">Menu</button>`,
         })}
-        <div id="kkTimer" class="game-turn game-turn--waiting" role="status">${formatTime(elapsed)}</div>
+        <div id="kkTimer" class="game-turn game-turn--waiting" role="status"${prefs.timer ? '' : ' hidden'}>${formatTime(elapsed)}</div>
         <div class="kk-board-area">
-          <div id="kkStatus" class="kk-status"></div>
+          ${challenge && Hub() ? Hub().targetHtml(challenge) : ''}
+          <div id="kkStatus" class="kk-status" aria-live="polite"></div>
           <div id="kkGrid" class="kk-grid">${gridHtml}</div>
         </div>
         <div class="kk-keypad">
@@ -2190,10 +2577,11 @@
           <div class="kk-action-row kk-action-row--secondary">
             <button type="button" id="kkUndo" class="kk-action game-tap-target" disabled>Undo</button>
             <button type="button" id="kkRedo" class="kk-action game-tap-target" disabled>Redo</button>
-            <button type="button" id="kkClean" class="kk-action game-tap-target">Clean notes</button>
-            <button type="button" id="kkLive" class="kk-action game-tap-target">Live</button>
+            <button type="button" id="kkAuto" class="kk-action game-tap-target" title="Fill notes with every digit that still fits">Auto-notes</button>
+            <button type="button" id="kkSums" class="kk-action game-tap-target" title="Digit sets for this run">Sums</button>
           </div>
           <div class="kk-action-row kk-action-row--secondary">
+            <button type="button" id="kkClean" class="kk-action game-tap-target">Clean notes</button>
             <button type="button" id="kkClear" class="kk-action game-tap-target">Clear all</button>
           </div>
         </div>`;
@@ -2233,7 +2621,10 @@
         }
         const ask =
           typeof confirmLeaveGame === 'function'
-            ? confirmLeaveGame({ title: 'Leave Kakuro?', body: 'Progress will be saved — you can Continue later.' })
+            ? confirmLeaveGame({
+                title: 'Leave Kakuro?',
+                body: scored ? 'Your board and time are saved — Continue from the menu to finish today’s scored try.' : 'Progress will be saved — you can Continue later.',
+              })
             : Promise.resolve(window.confirm('Leave Kakuro? Progress will be saved.'));
         Promise.resolve(ask).then((ok) => {
           if (!ok) return;
@@ -2242,7 +2633,7 @@
         });
       });
       root.querySelector('#kkNew')?.addEventListener('click', () => {
-        clearAnkSave(saveDiff);
+        persistSave();
         if (session) session.end('restart');
         openDifficultyPicker(ctx);
       });
@@ -2252,14 +2643,14 @@
         if (!btn || won) return;
         selected = [+btn.dataset.r, +btn.dataset.c];
         statusMsg = '';
-        if (typeof gameFeedback === 'function') gameFeedback('select');
+        fb('select');
         refreshPlay();
       });
 
       root.querySelectorAll('.kk-num').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (btn.disabled) {
-            if (typeof gameFeedback === 'function') gameFeedback('invalid');
+            fb('invalid');
             return;
           }
           placeDigit(+btn.dataset.n);
@@ -2271,12 +2662,15 @@
       root.querySelector('#kkRedo')?.addEventListener('click', redo);
       root.querySelector('#kkHint')?.addEventListener('click', applyHint);
       root.querySelector('#kkClean')?.addEventListener('click', () => cleanPencils(selected ? 'run' : 'board'));
-      root.querySelector('#kkLive')?.addEventListener('click', () => {
-        liveConflict = !liveConflict;
-        statusMsg = liveConflict ? 'Live conflicts on' : 'Live conflicts off — use Check';
-        refreshPlay();
-      });
-      root.querySelector('#kkHelp')?.addEventListener('click', () => showCoach(true));
+      root.querySelector('#kkAuto')?.addEventListener('click', () => autoNotes('board'));
+      root.querySelector('#kkSums')?.addEventListener('click', openSums);
+      root.querySelector('#kkHelp')?.addEventListener('click', () => openRules(puzzle.archive ? 'archive' : puzzle.difficulty));
+      root.querySelector('#kkGear')?.addEventListener('click', () =>
+        openKakuroSettings((ns) => {
+          prefs = ns;
+          refreshPlay();
+        })
+      );
       root.querySelector('#kkClear')?.addEventListener('click', () => {
         if (won) return;
         const ask =
@@ -2321,7 +2715,7 @@
           pencilTimer = setTimeout(() => {
             pencilLong = true;
             autoNotes(selected ? 'run' : 'board');
-            if (typeof gameFeedback === 'function') gameFeedback('valid');
+            fb('valid');
           }, 450);
           try {
             pencilBtn.setPointerCapture(e.pointerId);
@@ -2332,7 +2726,7 @@
           if (pencilLong || won) return;
           pencilMode = !pencilMode;
           statusMsg = pencilMode ? 'Pencil mode on · long-press for auto-notes' : 'Digit mode';
-          if (typeof gameFeedback === 'function') gameFeedback('select');
+          fb('select');
           refreshPlay();
         });
         pencilBtn.addEventListener('pointercancel', clearPencilTimer);
@@ -2344,8 +2738,12 @@
         showMistakes = true;
         if (a.won) finishWin();
         else {
-          statusMsg = checkStatusMessage(a);
-          if (typeof gameFeedback === 'function') gameFeedback(a.bad.size ? 'invalid' : 'select');
+          const wrong = wrongCells().length;
+          const issues = wrong || a.bad.size;
+          if (prefs.errors === 'off') statusMsg = issues ? 'Something’s not right yet — keep looking' : 'No mistakes so far — keep going';
+          else if (wrong && !a.bad.size) statusMsg = wrong === 1 ? '1 digit is wrong — marked in red' : wrong + ' digits are wrong — marked in red';
+          else statusMsg = checkStatusMessage(a);
+          fb(issues ? 'invalid' : 'select');
           refreshPlay();
         }
       });
@@ -2384,7 +2782,7 @@
       const [r, c] = selected;
       const legal = legalDigits(r, c);
       if (!legal.has(n)) {
-        if (typeof gameFeedback === 'function') gameFeedback('invalid');
+        fb('invalid');
         statusMsg = 'That digit can’t fit this run';
         refreshPlay();
         return;
@@ -2398,7 +2796,7 @@
         });
         showMistakes = false;
         statusMsg = '';
-        if (typeof gameFeedback === 'function') gameFeedback('select');
+        fb('select');
         scheduleSave();
         refreshPlay();
         return;
@@ -2413,7 +2811,7 @@
       });
       showMistakes = false;
       statusMsg = '';
-      if (typeof gameFeedback === 'function') gameFeedback('place');
+      fb('place');
       const a = analyzeMistakes(board, values);
       if (a.won) finishWin();
       else {
@@ -2433,89 +2831,89 @@
       });
       showMistakes = false;
       statusMsg = '';
-      if (typeof gameFeedback === 'function') gameFeedback('select');
+      fb('select');
       scheduleSave();
       refreshPlay();
     }
 
+    function nextPuzzleNumber() {
+      const L = bankList(puzzle.difficulty).length;
+      if (!L || !puzzle.n) return null;
+      const nx = nextNumber(puzzle.difficulty);
+      return nx === puzzle.n ? (puzzle.n % L) + 1 : nx;
+    }
+
+    function shareWin() {
+      const H = Hub();
+      if (!H || !winInfo) return;
+      const params = isDaily ? { mode: 'daily', day: puzzle.dayNo } : { diff: puzzle.difficulty, n: puzzle.n };
+      H.share(GAME, {
+        title: puzzleTitle,
+        line: winInfo.line,
+        score: winInfo.secs,
+        label: formatTime(winInfo.ms),
+        params,
+        text: `Kakuro ${puzzleTitle}: solved in ${winInfo.line}. Can you beat my time?`,
+      });
+    }
+
     function paintWinResult() {
       shellBuilt = false;
-      clearAnkSave(saveDiff);
-      const elapsed = getPlayElapsed();
-      const secs = Math.round(elapsed / 1000);
-      const pbId = typeof ankJodPbGameId === 'function' ? ankJodPbGameId(saveDiff) : 'ankjod';
-      if (typeof setGamePB === 'function') setGamePB(pbId, secs);
-      const vsBest = typeof formatVsBest === 'function' ? formatVsBest(pbId, secs) : '';
-      const dailyBit = saveDiff === 'daily' && puzzle.dailyKey ? ` · ${puzzle.dailyKey}` : '';
-      const shareStats = {
-        scoreLine: formatTime(elapsed),
-        score: secs,
-        meta: `${diffMeta.label}${dailyBit}${vsBest ? ` · ${vsBest}` : ''}`,
-        text: `I solved Kakuro (${diffMeta.label}${dailyBit}) in ${formatTime(elapsed)} on Chaupaal. Can you beat that?`,
-      };
       if (pauseCtrl) {
         try {
           pauseCtrl.destroy();
         } catch (e) {}
         pauseCtrl = null;
       }
+      const w = winInfo || { ms: getPlayElapsed(), line: formatTime(getPlayElapsed()), vsBest: '', status: '', board: null, note: '' };
+      const H = Hub();
+      const nextN = !isDaily ? nextPuzzleNumber() : null;
+      const streak = isDaily && !puzzle.archive && H ? H.streak(GAME) : 0;
+      const body = H
+        ? H.resultHtml({
+            title: 'Solved · ' + puzzleTitle,
+            lines: [`<b>${w.line}</b>`, w.vsBest, streak ? `🔥 ${streak} day streak` : ''],
+            status: w.status,
+            primary: nextN ? 'Next puzzle' : 'More puzzles',
+            share: true,
+            board: !!w.board,
+            closeLabel: 'Done',
+          })
+        : `<div class="kk-status kk-status--won">Puzzle solved! ${w.line}</div>`;
       root.innerHTML = `
-        ${gameChromeHtml({ title: 'Kakuro', subtitle: 'Practice · ' + diffMeta.label, backId: 'kkBack' })}
-        ${
-          typeof gameResultHtml === 'function'
-            ? gameResultHtml({
-                gameId: 'ankjod',
-                glyph: '✓',
-                title: 'Puzzle solved',
-                subtitle: `${diffMeta.label}${dailyBit} · ${formatTime(elapsed)}`,
-                vsBest: vsBest || undefined,
-                shareCardHtml: typeof buildGameShareCard === 'function' ? buildGameShareCard('ankjod', shareStats) : '',
-                actions: [
-                  { label: 'Play again', primary: true, id: 'again' },
-                  { label: 'Change difficulty', primary: false, id: 'changeFormat' },
-                  { label: 'Share', primary: false, id: 'share' },
-                  { label: 'Done', primary: false, id: 'done' },
-                ],
-              })
-            : `<div class="kk-board-area"><div class="kk-status kk-status--won">Puzzle solved!</div></div>`
-        }`;
+        ${gameChromeHtml({ title: 'Kakuro', subtitle, backId: 'kkBack' })}
+        <div class="kk-board-area kk-result">${body}<p class="solo-res-hint" id="kkSubmitNote">${w.note || ''}</p></div>`;
       root.querySelector('#kkBack')?.addEventListener('click', () => {
         if (session) session.end('won');
       });
-      if (typeof wireGameResultActions === 'function') {
-        wireGameResultActions(root, {
-          again: () => {
-            if (session) session.end('restart');
-            openDifficultyPicker(ctx);
-          },
-          changeFormat: () => {
-            if (session) session.end('restart');
-            openDifficultyPicker(ctx);
-          },
-          share: () => {
-            if (typeof shareGameResult === 'function') shareGameResult('ankjod', shareStats);
-          },
-          challenge: async () => {
-            if (typeof openFriendPickerSheet === 'function') {
-              const f = await openFriendPickerSheet({
-                title: 'Challenge a friend',
-                subtitle: `Beat my ${diffMeta.label} time · ${formatTime(elapsed)}`,
-              });
-              if (f && typeof shareGameResult === 'function') {
-                shareGameResult('ankjod', {
-                  ...shareStats,
-                  text: `Hey ${f.name} — beat my Kakuro ${diffMeta.label} time of ${formatTime(elapsed)} on Chaupaal!`,
-                });
-              }
-            } else if (typeof shareGameResult === 'function') {
-              shareGameResult('ankjod', shareStats);
-            }
-          },
-          done: () => {
-            if (session) session.end('won');
-          },
-        });
+      if (!H) return;
+      H.wireResult(root, {
+        primary: () => {
+          if (session) session.end('restart');
+          if (nextN) startAnkJodGame(ctx, puzzle.difficulty, { n: nextN });
+          else openDifficultyPicker(ctx);
+        },
+        share: shareWin,
+        board: () => w.board && H.openBoard(GAME, w.board, { title: 'Kakuro · ' + puzzleTitle }),
+        close: () => {
+          if (session) session.end('won');
+        },
+      });
+    }
+
+    /** White-cell digits in row-major order — the plausibility payload server-lib/solo-scores.js checks. */
+    function solutionDigits() {
+      let s = '';
+      let n = 0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c].kind === 'cell') {
+            s += String(values[r][c] || 0);
+            n++;
+          }
+        }
       }
+      return { s, n };
     }
 
     function finishWin() {
@@ -2523,22 +2921,88 @@
       won = true;
       winShown = true;
       showMistakes = false;
+      pendingHint = null;
       statusMsg = 'Puzzle solved!';
       clearAnkSave(saveDiff);
+      const ms = Math.round(getPlayElapsed());
+      const secs = Math.round(ms / 1000);
+      const pkey = isDaily ? (puzzle.dayNo != null ? 'd' + puzzle.dayNo : null) : puzzle.n && puzzle.source === 'bank' ? puzzleKey(puzzle.difficulty, puzzle.n) : null;
+      const pbId = typeof ankJodPbGameId === 'function' ? ankJodPbGameId(puzzle.difficulty) : 'ankjod';
+      const vsBest = typeof formatVsBest === 'function' ? formatVsBest(pbId, secs) : '';
+      if (typeof setGamePB === 'function') setGamePB(pbId, secs);
+      let prevBest = 0;
+      if (Hub()) {
+        Hub().update(GAME, (p) => {
+          const s = p.stats[statKey] || { played: 0, solved: 0, bestMs: 0, totalMs: 0 };
+          s.solved++;
+          s.played = Math.max(s.played, s.solved);
+          s.totalMs += ms;
+          s.bestMs = s.bestMs ? Math.min(s.bestMs, ms) : ms;
+          p.stats[statKey] = s;
+          if (pkey) {
+            prevBest = p.bests[pkey] || 0;
+            p.stars[pkey] = 1;
+            p.bests[pkey] = prevBest ? Math.min(prevBest, ms) : ms;
+          }
+          p.pb[pbId] = p.pb[pbId] ? Math.min(p.pb[pbId], secs) : secs;
+          return p;
+        });
+      }
+      const line = formatTime(ms) + (hintsUsed ? ' · ' + hintsUsed + (hintsUsed === 1 ? ' hint' : ' hints') : ' · no hints');
+      let status = '';
+      if (challenge && Number.isFinite(Number(challenge.beatScore)) && challenge.beatScore != null) {
+        const who = challenge.challenger || 'your friend';
+        status = secs < Number(challenge.beatScore) ? 'You beat ' + who + '’s time!' : who + '’s time still stands — try again';
+      }
+      const lbId = isDaily
+        ? SC() && puzzle.dayNo != null
+          ? SC().boardId(GAME, 'daily', puzzle.dayNo)
+          : null
+        : pkey && SC()
+          ? SC().boardId(GAME, 'kakuro', pkey)
+          : null;
+      winInfo = { ms, secs, line, vsBest, status, board: lbId, note: '' };
       paintWinResult();
-      if (typeof gameFeedback === 'function') gameFeedback('win');
-      const secs = Math.round(getPlayElapsed() / 1000);
+      fb('win');
       if (typeof recordGameResult === 'function') {
         try {
           recordGameResult('ankjod', true, false, {
             score: secs,
             difficulty: saveDiff,
-            daily: saveDiff === 'daily',
+            daily: isDaily && !puzzle.archive,
             dailyKey: puzzle.dailyKey || null,
           });
         } catch (e) {}
       }
       // Economy reported once via session.end('won') — avoid double-count
+      submitWin(pkey, prevBest);
+    }
+
+    async function submitWin(pkey, prevBest) {
+      const H = Hub();
+      if (!H || !winInfo) return;
+      const dig = solutionDigits();
+      const run = { solution: dig.s, ms: winInfo.ms, hints: Math.min(hintsUsed, dig.n) };
+      const setNote = (txt) => {
+        winInfo.note = txt || '';
+        const el = root.querySelector('#kkSubmitNote');
+        if (el) el.textContent = winInfo.note;
+      };
+      let res = null;
+      if (isDaily && !puzzle.archive) {
+        if (!scored) return setNote(H.submitNote({ ranked: false, reason: 'practice' }));
+        if (H.signedIn()) setNote('Checking your time…');
+        res = await H.finishDaily(GAME, run, { score: winInfo.secs, line: winInfo.line });
+        setNote(H.submitNote(res.scored ? res : { ranked: false, reason: 'practice' }));
+        return;
+      }
+      if (puzzle.archive) return setNote('Archive puzzles are practice — only today’s Daily is ranked.');
+      if (!pkey || !winInfo.board) return;
+      if (!H.signedIn()) return setNote(H.submitNote(null));
+      if (prevBest && winInfo.ms >= prevBest) return setNote('Your earlier best still stands.');
+      setNote('Checking your time…');
+      res = await H.submit(GAME, winInfo.board, run);
+      setNote(H.submitNote(res));
     }
 
     function onKey(e) {
@@ -2585,7 +3049,7 @@
         if (board[r][c].kind === 'cell') {
           selected = [r, c];
           statusMsg = '';
-          if (typeof gameFeedback === 'function') gameFeedback('select');
+          fb('select');
           refreshPlay();
           return;
         }
@@ -2692,8 +3156,30 @@
   }
 
 
+  /**
+   * Entry. Challenge links carry { diff, n } (a numbered puzzle) or { mode: 'daily', day } — today's
+   * day opens the Daily sheet, an earlier day opens that archive puzzle as practice.
+   */
   function openAnkJod(ctx) {
-    openDifficultyPicker(ctx || { source: 'unknown' });
+    const c = ctx || { source: 'unknown' };
+    const go = () => {
+      const p = c.params || {};
+      if (c.source === 'challenge' && (p.mode === 'daily' || p.day != null)) {
+        const d = p.day != null && p.day !== '' ? Number(p.day) : todayNo();
+        if (!Number.isFinite(d) || d >= todayNo()) return openDailyFlow(c, null);
+        if (d >= firstDay() && dailyEntry(d)) return startAnkJodGame(c, 'daily', { dayNo: d, archive: true, challenge: c });
+      }
+      if (c.source === 'challenge' && NUMBERED.indexOf(p.diff) !== -1 && bankList(p.diff).length) {
+        const n = Math.max(1, Math.min(bankList(p.diff).length, Math.floor(Number(p.n) || 1)));
+        const save = readAnkSave(p.diff);
+        if (save && save.n === n) return startAnkJodGame(c, p.diff, { resume: save, challenge: c });
+        return startAnkJodGame(c, p.diff, { n, challenge: c });
+      }
+      openDifficultyPicker(c);
+    };
+    if (window.PartyKit && typeof PartyKit.ensureGameData === 'function') {
+      Promise.resolve(PartyKit.ensureGameData(GAME)).then(go, go);
+    } else go();
   }
 
   window.openAnkJod = openAnkJod;
@@ -2709,13 +3195,18 @@
     combosFor,
     puzzleQualityOk,
     extractRuns,
+    bankPuzzle,
+    dailyBankPuzzle,
+    nextNumber,
+    parseBankString,
+    packBoardRows,
   };
 
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'ankjod',
       name: 'Kakuro',
-      desc: 'Cross-sums · Easy / Medium / Hard / Daily · Solo',
+      desc: 'Cross-sums · 320 puzzles, Easy to Expert · Daily · Solo',
       icon: '🔢',
       ratingKey: 'ankjod',
       gameType: 'solo',

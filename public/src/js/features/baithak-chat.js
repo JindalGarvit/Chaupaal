@@ -1270,6 +1270,11 @@ function renderMsgBubble(m, isGroup){
       ?ShabdFive.chatCardHtml(att,m)
       :`<div class="sf-card"><strong>${chatEsc(m.text||'Shabd Five')}</strong></div>`;
     rich=true;
+  } else if(att && att.type==='solo_result'){
+    body=typeof SoloHub!=='undefined'&&SoloHub.chatCardHtml
+      ?SoloHub.chatCardHtml(att,m)
+      :`<div class="solo-card"><strong>${chatEsc(m.text||'Result')}</strong></div>`;
+    rich=true;
   } else if(att && att.type==='duniya_post'){
     const thumb = att.thumb || att.url || '';
     const cap = att.caption || m.text || 'Post';

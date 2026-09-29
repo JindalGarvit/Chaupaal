@@ -281,11 +281,14 @@ function loadLexicon() {
     const s = room.server.pub;
     const word = s.word;
     const choices = s.choices || [];
-    // String *values* only: a pack word like "game" must not match the JSON key "game".
+    // String *values* only: a pack word like "game" must not match the JSON key "game",
+    // and enum fields (phase "draw", reason, chat kind) are not user text.
+    const ENUM_KEYS = new Set(['phase', 'reason', 'k', 'status', 'game', 'type']);
     const values = new Set();
-    (function walk(v) {
-      if (typeof v === 'string') values.add(v);
-      else if (v && typeof v === 'object') Object.keys(v).forEach((k) => walk(v[k]));
+    (function walk(v, key) {
+      if (typeof v === 'string') {
+        if (!ENUM_KEYS.has(key)) values.add(v);
+      } else if (v && typeof v === 'object') Object.keys(v).forEach((k) => walk(v[k], k));
     })(room.pub);
     const hidden = s.phase === 'pick' || s.phase === 'draw';
     let leaked = false;
