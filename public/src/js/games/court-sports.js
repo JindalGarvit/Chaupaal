@@ -2,11 +2,16 @@
  * Court sports — Badminton (the RALLIES shell now serves badminton only).
  *
  * Laws (scoring, service courts, ends, intervals, faults, lets, stats) live in badminton-engine.js;
- * the match flow (seats, toss, contact windows, bots, intervals, AFK) in badminton-match.js. Both are
- * shared with the server. This file is the home, the court view and the two controllers:
+ * shots, flight, footwork, stamina and the bots in badminton-rally.js; the match flow (seats, toss,
+ * contact windows, intervals, AFK, reconnect lets) in badminton-match.js. All three are shared with
+ * the server. This file is the home, the court view, the drills and the two controllers:
  *   vs Bot / bot partner — the same reducer runs on the phone;
  *   Live singles + doubles — POST /api/media-config { action: 'badminton_match' } →
- *   server-lib/badminton-engine.js resolves every contact; the phone only sends tap times.
+ *   server-lib/badminton-engine.js resolves every exchange; the phone sends the tap time + swipe.
+ *
+ * Controls: swipe up from the court or the Hit pad — length = depth, speed = attack, sideways = aim,
+ * hold before swiping = deception. A plain tap plays the natural shot. Drag your own marker to move
+ * your base. Simple controls (tap only, the shot is picked for you) are unrated.
  */
 (function () {
   'use strict';
@@ -15,12 +20,14 @@
   const LABEL = 'Badminton';
   const KEY_SETTINGS = 'chaupaal_bd_settings_v1';
   const KEY_COACH = 'chaupaal_rally_coach_badminton';
+  const KEY_DRILLS = 'chaupaal_bd_drills_v1';
   const HIGH_RTT_MS = 350;
   const LIVE_POLICY = window.DangalLivePolicy ? window.DangalLivePolicy.policyFor(GAME) : { reconnectMs: 90000 };
   const RECONNECT_MS = LIVE_POLICY.reconnectMs || 90000;
 
   const E = () => window.BadmintonEngine;
   const BM = () => window.BadmintonMatch;
+  const R = () => window.BadmintonRally;
   const Kit = () => window.PartyKit;
 
   function esc(s) {
@@ -72,9 +79,13 @@
 
   function settings() {
     const s = readJson(KEY_SETTINGS, {}) || {};
+    const Rl = R();
     return {
       format: E() ? E().normFormat(s.format) : s.format || 'standard',
-      level: ['easy', 'normal', 'sharp'].indexOf(s.level) >= 0 ? s.level : 'normal',
+      // Old P12 tiers (easy / normal / sharp) map onto the P13 levels.
+      level: Rl ? Rl.levelOf(s.level) : 'club',
+      persona: Rl ? Rl.personaOf(s.persona) : 'allround',
+      simple: s.simple === true,
       voice: s.voice === true,
       sound: s.sound !== false,
     };
@@ -86,9 +97,16 @@
     const f = E() && E().FORMATS[id];
     return f ? tr('format.' + id, f.label) : id;
   }
-  function levelLabel(id) {
-    const T = E() && E().TIERS[id];
-    return tr('tier.' + id, T ? T.label : id) + ' ' + tr('bot', 'Bot');
+  /** "Pro · Attacker Bot" — always labelled as a bot. */
+  function levelLabel(level, persona) {
+    const Rl = R();
+    if (!Rl) return tr('bot', 'Bot');
+    const L = Rl.LEVELS[Rl.levelOf(level)];
+    const p = Rl.personaOf(persona);
+    return tr('level.' + L.id, L.label) + (p === 'allround' ? '' : ' · ' + tr('persona.' + p, Rl.PERSONAS[p].label)) + ' ' + tr('bot', 'Bot');
+  }
+  function botSeatFor(s) {
+    return 'bot:' + s.level + (s.persona && s.persona !== 'allround' ? ':' + s.persona : '');
   }
 
   // ---------------------------------------------------------------- shared shell
@@ -298,6 +316,84 @@
     } catch (e) {}
   }
 
+  // ---------------------------------------------------------------- sound + haptics (synthesised, no files)
+
+  const Snd = (() => {
+    let ctx = null;
+    function ac() {
+      if (!settings().sound) return null;
+      try {
+        if (!ctx) {
+          const A = window.AudioContext || window.webkitAudioContext;
+          if (!A) return null;
+          ctx = new A();
+        }
+        if (ctx.state === 'suspended') ctx.resume();
+        return ctx;
+      } catch (e) {
+        return null;
+      }
+    }
+    /** A band-passed noise burst: racket strings, shuttle cork, a crowd swell. */
+    function burst(dur, freq, gain, q, attack) {
+      const a = ac();
+      if (!a) return;
+      try {
+        const n = Math.max(1, Math.floor(a.sampleRate * dur));
+        const buf = a.createBuffer(1, n, a.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+        const src = a.createBufferSource();
+        src.buffer = buf;
+        const f = a.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = freq;
+        f.Q.value = q || 1;
+        const g = a.createGain();
+        const t0 = a.currentTime;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(gain, t0 + (attack || 0.004));
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        src.connect(f).connect(g).connect(a.destination);
+        src.start(t0);
+      } catch (e) {}
+    }
+    return {
+      hit(power) {
+        burst(0.07 + power * 0.06, 1800 - power * 700, 0.25 + power * 0.35, 3);
+      },
+      cord() {
+        burst(0.12, 420, 0.25, 6);
+      },
+      crowd(big) {
+        burst(big ? 1.4 : 0.8, 900, big ? 0.12 : 0.06, 0.6, 0.25);
+      },
+    };
+  })();
+  function vibrate(ms) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(ms);
+    } catch (e) {}
+  }
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  /**
+   * A finished pointer gesture → the swipe the model reads, or null for a plain tap.
+   * Up = toward the other court. Length = depth, speed = attack, sideways = aim, a still hold before
+   * moving = deception ("hold").
+   */
+  function swipeFrom(g) {
+    const dx = g.x1 - g.x0;
+    const dy = g.y0 - g.y1;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 14) return null;
+    const ref = clamp((window.innerHeight || 700) * 0.32, 120, 260);
+    let len = clamp(dist / ref, 0, 1);
+    if (dy < 0) len = Math.min(len, 0.3);
+    const moveMs = Math.max(1, g.t1 - (g.tMove || g.t0));
+    return { sw: { len: Math.round(len * 100) / 100, hard: dist / moveMs > 0.9, x: Math.round(clamp(dx / (ref * 0.8), -1, 1) * 100) / 100 }, hold: (g.tMove || g.t0) - g.t0 > 280 };
+  }
+
   // ---------------------------------------------------------------- court view
 
   const HALF = 6.7;
@@ -360,6 +456,7 @@
           ${row(tr('stats.winners', 'Winners'), s.winners[a], s.winners[b])}
           ${row(tr('stats.errors', 'Errors'), s.errors[a], s.errors[b])}
           ${row(tr('stats.streak', 'Best streak'), s.bestStreak[a], s.bestStreak[b])}
+          ${s.fastest ? row(tr('stats.fastest', 'Fastest smash'), BM().sideOfSeat(s.fastest.seat) === a ? s.fastest.kmh + ' ' + tr('simkmh', 'sim km/h') : '', BM().sideOfSeat(s.fastest.seat) === b ? s.fastest.kmh + ' ' + tr('simkmh', 'sim km/h') : '') : ''}
         </tbody>
       </table>
       <p class="bd-stats-line">${esc(tr('stats.rallies', 'Rallies') + ' ' + s.rallies + ' · ' + tr('stats.longest', 'longest') + ' ' + s.longest + ' ' + tr('stats.shots', 'shots') + ' · ' + tr('stats.avg', 'average') + ' ' + s.avgRally + (s.lets ? ' · ' + tr('stats.lets', 'lets') + ' ' + s.lets : ''))}</p>
@@ -374,7 +471,13 @@
       <h4>${esc(tr('rules.formats', 'Formats'))}</h4>
       <p>${esc(Eng ? Eng.FORMAT_ORDER.map((id) => Eng.FORMATS[id].label + ' — ' + Eng.FORMATS[id].blurb + (Eng.FORMATS[id].rated ? ' (rated in Live singles)' : ' (unrated)')).join(' · ') : '')}</p>
       <h4>${esc(tr('rules.play', 'Playing'))}</h4>
-      <p>${esc(tr('rules.playBody', 'Tap as the shuttle crosses the green band. The centre of the band is your best shot. Early hits tend to find the net; late ones fly long. Doubles: whoever covers the side the shuttle lands on takes it.'))}</p>
+      <p>${esc(tr('rules.playBody', 'Release as the bar crosses the green band — the centre is your best contact. Swipe up to choose the shot: a longer swipe goes deeper, a quick swipe attacks (smash, drive, kill), sideways aims. Hold still for a moment before swiping to disguise it. A plain tap plays the natural shot. You run to the shuttle yourself; drag your marker to change where you recover to.'))}</p>
+      <p>${esc(tr('rules.playMore', 'You can only smash from above your head, and only net-shot when you reach the net early. Long rallies tire you (slower feet, weaker shots); you recover between points and at intervals. Doubles: attack front-and-back, defend side-by-side — your partner rotates with you.'))}</p>
+      <h4>${esc(tr('rules.simple', 'Simple controls'))}</h4>
+      <p>${esc(tr('rules.simpleBody', 'Tap only, and the shot is picked for you. Matches with Simple controls are always unrated.'))}</p>
+      <h4>${esc(tr('rules.bots', 'Bots'))}</h4>
+      <p>${esc(tr('rules.botsBody', 'Beginner, Club, County and Pro, each as an All-rounder, Attacker, Retriever or Net player. Bots are always labelled as bots.'))}</p>
+      <p class="bd-attrib">${esc(tr('rules.sim', 'Line calls and km/h are simulated.'))}</p>
     </div>`;
     if (Kit() && Kit().openSheet) Kit().openSheet({ title: tr('rules.title', 'How to play Badminton'), bodyHtml: html });
     else if (window.DangalRules && typeof window.DangalRules.open === 'function') window.DangalRules.open(GAME);
@@ -399,6 +502,12 @@
     let callText = '';
     let callUntil = 0;
     let coachShown = !!readJson(KEY_COACH, false);
+    let dragBase = null;
+    let heard = '';
+    let trail = [];
+    let lcUntil = 0;
+    let lcSeen = '';
+    let pausedShown = '';
 
     const mySeat = () => (pub && !o.spectator ? BM().seatOfUid(pub, o.me) : '');
     const mySide = () => {
@@ -428,13 +537,17 @@
             <div class="bd-netline"></div>
             <div class="bd-half bd-half--near"><i class="bd-box" data-box="near-L"></i><i class="bd-box" data-box="near-R"></i></div>
             <i class="bd-land" data-bd-land></i>
+            <i class="bd-trail" data-bd-trail="0"></i><i class="bd-trail" data-bd-trail="1"></i><i class="bd-trail" data-bd-trail="2"></i>
             <span class="bd-shuttle" data-bd-shuttle aria-hidden="true"></span>
+            <div class="bd-linecall" data-bd-linecall hidden><b data-bd-lc-text></b><small>${esc(tr('linecall', 'Simulated line call'))}</small></div>
           </div>
-          <div class="bd-side-chips"><span data-bd-net></span></div>
+          <div class="bd-side-chips"><span data-bd-net></span><span class="bd-chip" data-bd-stamina hidden></span></div>
         </div>
-        <div class="bd-bar" data-bd-bar aria-hidden="true"><i class="bd-bar-sweet"></i><i class="bd-bar-perfect"></i><i class="bd-bar-fill" data-bd-fill></i></div>
-        <button type="button" class="bd-hit" data-bd-hit disabled>${esc(tr('hit', 'Hit'))}</button>
-        <p class="bd-hint" data-bd-hint></p>
+        <div class="bd-controls">
+          <div class="bd-bar" data-bd-bar aria-hidden="true"><i class="bd-bar-sweet"></i><i class="bd-bar-perfect"></i><i class="bd-bar-fill" data-bd-fill></i></div>
+          <button type="button" class="bd-hit" data-bd-hit disabled>${esc(tr('hit', 'Hit'))}</button>
+          <p class="bd-hint" data-bd-hint></p>
+        </div>
         <div class="bd-links">
           <button type="button" class="bd-link" data-bd-stats>${esc(tr('stats.title', 'Stats'))}</button>
           <button type="button" class="bd-link" data-bd-rules>${esc(tr('rules.short', 'Rules'))}</button>
@@ -443,14 +556,13 @@
         <div class="bd-layer" data-bd-layer hidden></div>
       </div>`;
       const hit = body.querySelector('[data-bd-hit]');
-      hit.addEventListener('pointerdown', (ev) => {
-        ev.preventDefault();
-        tapHit();
-      });
+      const courtEl = body.querySelector('[data-bd-court]');
+      wireGestures(hit);
+      wireGestures(courtEl);
       hit.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter' || ev.key === ' ') {
           ev.preventDefault();
-          tapHit();
+          tapHit(null, o.serverNow());
         }
       });
       body.querySelector('[data-bd-stats]').addEventListener('click', () => openStats());
@@ -481,14 +593,17 @@
       return n ? n.charAt(0).toUpperCase() : '?';
     }
 
-    function tapHit() {
+    const myContactOpen = () => {
+      const c = pub && pub.contact;
+      return !!(c && !o.spectator && seatIsMine(c.seat) && (pub.phase === 'serve' || pub.phase === 'rally') && !sent[c.n + ':' + c.k]);
+    };
+    /** Send the shot: `g` = the swipe (null = tap), `at` = when the finger released (shared clock). */
+    function tapHit(g, at) {
       if (!pub || o.spectator) return;
       const c = pub.contact;
-      if (!c || !seatIsMine(c.seat) || (pub.phase !== 'serve' && pub.phase !== 'rally')) return;
+      if (!myContactOpen()) return;
       const key = c.n + ':' + c.k;
-      if (sent[key]) return;
-      const now = o.serverNow();
-      const t = now - c.startAt;
+      const t = (at || o.serverNow()) - c.startAt;
       if (t < -150) return;
       sent[key] = true;
       if (!coachShown) {
@@ -499,9 +614,87 @@
       if (hitEl) hitEl.classList.add('is-swing');
       setTimeout(() => hitEl && hitEl.classList.remove('is-swing'), 220);
       buzz('move');
-      Promise.resolve(o.send('hit', { n: c.n, k: c.k, t: Math.round(t), rtt: o.rtt ? o.rtt() : 0 })).catch((e) => {
+      const args = { n: c.n, k: c.k, t: Math.round(t), rtt: o.rtt ? o.rtt() : 0 };
+      if (g && g.sw) {
+        args.sw = g.sw;
+        if (g.hold) args.hold = true;
+      }
+      Promise.resolve(o.send('hit', args)).catch((e) => {
         if (e && e.code !== 'STALE_CONTACT') toast(o.errorText ? o.errorText(e) : tr('err.generic', 'Couldn’t reach the match — try again'));
       });
+    }
+
+    /** Court → metres in my own half (for dragging my base). */
+    function spotFromPointer(ev) {
+      const court = body.querySelector('[data-bd-court]');
+      const r = court.getBoundingClientRect();
+      const left = ((ev.clientX - r.left) / r.width) * 100;
+      const top = ((ev.clientY - r.top) / r.height) * 100;
+      return { x: Math.round((((left - 50) / 46) * HALF_W) * 100) / 100, y: Math.round(clamp(((top - 50) / 46) * HALF, 0.8, HALF - 0.6) * 100) / 100, left, top };
+    }
+    /**
+     * One pointer gesture on the court or the Hit pad: while it's my shot, a swipe (release = the
+     * contact time) or a tap (press = the contact time); otherwise dragging my marker moves my base.
+     */
+    function wireGestures(el) {
+      let g = null;
+      el.addEventListener('pointerdown', (ev) => {
+        if (!pub || o.spectator) return;
+        const me = ev.target && ev.target.closest && ev.target.closest('.bd-p.is-me');
+        if (me && pub.status === 'playing' && !myContactOpen()) {
+          ev.preventDefault();
+          g = { drag: me, id: ev.pointerId };
+          me.classList.add('is-drag');
+          try {
+            el.setPointerCapture(ev.pointerId);
+          } catch (e) {}
+          return;
+        }
+        if (!myContactOpen()) return;
+        ev.preventDefault();
+        g = { id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, t0: Date.now(), tMove: 0, at0: o.serverNow() };
+        try {
+          el.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+        // Simple controls: the press is the shot.
+        if (pub.simple && pub.simple[o.me]) {
+          tapHit(null, g.at0);
+          g = null;
+        }
+      });
+      el.addEventListener('pointermove', (ev) => {
+        if (!g || ev.pointerId !== g.id) return;
+        if (g.drag) {
+          const s = spotFromPointer(ev);
+          g.drag.style.left = clamp(s.left, 2, 98) + '%';
+          g.drag.style.top = clamp(Math.max(s.top, 52), 2, 98) + '%';
+          g.spot = s;
+          return;
+        }
+        if (!g.tMove && Math.hypot(ev.clientX - g.x0, ev.clientY - g.y0) > 8) g.tMove = Date.now();
+      });
+      const end = (ev) => {
+        if (!g || ev.pointerId !== g.id) return;
+        const cur = g;
+        g = null;
+        if (cur.drag) {
+          cur.drag.classList.remove('is-drag');
+          if (cur.spot) {
+            dragBase = { x: cur.spot.x, y: cur.spot.y };
+            Promise.resolve(o.send('move', { base: dragBase })).catch(() => {});
+          }
+          return;
+        }
+        if (ev.type === 'pointercancel') return;
+        cur.x1 = ev.clientX;
+        cur.y1 = ev.clientY;
+        cur.t1 = Date.now();
+        const sw = swipeFrom(cur);
+        // A tap counts from the press; a swipe from the release (that's when the racket meets it).
+        tapHit(sw, sw ? o.serverNow() : cur.at0);
+      };
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
     }
 
     function paintBoard(state) {
@@ -533,15 +726,25 @@
       if (!court) return;
       const bottom = mySide();
       const serving = pub.phase === 'serve' || (pub.contact && pub.contact.serve);
+      const snap = posAt(now);
+      const c = pub.contact;
+      const last = lastHit(now);
       BM()
         .seatList(pub)
         .forEach((seat) => {
           const el = court.querySelector('[data-p="' + seat + '"]');
           if (!el) return;
           const side = BM().sideOfSeat(seat);
-          const pos = toScreen(side, playerSpot(state, side, BM().playerOfSeat(seat), serving), bottom);
-          el.style.left = pos.left + '%';
-          el.style.top = pos.top + '%';
+          const pos = toScreen(side, snap && snap[seat] ? snap[seat] : playerSpot(state, side, BM().playerOfSeat(seat), serving), bottom);
+          if (!el.classList.contains('is-drag')) {
+            el.style.left = pos.left + '%';
+            el.style.top = pos.top + '%';
+          }
+          // Footwork cues: split step as the shuttle comes, a lunge when stretched, the jump smash.
+          const mineUp = c && c.seat === seat && !c.serve;
+          el.classList.toggle('is-split', !!(mineUp && now >= c.startAt - 260 && now < c.startAt + 60));
+          el.classList.toggle('is-lunge', !!(mineUp && (c.r || 0) > 0.78 && now >= c.startAt && now < c.startAt + c.dur));
+          el.classList.toggle('is-jump', !!(last && last.seat === seat && last.shot === 'smash_jump' && now - last.at < 380));
           const isServer = state.server.side === side && state.server.player === BM().playerOfSeat(seat);
           const isRecv = state.receiver.side === side && state.receiver.player === BM().playerOfSeat(seat);
           el.classList.toggle('is-server', !state.over && isServer);
@@ -564,6 +767,83 @@
       court.classList.toggle('is-doubles', pub.discipline === 'doubles');
     }
 
+    /** The rally on screen: the current one, or the finished one still playing out before the next serve. */
+    function rallyHits(now) {
+      const c = pub.contact;
+      let all = pub.hits || [];
+      if (!all.some((h) => h.at <= now) && (pub.prevHits || []).length && (!c || now < c.startAt - 400)) all = pub.prevHits;
+      return { all, hits: all.filter((h) => h.at <= now) };
+    }
+    function lastHit(now) {
+      const r = rallyHits(now);
+      return r.hits[r.hits.length - 1] || null;
+    }
+    /** Where everyone is: the latest played shot's footwork snapshot, else the serve positions. */
+    function posAt(now) {
+      const h = lastHit(now);
+      const snap = h && h.pos ? Object.assign({}, h.pos) : pub.startPos ? Object.assign({}, pub.startPos) : null;
+      const seat = mySeat();
+      if (snap && seat && dragBase && pub.phase !== 'serve' && !(pub.contact && pub.contact.seat === seat)) snap[seat] = dragBase;
+      return snap;
+    }
+    /** New shots / points on the shared clock: racket + crowd sounds, haptics on smash / kill, net cord. */
+    function cueSounds(now) {
+      const r = rallyHits(now);
+      const h = r.hits[r.hits.length - 1];
+      const key = h ? h.seat + ':' + h.at : '';
+      if (!h || key === heard) return;
+      heard = key;
+      const fam = R() && R().SHOTS[h.shot] ? R().SHOTS[h.shot].family : '';
+      const power = R() && R().SHOTS[h.shot] ? R().SHOTS[h.shot].power : 0.2;
+      Snd.hit(power);
+      if (fam === 'smash' || fam === 'kill') {
+        vibrate(h.kind === 'winner' ? [30, 40, 30] : 25);
+        const pl = body.querySelector('[data-p="' + h.seat + '"]');
+        if (pl) {
+          pl.classList.remove('is-smash');
+          void pl.offsetWidth;
+          pl.classList.add('is-smash');
+        }
+      }
+      if (h.code === 'net' || h.code === 'serve_net' || h.code === 'caught_net') {
+        const net = body.querySelector('.bd-netline');
+        setTimeout(() => {
+          Snd.cord();
+          if (net) {
+            net.classList.remove('is-cord');
+            void net.offsetWidth;
+            net.classList.add('is-cord');
+          }
+        }, 260);
+      }
+      if (h.kind === 'winner' || h.kind === 'fault') setTimeout(() => Snd.crowd(h.kind === 'winner' && (fam === 'smash' || fam === 'kill')), 500);
+    }
+    /** Close calls replay as a zoomed "Simulated line call" (the engine's code already decided it). */
+    function lineCall(now) {
+      const el = body.querySelector('[data-bd-linecall]');
+      if (!el) return;
+      if (lcUntil && now > lcUntil) {
+        el.hidden = true;
+        lcUntil = 0;
+      }
+      const r = rallyHits(now);
+      const h = r.hits[r.hits.length - 1];
+      if (!h || r.all.length !== r.hits.length || lcSeen === h.seat + ':' + h.at || !(h.kind === 'winner' || h.code === 'out' || /^serve_(long|wide|short)$/.test(h.code || ''))) return;
+      lcSeen = h.seat + ':' + h.at;
+      if (now - h.at > 2500 || !R()) return;
+      const cc = R().closeCall(h.land, { discipline: pub.discipline, serve: !!h.serve, court: pub.contact ? pub.contact.court : 'R', margin: 0.15 });
+      if (!cc) return;
+      const spot = toScreen(1 - BM().sideOfSeat(h.seat), h.land, mySide());
+      el.style.left = spot.left + '%';
+      el.style.top = spot.top + '%';
+      el.classList.toggle('is-out', cc.out);
+      el.querySelector('[data-bd-lc-text]').textContent = cc.out ? tr('lc.out', 'Out!') : tr('lc.in', 'In');
+      setTimeout(() => {
+        el.hidden = false;
+        lcUntil = o.serverNow() + 1800;
+      }, 650);
+    }
+
     /** Shuttle position on the shared clock from the rally's hits and the contact in play. */
     function paintShuttle(state, now) {
       const court = body.querySelector('[data-bd-court]');
@@ -573,52 +853,82 @@
       const bottom = mySide();
       const c = pub.contact;
       // The finished rally keeps playing out until the next serve window is about to open.
-      let all = pub.hits || [];
-      if (!all.some((h) => h.at <= now) && (pub.prevHits || []).length && (!c || now < c.startAt - 400)) all = pub.prevHits;
-      const hits = all.filter((h) => h.at <= now);
+      const rh = rallyHits(now);
+      const all = rh.all;
+      const hits = rh.hits;
+      const snapNow = posAt(now);
       const seatSpot = (seat) => {
         const side = BM().sideOfSeat(seat);
-        return toScreen(side, playerSpot(state, side, BM().playerOfSeat(seat), pub.phase === 'serve'), bottom);
+        return toScreen(side, snapNow && snapNow[seat] ? snapNow[seat] : playerSpot(state, side, BM().playerOfSeat(seat), pub.phase === 'serve'), bottom);
       };
       let from = null;
       let to = null;
       let p = 0;
+      let arc = null;
+      const h = hits[hits.length - 1];
       if (!hits.length) {
         if (c && c.serve) from = to = seatSpot(c.seat);
       } else {
-        const h = hits[hits.length - 1];
-        from = seatSpot(h.seat);
+        // From where the hitter met it (the previous shot's footwork snapshot).
+        const before = hits.length >= 2 ? hits[hits.length - 2].pos : pub.startPos;
+        const hs = BM().sideOfSeat(h.seat);
+        from = before && before[h.seat] ? toScreen(hs, before[h.seat], bottom) : seatSpot(h.seat);
         const land = h.land && h.land.y > 0 ? h.land : { x: h.land ? h.land.x : 0, y: 0.05 };
-        to = toScreen(1 - BM().sideOfSeat(h.seat), land, bottom);
+        to = toScreen(1 - hs, land, bottom);
         const nextHit = all[hits.length];
         const following = all === pub.hits && c && !c.serve && c.k === hits.length ? c : null;
         let dur = 600;
         if (nextHit) dur = Math.max(160, nextHit.at - h.at);
-        else if (following) dur = following.dur * 0.8;
-        if (h.kind === 'miss') {
-          dur = 1;
-          from = to;
-        }
+        else if (following) dur = Math.max(160, following.startAt + following.dur * 0.55 - h.at);
         if (nextHit || following) {
-          // Going to be hit again: head for the next hitter.
-          const target = seatSpot(nextHit ? nextHit.seat : following.seat);
+          // Going to be hit again: head for where the next hitter meets it.
+          const ns = nextHit ? nextHit.seat : following.seat;
+          const target = h.pos && h.pos[ns] ? toScreen(BM().sideOfSeat(ns), h.pos[ns], bottom) : seatSpot(ns);
           to = { left: (to.left + target.left * 2) / 3, top: (to.top + target.top * 2) / 3 };
         }
         p = Math.max(0, Math.min(1, (now - h.at) / dur));
+        arc = R() ? R().flightAt(h.shot, p) : { s: p, h: Math.sin(p * Math.PI) * 4 };
       }
       if (!from) {
         sh.style.opacity = '0';
         if (landEl) landEl.style.opacity = '0';
+        court.querySelectorAll('[data-bd-trail]').forEach((t) => (t.style.opacity = '0'));
         return;
       }
-      const lift = Math.sin(p * Math.PI) * 9;
+      const s = arc ? arc.s : 0;
+      const lift = arc ? arc.h * 1.5 : 0;
+      const left = from.left + (to.left - from.left) * s;
+      const top = from.top + (to.top - from.top) * s - lift;
       sh.style.opacity = '1';
-      sh.style.left = from.left + (to.left - from.left) * p + '%';
-      sh.style.top = from.top + (to.top - from.top) * p - lift + '%';
+      sh.style.left = left + '%';
+      sh.style.top = top + '%';
+      sh.style.transform = 'translate(-50%,-50%) scale(' + (1 + lift / 14) + ')';
+      // Trail: the last few positions while it flies.
+      const moving = arc && p > 0 && p < 1;
+      if (moving && (!trail.length || Math.abs(trail[0].left - left) + Math.abs(trail[0].top - top) > 0.8)) trail.unshift({ left, top });
+      if (!moving) trail = [];
+      trail = trail.slice(0, 4);
+      court.querySelectorAll('[data-bd-trail]').forEach((t, i) => {
+        const pt = trail[i + 1];
+        t.style.opacity = pt ? String(0.45 - i * 0.13) : '0';
+        if (pt) {
+          t.style.left = pt.left + '%';
+          t.style.top = pt.top + '%';
+        }
+      });
       const lastVisible = pub.log[state.visibleCount - 1];
       const ended = all === pub.prevHits || (lastVisible && lastVisible.t === 'rally' && all.length === hits.length && pub.phase !== 'rally');
-      if (landEl) {
-        const h = hits[hits.length - 1];
+      // Coming to me: the landing marker appears once I've "read" it (my reaction time).
+      const incoming = c && !ended && !c.serve && seatIsMine(c.seat) && c.land && h && now >= h.at + (c.readMs || 250);
+      if (landEl && incoming) {
+        const spot = toScreen(BM().sideOfSeat(c.seat), c.land, bottom);
+        landEl.style.left = spot.left + '%';
+        landEl.style.top = spot.top + '%';
+        landEl.style.opacity = '0.8';
+        landEl.classList.add('is-read');
+        landEl.classList.remove('is-out');
+      } else if (landEl) {
+        landEl.classList.remove('is-read');
         if (ended && h && h.land && all.length === hits.length && p >= 1) {
           const spot = toScreen(1 - BM().sideOfSeat(h.seat), h.land.y > 0 ? h.land : { x: h.land.x, y: 0.05 }, bottom);
           landEl.style.left = spot.left + '%';
@@ -655,13 +965,55 @@
         text = w === mySide() && !o.spectator ? tr('toss.you', 'You won the toss — you serve first') : BM().configOf(pub).sides[w].name + ' ' + tr('toss.them', 'won the toss and serve first');
       } else if (c) {
         const court = c.court === 'L' ? tr('court.L', 'left court') : tr('court.R', 'right court');
-        if (seatIsMine(c.seat)) text = c.serve ? tr('hint.serve', 'Your serve from the') + ' ' + court + (coachShown ? '' : ' · ' + tr('hint.coach', 'tap as the bar crosses the green')) : tr('hint.hit', 'Your shot — tap in the green');
+        const simple = pub.simple && pub.simple[o.me];
+        if (seatIsMine(c.seat)) {
+          if (simple) text = c.serve ? tr('hint.serveSimple', 'Your serve — tap in the green') : tr('hint.hitSimple', 'Your shot — tap in the green');
+          else if (c.serve) text = tr('hint.serve', 'Your serve from the') + ' ' + court + ' · ' + (coachShown ? tr('hint.serveShort', 'tap = low · swipe long = high') : tr('hint.serveCoach', 'tap for a low serve, swipe up long for a high one, quick for a flick'));
+          else text = coachShown ? tr('hint.hit', 'Your shot — swipe or tap in the green') : tr('hint.hitCoach', 'Swipe up in the green: long = deep, quick = attack, sideways = aim · tap = natural shot');
+        }
         else if (BM().sideOfSeat(c.seat) === mySide() && !o.spectator) text = seatName(c.seat) + ' ' + tr('hint.partner', 'has this one');
         else text = seatName(c.seat) + (c.serve ? ' ' + tr('hint.serving', 'serving from the') + ' ' + court : ' ' + tr('hint.their', 'to play'));
       }
       hint.textContent = text;
       const net = body.querySelector('[data-bd-net]');
       if (net && o.live) net.innerHTML = netHtml(o.rtt ? o.rtt() : 0);
+      // Legs: only worth showing once they're tiring.
+      const stEl = body.querySelector('[data-bd-stamina]');
+      const seat = mySeat();
+      const stv = seat && pub.rally && pub.rally.st ? pub.rally.st[seat] : null;
+      if (stEl) {
+        const show = stv != null && stv < 0.6 && pub.status === 'playing';
+        stEl.hidden = !show;
+        if (show) {
+          stEl.textContent = tr('stamina', 'Legs') + ' ' + Math.round(stv * 100) + '%';
+          stEl.classList.toggle('is-low', stv < 0.3);
+        }
+      }
+    }
+
+    /** Someone dropped mid-rally: the rally is replayed as a let once they're back. */
+    function paintPaused(now) {
+      const pz = pub.pause;
+      if (!(pub.phase === 'paused' && pz)) {
+        if (pausedShown) layerHtml(null);
+        pausedShown = '';
+        return;
+      }
+      const left = Math.max(0, Math.ceil((pz.until - now) / 1000));
+      const key = 'p:' + pz.from;
+      if (pausedShown === key) {
+        const cd = body.querySelector('[data-bd-countdown]');
+        if (cd) cd.textContent = left + 's';
+        return;
+      }
+      pausedShown = key;
+      const who = pz.who && pz.who === mySeat() ? tr('paused.you', 'You') : seatName(pz.who);
+      layerHtml(`<div class="bd-interval">
+        <div class="bd-interval-title">${esc(tr('paused.title', 'Connection lost'))} <span data-bd-countdown>${left}s</span></div>
+        <div class="bd-interval-call">${esc(who + ' ' + tr('paused.body', 'dropped out — waiting to reconnect.'))}</div>
+        ${pz.let ? `<div class="bd-interval-ends">${esc(tr('paused.let', 'Let — that rally will be replayed'))}</div>` : ''}
+        <p class="bd-note">${esc(tr('paused.note', 'If they don’t make it back in time, the match is forfeited.'))}</p>
+      </div>`);
     }
 
     function layerHtml(html) {
@@ -779,16 +1131,21 @@
       layer.querySelector('[data-bd-share]')?.addEventListener('click', () => {
         const s = BM().statsOf(pub);
         const scoreLine = state.games.map((g) => g.score[mySide()] + '–' + g.score[1 - mySide()]).join(' ');
+        const mySmash = s.fastest && BM().sideOfSeat(s.fastest.seat) === mySide() ? s.fastest.kmh : 0;
+        const meta =
+          tr('share.meta', 'Longest rally') + ' ' + s.longest + ' ' + tr('stats.shots', 'shots') + (mySmash ? ' · ' + tr('share.smash', 'Fastest smash') + ' ' + mySmash + ' ' + tr('simkmh', 'sim km/h') : '') + ' · ' + tr('stats.winners', 'Winners') + ' ' + s.winners[mySide()];
         if (typeof openUnifiedShareSheet === 'function') {
           openUnifiedShareSheet({
             gameId: GAME,
             stats: {
               scoreLine,
               text: shareText(state),
-              meta: tr('share.meta', 'Longest rally') + ' ' + s.longest + ' · ' + tr('stats.winners', 'Winners') + ' ' + s.winners[mySide()],
+              meta,
+              longestRally: s.longest,
+              fastestSmash: mySmash ? mySmash + ' sim km/h' : '',
             },
           });
-        } else toast(shareText(state));
+        } else toast(shareText(state) + ' · ' + meta);
       });
       layer.querySelector('[data-bd-done]')?.addEventListener('click', () => shell.close('done'));
     }
@@ -823,10 +1180,13 @@
       if (pub.phase !== shownPhase) shownPhase = pub.phase;
       paintPositions(state, now);
       paintShuttle(state, now);
+      cueSounds(now);
+      lineCall(now);
       if (pub.status === 'over' && (pub.endedAt || 0) <= now) paintResult(BM().stateOf(pub));
       else {
         paintBar(now);
         paintInterval(state, now);
+        paintPaused(now);
       }
       if (callText && now > callUntil + 4000) {
         const el = body.querySelector('[data-bd-call]');
@@ -841,7 +1201,7 @@
         pub = next;
         if (first) {
           layout();
-          if (!coachShown && !o.spectator) toast(tr('coach', 'Tap Serve / Hit as the bar crosses the green band'));
+          if (!coachShown && !o.spectator) toast(pub.simple && pub.simple[o.me] ? tr('coachSimple', 'Tap as the bar crosses the green band') : tr('coach', 'Swipe up (or tap) as the bar crosses the green band'));
         }
         if (resultShown && pub.status === 'over') paintResult(BM().stateOf(pub));
         if (!raf) raf = requestAnimationFrame(frame);
@@ -862,20 +1222,22 @@
 
   function startLocal(opts) {
     const o = opts || {};
-    if (!E() || !BM()) {
+    if (!E() || !BM() || !R()) {
       toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
       return;
     }
     const s = settings();
     const doubles = o.discipline === 'doubles';
-    const bot = 'bot:' + s.level;
-    const seats = doubles ? { A0: 'me', A1: bot, B0: bot, B1: bot } : { A0: 'me', B0: bot };
+    const bot = botSeatFor(s);
+    // Your doubles partner is an All-rounder of the same level (it rotates and covers for you).
+    const partner = 'bot:' + s.level;
+    const seats = doubles ? { A0: 'me', A1: partner, B0: bot, B1: bot } : { A0: 'me', B0: bot };
     let view = null;
     let timer = 0;
     const shell = openShell({
       id: GAME,
       title: LABEL,
-      subtitle: practiceSub((doubles ? tr('doubles', 'Doubles') + ' · ' : '') + formatLabel(s.format) + ' · ' + levelLabel(s.level)),
+      subtitle: practiceSub((doubles ? tr('doubles', 'Doubles') + ' · ' : '') + formatLabel(s.format) + ' · ' + levelLabel(s.level, s.persona) + (s.simple ? ' · ' + tr('simple', 'Simple controls') : '')),
       mode: 'practice',
       accent: '#01579B',
       bg: '#000D1A',
@@ -888,7 +1250,7 @@
     });
     if (!shell) return;
     attachHow(shell);
-    let room = BM().reduceMatch(null, 'me', 'create', { matchId: 'local_' + Date.now().toString(36), discipline: doubles ? 'doubles' : 'singles', format: s.format, seats, names: { A0: myName() }, tier: s.level, local: true }, Date.now(), Math.random).match;
+    let room = BM().reduceMatch(null, 'me', 'create', { matchId: 'local_' + Date.now().toString(36), discipline: doubles ? 'doubles' : 'singles', format: s.format, seats, names: { A0: myName() }, tier: s.level, persona: s.persona, simple: s.simple, local: true }, Date.now(), Math.random).match;
     const send = (op, args) => {
       const r = BM().reduceMatch(room, 'me', op, args, Date.now(), Math.random);
       if (r) {
@@ -1073,9 +1435,11 @@
       const late = serverNow() - pub.createdAt > 20000;
       card(
         pub.discipline === 'doubles' ? tr('wait.doubles', 'Doubles — waiting for players') : tr('wait.title', 'Waiting for your opponent'),
-        `<ul class="bd-seats">${seats}</ul><p class="bd-card-note">${esc(formatLabel(pub.format) + (pub.rated ? ' · ' + tr('rated', 'rated') : ' · ' + tr('unrated', 'unrated')))}</p>`,
+        `<ul class="bd-seats">${seats}</ul><p class="bd-card-note">${esc(formatLabel(pub.format) + (pub.rated ? ' · ' + tr('rated', 'rated') : ' · ' + tr('unrated', 'unrated')) + (Object.keys(pub.simple || {}).length ? ' · ' + tr('simple', 'Simple controls') : ''))}</p>${
+          pub.rated && lastRtt > HIGH_RTT_MS ? `<p class="bd-card-note bd-card-warn">${esc(tr('net.warnWait', 'Your connection is slow') + ' (' + lastRtt + ' ms) — ' + tr('net.warnWait2', 'shots may land late in this rated match. Try Wi-Fi, or play unrated.'))}</p>` : ''
+        }`,
         [
-          host && late ? { label: tr('wait.fill', 'Fill empty seats with Bots'), primary: true, fn: () => liveCall('fill', { matchId, tier: s.level }).catch((e) => toast(liveErrorText(e))) } : null,
+          host && late ? { label: tr('wait.fill', 'Fill empty seats with Bots'), primary: true, fn: () => liveCall('fill', { matchId, tier: s.level, persona: s.persona }).catch((e) => toast(liveErrorText(e))) } : null,
           { label: tr('wait.cancel', 'Cancel'), fn: () => liveCall('leave', { matchId }).catch(() => {}).then(() => shell.close('cancel')) },
         ].filter(Boolean)
       );
@@ -1160,6 +1524,14 @@
       if (spectator) return;
       const gap = Date.now() - lastTick;
       const anyGone = oppUids().some((u) => goneFor(u) > RECONNECT_MS + 500);
+      // A dropped player mid-rally → the server turns the rally into a let and pauses; while paused,
+      // keep nudging so play resumes as soon as everyone's back.
+      const dropNow = (pub.phase === 'serve' || pub.phase === 'rally') && oppUids().some((u) => goneFor(u) > 0);
+      if (pub.status === 'playing' && (pub.phase === 'paused' || dropNow) && gap > 2000) {
+        lastTick = Date.now();
+        liveCall('tick', { matchId }).catch(() => {});
+        return;
+      }
       if (pub.status === 'waiting' && now >= pub.deadline && gap > 2500) {
         lastTick = Date.now();
         liveCall('tick', { matchId }).catch(() => {});
@@ -1240,7 +1612,7 @@
     }
     card(tr('live.connecting', 'Joining the match…'), '', []);
     const first = cfg.create
-      ? liveCall('create', Object.assign({ matchId, name: myName(), tier: s.level }, cfg.create))
+      ? liveCall('create', Object.assign({ matchId, name: myName(), tier: s.level, persona: s.persona, simple: s.simple }, cfg.create))
       : liveCall('join', {
           matchId,
           opponentUid: cfg.opponentUid,
@@ -1248,6 +1620,7 @@
           stake: cfg.host ? cfg.stake || 0 : undefined,
           format: cfg.host ? (cfg.matchmaking ? 'standard' : s.format) : undefined,
           name: myName(),
+          simple: s.simple || undefined,
         });
     first
       .then(() => subscribe())
@@ -1272,7 +1645,7 @@
     const s = settings();
     const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: tr('home.sub', 'Sports') });
     home = shell;
-    const line = formatLabel(s.format) + ' · ' + levelLabel(s.level);
+    const line = formatLabel(s.format) + ' · ' + levelLabel(s.level, s.persona) + (s.simple ? ' · ' + tr('simple', 'Simple controls') : '');
     shell.render(`<div class="pk-page bd-home">
       <div class="pk-hero">
         <div class="pk-hero-mark">${typeof gameMarkHtml === 'function' ? gameMarkHtml(GAME, { size: 64 }) : '🏸'}</div>
@@ -1293,6 +1666,7 @@
           <span class="pk-mode-sub">${esc(tr('home.doublesSub', 'With a Bot partner, friends, or anyone'))}</span>
         </button>
         <button type="button" class="pk-link" data-go="find">${esc(tr('home.find', 'Find an opponent'))}</button>
+        <button type="button" class="pk-link" data-go="drills">${esc(tr('home.drills', 'Drills'))}</button>
         <button type="button" class="pk-link" data-go="settings">${esc(tr('home.settings', 'Match settings'))}</button>
         <button type="button" class="pk-link" data-go="rules">${esc(tr('rules.short', 'Rules'))}</button>
       </div>
@@ -1302,13 +1676,22 @@
     go('[data-go="friend"]', () => challengeFriend(shell));
     go('[data-go="doubles"]', () => openDoublesSheet(shell));
     go('[data-go="find"]', () => findOpponent(shell));
+    go('[data-go="drills"]', () => openDrillsSheet(shell));
     go('[data-go="settings"]', () => openSettings(() => Kit().closeThen(shell, openHome)));
     go('[data-go="rules"]', openRules);
   }
 
+  const PERSONA_HELP = {
+    allround: 'mixes everything, no obvious weakness.',
+    attacker: 'smashes and kills whenever it can — make it hit from deep.',
+    retriever: 'gets everything back with clears and lifts — be patient, then finish.',
+    net: 'lives at the net with tight spinners and kills — lift it to the back.',
+  };
+
   function openSettings(onDone) {
     const K = Kit();
     const Eng = E();
+    const Rl = R();
     const st = settings();
     K.openSheet({
       title: tr('home.settings', 'Match settings'),
@@ -1321,8 +1704,13 @@
               ${K.segHtml('format', st.format, Eng.FORMAT_ORDER.map((id) => [id, formatLabel(id)]))}
               <div class="pk-field-help">${esc(Eng.FORMATS[st.format].blurb + (Eng.FORMATS[st.format].rated ? ' · ' + tr('set.rated', 'rated in Live singles') : ' · ' + tr('unrated', 'unrated')))}</div></div>
             <div class="pk-field"><div class="pk-field-label">${esc(tr('set.level', 'Bot level'))}</div>
-              ${K.segHtml('level', st.level, Eng.TIER_ORDER.map((id) => [id, tr('tier.' + id, Eng.TIERS[id].label)]))}</div>
+              ${K.segHtml('level', st.level, Rl.LEVEL_ORDER.map((id) => [id, tr('level.' + id, Rl.LEVELS[id].label)]))}</div>
+            <div class="pk-field"><div class="pk-field-label">${esc(tr('set.persona', 'Bot style'))}</div>
+              ${K.segHtml('persona', st.persona, Rl.PERSONA_ORDER.map((id) => [id, tr('persona.' + id, Rl.PERSONAS[id].label)]))}
+              <div class="pk-field-help">${esc(levelLabel(st.level, st.persona) + ' — ' + tr('persona.help.' + st.persona, PERSONA_HELP[st.persona] || ''))}</div></div>
             <details class="bd-adv"><summary>${esc(tr('set.more', 'More'))}</summary>
+              <label class="bd-toggle"><input type="checkbox" data-bd-pref="simple"${st.simple ? ' checked' : ''}> <span>${esc(tr('set.simple', 'Simple controls — tap only, the shot is picked for you (unrated)'))}</span></label>
+              <label class="bd-toggle"><input type="checkbox" data-bd-pref="sound"${st.sound ? ' checked' : ''}> <span>${esc(tr('set.sound', 'Racket, shuttle and crowd sounds'))}</span></label>
               <label class="bd-toggle"><input type="checkbox" data-bd-pref="voice"${st.voice ? ' checked' : ''}> <span>${esc(tr('set.voice', 'Umpire calls read aloud'))}</span></label>
             </details>
             <button type="button" class="pk-btn pk-btn--primary" data-done>${esc(tr('set.done', 'Done'))}</button>`;
@@ -1440,7 +1828,7 @@
             const seats = {};
             const names = {};
             Object.keys(picks).forEach((k) => {
-              seats[k] = picks[k] ? picks[k].uid : 'bot:' + s.level;
+              seats[k] = picks[k] ? picks[k].uid : k === 'A1' ? 'bot:' + s.level : botSeatFor(s);
               if (picks[k]) names[k] = picks[k].name;
             });
             const go = () => startLive({ matchId: mid, create: { discipline: 'doubles', format: s.format, seats, names }, source: 'doubles_host' });
@@ -1546,6 +1934,208 @@
     };
     poll();
     timer = setInterval(poll, 2000);
+  }
+
+  // ---------------------------------------------------------------- drills (solo, unrated)
+
+  function drillBests() {
+    return readJson(KEY_DRILLS, {}) || {};
+  }
+
+  function openDrillsSheet(homeShell) {
+    const K = Kit();
+    const Rl = R();
+    if (!K || !Rl) return;
+    const best = drillBests();
+    K.openSheet({
+      title: tr('drills.title', 'Drills'),
+      bodyHtml: `<div class="pk-modes">${Rl.DRILL_ORDER.map((id) => {
+        const D = Rl.DRILLS[id];
+        const pb = best[id] != null ? ' · ' + tr('drills.best', 'Best') + ' ' + best[id] + '/' + D.max : '';
+        return `<button type="button" class="pk-mode" data-drill="${id}"><span class="pk-mode-title">${esc(tr('drill.' + id, D.label))}</span><span class="pk-mode-sub">${esc(tr('drill.' + id + '.sub', D.blurb) + pb)}</span></button>`;
+      }).join('')}</div><p class="pk-field-help">${esc(tr('drills.help', 'Solo practice · unrated · 10 shots each'))}</p>`,
+      onMount: (el, close) => {
+        el.querySelectorAll('[data-drill]').forEach((b) =>
+          b.addEventListener('click', () => {
+            close();
+            K.closeThen(homeShell, () => startDrill(b.dataset.drill));
+          })
+        );
+      },
+    });
+  }
+
+  function startDrill(kind) {
+    const Rl = R();
+    if (!E() || !Rl) {
+      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      return;
+    }
+    const D = Rl.DRILLS[kind] || Rl.DRILLS.serve;
+    let raf = 0;
+    const shell = openShell({
+      id: GAME,
+      title: tr('drill.' + D.id, D.label),
+      subtitle: practiceSub(tr('drills.one', 'Drill · unrated')),
+      mode: 'practice',
+      accent: '#01579B',
+      bg: '#000D1A',
+      leaveBody: tr('leave.drill', 'This drill will end.'),
+      cleanup: () => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+      },
+    });
+    if (!shell) return;
+    attachHow(shell);
+    const d = Rl.createDrill(D.id, Math.floor(Math.random() * 1e9));
+    let startAt = 0;
+    let dur = 0;
+    let done = false;
+    let shot = null;
+    shell.body.innerHTML = `<div class="bd bd--drill">
+      <div class="bd-board"><div class="bd-row is-mine"><span class="bd-names">${esc(tr('drill.' + D.id, D.label))}</span><span class="bd-score" data-dr-score>0</span></div>
+        <div class="bd-board-meta" data-dr-meta></div></div>
+      <p class="bd-call" data-dr-call aria-live="polite"></p>
+      <div class="bd-court-wrap"><div class="bd-court" data-bd-court>
+        <div class="bd-half bd-half--far"><i class="bd-box" data-box="far-L"></i><i class="bd-box" data-box="far-R"></i></div>
+        <div class="bd-netline"></div>
+        <div class="bd-half bd-half--near"><i class="bd-box" data-box="near-L"></i><i class="bd-box" data-box="near-R"></i></div>
+        <i class="bd-land" data-bd-land></i>
+        <span class="bd-shuttle" data-bd-shuttle aria-hidden="true"></span>
+        <span class="bd-p bd-p--far" data-dr-p="B0"><b>B</b></span>
+        <span class="bd-p bd-p--near is-me" data-dr-p="A0"><b>${esc(myName().charAt(0).toUpperCase())}</b></span>
+      </div></div>
+      <div class="bd-controls">
+        <div class="bd-bar is-mine" aria-hidden="true"><i class="bd-bar-sweet"></i><i class="bd-bar-perfect"></i><i class="bd-bar-fill" data-bd-fill></i></div>
+        <button type="button" class="bd-hit" data-bd-hit>${esc(tr('hit', 'Hit'))}</button>
+        <p class="bd-hint" data-dr-hint>${esc(tr('drill.' + D.id + '.sub', D.blurb))}</p>
+      </div>
+      <div class="bd-layer" data-dr-layer hidden></div>
+    </div>`;
+    const $ = (sel) => shell.body.querySelector(sel);
+    const court = $('[data-bd-court]');
+    const place = (el, spot) => {
+      if (!el || !spot) return;
+      el.style.left = spot.left + '%';
+      el.style.top = spot.top + '%';
+    };
+    function arm() {
+      if (!d.contact) return finish();
+      startAt = Date.now() + 900;
+      dur = d.contact.win || 900;
+      shot = null;
+      const meta = $('[data-dr-meta]');
+      if (meta) meta.textContent = tr('drills.shot', 'Shot') + ' ' + Math.min(d.i + 1, D.shots) + '/' + D.shots + (d.kind === 'serve' ? ' · ' + (d.target === 'low' ? tr('drill.targetLow', 'Target: low serve, just over the short line') : tr('drill.targetDeep', 'Target: swipe long — a high serve or flick to the back')) : '');
+    }
+    function play(g, at) {
+      if (done || !d.contact || shot || !startAt || at < startAt - 150) return;
+      const p = (at - startAt) / dur;
+      const timing = p > 1 ? 'late' : E().timingOf(p) === 'none' ? 'early' : E().timingOf(p);
+      const req = g && g.sw ? Object.assign({}, g.sw) : { tap: true };
+      shot = Rl.playDrill(d, g === 'miss' ? { miss: true } : { req, hold: !!(g && g.hold), timing });
+      shot.at = Date.now();
+      if (Rl.SHOTS[shot.shot]) Snd.hit(Rl.SHOTS[shot.shot].power);
+      if (Rl.SHOTS[shot.shot] && /smash|kill/.test(Rl.SHOTS[shot.shot].family)) vibrate(25);
+      const call = $('[data-dr-call]');
+      if (call) {
+        call.textContent = (shot.pts ? '+' + shot.pts + ' · ' : '') + shot.note + (shot.shot && Rl.SHOTS[shot.shot] ? ' · ' + Rl.SHOTS[shot.shot].label : '');
+        call.classList.remove('is-fresh');
+        void call.offsetWidth;
+        call.classList.add('is-fresh');
+      }
+      $('[data-dr-score]').textContent = String(d.score);
+      setTimeout(() => {
+        if (!done && shell.alive()) arm();
+      }, 1300);
+    }
+    function finish() {
+      if (done) return;
+      done = true;
+      const best = drillBests();
+      const prev = best[D.id];
+      const isBest = prev == null || d.score > prev;
+      if (isBest) {
+        best[D.id] = d.score;
+        writeJson(KEY_DRILLS, best);
+      }
+      const layer = $('[data-dr-layer]');
+      layer.hidden = false;
+      layer.innerHTML = `<div class="bd-result">
+        <div class="bd-result-title">${esc(d.score + ' / ' + D.max)}</div>
+        <div class="bd-result-sub">${esc(isBest ? tr('drills.newBest', 'New personal best!') : tr('drills.best', 'Best') + ' ' + prev + '/' + D.max)}</div>
+        <div class="bd-result-actions">
+          <button type="button" class="bd-btn bd-btn--primary" data-again>${esc(tr('again', 'Play again'))}</button>
+          <button type="button" class="bd-btn bd-btn--ghost" data-done>${esc(tr('done', 'Done'))}</button>
+        </div></div>`;
+      if (isBest) buzz('win');
+      layer.querySelector('[data-again]').addEventListener('click', () => {
+        shell.close('again');
+        setTimeout(() => startDrill(D.id), 150);
+      });
+      layer.querySelector('[data-done]').addEventListener('click', () => shell.close('done'));
+    }
+    // Controls: swipe / tap anywhere on the court or the pad.
+    [court, $('[data-bd-hit]')].forEach((el) => {
+      let g = null;
+      el.addEventListener('pointerdown', (ev) => {
+        if (done || !d.contact || shot) return;
+        ev.preventDefault();
+        g = { id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, t0: Date.now(), tMove: 0 };
+        try {
+          el.setPointerCapture(ev.pointerId);
+        } catch (e) {}
+      });
+      el.addEventListener('pointermove', (ev) => {
+        if (g && ev.pointerId === g.id && !g.tMove && Math.hypot(ev.clientX - g.x0, ev.clientY - g.y0) > 8) g.tMove = Date.now();
+      });
+      el.addEventListener('pointerup', (ev) => {
+        if (!g || ev.pointerId !== g.id) return;
+        const cur = Object.assign(g, { x1: ev.clientX, y1: ev.clientY, t1: Date.now() });
+        g = null;
+        const sw = swipeFrom(cur);
+        play(sw, sw ? Date.now() : cur.t0);
+      });
+      el.addEventListener('pointercancel', () => (g = null));
+    });
+    function frame() {
+      raf = 0;
+      if (!shell.alive()) return;
+      const now = Date.now();
+      const rs = d.rs;
+      place(court.querySelector('[data-dr-p="A0"]'), toScreen(0, rs.pos.A0, 0));
+      place(court.querySelector('[data-dr-p="B0"]'), toScreen(1, rs.pos.B0, 0));
+      const sh = court.querySelector('[data-bd-shuttle]');
+      const landEl = court.querySelector('[data-bd-land]');
+      if (shot && shot.land) {
+        // My shot flying to their half.
+        const p = clamp((now - shot.at) / 700, 0, 1);
+        const arc = Rl.flightAt(shot.shot || 'lift', p);
+        const from = toScreen(0, rs.pos.A0, 0);
+        const to = toScreen(1, shot.land.y > 0 ? shot.land : { x: shot.land.x, y: 0.05 }, 0);
+        place(sh, { left: from.left + (to.left - from.left) * arc.s, top: from.top + (to.top - from.top) * arc.s - arc.h * 1.5 });
+        if (landEl) {
+          landEl.style.opacity = p >= 1 ? '1' : '0';
+          landEl.classList.toggle('is-out', shot.kind === 'fault');
+          place(landEl, to);
+        }
+      } else if (d.contact && startAt) {
+        // The feed coming to me (smash / net), or the shuttle in my hand (serve).
+        const me = toScreen(0, rs.pos.A0, 0);
+        const from = d.kind === 'serve' ? me : toScreen(1, rs.pos.B0, 0);
+        const p = clamp(1 - (startAt + dur * 0.55 - now) / (dur * 0.55 + 900), 0, 1);
+        const arc = Rl.flightAt(d.kind === 'smash' ? 'smash_jump' : 'net_tumble', p);
+        place(sh, d.kind === 'serve' ? me : { left: from.left + (me.left - from.left) * arc.s, top: from.top + (me.top - from.top) * arc.s - arc.h * 1.5 });
+        if (landEl) landEl.style.opacity = '0';
+        if (!shot && now > startAt + dur + 500) play('miss', now);
+      }
+      if (sh) sh.style.opacity = d.contact || shot ? '1' : '0';
+      const fill = $('[data-bd-fill]');
+      if (fill) fill.style.transform = 'scaleX(' + (startAt && !shot ? clamp((now - startAt) / dur, 0, 1) : 0) + ')';
+      if (!done) raf = requestAnimationFrame(frame);
+    }
+    arm();
+    raf = requestAnimationFrame(frame);
   }
 
   // ---------------------------------------------------------------- entry + registration

@@ -372,7 +372,8 @@ function localDriver(seed, o) {
   assert(forfeited && afk.pub.status === 'over' && afk.pub.winnerUids[0] === B && afk.pub.reason === 'afk', 'three missed turns forfeits (auto-serve / no swing counts as a miss)');
   // vs Bot on the phone: missed turns cost points, never a walkover (first-time players read the tips).
   let loc = BM.reduceMatch(null, 'me', 'create', { matchId: 'bd_afk_local', local: true, tier: 'normal' }, now, rng).match;
-  for (let i = 0; i < 12 && loc.pub.status === 'playing'; i++) {
+  // P13: an idle turn gets the weak auto-return (a lift), which the bot usually punishes.
+  for (let i = 0; i < 80 && loc.pub.status === 'playing' && BM.stateOf(loc.pub).score[1] < 5; i++) {
     const r = BM.reduceMatch(loc, 'me', 'tick', {}, loc.pub.deadline + 1, rng);
     if (r) loc = r.match;
   }
@@ -605,7 +606,7 @@ async function driveLive(F, call, mid, humans, rng, clock) {
     const media = read('api/media-config.js');
     assert(/'badminton_match'/.test(media) && /server-lib\/badminton-engine/.test(media), 'badminton_match action on /api/media-config');
     const kit = read('public/src/js/games/party-kit.js');
-    assert(/badminton: \['games\/badminton-engine\.js', 'games\/badminton-match\.js'\]/.test(kit), 'LAZY_DATA loads the engine + match');
+    assert(/badminton: \['games\/badminton-engine\.js', 'games\/badminton-rally\.js', 'games\/badminton-match\.js'\]/.test(kit), 'LAZY_DATA loads the engine + rally model (P13) + match');
     const html = read('public/index.html');
     assert(/data-party-lazy src="\/src\/js\/games\/badminton-engine\.js\?v=/.test(html) && /data-party-lazy src="\/src\/js\/games\/badminton-match\.js\?v=/.test(html), 'index.html lists the lazy badminton scripts');
     const rules = JSON.parse(read('firebase/database.rules.json'));

@@ -10,19 +10,22 @@
  *   contact the shuttle coming to one seat: { n, k, seat, side, serve, court, startAt, dur, land }
  *   hits    the current rally so far (animation): [{ seat, at, timing, land, kind }]
  *
- * A phone only ever sends `hit { n, k, t, rtt }` (tap time inside the window). The server clamps
- * the tap (RTT compensation capped at MAX_COMP_MS), rolls the contact with its own seed and appends
- * rally events; score, service and ends come out of the laws engine. Bot seats play at once with
- * future timestamps, so phones animate them on the shared clock without extra round trips.
+ *   rally   the exchange model state (badminton-rally.js): positions, stamina, formations
+ *
+ * A phone only ever sends `hit { n, k, t, rtt, sw?, hold?, base? }` (tap time inside the window, the
+ * swipe that picks the shot, an optional dragged base). The server clamps the tap (RTT compensation
+ * capped at MAX_COMP_MS), resolves the exchange with its own seed and appends rally events; score,
+ * service and ends come out of the laws engine. Bot seats play at once with future timestamps, so
+ * phones animate them on the shared clock without extra round trips.
  */
 (function (root, factory) {
   const api =
     typeof module === 'object' && module.exports
-      ? factory(require('./badminton-engine.js'), require('../dangal/dangal-live-policy.js'))
-      : factory(root.BadmintonEngine, root.DangalLivePolicy);
+      ? factory(require('./badminton-engine.js'), require('../dangal/dangal-live-policy.js'), require('./badminton-rally.js'))
+      : factory(root.BadmintonEngine, root.DangalLivePolicy, root.BadmintonRally);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BadmintonMatch = api;
-})(typeof self !== 'undefined' ? self : this, function (E, Policy) {
+})(typeof self !== 'undefined' ? self : this, function (E, Policy, R) {
   'use strict';
 
   const POLICY = Policy && Policy.policyFor ? Policy.policyFor('badminton') : { reconnectMs: 90000, afk: { maxMisses: 3 } };
@@ -46,7 +49,9 @@
   const MAX_STAKE = 500;
   const SETTLE_LEASE_MS = 30000;
   const SEATS = ['A0', 'A1', 'B0', 'B1'];
-  const CLIENT_OPS = new Set(['join', 'create', 'fill', 'hit', 'ready', 'tick', 'leave', 'rematch', 'settle']);
+  const CLIENT_OPS = new Set(['join', 'create', 'fill', 'hit', 'move', 'ready', 'tick', 'leave', 'rematch', 'settle']);
+  /** Presence older than this (or online: false) mid-rally = dropped: the rally becomes a let and play pauses. */
+  const STALE_MS = 25000;
 
   function err(code, message) {
     const e = new Error(message || code);
@@ -74,7 +79,16 @@
   const sideOfSeat = (seat) => (String(seat).charAt(0) === 'B' ? 1 : 0);
   const playerOfSeat = (seat) => (String(seat).charAt(1) === '1' ? 1 : 0);
   const seatOf = (side, player) => (side === 1 ? 'B' : 'A') + (player === 1 ? 1 : 0);
-  const botLabel = (tier) => E.TIERS[E.tierOf(tier)].label + ' Bot';
+  /** 'bot:<level>[:<persona>]' — old tier ids (easy / normal / sharp) map onto the P13 levels. */
+  function botSeat(v) {
+    const b = R.parseBot(v);
+    return 'bot:' + b.level + (b.persona === 'allround' ? '' : ':' + b.persona);
+  }
+  const botLabel = (v) => {
+    const b = R.parseBot(v);
+    return R.botLabel(b.level, b.persona);
+  };
+  const tierSeat = (tier, persona) => botSeat('bot:' + (tier || 'club') + (persona ? ':' + persona : ''));
 
   function seatList(pub) {
     return pub.discipline === 'doubles' ? SEATS : ['A0', 'B0'];
@@ -132,18 +146,21 @@
       nextMatchId: '',
       rematchOf: o.rematchOf || '',
       settlement: null,
+      simple: {},
+      fastest: null,
+      rally: null,
     };
     const seats = o.seats || {};
     seatList(pub).forEach((s) => {
       const v = seats[s];
-      if (isBot(v)) pub.seats[s] = 'bot:' + E.tierOf(v.slice(4));
+      if (isBot(v)) pub.seats[s] = botSeat(v);
       else if (cleanUid(v)) pub.seats[s] = cleanUid(v);
-      else pub.seats[s] = 'bot:' + E.tierOf(o.tier);
+      else pub.seats[s] = tierSeat(o.tier, o.persona);
     });
     const names = o.names || {};
     seatList(pub).forEach((s) => {
       const v = pub.seats[s];
-      if (isBot(v)) pub.names[s] = botLabel(v.slice(4));
+      if (isBot(v)) pub.names[s] = botLabel(v);
       else {
         pub.players[v] = true;
         pub.names[s] = cleanName(names[s] || names[v]) || 'Player';
@@ -156,14 +173,80 @@
     const twoHumanSingles = discipline === 'singles' && hs.length === 2;
     pub.rated = twoHumanSingles && !!E.FORMATS[pub.format].rated && !pub.local;
     pub.stake = twoHumanSingles && !pub.local ? stake : 0;
+    const simple = o.simple || {};
+    hs.forEach((u) => {
+      if (simple[u]) setSimple(pub, u, true);
+    });
     return { pub, server: { settled: false, settling: 0 }, presence: {} };
+  }
+
+  /** Simple controls (tap anywhere, the shot is picked for you) — any match with a Simple player is unrated. */
+  function setSimple(pub, uid, on) {
+    if (!pub.players[uid] || pub.log.length) return;
+    if (on) pub.simple[uid] = true;
+    else delete pub.simple[uid];
+    if (Object.keys(pub.simple).length) {
+      pub.rated = false;
+      pub.stake = 0;
+    }
+  }
+
+  function whoOf(pub) {
+    const who = {};
+    seatList(pub).forEach((s) => {
+      const v = pub.seats[s];
+      if (isBot(v)) who[s] = Object.assign({ bot: true }, R.parseBot(v));
+      else who[s] = { simple: !!pub.simple[v] };
+    });
+    return who;
+  }
+  /** The exchange state, created on first use and restored after RTDB drops empty fields. */
+  function rallyOf(pub) {
+    const seats = seatList(pub);
+    let rs = pub.rally;
+    if (!rs || !rs.seats) {
+      rs = R.createRally({ discipline: pub.discipline, seats, who: whoOf(pub) });
+      pub.rally = rs;
+      return rs;
+    }
+    ['pos', 'base', 'st', 'manual'].forEach((k) => (rs[k] = rs[k] || {}));
+    rs.seats = seats;
+    rs.who = whoOf(pub);
+    rs.discipline = pub.discipline;
+    rs.form = [rs.form && rs.form[0] ? rs.form[0] : '', rs.form && rs.form[1] ? rs.form[1] : ''];
+    rs.last = rs.last || null;
+    rs.n = rs.n || 0;
+    seats.forEach((s) => {
+      if (rs.st[s] == null) rs.st[s] = 1;
+      if (!rs.pos[s]) rs.pos[s] = { x: 0, y: 3 };
+      if (!rs.base[s]) rs.base[s] = { x: 0, y: 3 };
+    });
+    return rs;
+  }
+  function snapPos(rs) {
+    const out = {};
+    rs.seats.forEach((s) => {
+      const p = rs.pos[s] || { x: 0, y: 3 };
+      out[s] = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+    });
+    return out;
+  }
+  /** The part of a pub contact the exchange model reads. */
+  function rallyContact(c) {
+    return { seat: c.seat, serve: !!c.serve, ch: c.ch || (c.serve ? 'serve' : 'mid'), court: c.court, r: Number(c.r) || 0, power: Number(c.power) || 0, loose: !!c.loose, receiver: c.receiver || '' };
+  }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  /** A phone's swipe → the request the model reads (anything else it sends is ignored). */
+  function cleanSwipe(sw) {
+    if (!sw || typeof sw !== 'object') return { tap: true, x: 0 };
+    return { len: clamp(Number(sw.len) || 0, 0, 1), hard: !!sw.hard, x: clamp(Number(sw.x) || 0, -1, 1) };
   }
 
   /** RTDB drops empty objects / arrays and nulls — restore the shapes the reducer expects. */
   function hydrate(m) {
     if (!m || !m.pub) return m;
     const p = m.pub;
-    ['seats', 'players', 'names', 'joined', 'misses', 'ready', 'rematch'].forEach((k) => {
+    ['seats', 'players', 'names', 'joined', 'misses', 'ready', 'rematch', 'simple'].forEach((k) => {
       p[k] = p[k] || {};
     });
     const arr = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? Object.keys(v).sort((x, y) => x - y).map((k) => v[k]) : []);
@@ -176,6 +259,10 @@
     p.winnerUids = arr(p.winnerUids);
     if (p.winner == null) p.winner = -1;
     p.settlement = p.settlement || null;
+    p.fastest = p.fastest || null;
+    p.startPos = p.startPos || null;
+    p.rally = p.rally || null;
+    if (p.rally && p.rally.seats) p.rally.seats = arr(p.rally.seats);
     m.server = m.server || {};
     m.presence = m.presence || {};
     return m;
@@ -239,17 +326,21 @@
     const pub = m.pub;
     const st = stateOf(pub);
     const seat = seatOf(st.server.side, st.server.player);
+    const receiver = seatOf(st.receiver.side, st.receiver.player);
     pub.phase = 'serve';
     pub.pause = null;
     // The rally that just ended stays for the phones to finish animating it.
     pub.prevHits = pub.hits && pub.hits.length ? pub.hits : pub.prevHits || [];
     pub.hits = [];
-    pub.contact = { n: pub.log.length, k: 0, seat, side: st.server.side, serve: true, court: st.court, startAt: at + wait, dur: E.PLAY.serveWindowMs, land: null };
+    const rs = rallyOf(pub);
+    const rc = R.startRally(rs, { server: seat, receiver, court: st.court });
+    pub.startPos = snapPos(rs);
+    pub.contact = { n: pub.log.length, k: 0, seat, side: st.server.side, serve: true, court: st.court, startAt: at + wait, dur: E.PLAY.serveWindowMs, land: null, ch: rc.ch, r: 0, power: 0, shot: '', loose: false, receiver };
     pub.deadline = pub.contact.startAt + pub.contact.dur + GRACE_MS;
     return maybeBot(m, rng, 0);
   }
 
-  /** A bot's turn: pick its timing and resolve at a future moment inside its window. */
+  /** A bot's turn: pick its shot + timing and resolve at a future moment inside its window. */
   function maybeBot(m, rng, depth) {
     const pub = m.pub;
     const c = pub.contact;
@@ -257,9 +348,53 @@
     const who = pub.seats[c.seat];
     if (!isBot(who)) return {};
     if (depth > 400) throw err('runaway', 'Rally never ended');
-    const timing = E.botTiming({ tier: who.slice(4), windowMs: c.dur, rally: c.k, serve: c.serve }, rng);
-    const at = Math.round(c.startAt + E.tapFor(timing, rng) * c.dur);
-    return resolveTap(m, at, rng, timing, '', depth + 1);
+    const bp = R.botPlay(rallyOf(pub), rallyContact(c), E.mulberry32(seedOf(rng)));
+    const at = Math.round(c.startAt + E.tapFor(bp.timing, rng) * c.dur);
+    return resolveTap(m, at, rng, { shot: bp.choice.shot, x: bp.choice.x, hold: bp.choice.hold, timing: bp.timing }, '', depth + 1);
+  }
+
+  /** A person who hasn't played (AFK): the weak auto-return (low serve / lift) — it still counts as a miss. */
+  function autoReturn(m, at, rng, now) {
+    const c = m.pub.contact;
+    const ap = R.autoPlay(rallyContact(c));
+    return resolveTap(m, at, rng, { shot: ap.shot, x: ap.x, timing: ap.timing }, c.serve ? 'serve' : 'lift', 0, now);
+  }
+
+  /** Presence says this player dropped (tab closed / offline / no heartbeat). Local games have no presence. */
+  function dropped(m, uid, now) {
+    if (m.pub.local || !uid || isBot(uid)) return false;
+    const p = m.presence[uid];
+    if (!p) return false;
+    return p.online === false || now - (Number(p.at) || 0) > STALE_MS;
+  }
+
+  /**
+   * Someone dropped mid-rally: the rally is replayed as a let (no point) and play pauses until they're
+   * back (then the same server serves again) or the reconnect window runs out (forfeit).
+   */
+  function pauseForDrop(m, now, uid) {
+    const pub = m.pub;
+    const inRally = pub.phase === 'rally' || (pub.hits && pub.hits.length > 0);
+    if (inRally) pub.log.push({ t: 'let', code: 'disturbed', at: now });
+    pub.prevHits = pub.hits && pub.hits.length ? pub.hits : pub.prevHits || [];
+    pub.hits = [];
+    pub.phase = 'paused';
+    pub.contact = null;
+    pub.pause = { kind: 'reconnect', from: now, until: now + RECONNECT_MS, who: seatOfUid(pub, uid), let: inRally };
+    pub.deadline = pub.pause.until;
+    return { paused: true, let: inRally };
+  }
+  /** Everyone's back → the same server serves again (the let changed nothing); window gone → forfeit. */
+  function maybeResume(m, now, rng) {
+    const pub = m.pub;
+    if (pub.phase !== 'paused') return null;
+    const gone = humans(pub).find((u) => dropped(m, u, now));
+    if (gone) {
+      if (now < pub.pause.until) return null;
+      forfeitSide(m, now, sideOfSeat(seatOfUid(pub, gone)), 'disconnect');
+      return { ended: true, forfeit: true };
+    }
+    return Object.assign({ resumed: true }, toServe(m, now, LEAD_MS, rng));
   }
 
   /** After a point: the match, an interval / game break, or the next serve. */
@@ -270,6 +405,7 @@
       finish(m, at, st.result.winner, st.result.by);
       return { ended: true };
     }
+    R.rest(rallyOf(pub), st.pause ? (st.pause.kind === 'game' ? 'game' : 'interval') : 'point');
     if (st.pause) {
       pub.phase = 'interval';
       pub.contact = null;
@@ -282,18 +418,28 @@
   }
 
   /**
-   * Resolve the contact in play at `at` with `timing`. Faults and winners go into the log; a clean
-   * contact hands the shuttle to the other side (whoever covers the landing spot in doubles).
+   * Resolve the contact in play at `at` with `play` ({ timing, req | shot, x, hold }) through the
+   * exchange model. Faults and winners go into the log; a clean contact hands the shuttle to whoever
+   * on the other side takes it (the model's "mine" call in doubles).
    */
-  function resolveTap(m, at, rng, timing, auto, depth, now) {
+  function resolveTap(m, at, rng, play, auto, depth, now) {
     const pub = m.pub;
     const c = pub.contact;
-    const st = stateOf(pub);
-    const res = E.resolveContact({ discipline: pub.discipline, serve: c.serve, court: c.court, timing, windowMs: c.dur, prevLand: c.land }, E.mulberry32(seedOf(rng)));
+    const rs = rallyOf(pub);
+    const res = R.resolve(rs, rallyContact(c), play, E.mulberry32(seedOf(rng)));
     const land = round2(res.land);
-    const hit = { seat: c.seat, at, timing, land, kind: res.kind };
+    // pos = where everyone heads while this shot flies (the phones animate footwork from it).
+    const hit = { seat: c.seat, at, timing: play.timing, land, kind: res.kind, shot: res.shot, q: res.q, kmh: res.kmh, pos: snapPos(rs) };
+    if (c.r) hit.r = c.r;
+    if (res.code) hit.code = res.code;
+    if (c.serve) hit.serve = true;
     if (auto) hit.auto = auto;
+    if (res.hold) hit.hold = true;
+    if (res.dig) hit.dig = true;
+    if (res.call) hit.call = res.call;
     pub.hits.push(hit);
+    const fam = (R.SHOTS[res.shot] || {}).family;
+    if ((fam === 'smash' || fam === 'kill') && res.kind !== 'fault' && (!pub.fastest || res.kmh > pub.fastest.kmh)) pub.fastest = { kmh: res.kmh, seat: c.seat, shot: res.shot };
     if (res.kind === 'let') {
       pub.log.push({ t: 'let', code: res.code, at: at + 400 });
       return Object.assign(toServe(m, at + 400, POINT_MS, rng), { let: res.code });
@@ -306,15 +452,15 @@
       pub.log.push({ t: 'rally', w: 1 - c.side, by: c.side, code: res.code, hits: c.k + 1, at: at + 400 });
       return Object.assign(afterPoint(m, at + 400, rng), { point: 1 - c.side, code: res.code });
     }
-    const side = 1 - c.side;
-    const player = E.hitterFor(st, side, land, c.serve);
-    const seat = seatOf(side, player);
+    const nx = res.next;
+    const seat = nx.seat;
+    const side = sideOfSeat(seat);
     const nextBot = isBot(pub.seats[seat]);
     // A human tap may be stamped in the past (RTT compensation): the next human still gets a full window.
     const startAt = nextBot || depth ? at : Math.max(at, now || at) + HANDOFF_MS;
     pub.phase = 'rally';
-    pub.contact = { n: c.n, k: c.k + 1, seat, side, serve: false, court: c.court, startAt, dur: res.nextWindow, land };
-    pub.deadline = startAt + res.nextWindow + GRACE_MS;
+    pub.contact = { n: c.n, k: c.k + 1, seat, side, serve: false, court: c.court, startAt, dur: nx.win, land, ch: nx.ch, r: nx.r, power: nx.power, shot: nx.shot, loose: !!nx.loose, readMs: nx.readMs, from: c.seat };
+    pub.deadline = startAt + nx.win + GRACE_MS;
     return Object.assign({ contact: true }, maybeBot(m, rng, depth || 0));
   }
 
@@ -353,12 +499,14 @@
       const seats = { A0: uid };
       ['A1', 'B0', 'B1'].forEach((s) => {
         const v = a.seats && a.seats[s];
-        seats[s] = isBot(v) ? v : cleanUid(v) || 'bot:' + E.tierOf(a.tier);
+        seats[s] = isBot(v) ? v : cleanUid(v) || tierSeat(a.tier, a.persona);
       });
       const names = {};
       names.A0 = cleanName(a.name) || 'Player';
       if (a.names) ['A1', 'B0', 'B1'].forEach((s) => (names[s] = a.names[s]));
-      const m = newMatch({ matchId, discipline: a.discipline, format: a.format, stake: a.stake, seats, names, host: uid, now, tier: a.tier, local: !!a.local });
+      const simple = {};
+      if (a.simple) simple[uid] = true;
+      const m = newMatch({ matchId, discipline: a.discipline, format: a.format, stake: a.stake, seats, names, host: uid, now, tier: a.tier, persona: a.persona, local: !!a.local, simple });
       m.pub.joined[uid] = true;
       if (allJoined(m.pub)) start(m, now, rng);
       return { match: m, result: { created: true, started: m.pub.status === 'playing' } };
@@ -375,7 +523,9 @@
         const hostArgs = playerA === uid ? a : {};
         const names = {};
         names[uid] = cleanName(a.name) || 'Player';
-        const m = newMatch({ matchId, discipline: 'singles', format: hostArgs.format, stake: hostArgs.stake, seats: { A0: playerA, B0: playerB }, names, host: playerA, now });
+        const simple = {};
+        if (a.simple) simple[uid] = true;
+        const m = newMatch({ matchId, discipline: 'singles', format: hostArgs.format, stake: hostArgs.stake, seats: { A0: playerA, B0: playerB }, names, host: playerA, now, simple });
         m.pub.joined[uid] = true;
         return { match: m, result: { created: true } };
       }
@@ -388,10 +538,14 @@
       if (pub.status === 'waiting') {
         if (uid === pub.host && a.format != null && pub.log.length === 0) {
           pub.format = E.normFormat(a.format);
-          pub.rated = pub.discipline === 'singles' && humans(pub).length === 2 && !!E.FORMATS[pub.format].rated;
+          pub.rated = pub.discipline === 'singles' && humans(pub).length === 2 && !!E.FORMATS[pub.format].rated && !Object.keys(pub.simple).length;
         }
-        if (uid === pub.host && a.stake != null && pub.discipline === 'singles') pub.stake = Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(a.stake) || 0)));
+        if (uid === pub.host && a.stake != null && pub.discipline === 'singles' && !Object.keys(pub.simple).length) pub.stake = Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(a.stake) || 0)));
+        if (a.simple != null) setSimple(pub, uid, !!a.simple);
         if (allJoined(pub)) start(m, now, rng);
+      } else if (pub.phase === 'paused' && !pub.local) {
+        const res = maybeResume(m, now, rng);
+        if (res) return { match: m, result: Object.assign({ joined: true, seat }, res) };
       }
       return { match: m, result: { joined: true, seat } };
     }
@@ -409,8 +563,9 @@
         const v = pub.seats[s];
         if (!isBot(v) && !pub.joined[v]) {
           delete pub.players[v];
-          pub.seats[s] = 'bot:' + E.tierOf(a.tier);
-          pub.names[s] = botLabel(a.tier);
+          delete pub.simple[v];
+          pub.seats[s] = tierSeat(a.tier, a.persona);
+          pub.names[s] = botLabel(pub.seats[s]);
         }
       });
       pub.rated = false;
@@ -433,11 +588,31 @@
       const p = tap / c.dur;
       const timing = p > 1 ? 'late' : E.timingOf(p) === 'none' ? 'early' : E.timingOf(p);
       pub.misses[uid] = 0;
-      const res = resolveTap(m, Math.round(c.startAt + tap), rng, timing, '', 0, now);
+      const rs = rallyOf(pub);
+      if (a.base) R.setManual(rs, c.seat, a.base);
+      let play;
+      if (pub.simple[uid]) {
+        // Simple controls: the model picks the shot (club-level choice); only the tap timing is theirs.
+        const ch = R.chooseShot(rs, c.seat, rallyContact(c), E.mulberry32(seedOf(rng)));
+        play = { shot: ch.shot, x: ch.x, hold: false, timing };
+      } else play = { req: cleanSwipe(a.sw), hold: !!a.hold, timing };
+      const res = resolveTap(m, Math.round(c.startAt + tap), rng, play, '', 0, now);
       return { match: m, result: Object.assign({ resolved: true, timing }, res) };
     }
 
+    if (op === 'move') {
+      // Drag your marker: your base (where you recover to). Your bot partner covers the other half.
+      const seat = seatOfUid(pub, uid);
+      if (!seat || pub.status !== 'playing') return null;
+      R.setManual(rallyOf(pub), seat, a.base);
+      return { match: m, result: { moved: true } };
+    }
+
     if (op === 'ready') {
+      if (pub.phase === 'paused') {
+        const res = maybeResume(m, now, rng);
+        return res ? { match: m, result: res } : null;
+      }
       if (pub.phase !== 'interval') return null;
       pub.ready[uid] = true;
       if (humans(pub).every((u) => pub.ready[u])) {
@@ -464,6 +639,21 @@
           forfeitSide(m, now, sideOfSeat(seatOfUid(pub, gone)), 'disconnect');
           return { match: m, result: { ended: true, forfeit: true } };
         }
+        if (pub.phase === 'paused') {
+          const res = maybeResume(m, now, rng);
+          return res ? { match: m, result: res } : null;
+        }
+        if (pub.phase === 'serve' || pub.phase === 'rally') {
+          const drop = humans(pub).find((u) => dropped(m, u, now));
+          if (drop) {
+            // Repeated drops count like missed turns (P1 AFK policy).
+            if (afk(m, drop)) {
+              forfeitSide(m, now, sideOfSeat(seatOfUid(pub, drop)), 'disconnect');
+              return { match: m, result: { ended: true, forfeit: true } };
+            }
+            return { match: m, result: pauseForDrop(m, now, drop) };
+          }
+        }
       }
       if (now < pub.deadline) return null;
       if (pub.phase === 'interval') {
@@ -477,16 +667,9 @@
         forfeitSide(m, now, c.side, 'afk');
         return { match: m, result: { ended: true, forfeit: true } };
       }
-      if (c.serve) {
-        // No serve in time: the server auto-serves a steady serve (the P1 auto-play), and it counts as a miss.
-        const res = resolveTap(m, now, rng, 'good', 'serve', 0, now);
-        return { match: m, result: Object.assign({ autoServe: true }, res) };
-      }
-      // No swing: the shuttle lands in their court.
-      pub.hits.push({ seat: c.seat, at: c.startAt + c.dur, timing: 'none', land: c.land || { x: 0, y: 3 }, kind: 'miss', auto: 'none' });
-      pub.log.push({ t: 'rally', w: 1 - c.side, by: 1 - c.side, code: 'winner', hits: c.k, at: c.startAt + c.dur });
-      const res = afterPoint(m, Math.max(now, c.startAt + c.dur), rng);
-      return { match: m, result: Object.assign({ noSwing: true, point: 1 - c.side }, res) };
+      // No shot in time: the weak auto-return (a low serve / a lift) is played for them and counts as a miss.
+      const res = autoReturn(m, Math.max(now - GRACE_MS, c.startAt + c.dur), rng, now);
+      return { match: m, result: Object.assign(c.serve ? { autoServe: true } : { autoLift: true }, res) };
     }
 
     if (op === 'leave') {
@@ -518,7 +701,7 @@
           match: m,
           result: {
             nextMatchId: pub.nextMatchId,
-            createNext: { matchId: pub.nextMatchId, discipline: pub.discipline, format: pub.format, stake: pub.stake, seats: Object.assign({}, pub.seats), names, host: pub.host, rematchOf: pub.matchId, local: pub.local },
+            createNext: { matchId: pub.nextMatchId, discipline: pub.discipline, format: pub.format, stake: pub.stake, seats: Object.assign({}, pub.seats), names, host: pub.host, rematchOf: pub.matchId, local: pub.local, simple: Object.assign({}, pub.simple) },
           },
         };
       }
@@ -560,6 +743,7 @@
       bestStreak: s.bestStreak.slice(),
       lets: s.lets,
       games: st.games.map((g) => g.score.slice()),
+      fastest: pub.fastest ? Object.assign({}, pub.fastest) : null,
     };
   }
 
@@ -573,9 +757,14 @@
     GAME_BREAK_MS,
     JOIN_MS,
     RECONNECT_MS,
+    STALE_MS,
     SEATS,
     CLIENT_OPS,
     isBot,
+    botSeat,
+    botLabel,
+    rallyOf,
+    dropped,
     seatOf,
     sideOfSeat,
     playerOfSeat,

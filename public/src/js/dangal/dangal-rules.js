@@ -351,8 +351,11 @@
         }),
         opt('discipline', 'Play', 'singles', ['singles', 'doubles'], 'host', { labels: { singles: 'Singles', doubles: 'Doubles (2 v 2)' } }),
       ],
-      glance: ['Tap Serve or Hit as the shuttle reaches the green', 'Every rally scores a point', 'Best of 3 games to 21 — win by 2, 30 caps it'],
+      glance: ['Swipe (or tap) as the bar crosses the green', 'Every rally scores a point', 'Best of 3 games to 21 — win by 2, 30 caps it'],
       rules: [
+        { h: 'Controls', body: 'Your player runs to the shuttle by itself — drag your marker to change where you wait. When it’s your shot, swipe up as the bar crosses the green: a long swipe plays deep (clear, lift, high serve), a short one plays to the front (drop, net shot, low serve), a quick one attacks (smash, drive, flick, kill), and sideways aims. Hold still for a moment before swiping to disguise it. A plain tap plays the natural shot for where you are. Good timing, being in position and fresh legs make a better shot; you can only smash a shuttle that’s above you.' },
+        { h: 'Simple controls', body: 'In Match settings → More: tap anywhere in the green and the shot is picked for you. Matches with a Simple player are unrated.' },
+        { h: 'Bots and drills', body: 'Bots come in four levels (Beginner, Club, County, Pro) and four styles: All-rounder, Attacker (smashes whenever it can), Retriever (gets everything back) and Net player (tight at the net). Drills — serve practice, smash defence and net play — are solo and unrated, with a score and your personal best.' },
         { h: 'Scoring', body: 'Every rally wins a point for the side that wins it. A game is won at 21 with a 2-point lead; from 20-all the first side 2 points clear wins, and at 29-all the 30th point wins. Standard is best of 3 games; the winner of a game serves first in the next.' },
         { h: 'Intervals and ends', body: 'A short interval when the leading score reaches 11, and a longer one between games — either player can tap Ready to resume early. Players change ends after each game, and in the deciding game when the leading score reaches 11.' },
         { h: 'Singles service', body: 'Serve from the right service court when the server’s score is even (0, 2, 4 …) and the left when it is odd, diagonally to the receiver. The singles court is long and narrow: the serve may land up to the back line.' },
@@ -360,7 +363,7 @@
         { h: 'Faults', body: 'Shuttle out or into the net; touching the net; hitting twice or both partners hitting in succession; obstructing the opponent. Service faults: struck above 1.15 m, feet moving, short of the short service line, past the long line or outside the box.' },
         { h: 'Lets', body: 'The rally is replayed with no point: the receiver wasn’t ready, the shuttle caught on the net on a return, both sides faulted, the shuttle came apart, or play was disturbed.' },
         { h: 'Formats', body: 'Standard: best of 3 games to 21 (rated in Live singles). Single game to 21 and Quick 11 (best of 3 to 11, 2-point lead, capped at 15 — a Chaupaal quick format, not a BWF one) are unrated.' },
-        { h: 'Live', body: 'Our server resolves every rally with its own seed: your phone only sends the moment you tapped, allowed for your connection up to a fixed cap. Miss your swing and the point goes against you; three missed turns forfeits. Doubles pairs friends, bots or matchmade players 2 v 2 and is unrated. Virtual chips only.' },
+        { h: 'Live', body: 'Our server resolves every rally with its own seed: your phone only sends your swipe and the moment you played it, allowed for your connection up to a fixed cap (you’re warned before a rated match on a slow connection). Miss your turn and a weak lift is played for you; three missed turns in a row forfeits. If someone drops mid-rally, the rally is a let and play pauses until they’re back — no return in time forfeits. Line calls and shot speeds shown are simulated. Doubles pairs friends, bots or matchmade players 2 v 2 and is unrated. Virtual chips only.' },
       ],
     },
     penalty: {
