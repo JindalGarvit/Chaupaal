@@ -962,7 +962,7 @@ async function handlePost(req, res) {
       const ai = sharedAI(adminApp ? { db: adminApp.firestore(), admin: adminApp } : {});
       const input = body.input && typeof body.input === 'object' ? body.input : {};
       const out = await ai.run(hook, input, { uid: user.uid });
-      return sendSuccess(res, { data: out.data, source: out.source });
+      return sendSuccess(res, { data: out.data, source: out.source, reason: out.reason || '' });
     } catch (e) {
       console.warn('[media-config] dangal_ai', e?.message || e);
       return sendError(res, 500, 'DANGAL_AI_ERROR', 'Could not load that right now');

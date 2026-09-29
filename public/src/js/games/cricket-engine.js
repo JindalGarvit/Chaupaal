@@ -13,7 +13,9 @@
  *
  * Events:
  *   { t:'ball', extra:''|'wd'|'nb'|'b'|'lb', runs, out:''|kind, outWho:'striker'|'nonstriker',
- *     contact, del, shot, timing, dir, dist, seed, code }
+ *     contact, del, shot, timing, dir, dist, seed, code,
+ *     // P11 (CricketModel): type, line, length, variation, foot, run, band, region, edged, behind,
+ *     appeal:{kind:'lbw'|'caught', onField, track?, edge}, drs:{by:'bat'|'bowl', result, decision} }
  *   { t:'pen', runs }                                — penalty runs to the batting side
  *   { t:'end', reason:'forfeit'|'abandoned', winner } — forfeit (winner = side index) / no result
  */
@@ -55,6 +57,7 @@
     firstBallSafe: false,
     tipAndRun: false,
     bounceCatch: '',
+    drs: false,
   };
 
   const PRESETS = {
@@ -62,9 +65,12 @@
       id: 'standard',
       label: 'Standard',
       rated: true,
-      rules: {},
+      rules: { drs: true },
       toggles: [],
-      tweaks: ['MCC-adapted laws: LBW, free hit after a no-ball, one bowler per side in 1v1.'],
+      tweaks: [
+        'MCC-adapted laws: LBW, free hit after a no-ball, one bowler per side in 1v1.',
+        'Review: one per side per innings on LBW or caught behind — kept on umpire’s call.',
+      ],
     },
     gully: {
       id: 'gully',
@@ -135,6 +141,7 @@
       ['Free hit', 'Only a run out; carries over through a wide or another no-ball'],
       ['Byes / leg-byes', 'Count to extras, not the bowler'],
       ['Tie', 'Super Over (the chasing side bats first), shared, or boundary count'],
+      ['Review', 'Standard only: one per side per innings on LBW / caught behind; umpire’s call keeps it'],
     ];
     const cols = PRESET_ORDER.map((id) => {
       const r = makeRules(id);
@@ -148,6 +155,7 @@
         firstBallSafe: r.firstBallSafe,
         tipAndRun: r.tipAndRun,
         bounceCatch: r.bounceCatch,
+        drs: r.drs,
         tweaks: PRESETS[id].tweaks.slice(),
       };
     });
@@ -266,8 +274,10 @@
       target,
       innings: target > 0 ? 1 : 2,
       superOver: { overs: 1, wickets: Math.min(2, wickets) },
+      pitch: PITCH_IDS.indexOf(opts.pitch) >= 0 ? opts.pitch : '',
     };
   }
+  const PITCH_IDS = ['flat', 'green', 'dusty', 'tarmac'];
 
   /** Live match node (pub) → engine config. Side 0 = playerA. Server and phones share this. */
   function liveConfig(pub) {
@@ -278,6 +288,7 @@
       preset: p.preset,
       toggles: p.toggles || {},
       tie: p.tie,
+      pitch: p.pitch,
       sides: [
         { pid: p.playerA, name: names[p.playerA] || 'Player A' },
         { pid: p.playerB, name: names[p.playerB] || 'Player B' },
@@ -307,8 +318,26 @@
     return Math.max(1, Math.min(W + (lms ? 1 : 0), n - (lms ? 0 : 1)));
   }
 
+  /**
+   * Set batter confidence (0–100), tracked from the log. Middled / good contact and boundaries
+   * build it; dots, beaten balls and edges knock it. CricketModel turns it into ±8% contact quality.
+   */
+  const CONFIDENCE = { start: 20, middle: 8, good: 4, boundary: 4, dot: -2, beaten: -8, edge: -12, min: 0, max: 100 };
+
+  function confAfter(conf, raw, batRuns) {
+    let d = 0;
+    const band = raw.band || (raw.timing === 'perfect' ? 'good' : raw.timing === 'miss' ? 'beaten' : '');
+    if (band === 'middle') d += CONFIDENCE.middle;
+    else if (band === 'good') d += CONFIDENCE.good;
+    else if (band === 'beaten') d += CONFIDENCE.beaten;
+    if (raw.edged || raw.behind) d += CONFIDENCE.edge;
+    if (batRuns >= 4) d += CONFIDENCE.boundary;
+    else if (!batRuns && band !== 'beaten' && band !== 'left') d += CONFIDENCE.dot;
+    return Math.max(CONFIDENCE.min, Math.min(CONFIDENCE.max, conf + d));
+  }
+
   function newBatter(entry, order) {
-    return { id: entry.id, pid: entry.pid, name: entry.name, order, r: 0, b: 0, f4: 0, f6: 0, dots: 0, out: null };
+    return { id: entry.id, pid: entry.pid, name: entry.name, order, r: 0, b: 0, f4: 0, f6: 0, dots: 0, out: null, conf: CONFIDENCE.start };
   }
   function newBowler(entry) {
     return { id: entry.id, pid: entry.pid, name: entry.name, legal: 0, r: 0, w: 0, md: 0, dots: 0, wd: 0, nb: 0 };
@@ -348,6 +377,7 @@
       worm: [{ legal: 0, runs: 0, w: 0 }],
       wagon: [],
       balls: [],
+      reviews: { bat: c.rules.drs ? 1 : 0, bowl: c.rules.drs ? 1 : 0 },
       complete: false,
       end: '',
     };
@@ -404,7 +434,35 @@
   }
 
   const DEL_LABEL = { medium: 'Medium', quick: 'Quick', flight: 'Flight', spin: 'Spin' };
-  const SHOT_VERB = { defend: 'defended', push: 'pushed', loft: 'lofted' };
+  const SHOT_VERB = {
+    defend: 'defended',
+    push: 'pushed',
+    loft: 'lofted',
+    drive: 'driven',
+    cut: 'cut',
+    pull: 'pulled',
+    sweep: 'swept',
+    flick: 'flicked',
+    leave: 'left alone',
+  };
+  const LENGTH_TEXT = { yorker: 'yorker', full: 'full', good: 'good length', short: 'short', bouncer: 'bouncer', fulltoss: 'full toss' };
+  const VARIATION_TEXT = { slower: 'slower ball', cutter: 'cutter', turnIn: 'turning in', turnAway: 'turning away', armBall: 'arm ball' };
+  const REVIEW_TEXT = { overturned: 'overturned', umpires_call: 'umpire’s call — decision stays', stands: 'decision stands' };
+
+  /** "Pace, good length" · "Spin, arm ball, full" · legacy "Quick". */
+  function deliveryLabel(ev) {
+    if (ev.type === 'pace' || ev.type === 'spin') {
+      const parts = [ev.type === 'pace' ? 'Pace' : 'Spin'];
+      if (VARIATION_TEXT[ev.variation]) parts.push(VARIATION_TEXT[ev.variation]);
+      if (LENGTH_TEXT[ev.length]) parts.push(LENGTH_TEXT[ev.length]);
+      return parts.join(', ');
+    }
+    return DEL_LABEL[ev.del] || '';
+  }
+  function shotLabel(ev) {
+    if (ev.timing === 'miss' && ev.shot && ev.shot !== 'leave') return 'beaten';
+    return SHOT_VERB[ev.shot] || '';
+  }
 
   function plural(n, w) {
     return n + ' ' + w + (n === 1 ? '' : 's');
@@ -412,8 +470,8 @@
 
   /** Deterministic ball text: "2.3: Wide outside off, 1 extra". */
   function ballText(ev, info) {
-    const del = DEL_LABEL[ev.del] || '';
-    const shot = SHOT_VERB[ev.shot] || '';
+    const del = deliveryLabel(ev);
+    const shot = shotLabel(ev);
     const runs = info.runs;
     let s = '';
     if (info.extra === 'wd') {
@@ -430,6 +488,8 @@
       else s = head ? head + ', no run' : 'no run';
     }
     if (info.tipRun) s += ' — tip and run';
+    if (ev.appeal && !info.drs && !info.out && !info.saved) s += ev.appeal.kind === 'lbw' ? ' — LBW appeal, not out' : ' — caught-behind appeal, not out';
+    if (info.drs) s += ' — review (' + (info.drs.by === 'bat' ? 'batter' : 'bowler') + '): ' + (REVIEW_TEXT[info.drs.result] || 'decision stands');
     if (info.out) {
       const lbl = dismissalLabel(info.out, info.rules);
       const extraRuns = RUNS_STAND[info.out] && runs ? ' (' + plural(runs, 'run') + ' completed)' : '';
@@ -460,6 +520,20 @@
     let out = DISMISSALS[raw.out] ? raw.out : '';
     let saved = '';
     let tipRun = false;
+    // Review: only on an appeal, only the aggrieved side, only while they have one left. An
+    // invalid review is ignored and the on-field call stands. Lost only when the call stands.
+    let drs = null;
+    const appeal = raw.appeal && (raw.appeal.kind === 'lbw' || raw.appeal.kind === 'caught') ? raw.appeal : null;
+    if (appeal) {
+      const onFieldOut = appeal.onField === 'out' ? (appeal.kind === 'lbw' ? 'lbw' : 'caught') : '';
+      const want = appeal.onField === 'out' ? 'bat' : 'bowl';
+      const r = raw.drs;
+      if (r && rules.drs && r.by === want && inn.reviews[want] > 0 && REVIEW_TEXT[r.result]) {
+        drs = { by: want, result: r.result, decision: r.decision === 'out' ? 'out' : 'notout' };
+        out = drs.decision === 'out' ? (appeal.kind === 'lbw' ? 'lbw' : 'caught') : '';
+        if (drs.result === 'stands') inn.reviews[want] -= 1;
+      } else out = onFieldOut;
+    }
     if (out) {
       const chk = dismissalAllowed(out, { extra, freeHit: wasFreeHit, firstBall, rules });
       if (!chk.ok) {
@@ -592,8 +666,10 @@
       saved,
       tipRun,
       rules,
+      drs,
       freeHitNext: inn.freeHit && extra === 'nb',
     });
+    if (extra !== 'wd' && !striker.out) striker.conf = confAfter(striker.conf, raw, batRuns);
     inn.balls.push({
       no: ballNumber(legalBefore),
       over: Math.floor(legalBefore / BALLS_PER_OVER),
@@ -610,6 +686,15 @@
       del: raw.del || '',
       shot: raw.shot || '',
       timing: raw.timing || '',
+      type: raw.type || '',
+      line: raw.line || '',
+      length: raw.length || '',
+      variation: raw.variation || '',
+      region: raw.region || '',
+      band: raw.band || '',
+      appeal: appeal ? appeal.kind : '',
+      drs: drs ? drs.result : '',
+      conf: striker.conf,
     });
     // Over complete: maiden, change ends, next bowler.
     if (legal && inn.legal % BALLS_PER_OVER === 0) {
@@ -841,7 +926,9 @@
       rrr: inn.target ? requiredRate(inn) : 0,
       projected: inn.target ? 0 : projected(inn),
       freeHit: inn.freeHit,
-      striker: s ? { name: s.name, r: s.r, b: s.b } : null,
+      reviews: { bat: inn.reviews.bat, bowl: inn.reviews.bowl },
+      pitch: state.config.pitch || '',
+      striker: s ? { name: s.name, r: s.r, b: s.b, conf: s.conf } : null,
       nonStriker: ns ? { name: ns.name, r: ns.r, b: ns.b } : null,
       bowler: b ? { name: b.name, figures: b.w + '-' + b.r, overs: oversText(b.legal) } : null,
       thisOver: thisOver(state),
@@ -1318,5 +1405,9 @@
     aiDelivery,
     aiBat,
     chaseTarget,
+    CONFIDENCE,
+    confAfter,
+    deliveryLabel,
+    PITCH_IDS,
   };
 });

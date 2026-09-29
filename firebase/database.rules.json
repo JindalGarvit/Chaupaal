@@ -444,7 +444,7 @@
       "cricket": {
         "$matchId": {
           "pub": {
-            ".read": "auth != null && data.child('players').child(auth.uid).exists()"
+            ".read": "auth != null"
           },
           "presence": {
             ".read": "auth != null && root.child('games/cricket/' + $matchId + '/pub/players/' + auth.uid).exists()",

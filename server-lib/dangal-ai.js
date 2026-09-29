@@ -4,6 +4,7 @@
  *
  *   coachExplain({ gameId, situation, move })        → { text, tips[] }
  *   commentary({ gameId, event, score })             → { line }
+ *     streetcricket: { mode:'over', moments, persona } → { lines[] } · { mode:'recap', facts } → { recap }
  *   generateQuestions({ category, count })           → { questions: [{ q, options[4], answer }] }
  *   generateWordPack({ game, theme, count })         → { words[] }
  *   botPersona({ gameId, level, seed })              → { name, style: { aggression, bluff, speed, chattiness } }
@@ -60,9 +61,29 @@ function isSafe(obj) {
 const str = (v, max, min) => typeof v === 'string' && v.trim().length >= (min || 1) && v.length <= max;
 const unit = (v) => typeof v === 'number' && isFinite(v) && v >= 0 && v <= 1;
 
+/**
+ * Street Cricket commentary modes (input.gameId === 'streetcricket'):
+ *   mode 'over'  — { moments[], persona } → { lines: [{ i, line<=140 }] } (≤ 8, i indexes moments,
+ *                  every number grounded in that moment's facts)
+ *   mode 'recap' — { facts, persona }     → { recap<=320 } (2–3 sentences, numbers grounded)
+ * Fallback returns empty lines / recap: clients then show the no-repeat template library.
+ */
+function cricketMode(input) {
+  const i = input || {};
+  return String(i.gameId || '') === 'streetcricket' && (i.mode === 'over' || i.mode === 'recap') ? i.mode : '';
+}
+function cricketCommentary() {
+  return require('../public/src/js/games/cricket-commentary.js');
+}
+
 const SCHEMAS = {
   coachExplain: (d) => !!d && str(d.text, 280) && Array.isArray(d.tips) && d.tips.length <= 3 && d.tips.every((t) => str(t, 120)),
-  commentary: (d) => !!d && str(d.line, 140),
+  commentary: (d, input) => {
+    const mode = cricketMode(input);
+    if (mode === 'over') return !!cricketCommentary().validateOverLines(d, (input && input.moments) || []);
+    if (mode === 'recap') return !!cricketCommentary().validateRecap(d, (input && input.facts) || {});
+    return !!d && str(d.line, 140);
+  },
   generateQuestions: (d) =>
     !!d &&
     Array.isArray(d.questions) &&
@@ -188,6 +209,9 @@ const FALLBACKS = {
     return { text: text.slice(0, 280), tips };
   },
   commentary(input) {
+    const mode = cricketMode(input);
+    if (mode === 'over') return { lines: [] };
+    if (mode === 'recap') return { recap: '' };
     const list = COMMENTARY[input.event] || COMMENTARY.default;
     return { line: list[hashInt(JSON.stringify(input)) % list.length] };
   },
@@ -232,9 +256,27 @@ const PROMPTS = {
       ? `Review facts: ${clip(i.engineText, 280)} ${clip((i.engineTips || []).join(' '), 360)} Only mention these cards, written like 9♥: ${clip(i.allowedCards.join(', '), 80)}. Never name any other card or invent numbers.\n`
       : '') +
     'Explain briefly for a casual player. Schema: {"text": string<=280, "tips": [string<=120, max 3]}',
-  commentary: (i) =>
-    `Game: ${clip(i.gameId, 20)}. Event: ${clip(i.event, 30)}. Score: ${clip(i.score, 40)}.\n` +
-    'One upbeat commentary line. Schema: {"line": string<=140}',
+  commentary: (i) => {
+    const mode = cricketMode(i);
+    const voice = i.persona === 'fan' ? 'an excited, warm fan' : 'a calm, insightful analyst';
+    if (mode === 'over') {
+      return (
+        `Street cricket: a friendly virtual 1v1 game with made-up players. You are ${voice}.\n` +
+        `Key moments of one over (JSON, index = position): ${clip(JSON.stringify(i.moments || []), 1600)}\n` +
+        'Write one short commentary line per moment (at most 8). Use only the names and numbers given — never invent stats, real players, teams, brands or places.\n' +
+        'Schema: {"lines": [{"i": number, "line": string<=140}]}'
+      );
+    }
+    if (mode === 'recap') {
+      return (
+        `Street cricket: a friendly virtual 1v1 game with made-up players. You are ${voice}.\n` +
+        `Match facts (JSON): ${clip(JSON.stringify(i.facts || {}), 1600)}\n` +
+        'Write a 2–3 sentence match recap for a share card. Use only these names and numbers — never invent stats, real players, teams, brands or places.\n' +
+        'Schema: {"recap": string<=320}'
+      );
+    }
+    return `Game: ${clip(i.gameId, 20)}. Event: ${clip(i.event, 30)}. Score: ${clip(i.score, 40)}.\n` + 'One upbeat commentary line. Schema: {"line": string<=140}';
+  },
   generateQuestions: (i) =>
     `Write ${Math.max(1, Math.min(10, Number(i.count) || 5))} multiple-choice quiz questions on "${clip(i.category, 30)}" with globally known answers.\n` +
     'Schema: {"questions": [{"q": string<=200, "options": [4 distinct strings<=80], "answer": 0-3}]}',
@@ -394,7 +436,7 @@ function createDangalAI(deps) {
       return fallback(hook, inp, e && e.code === 'AI_TIMEOUT' ? 'timeout' : 'provider_error');
     }
     const data = parseJson(out && out.text);
-    if (!SCHEMAS[hook](data) || !isSafe(data) || (hook === 'coachExplain' && (!chessGrounded(inp, data) || !cardsGrounded(inp, data)))) {
+    if (!SCHEMAS[hook](data, inp) || !isSafe(data) || (hook === 'coachExplain' && (!chessGrounded(inp, data) || !cardsGrounded(inp, data)))) {
       counters[hook].rejected += 1;
       return fallback(hook, inp, 'invalid_output');
     }

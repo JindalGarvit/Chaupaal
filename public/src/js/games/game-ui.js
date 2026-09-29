@@ -146,9 +146,9 @@
       'Continue mid-puzzle · best times per difficulty · Daily is one seeded board',
     ],
     streetcricket: [
-      'Based on the MCC Laws of Cricket, adapted for street play — pick a delivery, time your shot',
-      'Wides and no-balls cost an extra · a no-ball earns a free hit (only a run out counts)',
-      'Standard is rated · Gully and Backyard rules are unrated · Live is resolved by our server',
+      'Based on the MCC Laws of Cricket, adapted for street play — bowl line, length and ball; tap one of 8 shots on time',
+      'Wides and no-balls cost an extra · a no-ball earns a free hit · one review per innings in Standard (simulated tracking)',
+      'Standard is rated · Gully and Backyard are unrated · Bots: Easy / Normal / Hard / Pro · Live is resolved by our server',
     ],
     badminton: [
       'Simplified rules · one game to 21 (win by 2; 29-all → 30) — not best-of-3',

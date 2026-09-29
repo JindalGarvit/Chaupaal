@@ -2,8 +2,9 @@
 /**
  * Dangal P10 — Street Cricket laws, scoring engine and server authority: legal balls with wides /
  * no-balls, free hit, dismissal law checks, strike rotation, innings end, result wording, Super
- * Over, preset tweaks, hand-computed stats, the server ignoring client-claimed outcomes, a full
- * server-resolved Standard match, replay determinism and wiring.
+ * Over, preset tweaks, hand-computed stats, the server ignoring client-claimed outcomes, replay
+ * determinism and wiring. (The P11 protocol — toss, meter, review, full Live match — is covered by
+ * scripts/test-dangal-p11-cricket.js.)
  *   node scripts/test-dangal-p10-cricket-engine.js
  */
 'use strict';
@@ -309,104 +310,64 @@ const OUT = (kind, more) => Object.assign({ t: 'ball', runs: 0, out: kind, del: 
   };
   let m = SC.reduceMatch(null, A, 'join', { matchId: 'dm_x', opponentUid: Bn, playerA: A, name: 'Ava', format: 'standard', preset: 'standard' }, now, rng).match;
   assert(m.pub.status === 'waiting' && m.pub.rated === true && m.pub.format === 'standard', 'host creates a rated Standard match');
-  queue = [0.1];
   m = SC.reduceMatch(clone(m), Bn, 'join', { matchId: 'dm_x', name: 'Ben', format: 'long', preset: 'gully' }, now, rng).match;
   assert(m.pub.status === 'playing' && m.pub.format === 'standard' && m.pub.preset === 'standard', 'guest join starts the match; the host’s settings stand');
-  assert(m.pub.toss.winner === A && m.pub.toss.bats === A, 'toss winner bats first');
+  // P11 toss: Ben (the guest) calls; the winner chooses. Coin rolls tails (0.9) → Ben calls tails and wins, chooses to bowl.
+  assert(m.pub.phase === 'toss' && m.pub.toss.caller === Bn, 'the guest calls the toss');
+  queue = [0.9];
+  m = SC.reduceMatch(clone(m), Bn, 'call', { call: 'tails' }, now, rng).match;
+  m = SC.reduceMatch(clone(m), Bn, 'choose', { bat: false }, now, rng).match;
+  assert(m.pub.toss.winner === Bn && m.pub.toss.bats === A, 'toss winner chose to bowl: Ava bats');
   assert(SC.rolesOf(m.pub).batter === A && SC.rolesOf(m.pub).bowler === Bn, 'roles: Ava bats, Ben bowls');
 
   const presence = (mm) => {
     mm.presence = { [A]: { at: now, online: true }, [Bn]: { at: now, online: true } };
     return mm;
   };
-  assert(code(() => SC.reduceMatch(clone(m), A, 'bowl', { ballNo: 0, delivery: 'medium' }, now, rng)) === 'not_bowler', 'the batter can’t bowl');
-  assert(code(() => SC.reduceMatch(clone(m), Bn, 'bowl', { ballNo: 3, delivery: 'medium' }, now, rng)) === 'stale_ball', 'stale ball number rejected');
-  assert(code(() => SC.reduceMatch(clone(m), Bn, 'bowl', { ballNo: 0, delivery: 'beamer' }, now, rng)) === 'bad_delivery', 'unknown delivery rejected');
+  const at = m.pub.meterAt + 400;
+  assert(code(() => SC.reduceMatch(clone(m), A, 'bowl', { ballNo: 0, line: 'off', length: 'good', m: 400 }, at, rng)) === 'not_bowler', 'the batter can’t bowl');
+  assert(code(() => SC.reduceMatch(clone(m), Bn, 'bowl', { ballNo: 3, line: 'off', length: 'good', m: 400 }, at, rng)) === 'stale_ball', 'stale ball number rejected');
+  assert(code(() => SC.reduceMatch(clone(m), Bn, 'bowl', { ballNo: 0, line: 'off', length: 'beamer', m: 400 }, at, rng)) === 'bad_delivery', 'unknown length rejected');
   assert(code(() => SC.reduceMatch(clone(m), A, 'ball', {}, now, rng)) === 'bad_op', 'unknown op rejected');
-  assert(!SC.CLIENT_OPS.has('settle_claim') && !SC.CLIENT_OPS.has('settle_done') && !SC.CLIENT_OPS.has('ball'), 'settle internals and "ball" are not client ops');
+  assert(!SC.CLIENT_OPS.has('settle_claim') && !SC.CLIENT_OPS.has('settle_done') && !SC.CLIENT_OPS.has('comment_done') && !SC.CLIENT_OPS.has('ball'), 'internal ops are not client ops');
 
-  const bowled = SC.reduceMatch(clone(m), Bn, 'bowl', { ballNo: 0, delivery: 'medium' }, now, rng).match;
-  assert(bowled.pub.phase === 'ball' && bowled.pub.ball.startAt === now + SC.LEAD_MS, 'bowl stamps a server release time');
-  assert(code(() => SC.reduceMatch(clone(bowled), A, 'hit', { ballNo: 0, shot: 'push', t: 0 }, now + 100, rng)) === 'too_early', 'a hit before release is rejected');
-  assert(code(() => SC.reduceMatch(clone(bowled), Bn, 'hit', { ballNo: 0, shot: 'push', t: 920 }, now + 1820, rng)) === 'not_batter', 'the bowler can’t hit');
+  const bowled = SC.reduceMatch(clone(m), Bn, 'bowl', { ballNo: 0, line: 'off', length: 'good', variation: 'stock', m: 400 }, at, rng).match;
+  assert(bowled.pub.phase === 'ball' && bowled.pub.ball.startAt === at + SC.LEAD_MS, 'bowl stamps a server release time');
+  assert(code(() => SC.reduceMatch(clone(bowled), A, 'hit', { ballNo: 0, shot: 'drive', t: 0 }, at + 100, rng)) === 'too_early', 'a hit before release is rejected');
+  assert(code(() => SC.reduceMatch(clone(bowled), Bn, 'hit', { ballNo: 0, shot: 'drive', t: 920 }, at + 1820, rng)) === 'not_batter', 'the bowler can’t hit');
 
-  // The client claims a six / a no-ball / a dismissal: the server reads only shot + tap time.
-  const seed = 424242;
-  queue = [seedRoll(seed)];
-  const hitAt = now + SC.LEAD_MS + 920;
-  const hit = SC.reduceMatch(clone(bowled), A, 'hit', { ballNo: 0, shot: 'push', t: 920, rtt: 80, runs: 6, out: 'bowled', extra: 'nb', timing: 'perfect', result: { runs: 6 } }, hitAt, rng).match;
-  const ev = hit.pub.log[0];
-  const expect = CE.resolveBall({ delivery: 'medium', shot: 'push', timing: 'perfect', rules: CE.makeRules('standard'), freeHit: false, firstBall: true }, seed);
-  assert(ev.seed === seed && ev.runs === expect.runs && ev.out === expect.out && ev.extra === expect.extra, 'server event = its own seeded roll (claimed runs/out/extra ignored)');
-  assert(!('result' in ev) && ev.tap === 920, 'no client fields in the log');
+  // The client claims a six / a no-ball / a dismissal: the server reads only shot, footwork, running + tap.
+  const hit = SC.reduceMatch(clone(bowled), A, 'hit', { ballNo: 0, shot: 'drive', t: 920, rtt: 80, runs: 6, out: 'bowled', extra: 'nb', timing: 'perfect', result: { runs: 6 } }, at + SC.LEAD_MS + 920, rng).match;
+  const ev = hit.pub.log[0] || hit.server.pending;
+  assert(ev && ev.t === 'ball' && !('result' in ev) && ev.tap === 920 && ev.shot === 'drive', 'server event from its own roll; no client fields in the log');
 
-  // Tap-time clamp: a tap can't be in the future nor older than the RTT allows.
+  // Tap-time clamp (P11: compensation = clamp(0.6·rtt + 100, 120, MAX_COMP_MS)).
   assert(SC.clampTap(5000, 920, 80) === 920, 'future tap clamped to arrival');
-  assert(SC.clampTap(0, 920, 100) === 670, 'stale tap clamped to arrival − (rtt + 150)');
-  assert(SC.clampTap(0, 5000, 99999) === 5000 - SC.MAX_LAG_MS, 'RTT compensation capped');
+  assert(SC.clampTap(0, 920, 100) === 920 - 160, 'stale tap clamped to arrival − compensation');
+  assert(SC.clampTap(0, 5000, 99999) === 5000 - SC.MAX_COMP_MS, 'RTT compensation capped');
   assert(SC.clampTap(800, 920, 100) === 800, 'plausible tap kept');
-  queue = [seedRoll(1)];
-  const lateClaim = SC.reduceMatch(clone(bowled), A, 'hit', { ballNo: 0, shot: 'push', t: 900, rtt: 0 }, now + SC.LEAD_MS + 1600, rng).match;
-  assert(lateClaim.pub.log[0].tap === 1600 - 150, 'a “perfect” tap claimed 700ms after the fact is clamped');
 
-  // Ticks: bowler timeout → auto delivery + AFK miss; ball timeout → a miss.
+  // Ticks: bowler timeout → stock ball + AFK miss; ball timeout → an auto-defend.
   const idle = presence(clone(m));
   const auto = SC.reduceMatch(idle, A, 'tick', {}, m.pub.deadline + 1, rng);
-  assert(auto && auto.result.autoBowled && auto.match.pub.phase === 'ball' && auto.match.pub.misses[Bn] === 1, 'bowler timeout: server bowls, AFK miss counted');
+  assert(auto && auto.result.autoBowled && auto.match.pub.phase === 'ball' && auto.match.pub.misses[Bn] === 1, 'bowler timeout: server bowls a stock ball, AFK miss counted');
   now = m.pub.deadline + 1;
   const timeout = SC.reduceMatch(presence(clone(auto.match)), Bn, 'tick', {}, auto.match.pub.deadline + 1, rng);
-  assert(timeout && timeout.result.timeout && timeout.match.pub.log.length === 1 && timeout.match.pub.log[0].timing === 'miss', 'no hit in time → a miss');
+  const tev = timeout && (timeout.match.pub.log[0] || timeout.match.server.pending);
+  assert(timeout && timeout.result.timeout && tev.shot === 'defend' && tev.auto === 'defend', 'no hit in time → an auto-defend');
 
-  // A full rated Live Standard match, every ball server-resolved: a wide, a no-ball + free hit, a wicket, a chase finish.
-  const find = (ctx, pred) => {
-    for (let s = 1; s < 400000; s++) {
-      const e = CE.resolveBall(ctx, s);
-      if (pred(e)) return s;
-    }
-    throw new Error('no seed');
-  };
-  let mm = clone(m);
-  now = 2000000;
-  const seen = { wd: 0, nb: 0, freeHit: 0, out: 0 };
-  const playOne = (pred, shot) => {
-    const pub = mm.pub;
-    const roles = SC.rolesOf(pub);
-    const sh = shot || 'push';
-    mm = SC.reduceMatch(mm, roles.bowler, 'bowl', { ballNo: pub.log.length, delivery: 'medium' }, now, rng).match;
-    const st = SC.stateOf(mm.pub);
-    const inn = CE.current(st);
-    const ctx = { delivery: 'medium', shot: sh, timing: 'perfect', rules: st.config.rules, freeHit: inn.freeHit, firstBall: CE.firstBallFor(st) };
-    queue = [seedRoll(find(ctx, pred))];
-    now += SC.LEAD_MS + 920;
-    mm = SC.reduceMatch(mm, roles.batter, 'hit', { ballNo: mm.pub.ball.n, shot: sh, t: 920, rtt: 60 }, now, rng).match;
-    const after = SC.stateOf(mm.pub);
-    const b = after.innings.map((i) => i.balls).flat().pop();
-    if (b.extra === 'wd') seen.wd++;
-    if (b.extra === 'nb') seen.nb++;
-    if (b.freeHit) seen.freeHit++;
-    if (b.out) seen.out++;
-    now += 3000;
-    if (mm.pub.phase === 'break') {
-      presence(mm);
-      mm = SC.reduceMatch(mm, A, 'tick', {}, mm.pub.deadline + 1, rng).match;
-      now = Math.max(now, mm.pub.deadline - SC.BOWL_MS);
-    }
-  };
-  playOne((e) => e.extra === 'wd' && !e.out);
-  playOne((e) => e.extra === 'nb' && e.runs === 1 && !e.out);
-  playOne((e) => !e.extra && e.out === 'caught'); // free hit: a proposed catch is not out
-  playOne((e) => !e.extra && e.out === 'caught'); // a real wicket
-  let guard = 0;
-  while (mm.pub.status === 'playing' && SC.stateOf(mm.pub).cur === 0 && guard++ < 60) playOne((e) => !e.extra && !e.out && e.runs === 1);
-  assert(SC.stateOf(mm.pub).cur === 1 && mm.pub.status === 'playing', 'first innings closes after 5 overs; the chase begins');
-  const target = CE.current(SC.stateOf(mm.pub)).target;
-  guard = 0;
-  while (mm.pub.status === 'playing' && guard++ < 60) playOne((e) => !e.extra && !e.out && e.runs === 6, 'loft');
+  // A Live log (the full server-driven match lives in the P11 test): a wide, a no-ball + free hit
+  // (the catch on it is not out), a wicket, then the chase finishes with sixes.
+  const mm = clone(m);
+  const log = [WD(0), NB(0), OUT('caught'), OUT('caught')];
+  while (log.length < 4 + 28) log.push(B(1));
+  for (let k = 0; k < 6; k++) log.push(B(6, { shot: 'loft' }));
+  mm.pub.log = log;
   const fin = SC.stateOf(mm.pub);
-  assert(seen.wd >= 1 && seen.nb >= 1 && seen.freeHit >= 1 && seen.out >= 1, 'match had a wide, a no-ball, a free hit and a wicket');
   assert(fin.innings[0].wkts === 1 && fin.innings[0].balls[2].freeHit && !fin.innings[0].balls[2].out, 'the catch on the free hit was not out; the next one was');
-  assert(mm.pub.status === 'over' && mm.pub.winner === Bn && /^Ben won by 3 wickets \(\d+ balls left\)$/.test(mm.pub.result), 'chase finish: ' + mm.pub.result + ' (target ' + target + ')');
-  assert(mm.pub.phase === '' && mm.pub.ball === null, 'match closed cleanly');
+  assert(fin.result && fin.result.winner === 1 && /^Ben won by 3 wickets \(\d+ balls left\)$/.test(fin.result.text), 'chase finish: ' + (fin.result && fin.result.text));
+  mm.pub.status = 'over';
+  mm.pub.winner = Bn;
   const replayed = CE.replay(CE.liveConfig(clone(mm.pub)), clone(mm.pub.log));
   assert(JSON.stringify(CE.scorecard(replayed)) === JSON.stringify(CE.scorecard(fin)), 'phones replay the server log to the same scorecard');
   const rtdbShape = clone(mm);
@@ -440,7 +401,7 @@ const OUT = (kind, more) => Object.assign({ t: 'ball', runs: 0, out: kind, del: 
     assert(leave.pub.status === 'over' && leave.pub.winner === Bn && /forfeited/.test(leave.pub.result), 'leaving forfeits (logged)');
     let rm = SC.reduceMatch(clone(leave), A, 'rematch', { matchId: 'dm_x' }, now, rng);
     rm = SC.reduceMatch(rm.match, Bn, 'rematch', { matchId: 'dm_x' }, now, rng);
-    assert(rm.result.nextMatchId === 'dm_x-r1' && rm.result.createNext.playerA === Bn, 'rematch swaps sides');
+    assert(rm.result.nextMatchId === 'dm_x-r1' && rm.result.createNext.playerA === Bn && rm.result.createNext.chooser === A, 'rematch swaps sides; the previous toss loser chooses');
 
     wiring();
   });
@@ -459,7 +420,7 @@ function wiring() {
   const pub = rules.rules.games.cricket.$matchId.pub;
   assert(pub && !pub['.write'], 'phones can’t write the cricket log');
   const kit = read('public/src/js/games/party-kit.js');
-  assert(/streetcricket:\s*\['games\/cricket-engine\.js'\]/.test(kit), 'LAZY_DATA loads the engine');
+  assert(/streetcricket:\s*\[[^\]]*'games\/cricket-engine\.js'/.test(kit), 'LAZY_DATA loads the engine');
   const html = read('public/index.html');
   assert(/data-party-lazy src="\/src\/js\/games\/cricket-engine\.js/.test(html), 'index.html lazy script for the engine');
   const rw = read('public/src/js/games/rw-sports.js');
