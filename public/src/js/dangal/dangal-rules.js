@@ -344,12 +344,23 @@
       ],
     },
     badminton: {
-      ruleset: { name: 'Badminton', source: 'Simplified rules based on the BWF Laws of Badminton', simplified: true },
-      variants: [],
-      glance: ['Time your tap to return the shuttle', 'Win a rally, win the point', 'First to 21 wins (by 2, capped at 30)'],
+      ruleset: { name: 'Badminton', source: 'Rules based on the BWF Laws of Badminton', simplified: false },
+      variants: [
+        opt('format', 'Format', 'standard', ['standard', 'single', 'quick11'], 'host', {
+          labels: { standard: 'Standard · best of 3 games to 21 (rated)', single: 'Single game to 21 (unrated)', quick11: 'Quick 11 · best of 3 to 11 (Chaupaal quick format, unrated)' },
+        }),
+        opt('discipline', 'Play', 'singles', ['singles', 'doubles'], 'host', { labels: { singles: 'Singles', doubles: 'Doubles (2 v 2)' } }),
+      ],
+      glance: ['Tap Serve or Hit as the shuttle reaches the green', 'Every rally scores a point', 'Best of 3 games to 21 — win by 2, 30 caps it'],
       rules: [
-        { h: 'Scoring', body: 'One game to 21 points, win by 2; at 29-all the next point wins. Not best-of-three.' },
-        { h: 'Contact', body: 'Arcade timing contact rather than full court physics. Sweet hits tighten the rally.' },
+        { h: 'Scoring', body: 'Every rally wins a point for the side that wins it. A game is won at 21 with a 2-point lead; from 20-all the first side 2 points clear wins, and at 29-all the 30th point wins. Standard is best of 3 games; the winner of a game serves first in the next.' },
+        { h: 'Intervals and ends', body: 'A short interval when the leading score reaches 11, and a longer one between games — either player can tap Ready to resume early. Players change ends after each game, and in the deciding game when the leading score reaches 11.' },
+        { h: 'Singles service', body: 'Serve from the right service court when the server’s score is even (0, 2, 4 …) and the left when it is odd, diagonally to the receiver. The singles court is long and narrow: the serve may land up to the back line.' },
+        { h: 'Doubles service', body: 'One service per side. If the serving side wins the rally, the same server serves again from the other court. If the receiving side wins, they score and serve next: their player in the court matching their score (right if even, left if odd) serves. Players only change courts when they win a point on their own serve. The receiver is always diagonal. The doubles court is wide, but the serve must land before the doubles long service line.' },
+        { h: 'Faults', body: 'Shuttle out or into the net; touching the net; hitting twice or both partners hitting in succession; obstructing the opponent. Service faults: struck above 1.15 m, feet moving, short of the short service line, past the long line or outside the box.' },
+        { h: 'Lets', body: 'The rally is replayed with no point: the receiver wasn’t ready, the shuttle caught on the net on a return, both sides faulted, the shuttle came apart, or play was disturbed.' },
+        { h: 'Formats', body: 'Standard: best of 3 games to 21 (rated in Live singles). Single game to 21 and Quick 11 (best of 3 to 11, 2-point lead, capped at 15 — a Chaupaal quick format, not a BWF one) are unrated.' },
+        { h: 'Live', body: 'Our server resolves every rally with its own seed: your phone only sends the moment you tapped, allowed for your connection up to a fixed cap. Miss your swing and the point goes against you; three missed turns forfeits. Doubles pairs friends, bots or matchmade players 2 v 2 and is unrated. Virtual chips only.' },
       ],
     },
     penalty: {

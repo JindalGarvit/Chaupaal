@@ -77,7 +77,10 @@
     // the server bowls a stock ball; no swing = an auto-defend. Toss call / choice time out to heads /
     // bat. Three missed turns in a row (any role) or leaving forfeits. Spectators read the live pub.
     streetcricket: { reconnectMs: 90000, turnMs: 12000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'forfeit', spectate: true, rematch: { swapSides: true, sameVariants: true } },
-    badminton: { afk: { action: 'auto_play', maxMisses: 3 } },
+    // Dangal P12 Badminton (server-lib/badminton-engine.js): the server resolves every contact. No serve
+    // in time → an auto-serve; no swing → the shuttle lands in. Three missed contacts in a row, leaving,
+    // or offline past reconnectMs forfeits (doubles: the whole side). P13 tunes these.
+    badminton: { reconnectMs: 90000, afk: { action: 'auto_play', maxMisses: 3 }, leave: 'forfeit', spectate: true, rematch: { swapSides: false, sameVariants: true } },
     // Server-resolved engines (H2 / H3): shipped timings stay the policy until their tuning prompt.
     penalty: { reconnectMs: 90000, turnMs: 20000, afk: { action: 'random_pick', maxMisses: 99 }, rematch: { swapSides: true, sameVariants: true } },
     poker: {

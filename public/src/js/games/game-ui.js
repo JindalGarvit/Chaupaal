@@ -151,9 +151,9 @@
       'Standard is rated · Gully and Backyard are unrated · Bots: Easy / Normal / Hard / Pro · Live is resolved by our server',
     ],
     badminton: [
-      'Simplified rules · one game to 21 (win by 2; 29-all → 30) — not best-of-3',
-      'Arcade timing contact — not full court physics',
-      'Sweet hits tighten the rally · Easy / Normal / Sharp in Practice',
+      'Best of 3 games to 21 — win by 2, 30 caps it · every rally scores',
+      'Serve from the right court on an even score, left on odd · in doubles, only the server’s side changes courts',
+      'Tap as the shuttle reaches the green · Standard singles is rated · Doubles with friends, bots or matchmaking',
     ],
     tambola: [
       'Numbers are called one by one — mark them on your ticket (or turn on auto-mark)',
