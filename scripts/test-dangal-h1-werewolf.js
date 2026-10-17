@@ -507,7 +507,11 @@ function secretsSafe(room, label) {
   op(host, 'tick', {});
   assert(room.pub.state.phase === 'dawn' && !WW.isAlive(room.pub.state, victim), 'server resolves the night on the timer');
   secretsSafe(room, 'dawn');
-  assert(room.secrets[victim].spectator && room.secrets[victim].spectator.roles[wolves[0]] === 'wolf', 'eliminated players become spectators who see everything');
+  const vsec = room.secrets[victim];
+  assert(!vsec.spectator, 'eliminated players get no spectator role map (P15)');
+  assert(vsec.alive === false && vsec.role === room.server.hidden.roles[victim], 'eliminated players keep only their own card');
+  assert(!vsec.wolves && !vsec.wolfChat, 'eliminated non-wolves never see the pack');
+  assert(!new RegExp('"' + wolves[0] + '":"wolf"').test(JSON.stringify(vsec)), 'eliminated players never see anyone else’s role');
   err = null;
   try {
     op(victim, 'chat', { channel: 'day', text: 'it was them!' });

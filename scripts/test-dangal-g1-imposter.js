@@ -39,14 +39,15 @@ REQUIRED.forEach((id) => assert(!!Packs.getPack(id), `pack ${id} present`));
 assert(Packs.MIXED && Packs.MIXED.id === 'mixed', 'Mixed pack exported');
 const DEVANAGARI = /[\u0900-\u097F]/;
 const allKeys = new Set();
+// P15 global-first: Hindi is optional locale data ('' = none); when present it must be Devanagari.
 Packs.PACKS.forEach((p) => {
   assert(p.words.length >= 40, `${p.id}: ≥40 words (got ${p.words.length})`);
-  assert(DEVANAGARI.test(p.hi), `${p.id}: Hindi pack label`);
+  assert(!p.hi || DEVANAGARI.test(p.hi), `${p.id}: Hindi pack label is Devanagari when present`);
   const seen = new Set();
   p.words.forEach((row, i) => {
     const [en, hi, pen, phi, alts] = row;
-    if (!(en && hi && pen && phi)) throw new Error(`${p.id}[${i}] missing en/hi/partner`);
-    if (!DEVANAGARI.test(hi) || !DEVANAGARI.test(phi)) throw new Error(`${p.id}[${i}] ${en}: Hindi must be Devanagari`);
+    if (!(en && pen)) throw new Error(`${p.id}[${i}] missing en/partner`);
+    if ((hi && !DEVANAGARI.test(hi)) || (phi && !DEVANAGARI.test(phi))) throw new Error(`${p.id}[${i}] ${en}: Hindi must be Devanagari`);
     if (Core.normalize(en) === Core.normalize(pen)) throw new Error(`${p.id}[${i}] ${en}: partner equals word`);
     if (alts != null && !Array.isArray(alts)) throw new Error(`${p.id}[${i}] alts must be an array`);
     const k = Core.normalize(en);
@@ -55,7 +56,7 @@ Packs.PACKS.forEach((p) => {
     if (allKeys.has(k)) throw new Error(`duplicate word across packs: ${en}`);
     allKeys.add(k);
   });
-  console.log(`✓ ${p.id}: every word has Hindi + partner, no duplicates`);
+  console.log(`✓ ${p.id}: every word has a partner, no duplicates`);
 });
 assert(allKeys.size >= 320, `≥320 unique words overall (got ${allKeys.size})`);
 
@@ -255,7 +256,7 @@ function secretsOf(room) {
   if (!h) return out;
   out.push(h.majority.en, h.majority.hi);
   if (h.minority) out.push(h.minority.en, h.minority.hi);
-  return out;
+  return out.filter(Boolean);
 }
 function assertNoLeak(room, label) {
   const shared = JSON.stringify({ pub: room.pub, presence: room.presence });

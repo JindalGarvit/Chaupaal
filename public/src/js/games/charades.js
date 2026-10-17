@@ -1,5 +1,5 @@
 /**
- * Dumb Charades — Dangal party game (G2) on the Party Kit. Two teams; the actor mimes a title, no talking.
+ * Charades — Dangal party game (G2) on the Party Kit. Two teams; the actor mimes a title, no talking.
  *   Pass & Play: one phone, offline, no sign-in — CharadesCore runs locally; the actor peeks at the
  *                title, then holds a big countdown with Got it / Pass that never shows the answer.
  *   Room ("Together or on a video call"): only the actor's secrets node holds the title
@@ -10,7 +10,7 @@
   'use strict';
 
   const GAME = 'charades';
-  const LABEL = 'Dumb Charades';
+  const LABEL = 'Charades';
   const SETTINGS_KEY = 'chaupaal_charades_settings';
   const TEAMS_KEY = 'chaupaal_charades_teams';
 
@@ -37,17 +37,36 @@
   }
 
   function packLabel(p) {
-    return p ? (isHi() ? p.hi + ' · ' + p.en : p.en) : '';
+    return p ? (isHi() && p.hi ? p.hi + ' · ' + p.en : p.en) : '';
   }
 
+  /** Global core by default; India add-ons follow the locale until the host picks categories. */
   function loadSettings() {
     let raw = {};
     try {
-      raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+      raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {};
     } catch (e) {}
+    if (!raw.region) raw.region = Kit().contentPrefs().region;
     const s = Core().mergeSettings(raw);
-    if (!s.categories) s.categories = Core().packs.defaultCategories(lang());
+    if (!s.categories) s.categories = Core().packs.defaultCategories(lang(), s.region);
     return s;
+  }
+
+  /** Host's own titles for tonight (AI draft or saved on this phone). */
+  let customTitles = null;
+  function startArgs() {
+    return customTitles ? { args: { customPack: { titles: customTitles } } } : null;
+  }
+
+  /** "Bad card" target for the last title of a finished turn (built-in titles only). */
+  function lastCard(last) {
+    if (!last) return null;
+    const t = last.missed || last.got[last.got.length - 1] || last.passed[last.passed.length - 1];
+    return t && t.key && String(t.key).indexOf('x:') !== 0 ? { game: GAME, key: t.key, label: t.en } : null;
+  }
+
+  function loadNames() {
+    return Kit().passNightNames ? Kit().passNightNames(Core().MIN_PLAYERS, Core().MAX_PLAYERS) : null;
   }
 
   function saveSettings(s) {
@@ -57,6 +76,8 @@
   }
 
   function loadTeams() {
+    const night = loadNames();
+    if (night) return [night.filter((n, i) => i % 2 === 0), night.filter((n, i) => i % 2 === 1)];
     try {
       const raw = JSON.parse(localStorage.getItem(TEAMS_KEY) || 'null');
       if (Array.isArray(raw) && raw.length === 2 && raw.every((t) => Array.isArray(t) && t.length >= 2)) return raw;
@@ -110,7 +131,7 @@
     if (!t) return '<div class="ch-card ch-card--empty">Dealing…</div>';
     const pack = Core().packs.getPack(t.pack);
     const primary = isHi() ? t.hi || t.en : t.en;
-    const secondary = isHi() ? t.en : t.hi;
+    const secondary = isHi() ? t.en : '';
     return `<div class="ch-card">
       <div class="ch-card-kind">${esc(KIND[t.kind] || '🎭')} · ${esc(pack ? packLabel(pack) : '')}</div>
       <div class="ch-card-title">${esc(primary)}</div>
@@ -129,14 +150,15 @@
   function openCategoryPicker(current, onSave) {
     const sel = new Set(current || []);
     const P = Core().packs;
-    Kit().openSheet({
-      title: 'Categories',
-      bodyHtml: `<div class="im-packs ch-cats">${P.PACKS.map(
-        (p) => `<label class="im-pack ch-cat"><input type="checkbox" data-cat="${esc(p.id)}" ${sel.has(p.id) ? 'checked' : ''}>
+    const tile = (p) => `<label class="im-pack ch-cat"><input type="checkbox" data-cat="${esc(p.id)}" ${sel.has(p.id) ? 'checked' : ''}>
           <span class="im-pack-icon" aria-hidden="true">${esc(p.icon)}</span>
           <span class="im-pack-name">${esc(packLabel(p))}</span>
-          <span class="im-pack-count">${p.titles.length}</span></label>`
-      ).join('')}</div>
+          <span class="im-pack-count">${p.titles.length}</span></label>`;
+    Kit().openSheet({
+      title: 'Categories',
+      bodyHtml: `<div class="im-packs ch-cats">${P.PACKS.filter((p) => !p.regional).map(tile).join('')}</div>
+      <div class="pk-section">India packs · optional</div>
+      <div class="im-packs ch-cats">${P.PACKS.filter((p) => p.regional).map(tile).join('')}</div>
       <div class="pk-field-help" data-cat-err></div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
       onMount(sheet, close) {
@@ -170,7 +192,12 @@
           <div data-goal-turns>${K.segHtml('turnsPerTeam', s.turnsPerTeam, C.TURNS_PER_TEAM.map((v) => [v, String(v)]))}</div>
           <div data-goal-points>${K.segHtml('targetPoints', s.targetPoints, C.TARGETS.map((v) => [v, v + ' pts']))}</div>
         </div>
-        <button type="button" class="im-pack-row" data-cats>🗂️ Categories: <strong data-cats-n>${(s.categories || []).length}</strong> <span class="im-chev">›</span></button>
+        <button type="button" class="im-pack-row" data-cats>🗂️ Categories: <strong data-cats-n>${customTitles ? 'Your pack' : (s.categories || []).length}</strong> <span class="im-chev">›</span></button>
+        ${
+          K.aiOn() || K.savedPacks(GAME).length || customTitles
+            ? `<button type="button" class="pk-row-btn" data-make>${customTitles ? '✨ Your pack · ' + customTitles.length + ' titles' : K.aiOn() ? '✨ Make a pack about…' : 'Your saved packs'}<span class="pk-chev" aria-hidden="true">›</span></button>`
+            : ''
+        }
         <details class="pk-advanced">
           <summary>Advanced</summary>
           <div class="pk-field">
@@ -197,10 +224,24 @@
         sheet.querySelector('[data-cats]').addEventListener('click', () =>
           openCategoryPicker(s.categories, (ids) => {
             s.categories = ids;
+            s.region = ids.some((id) => (C.packs.getPack(id) || {}).regional) ? 'in' : 'global';
+            customTitles = null;
             const n = sheet.querySelector('[data-cats-n]');
             if (n) n.textContent = String(ids.length);
           })
         );
+        sheet.querySelector('[data-make]')?.addEventListener('click', () => {
+          close();
+          K.openPackSheet({
+            game: GAME,
+            kind: 'titles',
+            min: C.CUSTOM_MIN || 4,
+            onUse: (p) => {
+              customTitles = p.items.map(String);
+              opts.onSave(C.mergeSettings(s));
+            },
+          });
+        });
         sheet.querySelector('[data-save]').addEventListener('click', () => {
           close();
           opts.onSave(C.mergeSettings(s));
@@ -249,7 +290,7 @@
     const hi = Math.max(st.teamScores[0], st.teamScores[1]);
     const lo = Math.min(st.teamScores[0], st.teamScores[1]);
     const score = hi + '–' + lo;
-    const head = st.winner === -1 ? 'Dumb Charades ended in a ' + score + ' tie' : Core().teamName(settings, st.winner) + ' won Dumb Charades ' + score;
+    const head = st.winner === -1 ? 'Charades ended in a ' + score + ' tie' : Core().teamName(settings, st.winner) + ' won Charades ' + score;
     Kit().shareLine(GAME, LABEL, head + (st.mvp ? ' · MVP actor ' + nm(st.mvp) : '') + ' 🎭');
   }
 
@@ -266,7 +307,8 @@
       return;
     }
     const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
-    renderHome(shell);
+    if (c.mode === 'pass') renderPassSetup(shell);
+    else renderHome(shell);
   }
 
   function renderHome(shell) {
@@ -337,7 +379,8 @@
           return id;
         })
       );
-      const game = Core().createGame(teams, settings, { lang: lang() });
+      Kit().refreshRetired(GAME);
+      const game = Core().createGame(teams, settings, { lang: lang(), custom: customTitles, exclude: Kit().retiredCached(GAME) });
       const session = { players, settings: game.settings, pub: game.pub, hidden: game.hidden };
       renderPassReady(shell, session);
     });
@@ -448,12 +491,15 @@
     const nextTeam = 1 - st.team;
     const list = st.teams[nextTeam];
     const nextActor = list[st.actorIdx[nextTeam] % list.length];
+    const card = lastCard(st.lastTurn);
     const body = shell.render(`<div class="pk-page">
       ${turnSummaryHtml(st.lastTurn, session.settings, nm)}
       ${scoreStripHtml(st, session.settings, nm)}
       <div class="pk-sub">Next up: ${esc(Core().teamName(session.settings, nextTeam))} · ${esc(nm(nextActor))} acts</div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Next turn</button>
+      ${Kit().badCardHtml(card)}
     </div>`);
+    if (card) Kit().wireBadCard(body, card);
     body.querySelector('[data-next]').addEventListener('click', () => {
       passAct(session, { type: 'next' });
       routePass(shell, session);
@@ -465,10 +511,13 @@
     const st = session.pub;
     if (session.clock) session.clock.stop();
     shell.setSubtitle('Final');
+    const roster = Object.keys(session.players).map((id) => ({ id, name: session.players[id] }));
+    Kit().reportPass(GAME, { players: roster, scores: st.actorPoints || {}, state: { teams: st.teams, teamScores: st.teamScores, winner: st.winner } });
     const body = shell.render(`<div class="pk-page">
       ${turnSummaryHtml(st.lastTurn, session.settings, nm)}
       ${finalHtml(st, session.settings, nm)}
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      ${Kit().passHubButtonHtml()}
       <div class="pk-row">
         <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
         <button type="button" class="pk-btn pk-btn--ghost" data-setup>Teams &amp; settings</button>
@@ -477,10 +526,11 @@
     try {
       if (typeof gameFeedback === 'function') gameFeedback('win');
     } catch (e) {}
+    Kit().wirePassHub(body, shell);
     body.querySelector('[data-share]').addEventListener('click', () => shareFinal(st, session.settings, nm));
     body.querySelector('[data-setup]').addEventListener('click', () => renderPassSetup(shell));
     body.querySelector('[data-again]').addEventListener('click', () => {
-      const game = Core().createGame(st.teams, session.settings, { lang: lang() });
+      const game = Core().createGame(st.teams, session.settings, { lang: lang(), custom: customTitles, exclude: Kit().retiredCached(GAME) });
       Object.assign(session, { pub: game.pub, hidden: game.hidden, clock: null, clockTurn: null });
       renderPassReady(shell, session);
     });
@@ -509,14 +559,15 @@
       min: Core().MIN_PLAYERS,
       max: Core().MAX_PLAYERS,
       hydrate: (st) => Core().hydrateState(st),
+      startArgs: () => startArgs(),
       lobbySummary: (ctrl) => {
         const s = Core().mergeSettings(ctrl.view.pub.settings);
-        if (!s.categories) s.categories = Core().packs.defaultCategories(lang());
-        return metaLine(s);
+        if (!s.categories) s.categories = Core().packs.defaultCategories(lang(), s.region);
+        return customTitles && ctrl.isHost() ? metaLine(s).replace(/\d+ categor(y|ies)$/, 'your pack') : metaLine(s);
       },
       openSettings: (ctrl) => {
         const s = Core().mergeSettings(ctrl.view.pub.settings);
-        if (!s.categories) s.categories = Core().packs.defaultCategories(lang());
+        if (!s.categories) s.categories = Core().packs.defaultCategories(lang(), s.region);
         openSettings(s, {
           onSave: (next) => {
             saveSettings(next);
@@ -535,7 +586,7 @@
               ${t
                 .map(
                   (p) => `<${isHost ? 'button type="button"' : 'div'} class="pk-lobby-row ch-member" ${isHost ? `data-move="${esc(p.id)}" data-to="${1 - i}" aria-label="Move ${esc(p.name)} to the other team"` : ''}>
-                  <span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${p.id === ctrl.view.pub.host ? '<span class="pk-badge">Host</span>' : ''}${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''}${isHost ? '<span class="pk-chev" aria-hidden="true">⇄</span>' : ''}
+                  <span class="pk-dot" data-presence="${esc(p.id)}"></span>${Kit().identityHtml(p.seat || 0, p.name)}<span>${esc(p.name)}</span>${p.id === ctrl.view.pub.host ? '<span class="pk-badge">Host</span>' : ''}${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''}${isHost ? '<span class="pk-chev" aria-hidden="true">⇄</span>' : ''}
                 </${isHost ? 'button' : 'div'}>`
                 )
                 .join('')}
@@ -690,8 +741,10 @@
         <div class="pk-sub">Next up: ${esc(Core().teamName(s, nextTeam))}${nextActor ? ' · ' + esc(nm(nextActor)) + ' acts' : ''}</div>
         <div class="pk-timer" data-timer></div>
         <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Next turn</button>
+        ${K.badCardHtml(lastCard(st.lastTurn))}
       </div>`);
       ctrl.wire(body);
+      if (lastCard(st.lastTurn)) K.wireBadCard(body, lastCard(st.lastTurn));
       body.querySelector('[data-next]').addEventListener('click', () => ctrl.act('nextTurn'));
       return;
     }
@@ -700,9 +753,9 @@
       const body = ctrl.render(`<div class="pk-page">
         ${turnSummaryHtml(st.lastTurn, s, nm)}
         ${finalHtml(st, s, nm)}
-        ${K.roomResultActions(ctrl, { nextLabel: 'Play again', waitLabel: 'Waiting for the host to start a new game…' })}
+        ${K.roomResultActions(ctrl, { nextLabel: 'Play again', waitLabel: 'Waiting for the host to start a new game…', card: lastCard(st.lastTurn) })}
       </div>`);
-      K.wireRoomResultActions(ctrl, body, { nextOp: 'start', onShare: () => shareFinal(st, s, nm) });
+      K.wireRoomResultActions(ctrl, body, { nextOp: 'start', onShare: () => shareFinal(st, s, nm), card: lastCard(st.lastTurn) });
       if (ctrl.view.celebrated !== pub.roundNo) {
         ctrl.view.celebrated = pub.roundNo;
         try {

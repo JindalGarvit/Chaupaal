@@ -259,7 +259,9 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
   assert([...hiSeen].some((id) => regional.includes(id)), 'Imposter: Hindi Mixed includes regional packs');
   assert(ImpCore.deal(['a', 'b', 'c'], { pack: 'bollywood' }, { rng }).hidden.category.id === 'bollywood', 'Imposter: regional packs stay pickable');
   assert(ImpCore.mergeSettings({ mixRegional: true }).mixRegional === true && ImpCore.mergeSettings({ mixRegional: 'yes' }).mixRegional === false, 'Imposter: mixRegional survives the server merge (strict boolean)');
-  assert(/s\.mixRegional = String\(lang\(\)\)\.indexOf\('hi'\) === 0;/.test(read('public/src/js/games/imposter.js')), 'Imposter client sets mixRegional from the UI language');
+  // P15: region follows the content locale (India / Hindi → regional add-ons) until the host picks.
+  const impSrc = read('public/src/js/games/imposter.js');
+  assert(/s\.region = Kit\(\)\.contentPrefs\(\)\.region/.test(impSrc) && /s\.mixRegional = s\.region === 'in'/.test(impSrc), 'Imposter client sets the region from the content locale');
   assert(!/Apni safai|safai do/i.test(read('public/src/js/games/mostlikely.js')), 'Most Likely settings copy is plain English');
 
   // ---------- (f) api count ----------

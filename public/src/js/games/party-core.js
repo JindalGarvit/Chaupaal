@@ -96,14 +96,19 @@
     return a;
   }
 
-  /** Label in the reader's language; bilingual shows both (primary first). */
-  function bilingualLabel(item, lang, both) {
-    if (!item) return '';
-    const hi = String(lang || 'en').indexOf('hi') === 0;
-    const primary = hi ? item.hi || item.en : item.en || item.hi;
-    const secondary = hi ? item.en : item.hi;
-    return both && secondary && secondary !== primary ? primary + ' · ' + secondary : primary;
+  function isHindi(lang) {
+    return String(lang || 'en').toLowerCase().indexOf('hi') === 0;
   }
 
-  return { normalize, levenshtein, fuzzyMatch, shuffle, rngOr, bilingualLabel };
+  /**
+   * Label in the reader's language. Translations are locale data: only a Hindi reader sees the
+   * Hindi label (English when there is none); `both` adds the English after it for that reader.
+   */
+  function bilingualLabel(item, lang, both) {
+    if (!item) return '';
+    if (!isHindi(lang) || !item.hi) return item.en || item.hi || '';
+    return both && item.en && item.en !== item.hi ? item.hi + ' · ' + item.en : item.hi;
+  }
+
+  return { normalize, levenshtein, fuzzyMatch, shuffle, rngOr, bilingualLabel, isHindi };
 });

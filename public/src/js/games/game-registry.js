@@ -633,6 +633,17 @@
           showChallenge: false,
           fn: () => g.launch(Object.assign({}, ctx, { source: 'chat_group' })),
         }));
+      if (pickerGames.length && window.PartyHub && typeof window.PartyHub.open === 'function') {
+        pickerGames.unshift({
+          id: 'partyhub',
+          emoji: '🎉',
+          name: 'Party night',
+          desc: 'Several party games, one group — no re-invites',
+          partyKit: true,
+          showChallenge: false,
+          fn: () => window.PartyHub.open({ chat, source: 'chat_group' }),
+        });
+      }
       title = 'Group games';
       subtitle = 'Party games for this chat — pick players next';
       emptyHint = 'No party games here yet — try Ludo, Oh No!, Scribble or Imposter from Manch.';

@@ -409,11 +409,11 @@
     rajamantri: {
       ruleset: { name: 'Raja Mantri Chor Sipahi', source: 'Traditional Raja Mantri Chor Sipahi rules', simplified: false },
       variants: [range('players', 'Players', 4, 4, 8, 'host')],
-      glance: ['Everyone draws a secret role', 'The Mantri must find the Chor', 'Right guess keeps points; wrong swaps them'],
+      glance: ['Everyone draws a secret role (King, Minister, Soldier, Thief)', 'The Mantri (Minister) must find the Chor (Thief)', 'Right guess keeps points; wrong swaps them'],
       rules: [
-        { h: 'Roles', body: 'Raja 1000 · Mantri 800 · Sipahi 500 · Chor 0.' },
-        { h: 'The call', body: 'The Raja reveals and calls on the Mantri, who reveals and picks the Chor.' },
-        { h: 'Big rooms', body: '5–8 players add Rani, Daku, Senapati and Daroga — find every thief, one pick each.' },
+        { h: 'Roles', body: 'Raja (King) 1000 · Mantri (Minister) 800 · Sipahi (Soldier) 500 · Chor (Thief) 0.' },
+        { h: 'The call', body: 'The Raja reveals — “Main Raja hoon!” (I’m the King!) — and calls on the Mantri, who reveals and picks the Chor.' },
+        { h: 'Big rooms', body: '5–8 players add Rani (Queen), Daku (Bandit), Senapati (General) and Daroga (Inspector) — find every thief, one pick each.' },
       ],
     },
     charades: {

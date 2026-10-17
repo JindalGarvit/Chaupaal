@@ -151,16 +151,21 @@ assert(true, 'swaps conserve the round total (points only move between guesser a
 assert(RM.publicView(RM.createRound(ids(4), {})) && !/"roles"/.test(JSON.stringify(RM.publicView(RM.createRound(ids(4), {})))), 'public view carries no role map before result');
 
 // ---------- (c) Charades packs ----------
-const MIN = { bollywood: 120, songs: 60, hollywood: 60, tv: 40, sports: 40, idioms: 40, actions: 40 };
-assert(Packs.PACKS.length === 7, '7 categories');
+// P15 global-first: 7 global core packs + 5 regional add-ons; Hindi labels are optional locale data.
+const MIN = {
+  hollywood: 60, hits: 40, tv: 40, people: 40, actions: 40, animals: 40, phrases: 40,
+  bollywood: 120, songs: 60, desitv: 36, sports: 30, idioms: 40,
+};
+assert(Packs.PACKS.length === 12, '12 categories (7 global + 5 regional)');
 const allKeys = new Set();
 Object.keys(MIN).forEach((id) => {
   const p = Packs.getPack(id);
   assert(!!p && p.titles.length >= MIN[id], `${id}: ≥${MIN[id]} titles (got ${p ? p.titles.length : 0})`);
-  if (!p.en || !DEVANAGARI.test(p.hi) || !p.icon || !p.kind) throw new Error(id + ': pack needs en + Hindi label + icon + kind');
+  if (!p.en || (p.hi && !DEVANAGARI.test(p.hi)) || !p.icon || !p.kind) throw new Error(id + ': pack needs en + icon + kind (Hindi label Devanagari when present)');
   const seen = new Set();
   p.titles.forEach((t) => {
-    if (!t.en || !t.hi) throw new Error(`${id}: ${t.key} needs English + Hindi labels`);
+    if (!t.en) throw new Error(`${id}: ${t.key} needs an English label`);
+    if (p.regional && !t.hi && id !== 'desitv') throw new Error(`${id}: ${t.key} regional titles keep their Hindi label`);
     if (Packs.DIFFICULTIES.indexOf(t.difficulty) < 0) throw new Error(`${id}: ${t.en} bad difficulty ${t.difficulty}`);
     const k = PC.normalize(t.en);
     if (seen.has(k)) throw new Error(`${id}: duplicate title ${t.en}`);
@@ -173,17 +178,17 @@ Object.keys(MIN).forEach((id) => {
   if (id === 'bollywood' && diffs.size < 3) throw new Error('Bollywood Movies must be difficulty-tagged (easy/medium/hard)');
   console.log(`✓ ${id}: labels + difficulty tags, no duplicates`);
 });
-assert(['bollywood', 'songs', 'idioms'].every((id) => Packs.getPack(id).regional) && !Packs.getPack('hollywood').regional && !Packs.getPack('actions').regional, 'regional packs flagged (global-first)');
-assert(Packs.defaultCategories('en').indexOf('bollywood') < 0 && Packs.defaultCategories('en').indexOf('actions') >= 0, 'English default: global packs only');
-assert(Packs.defaultCategories('hi').indexOf('bollywood') >= 0 && Packs.defaultCategories('hi').length === 7, 'Hindi default: every pack incl. Bollywood');
+const REGIONAL = ['bollywood', 'songs', 'desitv', 'sports', 'idioms'];
+const GLOBAL = ['hollywood', 'hits', 'tv', 'people', 'actions', 'animals', 'phrases'];
+assert(REGIONAL.every((id) => Packs.getPack(id).regional) && GLOBAL.every((id) => !Packs.getPack(id).regional), 'regional packs flagged (global-first)');
+assert(Packs.defaultCategories('en').slice().sort().join() === GLOBAL.slice().sort().join(), 'English default: the 7 global packs only');
+assert(Packs.defaultCategories('hi').length === 12 && Packs.defaultCategories('en', 'in').length === 12, 'Hindi reader or India region: every pack incl. regional add-ons');
 const regionalIn = (keys) => keys.filter((k) => Packs.byKey(k).regional).length;
-assert(regionalIn(CH.pool({}, 'en')) === 0 && CH.pool({}, 'en').length >= 150, 'English default deck: no India-specific titles (global TV/sports/actions only)');
-assert(regionalIn(CH.pool({ categories: ['tv', 'sports'] }, 'hi')) > 0, 'Hindi locale: India picks inside TV/sports join the deck');
-assert(regionalIn(CH.pool({ categories: ['tv', 'bollywood'] }, 'en')) > 0, 'picking a regional pack opts into India picks elsewhere too');
-['tv', 'sports'].forEach((id) => {
-  const g = Packs.getPack(id).titles.filter((t) => !t.regional).length;
-  assert(g >= 25, `${id}: ≥25 global titles for non-Hindi players (got ${g})`);
-});
+assert(regionalIn(CH.pool({}, 'en')) === 0 && CH.pool({}, 'en').length >= 250, 'English default deck: no India-specific titles');
+assert(regionalIn(CH.pool({ region: 'in' }, 'en')) > 0, 'India region: regional packs join the default deck');
+assert(regionalIn(CH.pool({ categories: ['actions'] }, 'hi')) > 0, 'Hindi locale: India picks inside a global pack join the deck');
+assert(regionalIn(CH.pool({ categories: ['actions', 'bollywood'] }, 'en')) > 0, 'picking a regional pack opts into India picks elsewhere too');
+assert(['Movies', 'Songs', 'TV Shows', 'Famous People', 'Actions', 'Animals', 'Idioms'].every((n) => Packs.PACKS.some((p) => !p.regional && p.en.indexOf(n) >= 0)), 'global core pack names');
 const BAD = /\b(sex|nude|porn|fuck|shit|bitch|rape|drugs?|cocaine|kill yourself)\b/i;
 Packs.PACKS.forEach((p) =>
   p.titles.forEach((t) => {

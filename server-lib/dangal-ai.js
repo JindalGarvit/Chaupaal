@@ -76,12 +76,38 @@ function cricketCommentary() {
   return require('../public/src/js/games/cricket-commentary.js');
 }
 
+/**
+ * Party packs (generateWordPack with input.kind — no kind keeps the original { words: string[] }):
+ *   kind 'pairs'   Imposter  → { words: [{ w, p }] }  w = word, p = its Undercover partner (related, different)
+ *   kind 'titles'  Charades  → { words: [string<=48] }
+ *   kind 'prompts' Most Likely To game → { prompts: [string<=120] } (mode 'mlt' | 'nhie') or
+ *                  { prompts: [{ a, b }] } (mode 'wyr')
+ * Fallbacks sample the bundled global packs (server-lib/party-content.js), never an empty pack.
+ *
+ * Werewolf narration (commentary with input.gameId 'werewolf', mode 'narrate'):
+ *   → { line<=160 } built only from the public facts given; party-content.js adds a gore filter.
+ *   Fallback { line: '' } → clients keep the theme's templated narration.
+ */
+const PACK_KINDS = ['pairs', 'titles', 'prompts'];
+function packKind(input) {
+  const k = input && input.kind;
+  return PACK_KINDS.indexOf(k) >= 0 ? k : '';
+}
+function distinct(list) {
+  return new Set(list.map((x) => String(x).toLowerCase().trim())).size === list.length;
+}
+function isNarrate(input) {
+  return !!input && String(input.gameId || '') === 'werewolf' && input.mode === 'narrate';
+}
+const NARRATE_MAX = 160;
+
 const SCHEMAS = {
   coachExplain: (d) => !!d && str(d.text, 280) && Array.isArray(d.tips) && d.tips.length <= 3 && d.tips.every((t) => str(t, 120)),
   commentary: (d, input) => {
     const mode = cricketMode(input);
     if (mode === 'over') return !!cricketCommentary().validateOverLines(d, (input && input.moments) || []);
     if (mode === 'recap') return !!cricketCommentary().validateRecap(d, (input && input.facts) || {});
+    if (isNarrate(input)) return !!d && str(d.line, NARRATE_MAX) && Object.keys(d).length === 1;
     return !!d && str(d.line, 140);
   },
   generateQuestions: (d) =>
@@ -95,9 +121,24 @@ const SCHEMAS = {
         Number.isInteger(q.answer) && q.answer >= 0 && q.answer <= 3 &&
         new Set(q.options.map((o) => o.toLowerCase())).size === 4
     ),
-  generateWordPack: (d) =>
-    !!d && Array.isArray(d.words) && d.words.length >= 4 && d.words.length <= 60 &&
-    d.words.every((w) => str(w, 32)) && new Set(d.words.map((w) => w.toLowerCase())).size === d.words.length,
+  generateWordPack: (d, input) => {
+    const kind = packKind(input);
+    if (!d) return false;
+    if (kind === 'pairs') {
+      return (
+        Array.isArray(d.words) && d.words.length >= 4 && d.words.length <= 40 &&
+        d.words.every((x) => x && str(x.w, 32) && str(x.p, 32) && x.w.toLowerCase().trim() !== x.p.toLowerCase().trim()) &&
+        distinct(d.words.map((x) => x.w))
+      );
+    }
+    if (kind === 'titles') return Array.isArray(d.words) && d.words.length >= 4 && d.words.length <= 40 && d.words.every((w) => str(w, 48)) && distinct(d.words);
+    if (kind === 'prompts') {
+      if (!Array.isArray(d.prompts) || d.prompts.length < 4 || d.prompts.length > 30) return false;
+      if (input.mode === 'wyr') return d.prompts.every((x) => x && str(x.a, 80, 2) && str(x.b, 80, 2) && x.a.toLowerCase() !== x.b.toLowerCase()) && distinct(d.prompts.map((x) => x.a + '|' + x.b));
+      return d.prompts.every((x) => str(x, 120, 6)) && distinct(d.prompts);
+    }
+    return Array.isArray(d.words) && d.words.length >= 4 && d.words.length <= 60 && d.words.every((w) => str(w, 32)) && distinct(d.words);
+  },
   botPersona: (d) =>
     !!d && str(d.name, 24) && !!d.style && ['aggression', 'bluff', 'speed', 'chattiness'].every((k) => unit(d.style[k])) &&
     Object.keys(d.style).length === 4,
@@ -219,6 +260,7 @@ const FALLBACKS = {
     const mode = cricketMode(input);
     if (mode === 'over') return { lines: [] };
     if (mode === 'recap') return { recap: '' };
+    if (isNarrate(input)) return { line: '' };
     const list = COMMENTARY[input.event] || COMMENTARY.default;
     return { line: list[hashInt(JSON.stringify(input)) % list.length] };
   },
@@ -230,6 +272,7 @@ const FALLBACKS = {
     return { questions: out };
   },
   generateWordPack(input) {
+    if (packKind(input)) return require('./party-content.js').fallbackPack(input);
     const words = WORD_PACKS[input.game] || WORD_PACKS.default;
     const n = Math.max(4, Math.min(words.length, Number(input.count) || words.length));
     return { words: words.slice(0, n) };
@@ -282,14 +325,50 @@ const PROMPTS = {
         'Schema: {"recap": string<=320}'
       );
     }
+    if (isNarrate(i)) {
+      return (
+        `You narrate a friendly Werewolf party game (theme: ${clip(i.theme, 20)}). Beat: ${clip(i.beat, 12)}.\n` +
+        `Public facts (JSON): ${clip(JSON.stringify(i.facts || {}), 400)}\n` +
+        'Write ONE atmospheric line for the narrator to read aloud. Use only the names given; never reveal or guess anyone’s role. ' +
+        'Spooky but light: no blood, gore, weapons, injuries or violence words — people are simply "gone" or "found asleep". ' +
+        `Schema: {"line": string<=${NARRATE_MAX}}`
+      );
+    }
     return `Game: ${clip(i.gameId, 20)}. Event: ${clip(i.event, 30)}. Score: ${clip(i.score, 40)}.\n` + 'One upbeat commentary line. Schema: {"line": string<=140}';
   },
   generateQuestions: (i) =>
     `Write ${Math.max(1, Math.min(10, Number(i.count) || 5))} multiple-choice quiz questions on "${clip(i.category, 30)}" with globally known answers.\n` +
     'Schema: {"questions": [{"q": string<=200, "options": [4 distinct strings<=80], "answer": 0-3}]}',
-  generateWordPack: (i) =>
-    `Write ${Math.max(4, Math.min(40, Number(i.count) || 12))} distinct, globally recognisable words for the party game ${clip(i.game, 20)} on the theme "${clip(i.theme, 40)}".\n` +
-    'Schema: {"words": [string<=32]}',
+  generateWordPack: (i) => {
+    const n = Math.max(4, Math.min(packKind(i) === 'prompts' ? 30 : 40, Number(i.count) || 12));
+    const theme = clip(i.theme, 40);
+    const safe = 'Teen-safe and kind: no insults, bodies, looks, romance, alcohol, drugs, violence or real private people.';
+    if (packKind(i) === 'pairs') {
+      return (
+        `Imposter party game, theme "${theme}". Write ${n} distinct, well-known words or short phrases, each with a partner: a related but clearly different word ` +
+        `(e.g. Tea → Coffee, Beach → Lake) that someone could confuse in conversation. ${safe}\n` +
+        'Schema: {"words": [{"w": string<=32, "p": string<=32}]}'
+      );
+    }
+    if (packKind(i) === 'titles') {
+      return (
+        `Charades party game, theme "${theme}". Write ${n} distinct things people can act out silently — actions, generic movie/TV ideas, animals, jobs or idioms. ` +
+        `No trademarks or brand names; famous people only if historical. ${safe}\n` +
+        'Schema: {"words": [string<=48]}'
+      );
+    }
+    if (packKind(i) === 'prompts') {
+      if (i.mode === 'wyr') {
+        return `"Would You Rather" party prompts, theme "${theme}". Write ${n} fun dilemmas, each two short options. ${safe}\nSchema: {"prompts": [{"a": string<=80, "b": string<=80}]}`;
+      }
+      const lead = i.mode === 'nhie' ? 'lines that finish "Never have I ever …" (write only the ending)' : 'lines that finish "Who is most likely to …" (write only the ending)';
+      return `Party prompts, theme "${theme}". Write ${n} playful, never-mean ${lead}. ${safe}\nSchema: {"prompts": [string<=120]}`;
+    }
+    return (
+      `Write ${n} distinct, globally recognisable words for the party game ${clip(i.game, 20)} on the theme "${theme}".\n` +
+      'Schema: {"words": [string<=32]}'
+    );
+  },
   botPersona: (i) =>
     `Create a bot opponent persona for ${clip(i.gameId, 20)} at level ${clip(i.level, 12)}. Style numbers only, 0 to 1.\n` +
     'Schema: {"name": string<=24, "style": {"aggression": n, "bluff": n, "speed": n, "chattiness": n}}',
@@ -479,6 +558,8 @@ module.exports = {
   isSafe,
   isSafeText,
   parseJson,
+  PACK_KINDS,
+  NARRATE_MAX,
   createDangalAI,
   sharedAI,
   CHESS_PERSONAS,

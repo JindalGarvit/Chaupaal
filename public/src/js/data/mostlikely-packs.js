@@ -3,7 +3,9 @@
  *   likely rows:  'english fragment (after “Who’s most likely to …”)|पूरा हिंदी सवाल'
  *   rather rows:  'Option A|विकल्प A|Option B|विकल्प B'
  *   never rows:   'english fragment (after “Never have I ever …”)' — English only, localised via i18n
- * `regional` packs are add-ons: on by default only for Hindi locales (global-first).
+ * Hindi text is locale data — shown only to Hindi readers.
+ * `regional` packs are optional add-ons: on by default only for region 'in' (suggested for the India
+ * locale) or Hindi readers (global-first).
  * UMD: window.MOSTLIKELY_PACKS / require().
  */
 (function (root, factory) {
@@ -833,11 +835,11 @@
     return PACKS.filter((p) => p[field].length);
   }
 
-  /** Default packs for a mode — the global set, plus regional packs for Hindi readers. */
-  function defaultPacks(mode, lang) {
-    const hi = String(lang || 'en').indexOf('hi') === 0;
+  /** Default packs for a mode — the global core, plus the regional add-ons for region 'in' / Hindi readers. */
+  function defaultPacks(mode, lang, region) {
+    const regional = region === 'in' || String(lang || 'en').indexOf('hi') === 0;
     return packsFor(mode)
-      .filter((p) => hi || !p.regional)
+      .filter((p) => regional || !p.regional)
       .map((p) => p.id);
   }
 

@@ -27,7 +27,9 @@
     voteSec: 60,
     defenceSec: 20,
     voteStyle: 'group', // Pass & Play: 'group' (host taps accused) | 'secret' (pass-around)
-    mixRegional: false, // Mixed draws regional packs too (Hindi locales) — global-first default
+    mixRegional: false, // mirrors region === 'in' (older rooms / saved settings)
+    region: 'global', // 'global' | 'in' — regional add-on packs join Mixed (suggested for the India locale)
+    difficulty: 'any', // 'any' | 'easy' | 'hard'
   };
 
   // ---------------- text helpers ----------------
@@ -157,9 +159,12 @@
     out.defenceSec = Math.max(5, Math.min(120, Number(out.defenceSec) || DEFAULT_SETTINGS.defenceSec));
     out.voteStyle = out.voteStyle === 'secret' ? 'secret' : 'group';
     out.imposters = Math.max(0, Math.min(4, Number(out.imposters) || 0));
-    const packOk = out.pack === 'mixed' || !!PACKS_MOD.getPack(out.pack);
+    const packOk = out.pack === 'mixed' || out.pack === 'custom' || !!PACKS_MOD.getPack(out.pack);
     if (!packOk) out.pack = 'mixed';
-    out.mixRegional = out.mixRegional === true;
+    // `region: 'in'` = regional add-ons join Mixed (`mixRegional` is the older name for the same switch).
+    out.region = out.region === 'in' || (s && s.region === undefined && out.mixRegional === true) ? 'in' : 'global';
+    out.mixRegional = out.region === 'in';
+    out.difficulty = out.difficulty === 'easy' || out.difficulty === 'hard' ? out.difficulty : 'any';
     return out;
   }
 
@@ -170,17 +175,72 @@
   }
 
   function toWord(en, hi, alts) {
-    return { en, hi, alts: Array.isArray(alts) ? alts.slice() : [] };
+    return { en, hi: hi || '', alts: Array.isArray(alts) ? alts.slice() : [] };
   }
 
-  /** Pick a (pack, word) not yet used this session. */
-  function pickWord(packId, rng, usedKeys, mixRegional) {
+  /** Stable identity of a word (survives reordering / dedupe edits): `pack:normalized english`. */
+  function wordKey(packId, row) {
+    return packId + ':' + normalize(row[0]);
+  }
+
+  /** Explicit tag (e / m / h) when the pack has one; untagged rows: short single words read easy, long or multi-word ones hard. */
+  function rowDifficulty(row) {
+    const d = row && row[5];
+    if (d === 'e' || d === 'm' || d === 'h') return d;
+    const w = String((row && row[0]) || '').trim();
+    if (/\s/.test(w) || w.length >= 10) return 'h';
+    return w.length <= 5 ? 'e' : 'm';
+  }
+
+  const CUSTOM_MIN = 4;
+  const CUSTOM_MAX = 60;
+
+  /**
+   * A host-made (or AI-drafted, host-approved) pack → pack shape. Session-only; the server re-checks it.
+   * @param {{ name?: string, words: ({ w: string, p: string } | string[])[] }} src
+   * @returns {object|null} null when fewer than CUSTOM_MIN usable pairs
+   */
+  function customPack(src) {
+    if (!src || !Array.isArray(src.words)) return null;
+    const seen = {};
+    const clean = (x) => String(x == null ? '' : x).replace(/[<>\u0000-\u001f]/g, '').trim().replace(/\s+/g, ' ').slice(0, 32);
+    const words = [];
+    src.words.slice(0, CUSTOM_MAX * 2).forEach((x) => {
+      const w = clean(Array.isArray(x) ? x[0] : x && x.w);
+      const p = clean(Array.isArray(x) ? x[1] : x && x.p);
+      if (!w || !p || normalize(w) === normalize(p)) return;
+      const k = normalize(w);
+      if (!k || seen[k]) return;
+      seen[k] = true;
+      words.push([w, '', p, '']);
+    });
+    if (words.length < CUSTOM_MIN) return null;
+    return { id: 'custom', en: clean(src.name) || 'Custom pack', hi: '', icon: '✨', custom: true, words: words.slice(0, CUSTOM_MAX) };
+  }
+
+  /**
+   * Pick a (pack, word) not yet used this session.
+   * @param {{ difficulty?: string, exclude?: string[], custom?: object }} [opts]
+   *   exclude = retired word keys (never dealt while anything else is left); custom = customPack() output
+   */
+  function pickWord(packId, rng, usedKeys, mixRegional, opts) {
+    const o = opts || {};
     const used = new Set(usedKeys || []);
+    const retired = new Set(o.exclude || []);
     const pool = [];
-    const packs = packId === 'mixed' ? mixedPacks(mixRegional) : [PACKS_MOD.getPack(packId)].filter(Boolean);
-    packs.forEach((p) => p.words.forEach((row, i) => pool.push({ p, row, key: p.id + ':' + i })));
-    let fresh = pool.filter((x) => !used.has(x.key));
-    if (!fresh.length) fresh = pool;
+    const packs =
+      packId === 'custom' && o.custom
+        ? [o.custom]
+        : packId === 'mixed' || packId === 'custom'
+          ? mixedPacks(mixRegional)
+          : [PACKS_MOD.getPack(packId)].filter(Boolean);
+    packs.forEach((p) => p.words.forEach((row) => pool.push({ p, row, key: wordKey(p.id, row) })));
+    const want = o.difficulty === 'easy' ? (r) => rowDifficulty(r) !== 'h' : o.difficulty === 'hard' ? (r) => rowDifficulty(r) !== 'e' : () => true;
+    let live = pool.filter((x) => !retired.has(x.key) && want(x.row));
+    if (!live.length) live = pool.filter((x) => !retired.has(x.key));
+    if (!live.length) live = pool;
+    let fresh = live.filter((x) => !used.has(x.key));
+    if (!fresh.length) fresh = live;
     return fresh[Math.floor(rng() * fresh.length) % fresh.length];
   }
 
@@ -199,7 +259,8 @@
    * Deal a round: exactly k imposters, words + per-player secrets.
    * @param {string[]} players seat order (ids)
    * @param {object} settings
-   * @param {{ rng?: () => number, usedKeys?: string[] }} [opts]
+   * @param {{ rng?: () => number, usedKeys?: string[], exclude?: string[], custom?: object }} [opts]
+   *   exclude = retired word keys; custom = customPack() output (used when settings.pack === 'custom')
    */
   function deal(players, settings, opts) {
     const o = opts || {};
@@ -209,7 +270,7 @@
     if (ids.length < MIN_PLAYERS || ids.length > MAX_PLAYERS) throw new Error('player_count');
     const k = resolveImposterCount(ids.length, s.imposters);
     const imposters = shuffle(ids, rng).slice(0, k);
-    const pick = pickWord(s.pack, rng, o.usedKeys, s.mixRegional);
+    const pick = pickWord(s.pack, rng, o.usedKeys, s.mixRegional, { difficulty: s.difficulty, exclude: o.exclude, custom: o.custom });
     const row = pick.row;
     let majority = toWord(row[0], row[1], row[4]);
     let minority = toWord(row[2], row[3]);
@@ -583,8 +644,9 @@
   function wordLabel(word, lang, bilingual) {
     if (!word) return '';
     const hi = String(lang || '').toLowerCase().indexOf('hi') === 0;
-    if (bilingual) return hi ? word.hi + ' · ' + word.en : word.en + ' · ' + word.hi;
-    return hi ? word.hi || word.en : word.en || word.hi;
+    // Translations are locale data: only a Hindi UI ever shows them, and only where one exists.
+    if (!hi || !word.hi) return word.en || word.hi || '';
+    return bilingual && word.en ? word.hi + ' · ' + word.en : word.hi;
   }
 
   return {
@@ -612,6 +674,11 @@
     hydrateState,
     publicView,
     wordLabel,
+    wordKey,
+    rowDifficulty,
+    customPack,
+    CUSTOM_MIN,
+    CUSTOM_MAX,
     packs: PACKS_MOD,
   };
 });

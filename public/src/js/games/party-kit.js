@@ -92,11 +92,13 @@
    * returns true); system back closes directly — it never steps back to a previous card.
    * @param {{ gameId: string, title: string, subtitle?: string, onClose?: Function, confirmLeave?: () => boolean }} opts
    */
+  const openShells = {};
+
   function openShell(opts) {
     const o = opts || {};
     document.querySelector('.pk-shell[data-game-id="' + o.gameId + '"]')?.remove();
     const el = document.createElement('div');
-    el.className = 'pk-shell';
+    el.className = 'pk-shell' + (largeText() ? ' pk-large' : '');
     el.dataset.gameId = o.gameId;
     const chrome =
       typeof gameChromeHtml === 'function'
@@ -109,7 +111,11 @@
     const cleanup = () => {
       if (closed) return;
       closed = true;
-      wakeLock.release();
+      if (openShells[o.gameId] === shell) delete openShells[o.gameId];
+      if (!Object.keys(openShells).length) wakeLock.release();
+      try {
+        document.dispatchEvent(new CustomEvent('pk:shell-closed', { detail: { gameId: o.gameId } }));
+      } catch (e) {}
       try {
         if (typeof o.onClose === 'function') o.onClose();
       } catch (e) {}
@@ -157,8 +163,77 @@
         GameUI.attachHowTo(el.querySelector('.game-chrome-right') || el, { gameId: o.gameId, title: 'How to play ' + o.title });
       } catch (e) {}
     }
+    const textBtn = document.createElement('button');
+    textBtn.type = 'button';
+    textBtn.className = 'pk-textsize';
+    textBtn.setAttribute('aria-pressed', String(largeText()));
+    textBtn.setAttribute('aria-label', 'Larger text');
+    textBtn.textContent = 'Aa';
+    textBtn.addEventListener('click', () => {
+      const on = !largeText();
+      setLargeText(on);
+      document.querySelectorAll('.pk-shell').forEach((s) => s.classList.toggle('pk-large', on));
+      textBtn.setAttribute('aria-pressed', String(on));
+    });
+    (el.querySelector('.game-chrome-right') || el.querySelector('.game-chrome') || el).appendChild(textBtn);
+    openShells[o.gameId] = shell;
     wakeLock.acquire();
     return shell;
+  }
+
+  // ---------------- accessibility ----------------
+
+  const LARGE_KEY = 'pk_large_text';
+  function largeText() {
+    try {
+      return localStorage.getItem(LARGE_KEY) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+  function setLargeText(on) {
+    try {
+      localStorage.setItem(LARGE_KEY, on ? '1' : '0');
+    } catch (e) {}
+  }
+  function reducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Colour-blind-safe player identity: every seat gets a shape AND a colour (never colour alone),
+   * so "the blue one" is also "the triangle". Stable by seat index.
+   */
+  const ID_SHAPES = ['●', '▲', '■', '◆', '★', '⬟', '✚', '⬢', '▼', '◐', '✦', '⬤', '◼', '▶', '✿', '♥'];
+  const ID_COLORS = ['#4F8EF7', '#F5A524', '#17C3B2', '#E4508F', '#9B6BF2', '#8BC34A', '#FF7043', '#26A69A'];
+  const ID_NAMES = ['circle', 'triangle', 'square', 'diamond', 'star', 'pentagon', 'cross', 'hexagon', 'down triangle', 'half circle', 'sparkle', 'dot', 'block', 'arrow', 'flower', 'heart'];
+  function identityHtml(index, name) {
+    const i = Math.max(0, Number(index) || 0);
+    const shape = ID_SHAPES[i % ID_SHAPES.length];
+    return `<span class="pk-ident" style="--pk-ident:${ID_COLORS[i % ID_COLORS.length]}" role="img" aria-label="${esc((name ? name + ', ' : '') + ID_NAMES[i % ID_NAMES.length])}">${shape}</span>`;
+  }
+
+  // ---------------- content locale ----------------
+
+  /**
+   * Which content a party deck starts with. Global core everywhere; regional add-ons (India packs)
+   * are suggested for the India locale / a Hindi UI and stay one tap away for everyone else.
+   */
+  function contentPrefs() {
+    let lang = 'en';
+    try {
+      if (typeof currentLang !== 'undefined' && currentLang) lang = String(typeof currentLang === 'function' ? currentLang() : currentLang);
+    } catch (e) {}
+    lang = lang.toLowerCase().slice(0, 2) || 'en';
+    let india = false;
+    try {
+      india = typeof isIndiaLocale === 'function' ? !!isIndiaLocale() : false;
+    } catch (e) {}
+    return { lang, region: india || lang === 'hi' ? 'in' : 'global', hindi: lang === 'hi' };
   }
 
   /**
@@ -307,6 +382,12 @@
       });
       window.addEventListener('blur', fireAway);
       window.addEventListener('pagehide', fireAway);
+      window.addEventListener('beforeunload', fireAway);
+      // Rotating the phone to show a neighbour is the classic peek — re-cover on any orientation change.
+      window.addEventListener('orientationchange', fireAway);
+      try {
+        if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', fireAway);
+      } catch (e) {}
     }
     pruneAway();
     const w = { root, onAway };
@@ -622,7 +703,7 @@
   };
 
   /** Server messages that are already plain, specific copy ("Need at least 4 players"). */
-  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING', 'REMOVED', 'BLOCKED', 'WORD_BLOCKED', 'TOO_FEW', 'BAD_TARGET', 'NOT_DRAWER', 'NO_QUESTIONS', 'TOO_EARLY', 'AGE_GATE', 'AGE_CONFIRM', 'INSUFFICIENT_CHIPS', 'NOT_SEATED'];
+  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING', 'REMOVED', 'BLOCKED', 'WORD_BLOCKED', 'TOO_FEW', 'BAD_TARGET', 'NOT_DRAWER', 'NO_QUESTIONS', 'TOO_EARLY', 'AGE_GATE', 'AGE_CONFIRM', 'INSUFFICIENT_CHIPS', 'NOT_SEATED', 'TOO_MANY', 'AI_OFF', 'CUSTOM_MISSING', 'BAD_THEME'];
 
   function roomErrorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
@@ -632,6 +713,37 @@
     return typeof navigator !== 'undefined' && navigator.onLine === false
       ? 'You’re offline — reconnect to keep playing'
       : 'Couldn’t reach the room — try again';
+  }
+
+  /**
+   * A game room launched from a Party night: when the host heads back (room closed with hubDone),
+   * the game screen folds away and the party screen underneath takes over. Otherwise pin a small
+   * "Party night" pill to the game shell so the group can find its way back.
+   */
+  function hubBridge(game, code, pub) {
+    const shell = openShells[game];
+    if (pub.status === 'closed') {
+      if (shell && !shell.closed) setTimeout(() => shell.close(), 0);
+      if (window.PartyHub && typeof PartyHub.onGameClosed === 'function') PartyHub.onGameClosed(game, code, pub);
+      return;
+    }
+    if (!shell || shell.closed || !shell.el) return;
+    let pill = shell.el.querySelector('.pk-hubpill');
+    const isHost = pub.host === myUid();
+    const label = isHost ? '← Party night' : 'Party night';
+    if (!pill) {
+      pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'pk-hubpill';
+      pill.addEventListener('click', () => {
+        if (window.PartyHub && typeof PartyHub.openFromGame === 'function') PartyHub.openFromGame(pill.dataset.hub, pill.dataset.host === '1');
+      });
+      shell.el.appendChild(pill);
+    }
+    pill.dataset.hub = String(pub.hub);
+    pill.dataset.host = isHost ? '1' : '0';
+    pill.textContent = label;
+    pill.setAttribute('aria-label', isHost ? 'Back to the party — pick the next game' : 'Party night scoreboard');
   }
 
   /**
@@ -682,6 +794,7 @@
       }
       syncOffset();
       handlers.onPub(pub);
+      if (pub && pub.hub) hubBridge(game, code, pub);
     });
     const infoRef = rtdb.ref('.info/serverTimeOffset');
     const onInfo = (snap) => {
@@ -908,6 +1021,7 @@
 
   /** index.html lists these as <script type="text/x-lazy" data-party-lazy> so bust-assets stamps them. */
   const LAZY_DATA = {
+    partyhub: ['games/party-hub-core.js'],
     imposter: ['data/imposter-packs.js', 'games/imposter-core.js'],
     rajamantri: ['games/rajamantri-core.js'],
     charades: ['data/charades-packs.js', 'games/charades-core.js'],
@@ -1324,11 +1438,7 @@
     };
     ctrl.hostBar = (timed) => {
       if (!ctrl.isHost() || !timed) return '';
-      return `<div class="pk-hostbar"><span>Host</span>${
-        view.pub.paused
-          ? '<button type="button" class="pk-chip" data-host="resume">Resume</button>'
-          : '<button type="button" class="pk-chip" data-host="pause">Pause</button>'
-      }</div>`;
+      return hostBarHtml(view.pub);
     };
     ctrl.pausedNote = () => (view.pub && view.pub.paused ? '<div class="pk-paused">Paused by the host</div>' : '');
     ctrl.wire = (body) => {
@@ -1391,12 +1501,14 @@
       if (ctrl.shell.closed) return;
       const pub = view.pub;
       if (!pub) return message('This room isn’t available any more.', 'Back to games');
+      if (pub.status === 'closed' && pub.hub) return message('Back to the party…', 'Done');
       if (pub.status === 'closed') return message('The host closed this room.', 'Done');
       if (!pub.players || !pub.players[ctrl.uid] || pub.players[ctrl.uid].left) return message('You’re no longer in this room.', 'Done');
       const st = pub.status === 'playing' && pub.state ? spec.hydrate(pub.state) : null;
       const key = JSON.stringify([
         pub.status, pub.roundNo, pub.host, !!pub.paused, pub.over, pub.players, pub.scores, pub.seen,
         pub.settings, pub.teamPick || null, pub.state || null, view.secret, pub.settlement || null,
+        pub.extended || null, pub.narration || null, pub.hub || null,
       ]);
       if (key === view.key) return;
       view.key = key;
@@ -1439,7 +1551,7 @@
         (spec.lobbyListHtml && spec.lobbyListHtml(ctrl, players)) ||
         `<div class="pk-lobby-list">${players
           .map(
-            (p) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${
+            (p, i) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span>${identityHtml(i, p.name)}<span>${esc(p.name)}</span>${
               p.id === pub.host ? '<span class="pk-badge">Host</span>' : ''
             }${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''}</div>`
           )
@@ -1506,8 +1618,24 @@
         <button type="button" class="pk-btn pk-btn--ghost" data-share-result>Share</button>
         ${isHost && ctrl.spec.openSettings ? '<button type="button" class="pk-btn pk-btn--ghost" data-room-settings>Settings</button>' : '<button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite</button>'}
       </div>
-      <button type="button" class="pk-link" data-end>${isHost ? 'End room' : 'Leave room'}</button>
+      ${o.card ? badCardHtml(o.card) : ''}
+      <button type="button" class="pk-link" data-end>${isHost ? (hubOf(ctrl) ? 'Back to the party' : 'End room') : 'Leave room'}</button>
     </div>`;
+  }
+
+  function hubOf(ctrl) {
+    return (ctrl.view && ctrl.view.pub && ctrl.view.pub.hub) || '';
+  }
+
+  /** Host leaving a party-night game goes back to the party (tallies placings) instead of ending the room. */
+  async function endOrBack(ctrl) {
+    const hub = hubOf(ctrl);
+    if (hub && ctrl.isHost() && window.PartyHub && typeof PartyHub.backToHub === 'function') {
+      const ok = await PartyHub.backToHub(hub);
+      if (ok) return;
+    }
+    await ctrl.act(ctrl.isHost() ? 'end' : 'leave');
+    ctrl.shell.close();
   }
 
   function wireRoomResultActions(ctrl, body, o) {
@@ -1515,9 +1643,266 @@
     body.querySelector('[data-share-result]')?.addEventListener('click', () => o.onShare && o.onShare());
     body.querySelector('[data-room-settings]')?.addEventListener('click', () => ctrl.spec.openSettings(ctrl));
     body.querySelector('[data-invite]')?.addEventListener('click', () => inviteFriends(ctrl.spec.game, ctrl.view.code, ctrl.spec.label));
-    body.querySelector('[data-end]')?.addEventListener('click', async () => {
-      await ctrl.act(ctrl.isHost() ? 'end' : 'leave');
-      ctrl.shell.close();
+    body.querySelector('[data-end]')?.addEventListener('click', () => endOrBack(ctrl));
+    if (o.card) wireBadCard(body, o.card);
+  }
+
+  /** Host timer bar: Pause/Resume + "+30s" (server caps it per turn). */
+  function hostBarHtml(pub) {
+    if (!pub) return '';
+    const used = pub.extended && pub.extended.key === String(pub.phaseKey || '') ? Number(pub.extended.n) || 0 : 0;
+    return `<div class="pk-hostbar"><span>Host</span>${
+      pub.paused
+        ? '<button type="button" class="pk-chip" data-host="resume">Resume</button>'
+        : '<button type="button" class="pk-chip" data-host="pause">Pause</button>'
+    }${used < 3 ? '<button type="button" class="pk-chip" data-host="addTime" aria-label="Add 30 seconds">+30s</button>' : ''}</div>`;
+  }
+
+  // ---------------- content quality: "Bad card" ----------------
+
+  const FLAG_REASONS = [
+    ['unclear', 'Unclear'],
+    ['too_hard', 'Too hard'],
+    ['offensive', 'Not okay'],
+    ['repeat', 'Seen it too often'],
+    ['other', 'Something else'],
+  ];
+  const flaggedLocal = {};
+
+  /** card = { game, key, label? } — built-in cards only; custom / AI cards have no key. */
+  function badCardHtml(card) {
+    if (!card || !card.key || !card.game || !isSignedIn()) return '';
+    if (flaggedLocal[card.game + '|' + card.key]) return '<div class="pk-badcard is-done">Thanks — noted</div>';
+    return `<button type="button" class="pk-badcard" data-bad-card aria-label="Report a bad card${card.label ? ': ' + esc(card.label) : ''}">👎 Bad card</button>`;
+  }
+
+  function wireBadCard(body, card) {
+    const btn = body.querySelector('[data-bad-card]');
+    if (!btn || !card || !card.key) return;
+    btn.addEventListener('click', () => {
+      openSheet({
+        title: 'What was wrong with it?',
+        bodyHtml: `<div class="pk-flag-reasons">${FLAG_REASONS.map(([v, l]) => `<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-reason="${v}">${esc(l)}</button>`).join('')}</div>`,
+        onMount: (el, close) => {
+          el.querySelectorAll('[data-reason]').forEach((b) =>
+            b.addEventListener('click', () => {
+              close();
+              flagCard(card, b.dataset.reason);
+              btn.outerHTML = '<div class="pk-badcard is-done">Thanks — noted</div>';
+            })
+          );
+        },
+      });
+    });
+  }
+
+  function flagCard(card, reason) {
+    flaggedLocal[card.game + '|' + card.key] = 1;
+    return roomCall(card.game, 'card_flag', { key: card.key, locale: contentPrefs().lang, reason }).catch(() => {});
+  }
+
+  /** Retired built-in cards (server list, cached on the device for offline Pass & Play). */
+  const RETIRED_TTL = 6 * 3600 * 1000;
+  function retiredCached(game) {
+    try {
+      const raw = JSON.parse(localStorage.getItem('pk_retired_' + game) || 'null');
+      return raw && Array.isArray(raw.keys) ? raw.keys : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function refreshRetired(game) {
+    let fresh = false;
+    try {
+      const raw = JSON.parse(localStorage.getItem('pk_retired_' + game) || 'null');
+      fresh = raw && Date.now() - (Number(raw.at) || 0) < RETIRED_TTL;
+    } catch (e) {}
+    if (fresh || !isSignedIn() || (typeof navigator !== 'undefined' && navigator.onLine === false)) return Promise.resolve(retiredCached(game));
+    return roomCall(game, 'card_retired', { locale: contentPrefs().lang })
+      .then((d) => {
+        const keys = Array.isArray(d.keys) ? d.keys : [];
+        try {
+          localStorage.setItem('pk_retired_' + game, JSON.stringify({ at: Date.now(), keys }));
+        } catch (e) {}
+        return keys;
+      })
+      .catch(() => retiredCached(game));
+  }
+
+  // ---------------- "Make a pack about…" (AI, optional) + device packs ----------------
+
+  function aiOn() {
+    try {
+      return typeof isAiFeaturesEnabledSync === 'function' && !!isAiFeaturesEnabledSync();
+    } catch (e) {
+      return false;
+    }
+  }
+
+  const PACKS_MAX = 6;
+  function savedPacks(game) {
+    try {
+      const list = JSON.parse(localStorage.getItem('pk_packs_' + game) || '[]');
+      return Array.isArray(list) ? list.filter((p) => p && p.name && p.items) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function savePack(game, pack) {
+    const list = savedPacks(game).filter((p) => p.name !== pack.name);
+    list.unshift({ name: pack.name, mode: pack.mode || '', items: pack.items, at: Date.now() });
+    try {
+      localStorage.setItem('pk_packs_' + game, JSON.stringify(list.slice(0, PACKS_MAX)));
+    } catch (e) {}
+  }
+  function deletePack(game, name) {
+    try {
+      localStorage.setItem('pk_packs_' + game, JSON.stringify(savedPacks(game).filter((p) => p.name !== name)));
+    } catch (e) {}
+  }
+
+  /** Items ↔ editable lines. pairs: "word — partner"; wyr: "A | B"; others: one per line. */
+  function packToLines(kind, items) {
+    return (items || [])
+      .map((it) => {
+        if (kind === 'pairs') return it && typeof it === 'object' ? (it.w || '') + ' — ' + (it.p || '') : String(it);
+        if (it && typeof it === 'object' && 'a' in it) return (it.a || '') + ' | ' + (it.b || '');
+        return String(it || '');
+      })
+      .join('\n');
+  }
+  function linesToPack(kind, text) {
+    return String(text || '')
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => {
+        if (kind === 'pairs') {
+          const m = l.split(/\s+-\s+|\s*[—–:,]\s*/);
+          return m.length >= 2 && m[0] && m[1] ? { w: m[0].slice(0, 40), p: m[1].slice(0, 40) } : null;
+        }
+        if (kind === 'wyr') {
+          const m = l.split(/\s*\|\s*/);
+          return m.length >= 2 && m[0] && m[1] ? { a: m[0].slice(0, 120), b: m[1].slice(0, 120) } : null;
+        }
+        return l.slice(0, 120);
+      })
+      .filter(Boolean);
+  }
+
+  /**
+   * Pack sheet: "Make a pack about…" (AI on only) → preview + edit → use for this session / save on this phone.
+   * Saved packs show even with AI off. onUse({ name, mode, items }).
+   * @param {{ game: string, kind: 'pairs'|'titles'|'prompts', mode?: string, min?: number, onUse: Function }} o
+   */
+  function openPackSheet(o) {
+    const lineKind = o.kind === 'prompts' && o.mode === 'wyr' ? 'wyr' : o.kind;
+    const min = o.min || 4;
+    const hint =
+      lineKind === 'pairs' ? 'One per line: word — similar word' : lineKind === 'wyr' ? 'One per line: option A | option B' : o.kind === 'titles' ? 'One title per line' : 'One prompt per line';
+    let draft = null;
+    const listHtml = () => {
+      const saved = savedPacks(o.game).filter((p) => !o.mode || !p.mode || p.mode === o.mode);
+      return saved.length
+        ? `<div class="pk-section">On this phone</div>${saved
+            .map(
+              (p) => `<div class="pk-pack-row"><button type="button" class="pk-row-btn" data-use-saved="${esc(p.name)}">${esc(p.name)} · ${p.items.length}</button><button type="button" class="pk-link" data-del-saved="${esc(p.name)}" aria-label="Delete ${esc(p.name)}">Delete</button></div>`
+            )
+            .join('')}`
+        : '';
+    };
+    const ai = aiOn();
+    openSheet({
+      title: ai ? 'Make a pack' : 'Your packs',
+      bodyHtml: `<div class="pk-packsheet">
+        ${
+          ai
+            ? `<form data-pack-form class="pk-row"><input class="pk-input" data-pack-theme maxlength="60" placeholder="Make a pack about… (e.g. space, the 90s)" aria-label="Pack theme"><button type="submit" class="pk-btn pk-btn--primary">Make</button></form>`
+            : ''
+        }
+        <div data-pack-preview hidden>
+          <input class="pk-input" data-pack-name maxlength="30" aria-label="Pack name">
+          <textarea class="pk-input pk-pack-lines" data-pack-lines rows="8" aria-label="${esc(hint)}"></textarea>
+          <div class="pk-sub">${esc(hint)} · at least ${min}</div>
+          <div class="pk-err" data-pack-err role="alert"></div>
+          <div class="pk-row">
+            <button type="button" class="pk-btn pk-btn--primary" data-pack-use>Use tonight</button>
+            <button type="button" class="pk-btn pk-btn--ghost" data-pack-save>Save on this phone</button>
+          </div>
+        </div>
+        <div data-pack-saved>${listHtml()}</div>
+        ${!ai && !savedPacks(o.game).length ? '<div class="pk-sub">No saved packs yet.</div>' : ''}
+      </div>`,
+      onMount: (el, closeSheet) => {
+        const preview = el.querySelector('[data-pack-preview]');
+        const err = el.querySelector('[data-pack-err]');
+        const showDraft = (name, items) => {
+          draft = { name, items };
+          preview.hidden = false;
+          el.querySelector('[data-pack-name]').value = name;
+          el.querySelector('[data-pack-lines]').value = packToLines(lineKind === 'wyr' ? 'wyr' : o.kind, items);
+          err.textContent = '';
+        };
+        const current = () => {
+          const items = linesToPack(lineKind, el.querySelector('[data-pack-lines]').value);
+          const name = el.querySelector('[data-pack-name]').value.trim().slice(0, 30) || (draft && draft.name) || 'My pack';
+          if (items.length < min) {
+            err.textContent = 'Add at least ' + min + ' (' + items.length + ' so far)';
+            return null;
+          }
+          return { name, mode: o.mode || '', items };
+        };
+        const wireSaved = () => {
+          el.querySelectorAll('[data-use-saved]').forEach((b) =>
+            b.addEventListener('click', () => {
+              const p = savedPacks(o.game).find((x) => x.name === b.dataset.useSaved);
+              if (p) showDraft(p.name, p.items);
+            })
+          );
+          el.querySelectorAll('[data-del-saved]').forEach((b) =>
+            b.addEventListener('click', () => {
+              deletePack(o.game, b.dataset.delSaved);
+              el.querySelector('[data-pack-saved]').innerHTML = listHtml();
+              wireSaved();
+            })
+          );
+        };
+        wireSaved();
+        el.querySelector('[data-pack-form]')?.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const input = el.querySelector('[data-pack-theme]');
+          const theme = input.value.trim();
+          if (theme.length < 2) return input.focus();
+          const btn = e.target.querySelector('button');
+          btn.disabled = true;
+          btn.textContent = 'Making…';
+          try {
+            const d = await roomCall(o.game, 'ai_pack', { theme, mode: o.mode || '', locale: contentPrefs().lang });
+            const items = (d.pack && (d.pack.words || d.pack.titles || d.pack.prompts)) || [];
+            showDraft((d.pack && d.pack.name) || theme.slice(0, 30), items);
+            if (d.source === 'fallback') err.textContent = 'Couldn’t make a fresh pack — here’s a close match you can edit';
+          } catch (ex) {
+            toast(roomErrorText(ex) || 'Couldn’t make a pack right now');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = 'Make';
+          }
+        });
+        el.querySelector('[data-pack-use]').addEventListener('click', () => {
+          const p = current();
+          if (!p) return;
+          closeSheet();
+          o.onUse(p);
+        });
+        el.querySelector('[data-pack-save]').addEventListener('click', () => {
+          const p = current();
+          if (!p) return;
+          savePack(o.game, p);
+          el.querySelector('[data-pack-saved]').innerHTML = listHtml();
+          wireSaved();
+          toast('Saved on this phone');
+        });
+      },
     });
   }
 
@@ -1601,8 +1986,82 @@
           <span class="pk-mode-title">Play with friends</span><span class="pk-mode-sub">${esc(o.roomSub || 'Everyone on their own phone')}</span>
         </button>
         <button type="button" class="pk-link" data-mode="join">Have a room code? Join</button>
+        ${partyNightLinkHtml(o.game)}
       </div>
     </div>`;
+  }
+
+  // ---------------- Pass & Play party night (offline; the hub screen owns the scoreboard) ----------------
+
+  const NIGHT_KEY = 'pk_party_night';
+  const NIGHT_TTL = 18 * 3600 * 1000;
+
+  function passNight() {
+    try {
+      const n = JSON.parse(localStorage.getItem(NIGHT_KEY) || 'null');
+      if (!n || !Array.isArray(n.players) || !n.players.length) return null;
+      if (Date.now() - (Number(n.touchedAt || n.startedAt) || 0) > NIGHT_TTL) return null;
+      return n;
+    } catch (e) {
+      return null;
+    }
+  }
+  function savePassNight(n) {
+    try {
+      if (!n) localStorage.removeItem(NIGHT_KEY);
+      else localStorage.setItem(NIGHT_KEY, JSON.stringify(Object.assign({}, n, { touchedAt: Date.now() })));
+    } catch (e) {}
+  }
+
+  /** Tonight's names for a game's Pass & Play setup (null when no night is on or it doesn't fit). */
+  function passNightNames(min, max) {
+    const n = passNight();
+    if (!n || n.players.length < (min || 2)) return null;
+    return n.players.slice(0, max || n.players.length);
+  }
+
+  /**
+   * A Pass & Play game reports its latest standings (ids → names). The hub commits `current` when
+   * the group comes back, so however the game ends, the last finished round counts once.
+   * @param {string} game
+   * @param {{ players: {id:string,name:string}[], scores?: object, state?: object }} r
+   */
+  function reportPass(game, r) {
+    const n = passNight();
+    if (!n || !r || !Array.isArray(r.players)) return;
+    const nameOf = {};
+    r.players.forEach((p) => (nameOf[p.id] = p.name));
+    const map = (id) => nameOf[id] || id;
+    const scores = {};
+    Object.keys(r.scores || {}).forEach((id) => (scores[map(id)] = r.scores[id]));
+    let state = r.state ? JSON.parse(JSON.stringify(r.state)) : null;
+    if (state && Array.isArray(state.teams)) state.teams = state.teams.map((t) => (t || []).map(map));
+    if (state && state.result && state.result.roles) {
+      const roles = {};
+      Object.keys(state.result.roles).forEach((id) => (roles[map(id)] = state.result.roles[id]));
+      state.result.roles = roles;
+      if (state.result.tanner) state.result.tanner = map(state.result.tanner);
+    }
+    n.current = { game, r: { players: r.players.map((p) => p.name), scores, state }, at: Date.now() };
+    savePassNight(n);
+  }
+
+  /** Result-screen button back to the Pass & Play party night (only while one is on). */
+  function passHubButtonHtml() {
+    return passNight() ? '<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-pass-hub>Back to party night</button>' : '';
+  }
+  function wirePassHub(body, shell) {
+    body.querySelector('[data-pass-hub]')?.addEventListener('click', () => {
+      shell.close();
+      if (window.PartyHub && typeof PartyHub.openPass === 'function') PartyHub.openPass();
+    });
+  }
+
+  /** "Party night" door on party game homes (the hub keeps one group across games). */
+  function partyNightLinkHtml(game) {
+    return window.PartyHubCore === undefined && !window.PartyHub
+      ? ''
+      : `<button type="button" class="pk-link pk-link--party" data-party-night="${esc(game || '')}">🎉 Party night · several games, one group</button>`;
   }
 
   window.PartyKit = {
@@ -1652,5 +2111,27 @@
     wireChat,
     shareLine,
     homeHtml,
+    hostBarHtml,
+    endOrBack,
+    identityHtml,
+    largeText,
+    reducedMotion,
+    contentPrefs,
+    badCardHtml,
+    wireBadCard,
+    retiredCached,
+    refreshRetired,
+    aiOn,
+    savedPacks,
+    openPackSheet,
+    openShellFor: (game) => openShells[game] || null,
+    openGameRoom: (game, code, opts) => (games[game] && typeof games[game].openRoom === 'function' ? games[game].openRoom(code, opts || {}) : null),
+    partyNightLinkHtml,
+    passNight,
+    savePassNight,
+    passNightNames,
+    reportPass,
+    passHubButtonHtml,
+    wirePassHub,
   };
 })();

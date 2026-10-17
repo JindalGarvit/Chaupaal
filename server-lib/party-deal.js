@@ -28,6 +28,7 @@ const { createRummyAdapter } = require('./rummy-engine.js');
 const { createTeenPattiAdapter } = require('./teenpatti-engine.js');
 const { createBluffAdapter } = require('./bluff-engine.js');
 const { createTambolaAdapter } = require('./tambola-engine.js');
+const Content = require('./party-content.js');
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LEN = 6;
@@ -36,6 +37,8 @@ const REVEAL_MS = 60000;
 const STEAL_MS = 45000;
 const ROOM_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_NAME = 32;
+const EXTEND_MS = 30000;
+const EXTEND_MAX = 3;
 
 function err(code, message) {
   const e = new Error(message || code);
@@ -71,16 +74,22 @@ const imposterAdapter = {
   min: ImposterCore.MIN_PLAYERS,
   max: ImposterCore.MAX_PLAYERS,
   mergeSettings: (s) => ImposterCore.mergeSettings(s),
+  prepare: Content.retiredPrepare('imposter'),
+  prepareOps: ['next'],
   deal(room, ids, ctx) {
     const prev = room.server || {};
     const usedKeys = Array.isArray(prev.usedKeys) ? prev.usedKeys : [];
-    const dealt = ImposterCore.deal(ids, room.pub.settings, { rng: ctx.rng, usedKeys });
+    const custom = ctx.args.customPack ? Content.cleanPack('imposter', ctx.args.customPack) : prev.custom || null;
+    if (room.pub.settings.pack === 'custom' && !custom) throw err('custom_missing', 'Make or pick a pack first');
+    const exclude = (ctx.args.prep && ctx.args.prep.retired) || [];
+    const dealt = ImposterCore.deal(ids, room.pub.settings, { rng: ctx.rng, usedKeys, exclude, custom });
     const starterIndex = (ctx.roundNo - 1) % ids.length;
     room.server = {
       settings: dealt.settings,
       hidden: dealt.hidden,
       pub: ImposterCore.createRound(ids, dealt.settings, starterIndex),
       usedKeys: usedKeys.concat(dealt.key).slice(-200),
+      custom,
       scored: false,
     };
     room.secrets = {};
@@ -163,6 +172,7 @@ const imposterAdapter = {
   },
   hydrate(s) {
     s.usedKeys = s.usedKeys || [];
+    s.custom = s.custom && Array.isArray(s.custom.words) ? s.custom : null;
     s.pub = ImposterCore.hydrateState(s.pub);
     const h = s.hidden || {};
     h.imposters = h.imposters || [];
@@ -256,7 +266,7 @@ const rajamantriAdapter = {
   },
 };
 
-// ------------------------------------------------------------------ Dumb Charades
+// ------------------------------------------------------------------ Charades
 
 const CHARADES_READY_MS = 30000;
 const CHARADES_TURN_END_MS = 12000;
@@ -279,10 +289,13 @@ const charadesAdapter = {
   min: CharadesCore.MIN_PLAYERS,
   max: CharadesCore.MAX_PLAYERS,
   mergeSettings: (s) => CharadesCore.mergeSettings(s),
+  prepare: Content.retiredPrepare('charades'),
   deal(room, ids, ctx) {
     const teams = charadesTeams(room, ids, ctx.rng);
     if (!CharadesCore.validTeams(teams)) throw err('teams_uneven', 'Each team needs at least 2 players');
-    const g = CharadesCore.createGame(teams, room.pub.settings, { rng: ctx.rng });
+    const custom = ctx.args.customPack ? Content.cleanPack('charades', ctx.args.customPack) : null;
+    const exclude = (ctx.args.prep && ctx.args.prep.retired) || [];
+    const g = CharadesCore.createGame(teams, room.pub.settings, { rng: ctx.rng, exclude, custom });
     room.server = { settings: g.settings, pub: g.pub, hidden: g.hidden };
     room.pub.teamPick = {};
     teams.forEach((t, i) => t.forEach((id) => (room.pub.teamPick[id] = i)));
@@ -410,6 +423,8 @@ const mostlikelyAdapter = {
   min: MostLikelyCore.MIN_PLAYERS,
   max: MostLikelyCore.MAX_PLAYERS,
   mergeSettings: (s) => MostLikelyCore.mergeSettings(s),
+  prepare: Content.retiredPrepare('mostlikely'),
+  prepareOps: ['next'],
   deal(room, ids, ctx) {
     const s = MostLikelyCore.mergeSettings(room.pub.settings);
     const min = MostLikelyCore.minPlayers(s);
@@ -417,13 +432,16 @@ const mostlikelyAdapter = {
     const prev = ctx.roundNo > 1 && room.server ? room.server : null;
     let deck = prev ? prev.deck : null;
     let prompt = null;
+    // Tonight's pack ("Make a pack about…", host-approved) stays in `server` for the whole game.
+    const pack = ctx.args.customPack ? Content.cleanPack('mostlikely', ctx.args.customPack) || [] : (room.server && room.server.customs) || [];
     const custom = ctx.args && ctx.args.custom;
     if (custom) {
       const c = MostLikelyCore.cleanCustom(custom, s.mode);
       if (!c.ok) throw err('custom_blocked', c.reason);
       prompt = Object.assign({ key: 'c:' + ctx.roundNo }, c.prompt);
     } else {
-      const out = MostLikelyCore.nextPrompt(deck, s, 'en', ctx.rng);
+      const exclude = (ctx.args.prep && ctx.args.prep.retired) || [];
+      const out = MostLikelyCore.nextPrompt(deck, s, 'en', ctx.rng, pack, exclude);
       prompt = out.prompt;
       deck = out.state;
     }
@@ -438,6 +456,7 @@ const mostlikelyAdapter = {
       hidden: MostLikelyCore.createHidden(),
       deck: deck || { deck: [], sig: '', last: null },
       session,
+      customs: pack,
       recorded: false,
     };
     room.secrets = {};
@@ -530,6 +549,7 @@ const mostlikelyAdapter = {
     s.deck = s.deck || { deck: [], sig: '', last: null };
     s.deck.deck = s.deck.deck || [];
     s.session = MostLikelyCore.hydrateSession(s.session);
+    s.customs = Array.isArray(s.customs) ? s.customs : Object.values(s.customs || {});
     s.recorded = !!s.recorded;
   },
 };
@@ -855,6 +875,22 @@ function reduceRoom(room, uid, op, args, now, rng) {
       return { room, result: {} };
     }
 
+    case 'addTime': {
+      // Host "+30s": the current phase only (a new phase resets its own clock), at most EXTEND_MAX times.
+      needRound();
+      if (!isHost) throw err('host_only', 'Only the host can add time');
+      if (!pub.deadline && !pub.paused) throw err('phase', 'Nothing is timed right now');
+      const key = String(pub.phaseKey || '');
+      const used = pub.extended && pub.extended.key === key ? Number(pub.extended.n) || 0 : 0;
+      if (used >= EXTEND_MAX) throw err('too_many', 'Time can be added ' + EXTEND_MAX + ' times per turn');
+      if (pub.paused) pub.paused.remaining = (Number(pub.paused.remaining) || 0) + EXTEND_MS;
+      else pub.deadline += EXTEND_MS;
+      if (game.onResume) game.onResume(room, EXTEND_MS);
+      pub.extended = { key, n: used + 1 };
+      publish(room, now);
+      return { room, result: { extended: used + 1 } };
+    }
+
     case 'resume': {
       needRound();
       if (!isHost) throw err('host_only', 'Only the host can resume');
@@ -981,7 +1017,9 @@ async function partyRoom(adminApp, uid, body, deps) {
   delete b.adult;
   const op = String(b.op || '');
   const game = String(b.game || 'imposter');
+  if (game === 'partyhub') return require('./party-hub.js').hubAction(adminApp, uid, b, deps);
   if (!GAMES[game]) throw err('unknown_game', 'Unknown party game');
+  if (Content.OPS.indexOf(op) >= 0) return Object.assign({ game, serverNow: Date.now() }, await Content.contentAction(adminApp, uid, game, b, deps));
   const rtdb = adminApp.database();
   const now = Date.now();
   if (GAMES[game].ageGated && AGE_OPS.has(op)) b.adult = await adultStatus(adminApp, uid, deps);
@@ -1023,7 +1061,7 @@ async function partyRoom(adminApp, uid, body, deps) {
   const path = `games/${game}/${code}`;
   const g = GAMES[game];
   if (g.direct && g.direct[op]) return Object.assign({ code, game, serverNow: now }, await g.direct[op](adminApp, rtdb, path, uid, b));
-  if (g.prepare && (op === 'start' || (g.prepareOps && g.prepareOps.indexOf(op) >= 0))) b.prep = await g.prepare(adminApp, rtdb, path, uid, deps, op);
+  if (g.prepare && (op === 'start' || (g.prepareOps && g.prepareOps.indexOf(op) >= 0))) b.prep = await g.prepare(adminApp, rtdb, path, uid, deps, op, b);
   const result = await transactRoom(rtdb, path, (current) => {
     const out = reduceRoom(current, uid, op, b, now, Math.random);
     const req = g.pendingSettlement && out.room.server ? g.pendingSettlement(out.room.server) : null;
@@ -1131,8 +1169,12 @@ module.exports = {
   GAMES,
   CODE_LEN,
   OFFLINE_MS,
+  EXTEND_MS,
+  EXTEND_MAX,
   makeCode,
   cleanCode,
+  cleanName,
+  transactRoom,
   newRoom,
   hydrateRoom,
   reduceRoom,

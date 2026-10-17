@@ -55,6 +55,14 @@
       <div id="productBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
     </div>
     <div class="card">
+      <div class="row">
+        <strong>Party cards</strong>
+        <span class="meta">(“Bad card” flags from party games — retired cards leave the deck for that locale)</span>
+        <button type="button" id="btnCards" class="secondary">Load cards</button>
+      </div>
+      <div id="cardsBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
+    </div>
+    <div class="card">
       <strong>Chronological log</strong>
       <span class="meta"> · chat-tagged chaupaalFeedback</span>
       <div id="logBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
@@ -166,6 +174,24 @@
     });
     document.getElementById('btnRefresh').addEventListener('click', () => { refresh(); refreshProduct(); loadSummary(); });
     document.getElementById('btnProduct')?.addEventListener('click', refreshProduct);
+    const cardsBox = document.getElementById('cardsBox');
+    async function refreshCards() {
+      try {
+        const data = await api('/api/admin-feedback?view=party_cards&limit=80');
+        const rows = data.cards || [];
+        cardsBox.innerHTML = rows.length
+          ? rows.map((c) => `
+            <div class="item">
+              <div class="meta"><span class="tag">${c.retired ? 'retired' : c.flags + '/' + data.retireAt}</span> · ${c.game} · ${c.pack} · ${c.locale}</div>
+              <div>${String(c.text || c.key).replace(/</g, '&lt;')}</div>
+              <div class="meta">${Object.keys(c.reasons || {}).map((r) => r + ' ' + c.reasons[r]).join(' · ')}</div>
+            </div>`).join('')
+          : '<em class="meta">No flagged cards.</em>';
+      } catch (e) {
+        cardsBox.innerHTML = `<div class="err">${e.message}</div>`;
+      }
+    }
+    document.getElementById('btnCards').addEventListener('click', refreshCards);
     document.getElementById('btnSummary').addEventListener('click', loadSummary);
 
     firebase.auth().onAuthStateChanged(async (u) => {

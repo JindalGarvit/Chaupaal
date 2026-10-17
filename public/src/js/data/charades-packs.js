@@ -1,9 +1,14 @@
 /**
- * Dumb Charades title packs (Dangal G2). Teen-safe titles only.
+ * Charades title packs (Dangal G2, global-first pass P15). Teen-safe titles only; famous people are
+ * historical or widely admired public figures (living-person-safe).
  * Row: 'English|हिंदी|difficulty[|alt1,alt2]' — difficulty e (easy) · m (medium) · h (hard).
- * `regional` packs are add-ons: on by default only for Hindi locales (global-first).
- * A leading '@' marks an India-specific title inside a global pack; it is dealt only when the
- * locale is Hindi or a regional pack is also selected (see CharadesCore.pool).
+ *   हिंदी is locale data ('' = none; the Hindi UI then shows English).
+ * Global core: Movies · Songs · TV Shows · Famous People · Actions · Animals · Idioms.
+ * `regional` packs are optional add-ons (Bollywood Movies/Songs, Indian TV, Cricket & Indian Sports,
+ * Hindi Idioms): on by default only for region 'in' / Hindi readers.
+ * A leading '@' marks an India-specific title inside a global pack; it is dealt only for region 'in',
+ * a Hindi reader, or when a regional pack is also selected (see CharadesCore.pool).
+ * Keys are `pack:titleId(english)` so the bad-card retire list survives edits.
  * UMD: window.CHARADES_PACKS / require().
  */
 (function (root, factory) {
@@ -83,8 +88,8 @@
     },
     {
       id: 'hollywood',
-      en: 'Hollywood Movies',
-      hi: 'हॉलीवुड फ़िल्में',
+      en: 'Movies',
+      hi: 'फ़िल्में',
       icon: '🍿',
       kind: 'movie',
       rows: [
@@ -107,30 +112,49 @@
     },
     {
       id: 'tv',
-      en: 'TV & Web Shows',
-      hi: 'टीवी और वेब शो',
+      en: 'TV Shows',
+      hi: 'टीवी शो',
       icon: '📺',
       kind: 'tv',
       rows: [
-        'Friends|फ्रेंड्स|e', '@Mahabharat|महाभारत|e', '@Ramayan|रामायण|e', '@Kaun Banega Crorepati|कौन बनेगा करोड़पति|e|KBC',
-        '@Taarak Mehta Ka Ooltah Chashmah|तारक मेहता का उल्टा चश्मा|m|tmkoc,taarak mehta', '@Shaktimaan|शक्तिमान|e', '@Malgudi Days|मालगुडी डेज़|h',
-        'The Office|द ऑफ़िस|m', 'Stranger Things|स्ट्रेंजर थिंग्स|m', 'Sherlock|शरलॉक|m', 'Doctor Who|डॉक्टर हू|h', 'Mr. Bean|मिस्टर बीन|e|mister bean',
+        'Friends|फ्रेंड्स|e', 'The Office|द ऑफ़िस|m', 'Stranger Things|स्ट्रेंजर थिंग्स|m', 'Sherlock|शरलॉक|m', 'Doctor Who|डॉक्टर हू|h', 'Mr. Bean|मिस्टर बीन|e|mister bean',
         'The Simpsons|द सिम्पसन्स|m', 'SpongeBob SquarePants|स्पंजबॉब स्क्वेयरपैंट्स|e|spongebob', 'Tom and Jerry|टॉम एंड जेरी|e', 'Pokémon|पोकेमॉन|e|pokemon',
-        'Doraemon|डोरेमोन|e', 'Shinchan|शिनचैन|e', '@Chhota Bheem|छोटा भीम|e', '@Motu Patlu|मोटू पतलू|e', '@Panchayat|पंचायत|m', '@Kota Factory|कोटा फ़ैक्ट्री|m',
-        '@Aspirants|एस्पिरेंट्स|h', '@Gullak|गुल्लक|h', '@Indian Idol|इंडियन आइडल|e', 'Shark Tank|शार्क टैंक|m', 'MasterChef|मास्टरशेफ़|e',
+        'Doraemon|डोरेमोन|e', 'Shinchan|शिनचैन|e', 'Shark Tank|शार्क टैंक|m', 'MasterChef|मास्टरशेफ़|e',
         'Wednesday|वेन्सडे|m', 'The Crown|द क्राउन|h', 'Modern Family|मॉडर्न फ़ैमिली|m', 'The Big Bang Theory|द बिग बैंग थ्योरी|m',
-        'Brooklyn Nine-Nine|ब्रुकलिन नाइन-नाइन|h|brooklyn 99', '@Sarabhai vs Sarabhai|साराभाई वर्सेस साराभाई|m', '@Hum Paanch|हम पाँच|h', '@Office Office|ऑफ़िस ऑफ़िस|h',
-        '@Byomkesh Bakshi|ब्योमकेश बक्शी|h', '@Chandrakanta|चंद्रकांता|h', '@Vikram Aur Betaal|विक्रम और बेताल|m', '@Alif Laila|अलिफ़ लैला|h', '@CID|सीआईडी|e',
-        'The Mandalorian|द मैंडलोरियन|h', 'Avatar: The Last Airbender|अवतार: द लास्ट एयरबेंडर|h|avatar last airbender', 'Peppa Pig|पेप्पा पिग|e', 'Bluey|ब्लूई|m',
-        'Ben 10|बेन 10|e', 'Scooby-Doo|स्कूबी-डू|e|scooby doo',
+        'Brooklyn Nine-Nine|ब्रुकलिन नाइन-नाइन|h|brooklyn 99', 'The Mandalorian|द मैंडलोरियन|h', 'Avatar: The Last Airbender|अवतार: द लास्ट एयरबेंडर|h|avatar last airbender',
+        'Peppa Pig|पेप्पा पिग|e', 'Bluey|ब्लूई|m', 'Ben 10|बेन 10|e', 'Scooby-Doo|स्कूबी-डू|e|scooby doo',
+        'Sesame Street||e', 'The Muppets||e|muppet show', 'Looney Tunes||e', 'Paw Patrol||e', 'The Flintstones||m', 'The Pink Panther||m|pink panther',
+        'Teenage Mutant Ninja Turtles||m|ninja turtles', 'Power Rangers||e', 'Seinfeld||h', 'How I Met Your Mother||m', 'Survivor||m',
+        'Who Wants to Be a Millionaire||m|millionaire', 'Wheel of Fortune||m', 'Top Gear||m', 'Planet Earth||h', 'The Great British Bake Off||h|bake off',
+        'Phineas and Ferb||m', 'Gravity Falls||h', 'Dora the Explorer||e|dora', 'Masha and the Bear||e', 'Naruto||m', 'Dragon Ball||m|dragon ball z',
+      ],
+    },
+    {
+      id: 'desitv',
+      en: 'Indian TV',
+      hi: 'भारतीय टीवी',
+      icon: '📡',
+      kind: 'tv',
+      regional: true,
+      rows: [
+        'Mahabharat|महाभारत|e', 'Ramayan|रामायण|e', 'Kaun Banega Crorepati|कौन बनेगा करोड़पति|e|KBC',
+        'Taarak Mehta Ka Ooltah Chashmah|तारक मेहता का उल्टा चश्मा|m|tmkoc,taarak mehta', 'Shaktimaan|शक्तिमान|e', 'Malgudi Days|मालगुडी डेज़|h',
+        'Chhota Bheem|छोटा भीम|e', 'Motu Patlu|मोटू पतलू|e', 'Panchayat|पंचायत|m', 'Kota Factory|कोटा फ़ैक्ट्री|m', 'Aspirants|एस्पिरेंट्स|h', 'Gullak|गुल्लक|h',
+        'Indian Idol|इंडियन आइडल|e', 'Sarabhai vs Sarabhai|साराभाई वर्सेस साराभाई|m', 'Hum Paanch|हम पाँच|h', 'Office Office|ऑफ़िस ऑफ़िस|h',
+        'Byomkesh Bakshi|ब्योमकेश बक्शी|h', 'Chandrakanta|चंद्रकांता|h', 'Vikram Aur Betaal|विक्रम और बेताल|m', 'Alif Laila|अलिफ़ लैला|h', 'CID|सीआईडी|e',
+        'Bigg Boss|बिग बॉस|e', 'Roadies|रोडीज़|m', 'The Kapil Sharma Show|द कपिल शर्मा शो|e|kapil sharma show', 'Khichdi|खिचड़ी|m', 'Dekh Bhai Dekh|देख भाई देख|h',
+        'Shrimaan Shrimati|श्रीमान श्रीमती|h', 'Jassi Jaissi Koi Nahin|जस्सी जैसी कोई नहीं|h', 'Dance India Dance|डांस इंडिया डांस|m', 'Sa Re Ga Ma Pa|सा रे गा मा पा|e',
+        'Son Pari|सोन परी|m', 'Shararat|शरारत|m', 'Baal Veer|बालवीर|m', 'Rangoli|रंगोली|h', 'Chitrahaar|चित्रहार|h', 'Surabhi|सुरभि|h',
+        'Balika Vadhu|बालिका वधू|m', 'Anupamaa|अनुपमा|m', 'Tu Tu Main Main|तू तू मैं मैं|h', 'Hero – Bhakti Hi Shakti Hai|हीरो – भक्ति ही शक्ति है|h|hero',
       ],
     },
     {
       id: 'sports',
-      en: 'Cricketers & Sports Stars',
+      en: 'Cricket & Indian Sports Stars',
       hi: 'क्रिकेटर और खेल सितारे',
       icon: '🏏',
       kind: 'person',
+      regional: true,
       rows: [
         '@Sachin Tendulkar|सचिन तेंदुलकर|e', '@Virat Kohli|विराट कोहली|e', '@MS Dhoni|एमएस धोनी|e|dhoni,mahendra singh dhoni', '@Rohit Sharma|रोहित शर्मा|e',
         '@Kapil Dev|कपिल देव|m', '@Sunil Gavaskar|सुनील गावस्कर|m', '@Sourav Ganguly|सौरव गांगुली|m', '@Rahul Dravid|राहुल द्रविड़|m', '@Anil Kumble|अनिल कुंबले|m',
@@ -140,17 +164,79 @@
         'Don Bradman|डॉन ब्रैडमैन|h', 'Ricky Ponting|रिकी पोंटिंग|h', 'AB de Villiers|एबी डिविलियर्स|h', 'Chris Gayle|क्रिस गेल|m',
         'Muttiah Muralitharan|मुथैया मुरलीधरन|h', 'Ben Stokes|बेन स्टोक्स|h', '@Neeraj Chopra|नीरज चोपड़ा|m', '@PV Sindhu|पीवी सिंधु|m', '@Saina Nehwal|साइना नेहवाल|m',
         '@Milkha Singh|मिल्खा सिंह|m', '@PT Usha|पीटी उषा|h', '@Sunil Chhetri|सुनील छेत्री|h', '@Dhyan Chand|ध्यानचंद|h', '@Abhinav Bindra|अभिनव बिंद्रा|h',
-        '@Sania Mirza|सानिया मिर्ज़ा|m', '@Viswanathan Anand|विश्वनाथन आनंद|h', 'Usain Bolt|उसेन बोल्ट|e', 'Lionel Messi|लियोनेल मेसी|e|messi',
-        'Cristiano Ronaldo|क्रिस्टियानो रोनाल्डो|e|ronaldo', 'Serena Williams|सेरेना विलियम्स|m', 'Roger Federer|रोजर फ़ेडरर|m', 'Rafael Nadal|राफ़ेल नडाल|m',
-        'Michael Jordan|माइकल जॉर्डन|m', 'Muhammad Ali|मुहम्मद अली|m', 'Michael Phelps|माइकल फ़ेल्प्स|h', 'Pelé|पेले|m|pele', 'Simone Biles|सिमोन बाइल्स|h',
-        'Lewis Hamilton|लुईस हैमिल्टन|m', 'LeBron James|लेब्रॉन जेम्स|m', 'Tiger Woods|टाइगर वुड्स|m', 'Novak Djokovic|नोवाक जोकोविच|m|djokovic',
-        'Kylian Mbappé|किलियन एम्बाप्पे|h|mbappe', 'Stephen Curry|स्टीफ़न करी|h', 'David Beckham|डेविड बेकहम|m|beckham', 'Diego Maradona|डिएगो माराडोना|m|maradona',
-        'Naomi Osaka|नाओमी ओसाका|h', 'Mike Tyson|माइक टायसन|m|tyson',
+        '@Sania Mirza|सानिया मिर्ज़ा|m', '@Viswanathan Anand|विश्वनाथन आनंद|h', '@Mary Kom|मैरी कॉम|m', '@Leander Paes|लिएंडर पेस|h',
+        'Jacques Kallis|जैक्स कैलिस|h', 'Kane Williamson|केन विलियमसन|h', 'Joe Root|जो रूट|h', 'Steve Smith|स्टीव स्मिथ|h', 'Wasim Akram|वसीम अकरम|m',
+      ],
+    },
+    {
+      id: 'people',
+      en: 'Famous People',
+      hi: 'मशहूर लोग',
+      icon: '🌟',
+      kind: 'person',
+      rows: [
+        'Albert Einstein||e|einstein', 'Cleopatra||e', 'Leonardo da Vinci||m|da vinci', 'William Shakespeare||e|shakespeare', 'Napoleon||m|napoleon bonaparte',
+        'Mozart||m|wolfgang amadeus mozart', 'Beethoven||m|ludwig van beethoven', 'Isaac Newton||e|newton', 'Marie Curie||m', 'Mahatma Gandhi||e|gandhi',
+        'Nelson Mandela||m|mandela', 'Abraham Lincoln||m|lincoln', 'Martin Luther King Jr.||m|martin luther king,mlk', 'Charlie Chaplin||e|chaplin',
+        'Elvis Presley||m|elvis', 'Michael Jackson||e', 'Frida Kahlo||h', 'Vincent van Gogh||m|van gogh', 'Pablo Picasso||m|picasso', 'Queen Victoria||h',
+        'Julius Caesar||m', 'Christopher Columbus||m|columbus', 'Neil Armstrong||e', 'Amelia Earhart||h', 'Galileo||h|galileo galilei', 'Charles Darwin||m|darwin',
+        'Thomas Edison||m|edison', 'Walt Disney||e', 'Bruce Lee||e', 'Muhammad Ali||m', 'Pelé||m|pele', 'Freddie Mercury||m', 'John Lennon||m', 'Bob Marley||m',
+        'Audrey Hepburn||h', 'Harry Houdini||m|houdini', 'Florence Nightingale||h', 'Joan of Arc||h', 'Tutankhamun||h|king tut', 'Genghis Khan||m',
+        'Usain Bolt||e', 'Serena Williams||m', 'Roger Federer||m', 'Michael Jordan||m', 'Lionel Messi||e|messi', 'Cristiano Ronaldo||e|ronaldo',
+        'Simone Biles||h', 'Michael Phelps||h', 'Diego Maradona||m|maradona', 'David Beckham||m|beckham',
+      ],
+    },
+    {
+      id: 'hits',
+      en: 'Songs',
+      hi: 'गाने',
+      icon: '🎵',
+      kind: 'song',
+      rows: [
+        'Happy Birthday||e', 'Twinkle Twinkle Little Star||e|twinkle twinkle', 'Jingle Bells||e', 'Let It Go||e', 'Hakuna Matata||e', 'Baby Shark||e',
+        'We Will Rock You||e', 'Yellow Submarine||m', 'Bohemian Rhapsody||m', 'Thriller||e', 'Macarena||e', 'Gangnam Style||e', 'Despacito||m', 'Shape of You||m',
+        'Happy||e', 'Dancing Queen||m', 'YMCA||e|y.m.c.a.', 'Hey Jude||m', 'Imagine||m', 'Don’t Worry, Be Happy||e|dont worry be happy', 'Old MacDonald Had a Farm||e|old macdonald',
+        'Row, Row, Row Your Boat||e|row row row your boat', 'Head, Shoulders, Knees and Toes||e|head shoulders knees and toes', 'The Wheels on the Bus||e|wheels on the bus',
+        'Under the Sea||m', 'Singin’ in the Rain||m|singing in the rain', 'Eye of the Tiger||m', 'Rolling in the Deep||h', 'Umbrella||m', 'Uptown Funk||m',
+        'Shake It Off||m', 'Waka Waka||m', 'Wannabe||h', 'Billie Jean||m', 'Don’t Stop Believin’||h|dont stop believing', 'Stayin’ Alive||m|staying alive',
+        'Hallelujah||h', 'Somewhere Over the Rainbow||m|over the rainbow', 'What a Wonderful World||m', 'Let It Be||m', 'All I Want for Christmas Is You||m',
+        'Walking on Sunshine||h', 'Can’t Stop the Feeling||h|cant stop the feeling', 'I Will Survive||m',
+      ],
+    },
+    {
+      id: 'animals',
+      en: 'Animals',
+      hi: 'जानवर',
+      icon: '🐘',
+      kind: 'animal',
+      rows: [
+        'Elephant||e', 'Monkey||e', 'Kangaroo||e', 'Penguin||e', 'Snake||e', 'Frog||e', 'Chicken||e', 'Cat||e', 'Dog||e', 'Lion||e', 'Giraffe||e', 'Crab||e',
+        'Butterfly||e', 'Horse||e', 'Cow||e', 'Pig||e', 'Duck||e', 'Fish||e', 'Shark||e', 'Octopus||m', 'Bee||e', 'Spider||e', 'Gorilla||e', 'Bear||e',
+        'Rabbit||e', 'Owl||m', 'Peacock||m', 'Dolphin||m', 'Turtle||m', 'Crocodile||m', 'Flamingo||m', 'Sloth||m', 'Camel||m', 'Seal||m', 'Squirrel||m',
+        'T-Rex||m|t rex,dinosaur', 'Bat||m', 'Snail||m', 'Ostrich||h', 'Woodpecker||h', 'Jellyfish||h', 'Chameleon||h', 'Goat||m', 'Eagle||m', 'Worm||m',
+        'Hedgehog||h', 'Scorpion||h', 'Mosquito||m',
+      ],
+    },
+    {
+      id: 'phrases',
+      en: 'Idioms',
+      hi: 'कहावतें',
+      icon: '💬',
+      kind: 'phrase',
+      rows: [
+        'Break a leg||m', 'Piece of cake||e', 'Raining cats and dogs||e', 'Spill the beans||e', 'Let the cat out of the bag||m', 'Hit the nail on the head||m',
+        'Cold feet||m', 'Once in a blue moon||m', 'Under the weather||m', 'Cost an arm and a leg||m', 'Hit the sack||m', 'Barking up the wrong tree||h',
+        'The ball is in your court||h', 'Burn the midnight oil||m', 'Cry over spilt milk||m', 'Time flies||e', 'Walk on eggshells||h', 'Beat around the bush||h',
+        'Head in the clouds||e', 'Keep your eyes peeled||m', 'On cloud nine||m', 'Butterflies in your stomach||e', 'Elephant in the room||m',
+        'Pull someone’s leg||m|pull your leg', 'Hold your horses||e', 'A penny for your thoughts||h', 'Actions speak louder than words||h', 'Back to square one||m',
+        'Break the ice||e', 'Cat got your tongue||m', 'Cut corners||h', 'Face the music||h', 'Go the extra mile||m', 'In hot water||m', 'Jump on the bandwagon||h',
+        'Miss the boat||m', 'Over the moon||e', 'Sit on the fence||m', 'Hit the road||e', 'Throw in the towel||m', 'Up in the air||m', 'When pigs fly||e',
+        'Zip your lip||e', 'Let sleeping dogs lie||h', 'Add fuel to the fire||h', 'Get out of hand||m',
       ],
     },
     {
       id: 'idioms',
-      en: 'Hindi Idioms (Muhavare)',
+      en: 'Hindi Idioms',
       hi: 'मुहावरे',
       icon: '🗣️',
       kind: 'phrase',
@@ -198,6 +284,15 @@
 
   const DIFF = { e: 'easy', m: 'medium', h: 'hard' };
 
+  /** Stable title id: lowercase ASCII letters/digits of the English title (survives reordering). */
+  function titleId(en) {
+    return String(en)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '');
+  }
+
   const PACKS = RAW.map((p) => ({
     id: p.id,
     en: p.en,
@@ -205,13 +300,14 @@
     icon: p.icon,
     kind: p.kind,
     regional: !!p.regional,
-    titles: p.rows.map((row, i) => {
+    titles: p.rows.map((row) => {
       const [raw, hi, d, alts] = row.split('|');
       const regional = !!p.regional || raw.charAt(0) === '@';
+      const en = raw.replace(/^@/, '');
       return {
-        key: p.id + ':' + i,
-        en: raw.replace(/^@/, ''),
-        hi,
+        key: p.id + ':' + titleId(en),
+        en,
+        hi: hi || '',
         difficulty: DIFF[d] || d,
         alts: alts ? alts.split(',').map((s) => s.trim()).filter(Boolean) : [],
         regional,
@@ -223,18 +319,21 @@
     return PACKS.find((p) => p.id === id) || null;
   }
 
-  /** Default categories — the global set, plus regional packs for Hindi readers. */
-  function defaultCategories(lang) {
-    const hi = String(lang || 'en').indexOf('hi') === 0;
-    return PACKS.filter((p) => hi || !p.regional).map((p) => p.id);
+  /**
+   * Default categories — the global core, plus the regional add-ons when the region is India
+   * (`region === 'in'`, suggested for the India locale) or the reader uses Hindi.
+   */
+  function defaultCategories(lang, region) {
+    const regional = region === 'in' || String(lang || 'en').indexOf('hi') === 0;
+    return PACKS.filter((p) => regional || !p.regional).map((p) => p.id);
   }
+
+  const BY_KEY = {};
+  PACKS.forEach((p) => p.titles.forEach((t) => (BY_KEY[t.key] = Object.assign({ pack: p.id, kind: p.kind }, t))));
 
   function byKey(key) {
-    const pack = getPack(String(key).split(':')[0]);
-    if (!pack) return null;
-    const t = pack.titles.find((x) => x.key === key);
-    return t ? Object.assign({ pack: pack.id, kind: pack.kind }, t) : null;
+    return BY_KEY[key] || null;
   }
 
-  return { PACKS, DIFFICULTIES: ['easy', 'medium', 'hard'], getPack, defaultCategories, byKey };
+  return { PACKS, DIFFICULTIES: ['easy', 'medium', 'hard'], getPack, defaultCategories, byKey, titleId };
 });

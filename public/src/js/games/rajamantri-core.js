@@ -34,8 +34,8 @@
   const ROUND_OPTIONS = [5, 10, 15];
 
   const CALLS = {
-    mantri: { en: 'Mantri, find the Chor!', hi: 'मंत्री, चोर का पता लगाओ!' },
-    sipahi: { en: 'Sipahi, catch the Chor!', hi: 'सिपाही, चोर को पकड़ो!' },
+    mantri: { en: 'Mantri, find the Chor!', hi: 'मंत्री, चोर का पता लगाओ!', gloss: 'Minister, find the Thief!' },
+    sipahi: { en: 'Sipahi, catch the Chor!', hi: 'सिपाही, चोर को पकड़ो!', gloss: 'Soldier, catch the Thief!' },
   };
 
   function mergeSettings(s) {

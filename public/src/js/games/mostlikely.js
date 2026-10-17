@@ -45,15 +45,41 @@
     } catch (e) {}
   }
 
+  function isHi() {
+    return String(lang()).indexOf('hi') === 0;
+  }
+
   function loadSettings(where) {
     const key = where === 'room' ? ROOM_KEY : PASS_KEY;
+    let raw = null;
     try {
-      const raw = JSON.parse(localStorage.getItem(key) || 'null');
-      // Rooms default to anonymous %; Pass & Play defaults to names (everyone is in the same room anyway).
-      return Core().mergeSettings(raw || (where === 'room' ? { reveal: 'anon' } : {}), lang());
-    } catch (e) {
-      return Core().mergeSettings(where === 'room' ? { reveal: 'anon' } : {}, lang());
-    }
+      raw = JSON.parse(localStorage.getItem(key) || 'null');
+    } catch (e) {}
+    // Rooms default to anonymous %; Pass & Play defaults to names (everyone is in the same room anyway).
+    const src = Object.assign({}, raw || (where === 'room' ? { reveal: 'anon' } : {}));
+    // Global prompts by default; India add-ons follow the locale until the host picks packs.
+    if (!src.region) src.region = Kit().contentPrefs().region;
+    src.customOnly = false;
+    return Core().mergeSettings(src, lang());
+  }
+
+  /** Host's AI / saved pack per room code (sent with start; the server keeps it for the session). */
+  const roomPacks = {};
+
+  /** "Bad card" target for a built-in prompt (custom prompts have none). */
+  function promptCard(prompt) {
+    const key = prompt && prompt.key;
+    return key && !prompt.custom && String(key).indexOf('c:') !== 0 ? { game: GAME, key, label: prompt.en || '' } : null;
+  }
+
+  /** Make-a-pack items → session customs for one mode (kindness-checked by cleanCustom). */
+  function packToCustoms(items, mode) {
+    const out = [];
+    (items || []).forEach((it) => {
+      const r = Core().cleanCustom(it, mode);
+      if (r.ok) out.push({ mode, prompt: r.prompt, used: false });
+    });
+    return out;
   }
 
   function saveSettings(where, s) {
@@ -63,6 +89,8 @@
   }
 
   function loadNames() {
+    const night = Kit().passNightNames && Kit().passNightNames(2, Core().MAX_PLAYERS);
+    if (night) return night;
     try {
       const raw = JSON.parse(localStorage.getItem(NAMES_KEY) || '[]');
       if (Array.isArray(raw) && raw.length >= 2) return raw.slice(0, 16);
@@ -268,6 +296,11 @@
               ? `<button type="button" class="im-pack-row" data-customs>✍️ Custom prompts: <strong data-customs-n>${opts.customs.length}</strong> <span class="im-chev">›</span></button>`
               : ''
           }
+          ${
+            opts.onPack && (K.aiOn() || K.savedPacks(GAME).length)
+              ? `<button type="button" class="pk-row-btn" data-make>${K.aiOn() ? '✨ Make a pack about…' : 'Your saved packs'}<span class="pk-chev" aria-hidden="true">›</span></button>`
+              : ''
+          }
         </details>
         <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
       onMount(sheet, close) {
@@ -284,6 +317,16 @@
             if (n) n.textContent = String(opts.customs.length);
           })
         );
+        sheet.querySelector('[data-make]')?.addEventListener('click', () => {
+          close();
+          K.openPackSheet({
+            game: GAME,
+            kind: 'prompts',
+            mode: s.mode,
+            min: 4,
+            onUse: (p) => opts.onPack(C.mergeSettings(s, lang()), p),
+          });
+        });
         sheet.querySelector('[data-save]').addEventListener('click', () => {
           close();
           opts.onSave(C.mergeSettings(s, lang()));
@@ -294,8 +337,9 @@
 
   // ---------------- shared views ----------------
 
+  /** Hindi readers can add the English line; everyone else just reads English. */
   function langBtn() {
-    return `<button type="button" class="ml-lang" data-lang-toggle aria-pressed="${both()}" aria-label="Show both languages">A/अ</button>`;
+    return isHi() ? `<button type="button" class="ml-lang" data-lang-toggle aria-pressed="${both()}" aria-label="Also show English">A/अ</button>` : '';
   }
 
   function wireLang(body, rerender) {
@@ -543,7 +587,7 @@
   function defenceHtml(round, nm) {
     return `<div class="ml-defence">
       <div class="ml-defence-title">Defend yourself!</div>
-      <div class="ml-defence-hi">अपनी सफ़ाई दो!</div>
+      ${isHi() ? '<div class="ml-defence-hi">अपनी सफ़ाई दो!</div>' : ''}
       <div class="pk-sub">${esc(joinNames(round.result.top, nm))} — you have 15 seconds to make your case.</div>
       <div class="pk-timer" data-timer></div>
     </div>`;
@@ -678,7 +722,8 @@
       return;
     }
     const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
-    renderHome(shell);
+    if (c.mode === 'pass') renderPassSetup(shell);
+    else renderHome(shell);
   }
 
   function renderHome(shell) {
@@ -766,6 +811,13 @@
           saveSettings('pass', settings);
           paintMeta();
         },
+        onPack: (s, p) => {
+          const add = packToCustoms(p.items, s.mode);
+          passCustoms.push.apply(passCustoms, add);
+          Object.assign(settings, s, { customOnly: add.length >= 4 });
+          saveSettings('pass', settings);
+          paintMeta();
+        },
       })
     );
     body.querySelector('[data-start]').addEventListener('click', () => {
@@ -781,6 +833,7 @@
         stats: Core().newSession(),
       };
       session.players.forEach((p) => (session.scores[p.id] = 0));
+      Kit().refreshRetired(GAME);
       startPassRound(shell, session);
     });
   }
@@ -792,7 +845,7 @@
 
   function startPassRound(shell, session, skip) {
     const C = Core();
-    const out = C.nextPrompt(session.deck, session.settings, lang(), Math.random, session.customs);
+    const out = C.nextPrompt(session.deck, session.settings, lang(), Math.random, session.customs, Kit().retiredCached(GAME));
     session.deck = out.state;
     if (!skip) session.roundNo += 1;
     const key = out.prompt && out.prompt.key;
@@ -995,7 +1048,9 @@
         <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
         ${last ? '' : '<button type="button" class="pk-btn pk-btn--ghost" data-end>End game</button>'}
       </div>
+      ${Kit().badCardHtml(promptCard(r.prompt))}
     </div>`);
+    if (promptCard(r.prompt)) Kit().wireBadCard(body, promptCard(r.prompt));
     animateReveal(body);
     wireLang(body, () => renderPassResult(shell, session));
     body.querySelector('[data-share]').addEventListener('click', () => share(roundShareLine(r, nm)));
@@ -1012,9 +1067,11 @@
   function renderPassFinal(shell, session) {
     const nm = (id) => nameOf(session, id);
     shell.setSubtitle('Final');
+    Kit().reportPass(GAME, { players: session.players, scores: session.scores });
     const body = shell.render(`<div class="pk-page">
       ${finalHtml(session.stats, session.players, nm, session.scores, session.settings)}
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      ${Kit().passHubButtonHtml()}
       <div class="pk-row">
         <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
         <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
@@ -1023,6 +1080,7 @@
     try {
       if (typeof gameFeedback === 'function') gameFeedback('win');
     } catch (e) {}
+    Kit().wirePassHub(body, shell);
     body.querySelector('[data-share]').addEventListener('click', () => share(finalShareLine(session.stats, session.players, nm, session.scores)));
     body.querySelector('[data-setup]').addEventListener('click', () => renderPassSetup(shell));
     body.querySelector('[data-again]').addEventListener('click', () => {
@@ -1102,6 +1160,10 @@
             saveSettings('room', next);
             ctrl.act('settings', { settings: next });
           },
+          onPack: (next, p) => {
+            roomPacks[code] = { mode: next.mode, items: p.items };
+            ctrl.act('settings', { settings: Object.assign({}, next, { customOnly: true }) });
+          },
         }),
       onLobbyMount: (ctrl, body) => {
         if (!ctrl.isHost()) return;
@@ -1118,7 +1180,14 @@
           })
         );
       },
-      startArgs: hostCustomArgs,
+      startArgs: (ctrl, op) => {
+        const a = hostCustomArgs(ctrl, op) || { args: {} };
+        const pack = roomPacks[code];
+        if (ctrl.isHost() && pack && op === 'start' && pack.mode === settingsOf(ctrl).mode) {
+          a.args = Object.assign({}, a.args, { customPack: { mode: pack.mode, prompts: pack.items } });
+        }
+        return Object.keys(a.args).length ? a : null;
+      },
       onState: onRoomState,
       renderPhase: renderRoomPhase,
     });
@@ -1234,6 +1303,7 @@
         ${K.roomResultActions(ctrl, {
           nextLabel: over ? 'Play again' : 'Next round',
           waitLabel: over ? 'Waiting for the host to start a new game…' : 'Waiting for the host to start the next round…',
+          card: promptCard(st.prompt),
         })}
         ${!over && ctrl.isHost() ? '<button type="button" class="pk-link" data-finish>End game &amp; see the verdict</button>' : ''}
       </div>`);
@@ -1242,6 +1312,7 @@
       K.wireRoomResultActions(ctrl, body, {
         nextOp: over ? 'start' : 'next',
         onShare: () => share(over ? finalShareLine(st.session, players, nm, pub.scores) : roundShareLine(st, nm)),
+        card: promptCard(st.prompt),
       });
       body.querySelector('[data-finish]')?.addEventListener('click', () => ctrl.act('finish'));
       if (over && view.celebrated !== pub.roundNo) {

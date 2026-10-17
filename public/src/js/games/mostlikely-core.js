@@ -35,6 +35,8 @@
     defence: true,
     reveal: 'names',
     voting: 'secret',
+    region: 'global', // 'global' | 'in' — regional add-on packs join the defaults
+    customOnly: false, // true = only tonight's custom pack (needs 4+ prompts for the mode)
   };
 
   const BADGES = ['Certified 👑', 'Called it!', 'No contest', 'The people have spoken', 'Guilty as charged 😄', 'Crowned'];
@@ -59,10 +61,12 @@
     });
     if (src.reveal === 'names' || src.reveal === 'anon') out.reveal = src.reveal;
     if (src.voting === 'secret' || src.voting === 'quick') out.voting = src.voting;
+    out.region = src.region === 'in' ? 'in' : 'global';
+    out.customOnly = src.customOnly === true;
     const valid = validPackIds();
     const packs = Array.isArray(src.packs) ? src.packs.filter((id, i, a) => valid.indexOf(id) >= 0 && a.indexOf(id) === i) : [];
     // Keep choices for every mode; activePacks() narrows to the current mode.
-    out.packs = packs.length ? packs : MODES.reduce((ids, m) => ids.concat(Packs.defaultPacks(m, lang).filter((id) => ids.indexOf(id) < 0)), []);
+    out.packs = packs.length ? packs : MODES.reduce((ids, m) => ids.concat(Packs.defaultPacks(m, lang, out.region).filter((id) => ids.indexOf(id) < 0)), []);
     return out;
   }
 
@@ -75,7 +79,7 @@
   function activePacks(s, lang) {
     const allowed = Packs.packsFor(s.mode).map((p) => p.id);
     const ids = (s.packs || []).filter((id) => allowed.indexOf(id) >= 0);
-    return ids.length ? ids : Packs.defaultPacks(s.mode, lang);
+    return ids.length ? ids : Packs.defaultPacks(s.mode, lang, s.region);
   }
 
   function minPlayers(s) {
@@ -84,12 +88,29 @@
 
   // ---------------- deck: no repeats until the chosen packs run dry ----------------
 
-  function poolKeys(s, lang, customs) {
+  function promptText(item) {
+    if (!item) return '';
+    return item.a ? item.a.en + '|' + item.b.en : item.en;
+  }
+
+  /** `exclude` = retired prompt keys; a prompt that appears in two chosen packs is dealt once. */
+  function poolKeys(s, lang, customs, exclude) {
     const field = Packs.FIELD[s.mode] || 'likely';
+    const retired = new Set(exclude || []);
+    const seen = {};
     const keys = [];
-    activePacks(s, lang).forEach((id) => {
+    // A made-for-tonight pack ("Make a pack about…") can replace the built-in packs.
+    const own = (customs || []).filter((c) => c && c.mode === s.mode).length;
+    const packs = s.customOnly && own >= 4 ? [] : activePacks(s, lang);
+    packs.forEach((id) => {
       const p = Packs.getPack(id);
-      if (p) p[field].forEach((item) => keys.push(item.key));
+      if (!p) return;
+      p[field].forEach((item) => {
+        const k = PC.normalize(promptText(item));
+        if (retired.has(item.key) || seen[k]) return;
+        seen[k] = true;
+        keys.push(item.key);
+      });
     });
     (customs || []).forEach((c, i) => {
       if (c && c.mode === s.mode) keys.push('c:' + i);
@@ -98,18 +119,18 @@
   }
 
   function deckSig(s, lang, customs) {
-    return s.mode + '|' + activePacks(s, lang).join(',') + '|' + (customs || []).filter((c) => c && c.mode === s.mode).length;
+    return s.mode + '|' + (s.customOnly ? '!' : '') + activePacks(s, lang).join(',') + '|' + (customs || []).filter((c) => c && c.mode === s.mode).length;
   }
 
   /**
    * Next prompt from a mixed-pack shuffle. `state` = { deck: string[], sig, last } (or null).
    * The deck only refills once every prompt in the chosen packs has been dealt.
    */
-  function nextPrompt(state, s, lang, rng, customs) {
+  function nextPrompt(state, s, lang, rng, customs, exclude) {
     const sig = deckSig(s, lang, customs);
     const st = state && state.sig === sig && Array.isArray(state.deck) ? { deck: state.deck.slice(), sig, last: state.last || null } : { deck: [], sig, last: (state && state.last) || null };
     if (!st.deck.length) {
-      let fresh = PC.shuffle(poolKeys(s, lang, customs), rng);
+      let fresh = PC.shuffle(poolKeys(s, lang, customs, exclude), rng);
       if (fresh.length > 1 && fresh[0] === st.last) fresh = fresh.slice(1).concat(fresh[0]);
       st.deck = fresh;
     }
@@ -231,16 +252,15 @@
     if (mode === 'nhie') return { primary: 'Never have I ever ' + String(prompt.en || '').replace(/[.!]+$/, ''), secondary: '' };
     const en = mltQuestionEn(prompt);
     const hi = prompt.hi || '';
-    const primary = isHi(lang) && hi ? hi : en;
-    const other = primary === en ? hi : en;
-    return { primary, secondary: both && other ? other : '' };
+    // Hindi is locale data: only a Hindi reader sees it (and, with `both`, the English under it).
+    if (!isHi(lang) || !hi) return { primary: en, secondary: '' };
+    return { primary: hi, secondary: both ? en : '' };
   }
 
   function optionLines(opt, lang, both) {
     if (!opt) return { primary: '', secondary: '' };
-    const primary = isHi(lang) && opt.hi ? opt.hi : opt.en;
-    const other = primary === opt.en ? opt.hi : opt.en;
-    return { primary, secondary: both && other ? other : '' };
+    if (!isHi(lang) || !opt.hi) return { primary: opt.en, secondary: '' };
+    return { primary: opt.hi, secondary: both ? opt.en : '' };
   }
 
   function badgeFor(prompt) {

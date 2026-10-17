@@ -36,15 +36,30 @@
     } catch (e) {}
   }
 
+  function hiReader() {
+    return String(lang()).indexOf('hi') === 0;
+  }
+
+  /** Global core by default; regional add-ons follow the locale until the host picks for themselves. */
   function loadSettings() {
-    let s;
+    let saved = {};
     try {
-      s = Object.assign({}, Core().DEFAULT_SETTINGS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
-    } catch (e) {
-      s = Object.assign({}, Core().DEFAULT_SETTINGS);
-    }
-    s.mixRegional = String(lang()).indexOf('hi') === 0;
+      saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {};
+    } catch (e) {}
+    const s = Object.assign({}, Core().DEFAULT_SETTINGS, saved);
+    if (!saved.region) s.region = Kit().contentPrefs().region;
+    s.mixRegional = s.region === 'in';
+    if (s.pack === 'custom' && !customPack) s.pack = 'mixed';
     return s;
+  }
+
+  /** Host's own pack for tonight (AI draft or saved on this phone) — never uploaded unless dealt. */
+  let customPack = null;
+  function setCustom(p) {
+    customPack = p ? { name: p.name, words: p.items } : null;
+  }
+  function customArgs(settings) {
+    return settings && settings.pack === 'custom' && customPack ? { customPack } : {};
   }
 
   function saveSettings(s) {
@@ -54,6 +69,8 @@
   }
 
   function loadNames() {
+    const night = Kit().passNightNames && Kit().passNightNames(Core().MIN_PLAYERS, Core().MAX_PLAYERS);
+    if (night) return night;
     try {
       const raw = JSON.parse(localStorage.getItem(NAMES_KEY) || '[]');
       if (Array.isArray(raw) && raw.length >= 3) return raw.slice(0, 12);
@@ -74,17 +91,21 @@
 
   function packLabel(p) {
     if (!p) return '';
-    const hi = String(lang()).indexOf('hi') === 0;
-    if (bilingual()) return hi ? p.hi + ' · ' + p.en : p.en + ' · ' + p.hi;
-    return hi ? p.hi : p.en;
+    if (!hiReader() || !p.hi) return p.en;
+    return bilingual() ? p.hi + ' · ' + p.en : p.hi;
   }
 
+  /** Global core first, then the regional add-ons (always pickable, only mixed in when region = in). */
   function packChoices() {
     const P = Core().packs;
-    return [P.MIXED].concat(P.PACKS);
+    const global = P.PACKS.filter((p) => !p.regional);
+    const regional = P.PACKS.filter((p) => p.regional);
+    return [P.MIXED].concat(global, regional);
   }
 
+  const CUSTOM_PACK = { id: 'custom', en: 'Your pack', hi: '', icon: '✨' };
   function packById(id) {
+    if (id === 'custom' && customPack) return Object.assign({}, CUSTOM_PACK, { en: customPack.name || CUSTOM_PACK.en, words: customPack.words });
     return packChoices().find((p) => p.id === id) || Core().packs.MIXED;
   }
 
@@ -162,8 +183,17 @@
               : `<div class="pk-field"><div class="pk-field-label">Voting</div>${seg('voteStyle', s.voteStyle, [['group', 'Point together'], ['secret', 'Secret pass-around']])}</div>`
           }
           <div class="pk-field">
-            <label class="pk-toggle"><input type="checkbox" data-bilingual ${bilingual() ? 'checked' : ''}> Show words in English + हिंदी</label>
+            <div class="pk-field-label">Word difficulty</div>
+            ${seg('difficulty', s.difficulty || 'any', [['any', 'Any'], ['easy', 'Easier'], ['hard', 'Harder']])}
           </div>
+          <div class="pk-field">
+            <label class="pk-toggle"><input type="checkbox" data-region ${s.region === 'in' ? 'checked' : ''}> Mix in India packs (Bollywood, cricket, festivals…)</label>
+          </div>
+          ${
+            hiReader()
+              ? `<div class="pk-field"><label class="pk-toggle"><input type="checkbox" data-bilingual ${bilingual() ? 'checked' : ''}> Also show English words</label></div>`
+              : ''
+          }
         </details>
         <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
       onMount(sheet, close) {
@@ -186,13 +216,17 @@
               });
               const key = grp.dataset.seg;
               const v = btn.dataset.v;
-              s[key] = key === 'variant' || key === 'voteStyle' ? v : Number(v);
+              s[key] = key === 'variant' || key === 'voteStyle' || key === 'difficulty' ? v : Number(v);
               if (key === 'variant') paintHelp();
             });
           });
         });
         sheet.querySelector('[data-hint]')?.addEventListener('change', (e) => (s.hint = !!e.target.checked));
         sheet.querySelector('[data-bilingual]')?.addEventListener('change', (e) => setBilingual(!!e.target.checked));
+        sheet.querySelector('[data-region]')?.addEventListener('change', (e) => {
+          s.region = e.target.checked ? 'in' : 'global';
+          s.mixRegional = s.region === 'in';
+        });
         sheet.querySelector('[data-save]').addEventListener('click', () => {
           close();
           o.onSave(Core().mergeSettings(s));
@@ -202,17 +236,20 @@
   }
 
   function openPackPicker(current, onPick) {
-    Kit().openSheet({
-      title: 'Word pack',
-      bodyHtml: `<div class="im-packs">${packChoices()
-        .map(
-          (p) => `<button type="button" class="im-pack${p.id === current ? ' is-on' : ''}" data-pack="${esc(p.id)}">
+    const tile = (p) => `<button type="button" class="im-pack${p.id === current ? ' is-on' : ''}" data-pack="${esc(p.id)}">
             <span class="im-pack-icon" aria-hidden="true">${esc(p.icon)}</span>
             <span class="im-pack-name">${esc(packLabel(p))}</span>
             <span class="im-pack-count">${p.words ? p.words.length + ' words' : 'All packs'}</span>
-          </button>`
-        )
-        .join('')}</div>`,
+          </button>`;
+    const choices = packChoices();
+    const own = customPack ? [packById('custom')] : [];
+    const showMake = Kit().aiOn() || Kit().savedPacks(GAME).length;
+    Kit().openSheet({
+      title: 'Word pack',
+      bodyHtml: `<div class="im-packs">${own.concat(choices.filter((p) => !p.regional)).map(tile).join('')}</div>
+        <div class="pk-section">India packs · optional</div>
+        <div class="im-packs">${choices.filter((p) => p.regional).map(tile).join('')}</div>
+        ${showMake ? `<button type="button" class="pk-row-btn" data-make>${Kit().aiOn() ? '✨ Make a pack about…' : 'Your saved packs'}<span class="pk-chev" aria-hidden="true">›</span></button>` : ''}`,
       onMount(sheet, close) {
         sheet.querySelectorAll('[data-pack]').forEach((btn) =>
           btn.addEventListener('click', () => {
@@ -220,6 +257,18 @@
             onPick(btn.dataset.pack);
           })
         );
+        sheet.querySelector('[data-make]')?.addEventListener('click', () => {
+          close();
+          Kit().openPackSheet({
+            game: GAME,
+            kind: 'pairs',
+            min: Core().CUSTOM_MIN || 4,
+            onUse: (p) => {
+              setCustom(p);
+              onPick('custom');
+            },
+          });
+        });
       },
     });
   }
@@ -251,7 +300,8 @@
       return;
     }
     const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
-    renderHome(shell);
+    if (c.mode === 'pass') renderPassSetup(shell);
+    else renderHome(shell);
   }
 
   function renderHome(shell) {
@@ -270,6 +320,7 @@
           <span class="im-mode-title">Play with friends</span><span class="im-mode-sub">Everyone on their own phone</span>
         </button>
         <button type="button" class="im-link" data-mode="join">Have a room code? Join</button>
+        ${Kit().partyNightLinkHtml ? Kit().partyNightLinkHtml(GAME) : ''}
       </div>
     </div>`);
     body.querySelector('[data-mode="pass"]').addEventListener('click', () => renderPassSetup(shell));
@@ -342,6 +393,7 @@
         settings: Core().mergeSettings(settings),
       };
       session.players.forEach((p) => (session.scores[p.id] = 0));
+      Kit().refreshRetired(GAME);
       startPassRound(shell, session);
     });
   }
@@ -353,7 +405,9 @@
 
   function startPassRound(shell, session) {
     const ids = session.players.map((p) => p.id);
-    const dealt = Core().deal(ids, session.settings, { usedKeys: session.usedKeys });
+    const custom = session.settings.pack === 'custom' && customPack ? Core().customPack(customPack) : null;
+    const settings = custom || session.settings.pack !== 'custom' ? session.settings : Object.assign({}, session.settings, { pack: 'mixed' });
+    const dealt = Core().deal(ids, settings, { usedKeys: session.usedKeys, exclude: Kit().retiredCached(GAME), custom });
     session.usedKeys.push(dealt.key);
     session.roundNo += 1;
     const starter = (session.roundNo - 1) % ids.length;
@@ -681,16 +735,23 @@
       session.round.scored = true;
       Object.keys(res.points).forEach((id) => (session.scores[id] = (session.scores[id] || 0) + res.points[id]));
     }
+    Kit().reportPass(GAME, { players: session.players, scores: session.scores });
+    const lastKey = session.usedKeys[session.usedKeys.length - 1] || '';
+    const card = lastKey && !/^custom/.test(lastKey) ? { game: GAME, key: lastKey, label: res.majority && res.majority.en } : null;
     const body = shell.render(resultHtml(res, (id) => nameOf(session, id), session.round.settings, {
       scoreboard: Kit().scoreboardHtml(session.players, session.scores, res.points),
       tally: null,
     }) + `<div class="im-result-actions">
         <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Next round</button>
+        ${Kit().passHubButtonHtml()}
         <div class="im-row">
           <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
           <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
         </div>
+        ${Kit().badCardHtml(card)}
       </div>`);
+    Kit().wirePassHub(body, shell);
+    if (card) Kit().wireBadCard(body, card);
     body.querySelector('[data-next]').addEventListener('click', () => startPassRound(shell, session));
     body.querySelector('[data-share]').addEventListener('click', () => shareResult(res, (id) => nameOf(session, id)));
     body.querySelector('[data-setup]').addEventListener('click', () => renderPassSetup(shell));
@@ -916,7 +977,7 @@
     }
     const me = conn.uid;
     if (pub.status === 'closed') {
-      shell.render(`<div class="im-empty">The host closed this room.
+      shell.render(`<div class="im-empty">${pub.hub ? 'Back to the party…' : 'The host closed this room.'}
         <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>Done</button></div>`)
         ?.querySelector('[data-close]')
         ?.addEventListener('click', () => shell.close());
@@ -946,6 +1007,8 @@
       JSON.stringify(pub.scores || {}),
       view.secret ? view.secret.roundNo : '',
       JSON.stringify(pub.settings || {}),
+      JSON.stringify(pub.extended || null),
+      pub.hub || '',
     ].join('|');
     if (key === view.key && !secretChanged) return;
     view.key = key;
@@ -974,6 +1037,12 @@
       view.pub.paused
         ? '<button type="button" class="pk-chip" data-host="resume">Resume</button>'
         : '<button type="button" class="pk-chip" data-host="pause">Pause</button>'
+    }${
+      view.pub.deadline || view.pub.paused
+        ? (view.pub.extended && view.pub.extended.key === String(view.pub.phaseKey || '') ? Number(view.pub.extended.n) || 0 : 0) < 3
+          ? '<button type="button" class="pk-chip" data-host="addTime" aria-label="Add 30 seconds">+30s</button>'
+          : ''
+        : ''
     }${st.phase === 'discuss' ? '<button type="button" class="pk-chip" data-host="skipDiscussion">Skip to vote</button>' : ''}</div>`;
   }
 
@@ -999,7 +1068,7 @@
       <div class="im-section-label">In the room · ${players.length}/12</div>
       <div class="im-lobby-list">${players
         .map(
-          (p) => `<div class="im-lobby-row"><span class="im-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${
+          (p, i) => `<div class="im-lobby-row"><span class="im-dot" data-presence="${esc(p.id)}"></span>${Kit().identityHtml(i, p.name)}<span>${esc(p.name)}</span>${
             p.id === pub.host ? '<span class="im-badge">Host</span>' : ''
           }${p.id === conn.uid ? '<span class="im-badge im-badge--me">You</span>' : ''}</div>`
         )
@@ -1025,7 +1094,7 @@
     });
     if (isHost) {
       body.querySelector('[data-settings]').addEventListener('click', () => openRoomSettings(conn, view, players.length));
-      body.querySelector('[data-start]')?.addEventListener('click', () => act(conn, view, 'start'));
+      body.querySelector('[data-start]')?.addEventListener('click', () => act(conn, view, 'start', customArgs(s)));
     }
   }
 
@@ -1307,6 +1376,7 @@
       const players = roomPlayers(view)
         .filter((p) => !p.left)
         .map((p) => ({ id: p.id, name: p.name }));
+      const card = pub.settings && pub.settings.pack === 'custom' ? null : roomCard(res);
       const body = shell.render(
         resultHtml(res, nm, pub.settings, {
           scoreboard: Kit().scoreboardHtml(players, pub.scores, res.points),
@@ -1322,14 +1392,17 @@
               <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
               ${isHost ? '<button type="button" class="pk-btn pk-btn--ghost" data-settings>Settings</button>' : '<button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite</button>'}
             </div>
-            <button type="button" class="im-link" data-leave>${isHost ? 'End room' : 'Leave room'}</button>
+            ${Kit().badCardHtml(card)}
+            <button type="button" class="im-link" data-leave>${isHost ? (pub.hub ? 'Back to the party' : 'End room') : 'Leave room'}</button>
           </div>`
       );
+      if (card) Kit().wireBadCard(body, card);
       body.querySelector('[data-share]').addEventListener('click', () => shareResult(res, nm));
-      body.querySelector('[data-next]')?.addEventListener('click', () => act(conn, view, 'next'));
+      body.querySelector('[data-next]')?.addEventListener('click', () => act(conn, view, 'next', customArgs(Core().mergeSettings(pub.settings))));
       body.querySelector('[data-settings]')?.addEventListener('click', () => openRoomSettings(conn, view, players.length));
       body.querySelector('[data-invite]')?.addEventListener('click', () => Kit().inviteFriends(GAME, view.code, LABEL));
       body.querySelector('[data-leave]').addEventListener('click', async () => {
+        if (isHost && pub.hub && window.PartyHub && (await PartyHub.backToHub(pub.hub))) return;
         await act(conn, view, isHost ? 'end' : 'leave');
         shell.close();
       });
@@ -1341,6 +1414,34 @@
         } catch (e) {}
       }
     }
+  }
+
+  /** Built-in card behind a Room result (for "Bad card"); custom packs have none. */
+  function roomCard(res) {
+    if (!res || !res.majority) return null;
+    const words = [res.majority, res.minority].filter(Boolean).map((w) => w.en);
+    const packs = Core().packs.PACKS;
+    const catId = res.category && res.category.id;
+    const order = catId ? packs.filter((p) => p.id === catId).concat(packs.filter((p) => p.id !== catId)) : packs;
+    for (const p of order) {
+      const row = p.words.find((r) => words.indexOf(r[0]) >= 0 && (words.length < 2 || words.indexOf(r[2]) >= 0));
+      if (row) return { game: GAME, key: Core().wordKey(p.id, row), label: row[0] };
+    }
+    return null;
+  }
+
+  /** Built-in card behind a Room result (for "Bad card"); custom packs have none. */
+  function roomCard(res) {
+    if (!res || !res.majority) return null;
+    const words = [res.majority, res.minority].filter(Boolean).map((w) => w.en);
+    const packs = Core().packs.PACKS;
+    const catId = res.category && res.category.id;
+    const order = catId ? packs.filter((p) => p.id === catId).concat(packs.filter((p) => p.id !== catId)) : packs;
+    for (const p of order) {
+      const row = p.words.find((r) => words.indexOf(r[0]) >= 0 && (words.length < 2 || words.indexOf(r[2]) >= 0));
+      if (row) return { game: GAME, key: Core().wordKey(p.id, row), label: row[0] };
+    }
+    return null;
   }
 
   function voteBreakdownHtml(st, nm) {

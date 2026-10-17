@@ -22,9 +22,15 @@
     return typeof normalizeLang === 'function' ? normalizeLang(raw) : raw;
   }
 
-  /** Role names are always bilingual (reader's language first). */
+  function isHi() {
+    return String(lang()).indexOf('hi') === 0;
+  }
+
+  /** The game keeps its origin role names; everyone else gets the English meaning beside them (Raja · King). */
   function roleName(roleId) {
-    return Core().roleLabel(roleId, lang(), true);
+    const r = Core().ROLES[roleId];
+    if (!r) return '';
+    return isHi() ? r.hi + ' · ' + r.en : r.en + ' · ' + r.gloss;
   }
 
   function roleIcon(roleId) {
@@ -33,8 +39,10 @@
 
   function callLine(guesserRole) {
     const c = Core().CALLS[guesserRole] || Core().CALLS.mantri;
-    return String(lang()).indexOf('hi') === 0 ? c.hi + ' · ' + c.en : c.en + ' · ' + c.hi;
+    return isHi() ? c.hi + ' · ' + c.en : c.en + ' · ' + c.gloss;
   }
+
+  const RAJA_QUOTE = () => (isHi() ? 'मैं राजा हूँ!' : 'Main Raja hoon! · I’m the King!');
 
   function loadSettings() {
     try {
@@ -51,6 +59,8 @@
   }
 
   function loadNames() {
+    const night = Kit().passNightNames && Kit().passNightNames(4, 8);
+    if (night) return night;
     try {
       const raw = JSON.parse(localStorage.getItem(NAMES_KEY) || '[]');
       if (Array.isArray(raw) && raw.length >= 4) return raw.slice(0, 8);
@@ -92,9 +102,9 @@
     return `<details class="pk-howto">
       <summary>How to play · 20 seconds</summary>
       <ol>
-        <li>Everyone secretly gets a chit: <strong>Raja 1000 · Mantri 800 · Sipahi 500 · Chor 0</strong>.</li>
-        <li>The Raja announces “Main Raja hoon!” and calls the Mantri to find the Chor.</li>
-        <li>The Mantri reveals and points at who they think is the Chor.</li>
+        <li>Everyone secretly gets a chit: <strong>Raja (King) 1000 · Mantri (Minister) 800 · Sipahi (Soldier) 500 · Chor (Thief) 0</strong>.</li>
+        <li>The Raja stands up — “Main Raja hoon!” (I’m the King!) — and calls the Mantri to find the Chor.</li>
+        <li>The Mantri reveals and points at who they think is the Chor (the Thief).</li>
         <li>Right — everyone keeps their points. Wrong — Mantri and Chor <strong>swap</strong> points.</li>
       </ol>
       <div class="pk-howto-score">5–8 players add chits in this order (points · from players):</div>
@@ -244,7 +254,8 @@
       return;
     }
     const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
-    renderHome(shell);
+    if (c.mode === 'pass') renderPassSetup(shell);
+    else renderHome(shell);
   }
 
   function renderHome(shell) {
@@ -371,7 +382,7 @@
     </div>`);
     body.querySelector('[data-go]').addEventListener('click', async () => {
       passAct(session, { type: 'revealRaja' });
-      await Kit().bigReveal({ icon: '👑', title: nm(session.round.pub.raja) + ' is the Raja!', quote: 'Main Raja hoon!', host: shell.el });
+      await Kit().bigReveal({ icon: '👑', title: nm(session.round.pub.raja) + ' is the Raja!', quote: RAJA_QUOTE(), host: shell.el });
       renderPassCall(shell, session);
     });
   }
@@ -448,9 +459,11 @@
 
   function renderPassFinal(shell, session) {
     shell.setSubtitle('Final');
+    Kit().reportPass(GAME, { players: session.players, scores: session.scores });
     const body = shell.render(`<div class="pk-page">
       ${finalHtml(session.players, session.scores)}
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      ${Kit().passHubButtonHtml()}
       <div class="pk-row">
         <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
         <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
@@ -459,6 +472,7 @@
     try {
       if (typeof gameFeedback === 'function') gameFeedback('win');
     } catch (e) {}
+    Kit().wirePassHub(body, shell);
     body.querySelector('[data-share]').addEventListener('click', () => shareFinal(session.players, session.scores));
     body.querySelector('[data-setup]').addEventListener('click', () => renderPassSetup(shell));
     body.querySelector('[data-again]').addEventListener('click', () => {
@@ -509,7 +523,7 @@
     if (!prev || prev.players.join() !== st.players.join()) return;
     const nm = ctrl.name;
     const host = ctrl.shell.el;
-    if (!prev.raja && st.raja) Kit().bigReveal({ icon: '👑', title: nm(st.raja) + ' is the Raja!', quote: 'Main Raja hoon!', host });
+    if (!prev.raja && st.raja) Kit().bigReveal({ icon: '👑', title: nm(st.raja) + ' is the Raja!', quote: RAJA_QUOTE(), host });
     else if (!prev.guesser && st.guesser) Kit().bigReveal({ icon: roleIcon(st.guesserRole), title: nm(st.guesser) + ' is the ' + roleName(st.guesserRole) + '!', host });
     else if (st.picks.length > prev.picks.length) {
       const pick = st.picks[st.picks.length - 1];
@@ -566,7 +580,7 @@
       const body = ctrl.render(`<div class="pk-page rm-stage">${top}
         <div class="pk-title">${mine ? 'You’re the Raja!' : 'Who’s the Raja?'}</div>
         <div class="pk-timer" data-timer></div>
-        ${mine ? '<button type="button" class="rm-big-btn" data-go>👑 Main Raja hoon!</button>' : '<div class="pk-wait">Waiting for the Raja to stand up…</div>'}
+        ${mine ? '<button type="button" class="rm-big-btn" data-go>👑 I’m the Raja!</button>' : '<div class="pk-wait">Waiting for the Raja to stand up…</div>'}
         ${tableHtml(st, nm)}
         ${peek}
       </div>`);

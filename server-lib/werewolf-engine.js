@@ -71,10 +71,9 @@ function secretFor(s, id) {
   }
   if (pub.phase === 'vote' && hidden.votes[id]) sec.myVote = { day: pub.day, revote: !!pub.revote, target: hidden.votes[id] };
   if (!alive && pub.phase !== 'over') {
-    // Spectators see everything but can only talk to each other.
-    const acts = {};
-    Object.keys(hidden.acts).forEach((x) => (acts[x] = { verb: hidden.acts[x].verb, target: hidden.acts[x].target || null }));
-    sec.spectator = { roles: Object.assign({}, hidden.roles), acts, seerLog: hidden.seerLog.slice(), wolfChat: s.chat.wolf.slice() };
+    // Out players keep their own card and talk only to each other. They never see anyone else's
+    // role, night choice or the wolves' chat (P15: spectators never see secrets — a dead player
+    // at the same table would otherwise be one whisper away from deciding the game).
     sec.deadChat = s.chat.dead.slice();
   }
   return sec;

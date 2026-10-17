@@ -130,6 +130,8 @@
   }
 
   function loadNames() {
+    const night = Kit().passNightNames && Kit().passNightNames(Core().MIN_PLAYERS, Core().MAX_PASS);
+    if (night) return night;
     try {
       const raw = JSON.parse(localStorage.getItem(NAMES_KEY) || '[]');
       if (Array.isArray(raw) && raw.length >= Core().MIN_PLAYERS) return raw.slice(0, Core().MAX_PASS);
@@ -424,6 +426,14 @@
     return `<div class="ww-narration" role="status"><span class="ww-narration-icon" aria-hidden="true">${esc(icon || '🌙')}</span><span>${esc(text)}</span></div>`;
   }
 
+  /** AI narrator flavour for the current beat (Room only; empty when AI is off or the line is stale). */
+  function flavourHtml(ctrl, st) {
+    const pub = ctrl && ctrl.view && ctrl.view.pub;
+    const n = pub && pub.narration;
+    if (!n || !n.line || n.key !== String(pub.phaseKey || '') + '#' + (st.log || []).length) return '';
+    return `<div class="ww-flavour" aria-live="polite">${esc(n.line)}</div>`;
+  }
+
   function lastOf(pub, type) {
     return pub.log.filter((e) => e.t === type).slice(-1)[0] || null;
   }
@@ -591,7 +601,8 @@
       return;
     }
     const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => !!shell.wwPlaying, leaveBody: 'This game will end for everyone on this phone.' });
-    renderHome(shell);
+    if (c.mode === 'pass') renderPassSetup(shell);
+    else renderHome(shell);
   }
 
   function renderHome(shell) {
@@ -1043,16 +1054,19 @@
     sfx('ui.win');
     say(line);
     shell.setSubtitle('Game over');
+    Kit().reportPass(GAME, { players: session.players, state: { result: pub.result } });
     const body = shell.render(`<div class="pk-page">
       <div class="ww-top">${muteBtnHtml()}</div>
       ${overHtml(pub, nm)}
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      ${Kit().passHubButtonHtml()}
       <div class="pk-row">
         <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
         <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
       </div>
     </div>`);
     wireMute(body, shell, 'day');
+    Kit().wirePassHub(body, shell);
     try {
       if (typeof gameFeedback === 'function') gameFeedback('win');
     } catch (e) {}
@@ -1131,6 +1145,10 @@
       .filter(Boolean)
       .join(' ');
     const last = fresh[fresh.length - 1];
+    // Optional AI flavour line (host phone asks once per beat; server caches + caps it). Template stays the fact.
+    if (ctrl.isHost() && Kit().aiOn() && ['night', 'dawn', 'vote', 'win'].indexOf(last.t) >= 0) {
+      Kit().roomCall(GAME, 'narrate', { code: ctrl.view.code }).catch(() => {});
+    }
     if (last.t === 'dawn') sfx(last.taken.length ? 'ui.lose' : 'ui.check');
     else if (last.t === 'night') sfx('ui.turn');
     else if (last.t === 'vote') sfx(last.out ? 'ui.lose' : 'ui.check');
@@ -1147,24 +1165,10 @@
   }
 
   function spectatorPanel(ctrl, st, sec) {
-    const sp = sec.spectator;
-    const th = st.theme;
-    const acts = Object.keys(sp.acts || {});
     return `<div class="ww-spectator">
       <div class="pk-section">You’re out — watching</div>
-      ${aliveListHtml(st, ctrl.name, { roles: sp.roles, me: ctrl.uid })}
-      ${
-        st.phase === 'night'
-          ? `<div class="ww-spec-acts">${
-              acts.length
-                ? acts
-                    .map((id) => `<div>${esc(ctrl.name(id))} (${esc(rn(sp.roles[id], th))}) → ${sp.acts[id].target ? esc(ctrl.name(sp.acts[id].target)) : 'no one'}</div>`)
-                    .join('')
-                : '<div>Nobody has acted yet.</div>'
-            }</div>`
-          : ''
-      }
-      ${sp.wolfChat && sp.wolfChat.length ? chatBox(ctrl, 'wolfview', sp.wolfChat, { title: rp('wolf', th) + '’ chat', disabled: 'Read only' }) : ''}
+      <div class="pk-sub">Roles stay secret until the end. No hints to the table!</div>
+      ${aliveListHtml(st, ctrl.name, { roles: publicRoles(st), me: ctrl.uid })}
       ${chatBox(ctrl, 'dead', sec.deadChat, { title: 'Spectators’ chat', placeholder: 'Chat with the others who are out' })}
     </div>`;
   }
@@ -1210,7 +1214,7 @@
       wireRoomChat(ctrl, body);
       body.querySelector('[data-advance]')?.addEventListener('click', () => ctrl.act('advance'));
     };
-    const deadBlock = !alive && st.phase !== 'over' && sec.spectator ? spectatorPanel(ctrl, st, sec) : '';
+    const deadBlock = !alive && st.phase !== 'over' ? spectatorPanel(ctrl, st, sec) : '';
 
     if (st.phase === 'reveal') {
       const ready = st.players.filter((id) => pub.seen && pub.seen[id]).length;
@@ -1259,6 +1263,7 @@
       if (sec.myNight || !step) {
         const body = ctrl.render(`<div class="pk-page ww-stage">${top}
           ${narrationHtml(narrate({ t: 'night' }, th), '🌙')}
+          ${flavourHtml(ctrl, st)}
           <div class="ww-locked">✓ ${sec.myNight && sec.myNight.target ? 'You chose ' + esc(nm(sec.myNight.target)) : 'Locked in'}${sec.myNight && sec.myNight.save ? ' · save potion ready' : ''}</div>
           ${seerBits}${status}${wolfBits}${peek}
         </div>`);
@@ -1301,6 +1306,7 @@
       const roles = st.phase === 'dawn' ? e && e.roles : e && e.out && e.role ? { [e.out]: e.role } : null;
       const body = ctrl.render(`<div class="pk-page ww-stage">${top}
         ${narrationHtml(narrate(e, th, nm), st.phase === 'dawn' ? '🌅' : '⚖️')}
+        ${flavourHtml(ctrl, st)}
         ${roleRevealLine(roles, st, nm)}
         ${aliveListHtml(st, nm, { roles: publicRoles(st), me, presence: true })}
         ${ctrl.isHost() ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-advance>Continue</button>' : '<div class="pk-wait">Carrying on in a moment…</div>'}

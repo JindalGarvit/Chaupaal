@@ -567,7 +567,11 @@ function renderDangalGamesGrid() {
           '<div class="cp-empty" style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);">No games match this filter.</div>';
       }
     } else {
-      manchGrid.innerHTML = list.map(dangalTileHtml).join('') + gateCard;
+      const partyNight =
+        state.genre === 'party' && window.PartyHub && typeof window.PartyHub.open === 'function'
+          ? '<button type="button" class="dangal-partynight" style="grid-column:1/-1" data-party-night><span aria-hidden="true">🎉</span><span><strong>Party night</strong><small>Several games, one group — no re-invites</small></span></button>'
+          : '';
+      manchGrid.innerHTML = partyNight + list.map(dangalTileHtml).join('') + gateCard;
       wireDangalTiles(manchGrid);
     }
     manchGrid.querySelector('[data-age-gate]')?.addEventListener('click', () => {

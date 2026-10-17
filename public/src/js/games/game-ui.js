@@ -90,7 +90,7 @@
     brickbreaker: 'Brick Breaker',
     imposter: 'Imposter',
     rajamantri: 'Raja Mantri Chor Sipahi',
-    charades: 'Dumb Charades',
+    charades: 'Charades',
     mostlikely: 'Most Likely To?',
     werewolf: 'Werewolf',
     penalty: 'Penalty Shootout',

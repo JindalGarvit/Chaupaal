@@ -2,7 +2,8 @@
  * Admin-only feedback log + daily summaries + Peepal intent weight profiles.
  * Requires Firebase ID token with custom claim admin === true.
  *
- * GET  ?view=log|summary|errors|intent_weights|product|retention|quiz
+ * GET  ?view=log|summary|errors|intent_weights|product|retention|quiz|party_cards
+ *      party_cards = most-flagged party cards ("Bad card"), retired first (server-lib/party-content.js)
  * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
  * POST { action: 'quiz_approve' | 'quiz_retire', qid }  (Quiz Muqabala moderation)
  *
@@ -76,6 +77,11 @@ module.exports = async function handler(req, res) {
     if (view === 'quiz') {
       const { quizAdminView } = require('../server-lib/quiz-admin');
       return sendSuccess(res, await quizAdminView(db));
+    }
+
+    if (view === 'party_cards') {
+      const { adminCardList, RETIRE_AT } = require('../server-lib/party-content');
+      return sendSuccess(res, { retireAt: RETIRE_AT, cards: await adminCardList(db, req.query?.limit) });
     }
 
     if (view === 'intent_weights') {

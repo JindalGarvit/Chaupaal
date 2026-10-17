@@ -1,5 +1,5 @@
 /**
- * Dumb Charades — pure game logic shared by Pass & Play (client) and Room (server-lib/party-deal.js).
+ * Charades — pure game logic shared by Pass & Play (client) and Room (server-lib/party-deal.js).
  * The deck and the title being acted live in `hidden`; `pub` only gets a title once it is guessed,
  * passed or the turn ends. UMD: window.CharadesCore / require().
  */
@@ -28,6 +28,7 @@
     categories: null,
     difficulty: 'all',
     teamNames: null,
+    region: 'global', // 'global' | 'in' — regional add-on packs join the default deck
   };
   const TURN_SEC = [60, 90, 120];
   const TURNS_PER_TEAM = [2, 3, 4, 5, 6];
@@ -66,7 +67,32 @@
     if (Array.isArray(src.teamNames) && src.teamNames.length === 2) {
       out.teamNames = src.teamNames.map((n, i) => String(n || '').replace(/[<>]/g, '').trim().slice(0, 20) || TEAM_NAMES[i]);
     }
+    out.region = src.region === 'in' ? 'in' : 'global';
     return out;
+  }
+
+  // ---------------- custom (host-made / AI-drafted) titles ----------------
+
+  const CUSTOM_PREFIX = 'x:';
+  const CUSTOM_MIN = 4;
+  const CUSTOM_MAX = 60;
+
+  function cleanTitle(t) {
+    return String(t == null ? '' : t).replace(/[<>\u0000-\u001f]/g, '').trim().replace(/\s+/g, ' ').slice(0, 48);
+  }
+
+  /** Session-only custom titles → deck keys (the title travels inside the key; never a pack row). */
+  function customKeys(list) {
+    const seen = {};
+    const out = [];
+    (Array.isArray(list) ? list : []).slice(0, CUSTOM_MAX * 2).forEach((t) => {
+      const en = cleanTitle(t);
+      const k = PC.normalize(en);
+      if (!en || !k || seen[k]) return;
+      seen[k] = true;
+      out.push(CUSTOM_PREFIX + en);
+    });
+    return out.length >= CUSTOM_MIN ? out.slice(0, CUSTOM_MAX) : [];
   }
 
   function teamName(settings, i) {
@@ -90,21 +116,36 @@
    * Title keys for the chosen categories + difficulty (falls back to every difficulty if too few).
    * India-specific titles inside global packs join only for Hindi locales or when a regional pack is picked.
    */
-  function pool(settings, lang) {
+  function pool(settings, lang, exclude) {
     const s = mergeSettings(settings);
-    const cats = s.categories || PACKS.defaultCategories(lang);
-    const regionalOk = String(lang || '').indexOf('hi') === 0 || cats.some((id) => (PACKS.getPack(id) || {}).regional);
+    const cats = s.categories || PACKS.defaultCategories(lang, s.region);
+    const regionalOk = s.region === 'in' || PC.isHindi(lang) || cats.some((id) => (PACKS.getPack(id) || {}).regional);
+    const retired = new Set(exclude || []);
+    const seen = {};
     const all = [];
     cats.forEach((id) => {
       const p = PACKS.getPack(id);
-      if (p) p.titles.forEach((t) => (regionalOk || !t.regional) && all.push(t));
+      if (!p) return;
+      p.titles.forEach((t) => {
+        // Cross-pack dedupe: the same title in two selected packs is dealt once.
+        const k = PACKS.titleId(t.en);
+        if ((!regionalOk && t.regional) || retired.has(t.key) || seen[k]) return;
+        seen[k] = true;
+        all.push(t);
+      });
     });
     const filtered = s.difficulty === 'all' ? all : all.filter((t) => t.difficulty === s.difficulty);
     return (filtered.length >= 10 ? filtered : all).map((t) => t.key);
   }
 
   function titleOf(key) {
-    return key ? PACKS.byKey(key) : null;
+    if (!key) return null;
+    const k = String(key);
+    if (k.indexOf(CUSTOM_PREFIX) === 0) {
+      const en = cleanTitle(k.slice(CUSTOM_PREFIX.length));
+      return en ? { key: k, en, hi: '', pack: 'custom', kind: 'custom', difficulty: 'medium', alts: [], regional: false } : null;
+    }
+    return PACKS.byKey(k);
   }
 
   /** Public copy of a title once it may be shown to everyone. */
@@ -135,7 +176,10 @@
     const o = opts || {};
     if (!validTeams(teams)) throw new Error('teams');
     const s = mergeSettings(settings);
-    const hidden = { deck: PC.shuffle(pool(s, o.lang), o.rng), pos: 0, current: null };
+    // opts.custom = host titles (session only; replaces the packs); opts.exclude = retired keys.
+    const custom = customKeys(o.custom);
+    const deck = custom.length ? custom : pool(s, o.lang, o.exclude);
+    const hidden = { deck: PC.shuffle(deck, o.rng), pos: 0, current: null };
     const pub = {
       phase: 'ready',
       teams: [teams[0].slice(), teams[1].slice()],
@@ -392,6 +436,9 @@
     balanceTeams,
     validTeams,
     pool,
+    customKeys,
+    CUSTOM_MIN,
+    CUSTOM_MAX,
     titleOf,
     reveal,
     matchTitle,

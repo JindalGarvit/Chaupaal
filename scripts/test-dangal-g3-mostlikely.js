@@ -372,7 +372,7 @@ function ownerOnlySecrets(room) {
   }
   assert(/custom_blocked/.test(code), 'server re-checks a custom prompt (kindness)');
   Party.reduceRoom(room, host, 'start', { custom: { a: 'Fly', b: 'Swim' } }, NOW + 10, seeded(1));
-  assert(room.pub.state.prompt.custom && room.pub.state.prompt.a.en === 'Fly' && !room.server.customs, 'host custom arrives with start; only that one prompt lives in the room');
+  assert(room.pub.state.prompt.custom && room.pub.state.prompt.a.en === 'Fly' && !(room.server.customs || []).length, 'host custom arrives with start; only that one prompt lives in the room');
   all.forEach((id, i) => Party.reduceRoom(room, id, 'vote', { pick: i ? 'b' : 'a', guess: 'a' }, NOW + 11 + i, Math.random));
   assert(room.pub.state.result.picks[all[1]] === 'b', 'names mode publishes picks after reveal');
   code = '';
@@ -591,7 +591,7 @@ assert(!ML.cleanCustom('stolen from a shop', 'nhie').ok && !ML.cleanCustom('been
   }
   assert(/custom_blocked/.test(code), 'server re-checks a custom NHIE statement');
   Party.reduceRoom(room, host, 'start', { custom: 'Never have I ever eaten cereal for dinner' }, NOW + 10, seeded(1));
-  assert(room.pub.state.prompt.custom && room.pub.state.prompt.en === 'eaten cereal for dinner' && !room.server.customs, 'host custom statement is session-only');
+  assert(room.pub.state.prompt.custom && room.pub.state.prompt.en === 'eaten cereal for dinner' && !(room.server.customs || []).length, 'host custom statement is session-only');
 })();
 
 // ---------- (g) wiring ----------
