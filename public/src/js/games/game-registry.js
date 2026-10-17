@@ -889,6 +889,8 @@
 
   /** Honest opponent sheet — Practice vs AI or Live challenge friend (never fake Priya). */
   function launchDangalWithOpponent(gameId) {
+    // A double tap must not stack two opponent sheets (their buttons share ids).
+    document.querySelectorAll('.dangal-opp-sheet').forEach((s) => s.remove());
     const game = getGame(gameId);
     if (!game) {
       showRetiredIfRetired(gameId);
@@ -910,6 +912,7 @@
       const stakesOk =
         liveOk && typeof stakesEnabledForGame === 'function' && stakesEnabledForGame('ludo');
       const sheet = document.createElement('div');
+      sheet.className = 'dangal-opp-sheet';
       sheet.style.cssText =
         'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
       sheet.innerHTML = `
@@ -921,12 +924,12 @@
     <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
       document.querySelector('.device').appendChild(sheet);
       if (stakesOk) wireDangalStakePicker(sheet);
-      document.getElementById('dgCancelGame').addEventListener('click', () => sheet.remove());
-      document.getElementById('dgPracticeAi').addEventListener('click', () => {
+      sheet.querySelector('#dgCancelGame').addEventListener('click', () => sheet.remove());
+      sheet.querySelector('#dgPracticeAi').addEventListener('click', () => {
         sheet.remove();
         launchPracticeVsAi('ludo', 'manch');
       });
-      document.getElementById('dgFriendOpp').addEventListener('click', async () => {
+      sheet.querySelector('#dgFriendOpp').addEventListener('click', async () => {
         const stake = stakesOk ? readDangalStake(sheet) : 0;
         if (stake > 0 && window.DangalEconomy && typeof DangalEconomy.canAffordStake === 'function') {
           try {
@@ -1011,6 +1014,7 @@
       typeof stakesEnabledForGame === 'function' &&
       stakesEnabledForGame(gameId);
     const sheet = document.createElement('div');
+    sheet.className = 'dangal-opp-sheet';
     sheet.style.cssText =
       'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
     const prepMark =
@@ -1032,12 +1036,12 @@
   `;
     document.querySelector('.device').appendChild(sheet);
     if (stakesOk) wireDangalStakePicker(sheet);
-    document.getElementById('dgCancelGame').addEventListener('click', () => sheet.remove());
-    document.getElementById('dgPracticeAi').addEventListener('click', () => {
+    sheet.querySelector('#dgCancelGame').addEventListener('click', () => sheet.remove());
+    sheet.querySelector('#dgPracticeAi').addEventListener('click', () => {
       sheet.remove();
       launchPracticeVsAi(gameId, 'manch');
     });
-    document.getElementById('dgFriendOpp').addEventListener('click', async () => {
+    sheet.querySelector('#dgFriendOpp').addEventListener('click', async () => {
       const stake = stakesOk ? readDangalStake(sheet) : 0;
       if (stake > 0 && window.DangalEconomy && typeof DangalEconomy.canAffordStake === 'function') {
         try {

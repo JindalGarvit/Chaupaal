@@ -439,10 +439,11 @@ function renderDangalGamesGrid() {
   filterBar.setAttribute('aria-label', 'Filter games');
   const modeFilters = [
     { id: 'all', label: 'All', kind: 'all', icon: '▦', color: '#546E7A' },
-    { id: 'solo', label: 'Solo', kind: 'mode', gameType: 'solo', icon: '①', color: '#00897B' },
-    { id: 'dual', label: 'Dual', kind: 'mode', gameType: 'dual', icon: '②', color: '#F9A825' },
+    // Player-count labels — "Solo" is also a section chip, so the mode chips say how many play.
+    { id: 'solo', label: '1 player', kind: 'mode', gameType: 'solo', icon: '①', color: '#00897B' },
+    { id: 'dual', label: '2 players', kind: 'mode', gameType: 'dual', icon: '②', color: '#F9A825' },
     { id: 'live', label: 'Live 1v1', kind: 'live', icon: '●', color: '#E53935' },
-    { id: 'multiplayer', label: 'Multi', kind: 'mode', gameType: 'multiplayer', icon: '③', color: '#E53935' },
+    { id: 'multiplayer', label: 'Groups', kind: 'mode', gameType: 'multiplayer', icon: '③', color: '#E53935' },
   ];
   const genreFilters = (typeof getGameGenres === 'function' ? getGameGenres() : []).map((g) => ({
     id: g.id,

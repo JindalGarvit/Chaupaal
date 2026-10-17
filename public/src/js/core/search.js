@@ -460,16 +460,23 @@
       const reg = typeof getGames === 'function' ? getGames({ dangal: true }) : [];
       const byId = {};
       reg.forEach((g) => (byId[g.id] = g));
+      // Not yet age-confirmed (not known under-18): an 18+ title shows as "confirm your age" — like Manch's gate card.
+      const gateUnknown = typeof ageGateStatus === 'function' && ageGateStatus() !== 'ok' && ageGateStatus() !== 'under_18';
+      const gated = (id) => gateUnknown && typeof isAgeGatedGame === 'function' && isAgeGatedGame(id);
       const hits = DA.searchGames(query, { limit })
-        .filter((h) => !reg.length || byId[h.id])
-        .map((h) => ({
-        type: 'game',
-        category: 'games',
-        id: h.id,
-        title: (byId[h.id] && byId[h.id].name) || h.name,
-        subtitle: (byId[h.id] && (byId[h.id].tagline || byId[h.id].desc)) || 'Dangal',
-        score: h.score,
-      }));
+        .filter((h) => !reg.length || byId[h.id] || gated(h.id))
+        .map((h) =>
+          gated(h.id) && !byId[h.id]
+            ? { type: 'game', category: 'games', id: h.id, ageGate: true, title: h.name, subtitle: '18+ · confirm your age to play', score: h.score }
+            : {
+                type: 'game',
+                category: 'games',
+                id: h.id,
+                title: (byId[h.id] && byId[h.id].name) || h.name,
+                subtitle: (byId[h.id] && (byId[h.id].tagline || byId[h.id].desc)) || 'Dangal',
+                score: h.score,
+              }
+        );
       if (!hits.length) {
         const r = DA.resolveGame(query);
         if (r && r.retired) hits.push({ type: 'game', category: 'games', id: r.retired, retired: true, title: r.name, subtitle: 'No longer in Dangal — see what replaced it', score: 50 });
@@ -572,6 +579,10 @@
     if (r.type === 'game' || r.category === 'games') {
       document.querySelector('.bottom-tabs .tab-btn[data-tab="dangal"]')?.click();
       if (r.retired && typeof openRetiredGameScreen === 'function') return openRetiredGameScreen(r.id);
+      if (r.ageGate && typeof openAgeGateSheet === 'function') {
+        openAgeGateSheet(r.id).then((ok) => ok && typeof handleDangalGameTap === 'function' && handleDangalGameTap(r.id));
+        return;
+      }
       if (r.id && typeof handleDangalGameTap === 'function') handleDangalGameTap(r.id);
       return;
     }

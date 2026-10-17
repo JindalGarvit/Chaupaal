@@ -223,10 +223,7 @@
         score -= 14;
         reasons.push('You just played this');
       } else if (r > 0) score -= 4;
-      else if (recent.length) {
-        score += 4;
-        reasons.push('Something different');
-      }
+      else if (recent.length) score += 4; // variety nudges the order; no reason line (it would sit on every row)
       if (friends && g.remote && !solo) {
         score += 6;
         reasons.push(friends === 1 ? 'A friend is online' : friends + ' friends are online');

@@ -632,15 +632,16 @@
     function render() {
       if (!gs.alive()) return;
       // Hints in Practice / archive / challenge only — the Daily stays hint-free for everyone's streak.
-      const hintBtn = mode !== 'daily' && !(st.over || st.recorded) ? `<button type="button" class="game-chrome-action" data-act="hint" aria-label="${esc(tr('hint', 'Hint'))}">💡</button>` : '';
-      const right = `${hintBtn}<button type="button" class="game-chrome-action" data-act="stats" aria-label="${esc(tr('stats', 'Statistics'))}">📊</button><button type="button" class="game-chrome-action" data-act="more" aria-label="${esc(tr('more', 'More'))}">⋯</button>`;
+      // (Kept out of the top bar: at phone width it would crowd the title.)
+      const hintBtn = mode !== 'daily' && !(st.over || st.recorded) ? `<button type="button" class="sf-hint-btn" data-act="hint">💡 ${esc(tr('hint', 'Hint'))}</button>` : '';
+      const right = `<button type="button" class="game-chrome-action" data-act="stats" aria-label="${esc(tr('stats', 'Statistics'))}">📊</button><button type="button" class="game-chrome-action" data-act="more" aria-label="${esc(tr('more', 'More'))}">⋯</button>`;
       const chrome =
         typeof gameChromeHtml === 'function'
           ? gameChromeHtml({ title: LABEL, subtitle: subtitle() + (st.hard ? ' · ' + tr('hard', 'Hard') : ''), backId: 'wgBack', rightHtml: right })
           : `<div class="sf-top"><button type="button" id="wgBack">‹</button><b>${esc(LABEL)}</b>${right}</div>`;
       const done = st.over || st.recorded;
       const hintNote = !done && st.hint ? `<p class="sf-hint" role="status" aria-live="polite" data-sf-hint>💡 ${esc(st.hint)}</p>` : '';
-      overlay.innerHTML = `${chrome}<div class="sf-main">${tilesHtml()}${hintNote}${resultHtml()}</div>${done ? '' : keyboardHtml()}`;
+      overlay.innerHTML = `${chrome}<div class="sf-main">${tilesHtml()}${hintNote || hintBtn}${resultHtml()}</div>${done ? '' : keyboardHtml()}`;
       overlay.querySelector('#wgBack').addEventListener('click', askLeave);
       overlay.querySelectorAll('[data-act]').forEach((b) =>
         b.addEventListener('click', () => {
