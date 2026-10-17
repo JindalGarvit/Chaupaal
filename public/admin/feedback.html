@@ -63,6 +63,14 @@
       <div id="cardsBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
     </div>
     <div class="card">
+      <div class="row">
+        <strong>Dangal AI usage</strong>
+        <span class="meta">(per hook per UTC day — calls, AI calls, cache hits, fallbacks, errors, est. $; caps + kill switches)</span>
+        <button type="button" id="btnAi" class="secondary">Load AI usage</button>
+      </div>
+      <div id="aiBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
+    </div>
+    <div class="card">
       <strong>Chronological log</strong>
       <span class="meta"> · chat-tagged chaupaalFeedback</span>
       <div id="logBox" style="margin-top:10px"><em class="meta">Sign in as admin to load.</em></div>
@@ -192,6 +200,32 @@
       }
     }
     document.getElementById('btnCards').addEventListener('click', refreshCards);
+
+    const aiBox = document.getElementById('aiBox');
+    const escAi = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    async function refreshAi() {
+      try {
+        const data = await api('/api/admin-feedback?view=dangal_ai&days=7');
+        const p = data.policy || { hooks: {} };
+        const head = `<div class="meta">AI ${p.enabled ? 'on' : 'off'} · provider ${escAi(p.provider)} · ${p.paused ? 'PAUSED · ' : ''}global cap ${p.globalCap}/day · per-user ${p.userCap}/day</div>`;
+        const caps = Object.keys(p.hooks).map((h) => {
+          const r = p.hooks[h];
+          return `<tr><td>${escAi(h)}</td><td>${escAi(r.tier)}</td><td>${r.userCap == null ? '—' : r.userCap}</td><td>${r.dailyCap}</td><td>${r.disabled ? '<b>off</b>' : 'on'}</td></tr>`;
+        }).join('');
+        const days = (data.days || []).map((d) => {
+          const hooks = d.hooks || {};
+          const rows = Object.keys(hooks).map((h) => {
+            const x = hooks[h] || {};
+            return `<tr><td>${escAi(h)}</td><td>${x.calls || 0}</td><td>${x.aiCalls || 0}</td><td>${x.cacheHits || 0}</td><td>${x.fallbacks || 0}</td><td>${(x.rejected || 0) + (x.errors || 0)}</td><td>$${Number(x.costUsd || 0).toFixed(4)}</td></tr>`;
+          }).join('');
+          return `<div class="item"><strong>${escAi(d.day)}</strong><table><tr><th>hook</th><th>calls</th><th>AI</th><th>cache</th><th>fallback</th><th>rejected+errors</th><th>est. $</th></tr>${rows}</table></div>`;
+        }).join('');
+        aiBox.innerHTML = head + `<table><tr><th>hook</th><th>tier</th><th>per-user/day</th><th>hook cap/day</th><th>switch</th></tr>${caps}</table>` + (days || '<em class="meta">No usage recorded yet.</em>');
+      } catch (e) {
+        aiBox.innerHTML = `<div class="err">${escAi(e.message)}</div>`;
+      }
+    }
+    document.getElementById('btnAi').addEventListener('click', refreshAi);
     document.getElementById('btnSummary').addEventListener('click', loadSummary);
 
     firebase.auth().onAuthStateChanged(async (u) => {

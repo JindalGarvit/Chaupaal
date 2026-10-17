@@ -38,6 +38,8 @@
     allowedCount: allowedSet.size,
     isAllowed: (w) => allowedSet.has(norm(w)),
     isAnswer: (w) => answerSet.has(norm(w)),
+    /** How many answer words satisfy fn — a count only, the list never leaves this closure. */
+    countMatching: (fn) => schedule.reduce((n, w) => n + (fn(w) ? 1 : 0), 0),
     daily: (n) => (Core ? Core.dailyAnswer(n, schedule) : null),
     random(rng) {
       if (!schedule.length) return 'HOUSE';

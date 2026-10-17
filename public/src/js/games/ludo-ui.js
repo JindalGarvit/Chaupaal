@@ -534,7 +534,9 @@
           if (humans.length === 1) {
             const won = st.ranking[0] === humans[0] || (st.settings.teams && st.seats[humans[0]].team === st.winnerTeam);
             C.fx(won ? 'win' : 'lose');
-            if (typeof recordGameResult === 'function') recordGameResult(GAME, !!won);
+            const me = humans[0];
+            const timesCaptured = (st.log || []).reduce((n, e) => n + (e.captures || []).filter((c) => c.seat === me).length, 0);
+            if (typeof recordGameResult === 'function') recordGameResult(GAME, !!won, false, { tipStats: { captures: (st.seats[me] && st.seats[me].captures) || 0, timesCaptured } });
           } else C.fx('win');
         }
         const win = st.seats[st.ranking[0]];

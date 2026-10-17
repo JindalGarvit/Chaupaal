@@ -4,6 +4,8 @@
  *
  * GET  ?view=log|summary|errors|intent_weights|product|retention|quiz|party_cards
  *      party_cards = most-flagged party cards ("Bad card"), retired first (server-lib/party-content.js)
+ *      dangal_ai   = Dangal AI caps table + per-hook per-day calls / cache hits / fallbacks / errors / est. $
+ *                    (Firestore dangalAiStats/{day}, server-lib/dangal-ai.js)
  * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
  * POST { action: 'quiz_approve' | 'quiz_retire', qid }  (Quiz Muqabala moderation)
  *
@@ -77,6 +79,27 @@ module.exports = async function handler(req, res) {
     if (view === 'quiz') {
       const { quizAdminView } = require('../server-lib/quiz-admin');
       return sendSuccess(res, await quizAdminView(db));
+    }
+
+    if (view === 'dangal_ai') {
+      const AI = require('../server-lib/dangal-ai');
+      const days = Math.min(14, Math.max(1, Number(req.query?.days) || 7));
+      const rows = [];
+      for (let i = 0; i < days; i++) {
+        const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        try {
+          const snap = await db.collection('dangalAiStats').doc(day).get();
+          if (snap.exists) rows.push(Object.assign({ day }, snap.data() || {}));
+        } catch (e) {}
+      }
+      let budget = null;
+      try {
+        const b = await db.collection('chaupaalMeta').doc('aiBudget').get();
+        budget = b.exists ? b.data() || null : null;
+      } catch (e) {}
+      const shared = AI.sharedAI({ db, admin });
+      await shared.flushStats(true).catch(() => {});
+      return sendSuccess(res, { policy: AI.policyTable(), costPerCall: AI.COST_BY_TIER, days: rows, budget, instance: shared.telemetry() });
     }
 
     if (view === 'party_cards') {

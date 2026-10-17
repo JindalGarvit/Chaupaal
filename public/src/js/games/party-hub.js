@@ -65,9 +65,17 @@
 
   // ---------------- shared bits ----------------
 
+  /** Deterministic suggestion for the group (DangalAssist.recommend), with its plain reason. */
+  function suggestionHtml(count, where) {
+    const DA = window.DangalAssist;
+    if (!DA || count < 2) return '';
+    const top = DA.recommend({ players: count, where, partyOnly: true, limit: 8 }).find((g) => Core().GAME_IDS.indexOf(g.id) >= 0);
+    return top ? `<div class="ph-suggest" role="note">Suggested: <strong>${esc(top.name)}</strong> — ${esc(top.reason)}</div>` : '';
+  }
+
   function gameCardsHtml(o) {
     const counts = o.votes || {};
-    return `<div class="ph-games" role="list">${Core()
+    return `${suggestionHtml(o.count, o.where || 'together')}<div class="ph-games" role="list">${Core()
       .GAMES.map((g) => {
         const tooFew = o.count < g.min;
         const n = counts[g.id] || 0;
@@ -391,10 +399,10 @@
         </div>`;
       } else if (isHost) {
         stage = `<div class="pk-section">${settings.pickBy === 'vote' ? 'Group vote — start the top pick or choose one' : 'Pick the next game'}</div>
-          ${gameCardsHtml({ count: onlineCount, votes, myVote: null })}
+          ${gameCardsHtml({ count: onlineCount, votes, myVote: null, where: 'remote' })}
           ${settings.pickBy === 'vote' && Object.keys(votes).length ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start-vote>Start the top pick</button>' : ''}`;
       } else if (settings.pickBy === 'vote') {
-        stage = `<div class="pk-section">Vote for the next game</div>${gameCardsHtml({ count: onlineCount, votes, myVote: (pub.votes || {})[me] })}`;
+        stage = `<div class="pk-section">Vote for the next game</div>${gameCardsHtml({ count: onlineCount, votes, myVote: (pub.votes || {})[me], where: 'remote' })}`;
       } else {
         stage = '<div class="pk-wait">The host is picking the next game…</div>';
       }
@@ -601,7 +609,7 @@
     const seatOf = (id) => Math.max(0, night.players.indexOf(id));
     const body = shell.render(`<div class="pk-page ph-room">
       <div class="pk-section">Pick the next game</div>
-      ${gameCardsHtml({ count: night.players.length })}
+      ${gameCardsHtml({ count: night.players.length, where: 'together' })}
       ${scoreboardHtml(rows, night.history, { seatOf })}
       <details class="ph-more">
         <summary>Players · ${night.players.length}</summary>

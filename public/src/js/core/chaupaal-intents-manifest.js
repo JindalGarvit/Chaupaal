@@ -669,6 +669,49 @@
     },
   });
 
-  // games/foo.js — on DOMContentLoaded:
-  // ChaupaalIntents.register({ id: 'games.foo', ... });
+  // —— Dangal games (P16): every roster title by name, alias or need — "play imposter",
+  //    "poker with friends", "daily word game". Deterministic (DangalAssist); retired names land on
+  //    the retired screen. Age-gated titles still pass through the registry's 18+ gate.
+  const DA = window.DangalAssist;
+  function openGame(id) {
+    switchTab('dangal');
+    if (typeof handleDangalGameTap === 'function') handleDangalGameTap(id);
+    else if (typeof getGame === 'function' && getGame(id)) getGame(id).launch({ source: 'chaupaal_cmd' });
+  }
+  if (DA && Array.isArray(DA.CATALOG)) {
+    DA.CATALOG.forEach((g) => {
+      const name = g.name.toLowerCase();
+      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[’']/g, "['’]?");
+      reg({
+        id: `dangal.game.${g.id}`,
+        category: 'create',
+        label: `Play ${g.name}`,
+        icon: 'gamepad',
+        keywords: [name].concat(g.keys.filter((k) => k.length > 3).slice(0, 6)),
+        phrases: [new RegExp(`\\b(play|start|open)\\s+(a\\s+)?(game\\s+of\\s+)?${esc(name)}\\b`, 'i')],
+        priority: 77,
+        run: () => openGame(g.id),
+      });
+    });
+    reg({
+      id: 'dangal.find_game',
+      category: 'create',
+      label: 'Find a game',
+      icon: 'gamepad',
+      keywords: ['game with friends', 'party game', 'daily puzzle', 'daily word game', 'card game'],
+      phrases: [/\b(play|start)\b.+\b(with friends|game|puzzle)\b/i, /\bdaily (word|puzzle|quiz)\b/i],
+      priority: 75,
+      run: (ctx) => {
+        const r = DA.resolveGame((ctx && ctx.sourceText) || '');
+        if (r && r.id) return openGame(r.id);
+        if (r && r.retired) {
+          switchTab('dangal');
+          if (typeof openRetiredGameScreen === 'function') return openRetiredGameScreen(r.retired);
+        }
+        switchTab('dangal');
+        if (window.DangalAssistUI && typeof DangalAssistUI.openSuggestSheet === 'function') DangalAssistUI.openSuggestSheet();
+        else if (typeof setDangalSection === 'function') setDangalSection('manch');
+      },
+    });
+  }
 })();

@@ -198,6 +198,7 @@
   }
   function reducedMotion() {
     try {
+      if (localStorage.getItem('dangal_reduce_motion') === '1') return true;
       return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     } catch (e) {
       return false;

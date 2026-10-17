@@ -1,18 +1,30 @@
 /**
- * Dangal AI contract — five hooks on top of ai.js / ai-config.js, each with a mandatory
- * deterministic fallback. The build and every game work with AI off.
+ * Dangal AI contract — hooks on top of ai.js / ai-config.js, each with a mandatory deterministic
+ * fallback. The build and every game work with AI off.
  *
  *   coachExplain({ gameId, situation, move })        → { text, tips[] }
+ *     mode 'tip'  { gameId, stats, baseTip }          post-game tip; every number must be in stats
+ *     mode 'hint' { gameId, facts, baseText }         Kakuro / Shabd Five deduction in plain English
  *   commentary({ gameId, event, score })             → { line }
  *     streetcricket: { mode:'over', moments, persona } → { lines[] } · { mode:'recap', facts } → { recap }
  *   generateQuestions({ category, count })           → { questions: [{ q, options[4], answer }] }
  *   generateWordPack({ game, theme, count })         → { words[] }
  *   botPersona({ gameId, level, seed })              → { name, style: { aggression, bluff, speed, chattiness } }
+ *   rulesQA({ gameId, question, variants })          → { answer, cite[], covered }  (passages built here)
+ *   rerankGames({ candidates: [{ id }], ctx })       → { order: [id] }  (a permutation, never new ids)
  *
- * An LLM is called only when AI_FEATURES_ENABLED === 'true', AI_JOBS_PAUSED is off, the global
- * AI_DAILY_CALL_CAP and the per-user cap have room, and the input is not cached. Every output is
- * JSON-schema checked and safety filtered; any failure, timeout or missing key → fallback.
- * Callers only ever see { data, source } — never a raw provider error.
+ * ONE budget layer governs every hook (and the scheduler's quiz pipeline via hookAllowed/recordExternal):
+ *   AI_FEATURES_ENABLED === 'true'      master switch (anything else = deterministic everywhere)
+ *   AI_JOBS_PAUSED                      pause all Dangal LLM calls (batch jobs + live hooks)
+ *   DANGAL_AI_DISABLE=hook,hook|all     per-hook kill switch (names in HOOKS + EXTERNAL_HOOKS)
+ *   AI_DAILY_CALL_CAP                   UTC-day global budget; each hook may use HOOK_POLICY.share of it
+ *   DANGAL_AI_USER_CAP                  per-user daily calls across hooks (default 30)
+ *   DANGAL_AI_HOOK_CAPS=hook:n,…        per-user daily cap override per hook
+ *   model tier per hook (HOOK_POLICY.tier → AI_MODEL_FAST / AI_MODEL_BALANCED), per-hook timeout,
+ *   cache by input hash. Telemetry per hook per UTC day (calls, AI calls, cache hits, fallbacks,
+ *   rejected, errors, est. $) → Firestore dangalAiStats/{day} → admin feedback view=dangal_ai.
+ * Every output is JSON-schema checked, grounded and safety filtered; any failure, timeout or missing
+ * key → fallback. Callers only ever see { data, source } — never a raw provider error.
  */
 'use strict';
 
@@ -23,8 +35,80 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const CACHE_MAX = 500;
 /** Rough blended $ per call for the fast tier (telemetry estimate only). */
 const COST_PER_CALL_USD = 0.0008;
+const COST_BY_TIER = { fast: COST_PER_CALL_USD, balanced: 0.006 };
+const STATS_FLUSH_MS = 20000;
 
-const HOOKS = ['coachExplain', 'commentary', 'generateQuestions', 'generateWordPack', 'botPersona'];
+const HOOKS = ['coachExplain', 'commentary', 'generateQuestions', 'generateWordPack', 'botPersona', 'rulesQA', 'rerankGames'];
+
+/**
+ * Per-hook policy. userCap = per-user daily LLM calls for that hook; share = fraction of
+ * AI_DAILY_CALL_CAP the hook may spend per day. Every live hook runs on the fast tier: short,
+ * grounded outputs validated against our own facts don't need a bigger model.
+ */
+const HOOK_POLICY = {
+  coachExplain: { tier: 'fast', userCap: 20, share: 0.3, timeoutMs: 6000 },
+  commentary: { tier: 'fast', userCap: 40, share: 0.3, timeoutMs: 6000 },
+  generateQuestions: { tier: 'fast', userCap: 4, share: 0.1, timeoutMs: 8000 },
+  generateWordPack: { tier: 'fast', userCap: 10, share: 0.15, timeoutMs: 8000 },
+  botPersona: { tier: 'fast', userCap: 6, share: 0.05, timeoutMs: 5000 },
+  rulesQA: { tier: 'fast', userCap: 15, share: 0.2, timeoutMs: 6000 },
+  rerankGames: { tier: 'fast', userCap: 6, share: 0.05, timeoutMs: 4000 },
+};
+/**
+ * Dangal AI spend outside the request hooks, governed by the same switches. The quiz pipeline is the
+ * only place the balanced tier is used: its blind fact-check pass needs the stronger model, and it
+ * runs from the scheduler only (≤ 24 calls / day).
+ */
+const EXTERNAL_HOOKS = {
+  quizPipeline: { tier: 'fast + balanced verify', userCap: null, share: null, dailyCalls: 24, where: 'server-lib/quiz-ai-pipeline.js (scheduler)' },
+};
+
+function parseList(v) {
+  return String(v || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Per-hook kill switch: DANGAL_AI_DISABLE=commentary,rulesqa (case-insensitive) or "all". */
+function hookDisabled(hook, env) {
+  const list = parseList((env || process.env).DANGAL_AI_DISABLE);
+  return list.indexOf('all') >= 0 || list.indexOf(String(hook || '').toLowerCase()) >= 0;
+}
+
+function hookUserCaps(env) {
+  const out = {};
+  parseList((env || process.env).DANGAL_AI_HOOK_CAPS).forEach((pair) => {
+    const [k, v] = pair.split(':');
+    const hook = HOOKS.find((h) => h.toLowerCase() === k);
+    if (hook && v != null && v !== '' && isFinite(Number(v))) out[hook] = Math.max(0, Math.floor(Number(v)));
+  });
+  return out;
+}
+
+/** Caps table for docs / admin: hook → { tier, userCap, dailyCap, disabled }. */
+function policyTable(env) {
+  const e = env || process.env;
+  const globalCap = Math.max(0, Number(e.AI_DAILY_CALL_CAP) || 200);
+  const over = hookUserCaps(e);
+  const rows = {};
+  HOOKS.forEach((h) => {
+    const p = HOOK_POLICY[h];
+    rows[h] = { tier: p.tier, userCap: over[h] != null ? over[h] : p.userCap, dailyCap: Math.max(1, Math.ceil(globalCap * p.share)), timeoutMs: p.timeoutMs, disabled: hookDisabled(h, e) };
+  });
+  Object.keys(EXTERNAL_HOOKS).forEach((h) => {
+    const p = EXTERNAL_HOOKS[h];
+    rows[h] = { tier: p.tier, userCap: null, dailyCap: p.dailyCalls, timeoutMs: null, disabled: hookDisabled(h, e), external: true };
+  });
+  return {
+    globalCap,
+    enabled: e.AI_FEATURES_ENABLED === 'true',
+    paused: e.AI_JOBS_PAUSED === 'true' || e.AI_JOBS_PAUSED === '1',
+    provider: String(e.AI_PROVIDER || 'anthropic').toLowerCase(),
+    userCap: Math.max(0, Number(e.DANGAL_AI_USER_CAP) || 30),
+    hooks: rows,
+  };
+}
 
 // ─── Safety ────────────────────────────────────────────────────────────────
 const UNSAFE = [
@@ -101,8 +185,51 @@ function isNarrate(input) {
 }
 const NARRATE_MAX = 160;
 
+function assist() {
+  return require('../public/src/js/dangal/dangal-assist.js');
+}
+function coachMode(input) {
+  const m = input && input.mode;
+  return m === 'tip' || m === 'hint' ? m : '';
+}
+/** Every number in the output must already be in the facts we sent (no invented stats). */
+function numbersGrounded(texts, facts) {
+  return assist().numbersGrounded([].concat(texts).join(' '), facts);
+}
+const RULES_MAX = 320;
+/** Five-letter words a Shabd hint may use in plain prose (anything else could be a word suggestion). */
+const SHABD_PROSE = ['first', 'third', 'fifth', 'which', 'there', 'these', 'those', 'their', 'where', 'while', 'still', 'could', 'might', 'would', 'about', 'after', 'every', 'never', 'other', 'place', 'right', 'wrong', 'guess', 'words', 'think', 'start', 'least', 'until', 'twice', 'again', 'green', 'amber', 'spots', 'lines', 'means', 'great', 'focus', 'check', 'shows', 'tells', 'below', 'above', 'avoid', 'count', 'reuse', 'known', 'sound', 'vowel', 'leave', 'stays', 'match', 'clues', 'tiles', 'board', 'rules', 'order', 'being', 'since', 'given', 'using', 'times', 'begin'];
+
 const SCHEMAS = {
-  coachExplain: (d) => !!d && str(d.text, 280) && Array.isArray(d.tips) && d.tips.length <= 3 && d.tips.every((t) => str(t, 120)),
+  coachExplain: (d, input) => {
+    if (!(!!d && str(d.text, 280) && Array.isArray(d.tips) && d.tips.length <= 3 && d.tips.every((t) => str(t, 120)))) return false;
+    const mode = coachMode(input);
+    if (mode === 'tip') return numbersGrounded([d.text].concat(d.tips), (input && input.stats) || {});
+    if (mode === 'hint') {
+      const facts = (input && input.facts) || {};
+      const all = [d.text].concat(d.tips).join(' ');
+      // Shabd Five: never name a five-letter word the player hasn't typed (that could be the answer).
+      if (String(input.gameId) === 'wordguess') {
+        const typed = new Set((facts.guesses || []).map((w) => String(w).toUpperCase()));
+        if ((all.match(/\b[A-Za-z]{5}\b/g) || []).some((w) => !typed.has(w.toUpperCase()) && SHABD_PROSE.indexOf(w.toLowerCase()) < 0)) return false;
+      }
+      return numbersGrounded(all, facts);
+    }
+    return true;
+  },
+  rulesQA: (d, input) => {
+    if (!d || typeof d.covered !== 'boolean' || !str(d.answer, RULES_MAX) || !Array.isArray(d.cite) || d.cite.length > 3) return false;
+    const passages = (input && input.passages) || [];
+    if (!d.covered) return true;
+    if (!d.cite.length) return false;
+    const cited = d.cite.map((id) => passages.find((p) => p.id === id));
+    if (cited.some((p) => !p)) return false;
+    return numbersGrounded(d.answer, { cited: cited.map((p) => p.h + ' ' + p.body).join(' '), q: input.question || '' });
+  },
+  rerankGames: (d, input) => {
+    const ids = ((input && input.candidates) || []).map((c) => String(c.id));
+    return !!d && Array.isArray(d.order) && d.order.length === ids.length && new Set(d.order).size === ids.length && d.order.every((id) => ids.indexOf(String(id)) >= 0);
+  },
   commentary: (d, input) => {
     const mode = cricketMode(input);
     if (mode === 'over') return !!cricketCommentary().validateOverLines(d, (input && input.moments) || []);
@@ -247,6 +374,12 @@ function cardsGrounded(input, data) {
 
 const FALLBACKS = {
   coachExplain(input) {
+    const mode = coachMode(input);
+    if (mode === 'tip') {
+      const base = input.baseTip ? String(input.baseTip).slice(0, 280) : assist().pickTip(input.gameId, input.stats || {}).text;
+      return { text: base, tips: [] };
+    }
+    if (mode === 'hint') return { text: String(input.baseText || (input.facts && input.facts.text) || 'Look for the tightest clue first.').slice(0, 280), tips: [] };
     if ((String(input.gameId || '') === 'chess' || String(input.gameId || '') === 'rummy') && input.engineText) {
       const tips = Array.isArray(input.engineTips) ? input.engineTips.map((t) => String(t).slice(0, 120)).slice(0, 3) : [];
       return { text: String(input.engineText).slice(0, 280), tips };
@@ -277,12 +410,20 @@ const FALLBACKS = {
     const n = Math.max(4, Math.min(words.length, Number(input.count) || words.length));
     return { words: words.slice(0, n) };
   },
+  rulesQA(input) {
+    const a = assist().answerRules(input.gameId, input.question, input.variants);
+    return { answer: a.answer, cite: a.section ? [a.section] : [], covered: !a.notCovered };
+  },
+  rerankGames(input) {
+    return { order: ((input && input.candidates) || []).map((c) => String(c.id)) };
+  },
   botPersona(input) {
     const table = { chess: CHESS_PERSONAS, uno: OHNO_PERSONAS, badminton: BADMINTON_PERSONAS }[String(input.gameId || '')];
     const cp = table ? table[String(input.persona || '').toLowerCase()] : null;
     if (cp) return { name: cp.name, style: Object.assign({}, cp.style) };
     const style = LEVEL_STYLE[String(input.level || 'regular').toLowerCase()] || LEVEL_STYLE.regular;
-    const name = PERSONA_NAMES[hashInt(String(input.gameId || '') + ':' + (input.seed || '')) % PERSONA_NAMES.length];
+    // Bots are always labelled as bots — never a bare human name.
+    const name = PERSONA_NAMES[hashInt(String(input.gameId || '') + ':' + (input.seed || '')) % PERSONA_NAMES.length] + ' Bot';
     return { name, style: Object.assign({}, style) };
   },
 };
@@ -297,7 +438,27 @@ function clip(v, n) {
 }
 
 const PROMPTS = {
-  coachExplain: (i) =>
+  coachExplain: (i) => {
+    const mode = coachMode(i);
+    if (mode === 'tip') {
+      return (
+        `Game: ${clip(i.gameId, 20)} (a casual game in a friendly app). The player just finished a game.\n` +
+        `Match stats (JSON): ${clip(JSON.stringify(i.stats || {}), 600)}\nOur rule-based tip: ${clip(i.baseTip, 200)}\n` +
+        'Write ONE short, warm, practical tip for next time. Only use numbers that appear in the stats — never invent a number, percentage or count. ' +
+        'Schema: {"text": string<=200, "tips": []}'
+      );
+    }
+    if (mode === 'hint') {
+      const shabd = String(i.gameId) === 'wordguess';
+      return (
+        `Puzzle: ${shabd ? 'a five-letter word puzzle' : 'Kakuro (digits 1–9, runs add up to their clue, no repeats in a run)'}.\n` +
+        `Solver facts (JSON): ${clip(JSON.stringify(i.facts || {}), 700)}\n` +
+        'Explain the next logical step in plain English for a beginner, in 1–2 short sentences. Use only the digits, letters and positions in the facts. ' +
+        (shabd ? 'Never suggest or spell out any word, never guess the answer. ' : 'Do not reveal any other cell. ') +
+        'Schema: {"text": string<=240, "tips": []}'
+      );
+    }
+    return (
     `Game: ${clip(i.gameId, 20)}. Situation: ${clip(i.situation, 400)}. Last move: ${clip(i.move, 40)}.\n` +
     (Array.isArray(i.allowedMoves)
       ? `Engine facts: ${clip(i.engineText, 280)} Only mention these moves, in SAN: ${clip(i.allowedMoves.join(', '), 200)}. Never name any other move or square.\n`
@@ -305,7 +466,20 @@ const PROMPTS = {
     (Array.isArray(i.allowedCards)
       ? `Review facts: ${clip(i.engineText, 280)} ${clip((i.engineTips || []).join(' '), 360)} Only mention these cards, written like 9♥: ${clip(i.allowedCards.join(', '), 80)}. Never name any other card or invent numbers.\n`
       : '') +
-    'Explain briefly for a casual player. Schema: {"text": string<=280, "tips": [string<=120, max 3]}',
+    'Explain briefly for a casual player. Schema: {"text": string<=280, "tips": [string<=120, max 3]}'
+    );
+  },
+  rulesQA: (i) =>
+    `You answer questions about the rules of the game ${clip(i.gameName || i.gameId, 40)} using ONLY the numbered passages below. ` +
+    'Never use outside knowledge. If the passages do not answer the question, reply covered=false. ' +
+    'Cite the passage ids you used (max 3). Only use numbers that appear in the cited passages.\n' +
+    `Passages (JSON): ${clip(JSON.stringify(i.passages || []), 6000)}\n` +
+    `Question: ${clip(i.question, 200)}\n` +
+    `Schema: {"answer": string<=${RULES_MAX}, "cite": [passage id], "covered": boolean}`,
+  rerankGames: (i) =>
+    `Re-order these game suggestions for this context (JSON): ${clip(JSON.stringify(i.ctx || {}), 300)}.\n` +
+    `Candidates (JSON, with our reasons): ${clip(JSON.stringify(i.candidates || []), 1200)}\n` +
+    'Return every id exactly once, best first. Never add an id. Schema: {"order": [id]}',
   commentary: (i) => {
     const mode = cricketMode(i);
     const voice = i.persona === 'fan' ? 'an excited, warm fan' : 'a calm, insightful analyst';
@@ -397,25 +571,111 @@ function dayKeyUTC(now) {
  *   db, admin                    optional Firestore for the shared global budget (aiBudget doc)
  *   now()                        clock
  *   userCap                      per-user daily LLM calls (default env DANGAL_AI_USER_CAP or 30)
- *   timeoutMs
+ *   timeoutMs                    overrides every hook's timeout (tests)
  */
+const COUNTER_KEYS = ['calls', 'aiCalls', 'fallbacks', 'cacheHits', 'rejected', 'errors'];
+
+/** Server-side input prep: rulesQA passages always come from our own rules text, never the client. */
+const PREPARE = {
+  rulesQA(input) {
+    const A = assist();
+    const id = A.canonId(input.gameId);
+    const passages = A.rulesPassages(id, input.variants);
+    if (!passages.length) return null;
+    return { gameId: id, gameName: A.gameName(id), question: String(input.question || '').slice(0, 200), variants: input.variants || null, passages };
+  },
+};
+/** After validation: a not-covered answer always uses our one honest line; bots always say Bot. */
+const FINISH = {
+  botPersona(data) {
+    const name = /\bbot\b/i.test(data.name) ? data.name : (String(data.name).slice(0, 20) + ' Bot').trim();
+    return Object.assign({}, data, { name });
+  },
+  rulesQA(data, input) {
+    if (!data.covered) return { answer: assist().NOT_COVERED, cite: [], covered: false };
+    const sections = data.cite.map((id) => (input.passages.find((p) => p.id === id) || {}).h).filter(Boolean);
+    return { answer: data.answer, cite: data.cite, covered: true, sections };
+  },
+};
+
 function createDangalAI(deps) {
   const d = deps || {};
   const env = d.env || process.env;
   const now = d.now || (() => Date.now());
-  const timeoutMs = d.timeoutMs || TIMEOUT_MS;
   const userCap = Math.max(0, Number(d.userCap != null ? d.userCap : env.DANGAL_AI_USER_CAP) || 30);
   const globalCap = Math.max(0, Number(env.AI_DAILY_CALL_CAP) || 200);
+  const hookCaps = hookUserCaps(env);
   const cache = new Map();
   const userCalls = new Map();
-  let localGlobal = { day: '', calls: 0 };
+  let localGlobal = { day: '', calls: 0, hooks: {} };
   const counters = {};
-  HOOKS.forEach((h) => (counters[h] = { calls: 0, aiCalls: 0, fallbacks: 0, cacheHits: 0, rejected: 0, errors: 0 }));
+  let countersDay = '';
+  const blank = () => COUNTER_KEYS.reduce((o, k) => ((o[k] = 0), o), { costUsd: 0 });
+  function resetCounters() {
+    HOOKS.concat(Object.keys(EXTERNAL_HOOKS)).forEach((h) => (counters[h] = blank()));
+  }
+  resetCounters();
+  /** Unflushed deltas for dangalAiStats/{day}. */
+  let pending = {};
+  let lastFlush = 0;
 
   const callAI = d.callAI || ((opts) => require('./ai').callAI(opts));
 
   function enabled() {
     return env.AI_FEATURES_ENABLED === 'true' && !(env.AI_JOBS_PAUSED === 'true' || env.AI_JOBS_PAUSED === '1');
+  }
+  function hookOn(hook) {
+    return enabled() && !hookDisabled(hook, env);
+  }
+  function capFor(hook) {
+    const p = HOOK_POLICY[hook];
+    const own = hookCaps[hook] != null ? hookCaps[hook] : p ? p.userCap : userCap;
+    return Math.min(userCap, own);
+  }
+  function hookDailyCap(hook) {
+    const p = HOOK_POLICY[hook];
+    return p ? Math.max(1, Math.ceil(globalCap * p.share)) : globalCap;
+  }
+
+  function bump(hook, key, n) {
+    const day = dayKeyUTC(now());
+    if (countersDay !== day) {
+      countersDay = day;
+      resetCounters();
+    }
+    if (!counters[hook]) counters[hook] = blank();
+    counters[hook][key] += n == null ? 1 : n;
+    const p = (pending[day] = pending[day] || {});
+    const h = (p[hook] = p[hook] || {});
+    h[key] = (h[key] || 0) + (n == null ? 1 : n);
+  }
+
+  /** Persist per-hook per-day counters (throttled; one merge write). */
+  async function flushStats(force) {
+    if (!d.db || !d.admin || !d.admin.firestore || !d.admin.firestore.FieldValue) return false;
+    const t = now();
+    if (!force && t - lastFlush < STATS_FLUSH_MS) return false;
+    const days = Object.keys(pending);
+    if (!days.length) return false;
+    const snapshot = pending;
+    pending = {};
+    lastFlush = t;
+    const FV = d.admin.firestore.FieldValue;
+    try {
+      await Promise.all(
+        days.map((day) => {
+          const hooks = {};
+          Object.keys(snapshot[day]).forEach((hook) => {
+            hooks[hook] = {};
+            Object.keys(snapshot[day][hook]).forEach((k) => (hooks[hook][k] = FV.increment(snapshot[day][hook][k])));
+          });
+          return d.db.collection('dangalAiStats').doc(day).set({ day, hooks, updatedAt: t }, { merge: true });
+        })
+      );
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   function cacheKey(hook, input) {
@@ -435,112 +695,162 @@ function createDangalAI(deps) {
     cache.set(key, { at: now(), data });
   }
 
-  function userAllows(uid) {
-    if (!uid) return userCap > 0;
+  function userAllows(uid, hook) {
+    const cap = capFor(hook);
+    if (!uid) return cap > 0;
     const day = dayKeyUTC(now());
     const row = userCalls.get(uid);
-    if (!row || row.day !== day) return userCap > 0;
-    return row.calls < userCap;
+    if (!row || row.day !== day) return cap > 0 && userCap > 0;
+    return row.calls < userCap && (row.hooks[hook] || 0) < cap;
   }
-  function bumpUser(uid) {
+  function bumpUser(uid, hook) {
     if (!uid) return;
     const day = dayKeyUTC(now());
-    const row = userCalls.get(uid);
-    if (!row || row.day !== day) userCalls.set(uid, { day, calls: 1 });
-    else row.calls += 1;
+    let row = userCalls.get(uid);
+    if (!row || row.day !== day) {
+      row = { day, calls: 0, hooks: {} };
+      userCalls.set(uid, row);
+    }
+    row.calls += 1;
+    row.hooks[hook] = (row.hooks[hook] || 0) + 1;
   }
 
-  async function globalAllows() {
+  /** null when allowed, else 'global_cap' | 'hook_cap'. */
+  async function globalBlock(hook) {
     const day = dayKeyUTC(now());
-    if (localGlobal.day !== day) localGlobal = { day, calls: 0 };
-    if (localGlobal.calls >= globalCap) return false;
+    if (localGlobal.day !== day) localGlobal = { day, calls: 0, hooks: {} };
+    if (localGlobal.calls >= globalCap) return 'global_cap';
+    if ((localGlobal.hooks[hook] || 0) >= hookDailyCap(hook)) return 'hook_cap';
     if (d.db) {
       try {
         const snap = await d.db.collection('chaupaalMeta').doc('aiBudget').get();
         const data = snap.exists ? snap.data() || {} : {};
-        if (data.paused === true) return false;
-        if (data.day === day && Number(data.calls) >= globalCap) return false;
+        if (data.paused === true) return 'global_cap';
+        if (data.day === day && Number(data.calls) >= globalCap) return 'global_cap';
+        if (data.day === day && data.dangalHooks && Number(data.dangalHooks[hook]) >= hookDailyCap(hook)) return 'hook_cap';
       } catch (e) {}
     }
-    return true;
+    return null;
   }
-  async function bumpGlobal() {
+  async function bumpGlobal(hook) {
     localGlobal.calls += 1;
+    localGlobal.hooks[hook] = (localGlobal.hooks[hook] || 0) + 1;
     if (d.db && d.admin) {
       try {
-        await d.db.collection('chaupaalMeta').doc('aiBudget').set(
-          {
-            day: dayKeyUTC(now()),
-            calls: d.admin.firestore.FieldValue.increment(1),
-            tokensEst: d.admin.firestore.FieldValue.increment(500),
-          },
-          { merge: true }
-        );
+        const FV = d.admin.firestore.FieldValue;
+        const day = dayKeyUTC(now());
+        const snap = await d.db.collection('chaupaalMeta').doc('aiBudget').get().catch(() => null);
+        const fresh = !snap || !snap.exists || (snap.data() || {}).day !== day;
+        const ref = d.db.collection('chaupaalMeta').doc('aiBudget');
+        if (fresh) {
+          // New UTC day: start from zero and replace yesterday's per-hook map (update() swaps the whole map).
+          await ref.set({ day, calls: 1, tokensEst: 500 }, { merge: true });
+          if (typeof ref.update === 'function') await ref.update({ dangalHooks: { [hook]: 1 } });
+        } else {
+          await ref.set({ day, calls: FV.increment(1), tokensEst: FV.increment(500), dangalHooks: { [hook]: FV.increment(1) } }, { merge: true });
+        }
       } catch (e) {}
     }
   }
 
-  function withTimeout(p) {
+  function withTimeout(p, ms) {
     let t;
     return Promise.race([
       p,
       new Promise((_, reject) => {
-        t = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'AI_TIMEOUT' })), timeoutMs);
+        t = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'AI_TIMEOUT' })), ms);
       }),
     ]).finally(() => clearTimeout(t));
   }
 
   function fallback(hook, input, reason) {
-    counters[hook].fallbacks += 1;
-    return { data: FALLBACKS[hook](input || {}), source: 'fallback', reason };
+    bump(hook, 'fallbacks');
+    let data;
+    try {
+      data = FALLBACKS[hook](input || {});
+    } catch (e) {
+      data = FALLBACKS[hook]({});
+    }
+    return { data, source: 'fallback', reason };
   }
 
   async function run(hook, input, ctx) {
     if (HOOKS.indexOf(hook) < 0) throw Object.assign(new Error('Unknown AI hook'), { code: 'VALIDATION_ERROR' });
-    const inp = input || {};
+    const policy = HOOK_POLICY[hook];
     const uid = ctx && ctx.uid ? String(ctx.uid) : '';
-    counters[hook].calls += 1;
-    if (!enabled()) return fallback(hook, inp, 'ai_off');
-    const key = cacheKey(hook, inp);
-    const cached = cacheGet(key);
-    if (cached) {
-      counters[hook].cacheHits += 1;
-      return { data: cached, source: 'cache' };
-    }
-    if (!userAllows(uid)) return fallback(hook, inp, 'user_cap');
-    if (!(await globalAllows())) return fallback(hook, inp, 'global_cap');
-    let out;
+    let inp = input || {};
+    bump(hook, 'calls');
     try {
-      bumpUser(uid);
-      await bumpGlobal();
-      counters[hook].aiCalls += 1;
-      out = await withTimeout(
-        Promise.resolve(callAI({ tier: 'fast', system: SYSTEM, messages: [{ role: 'user', content: PROMPTS[hook](inp) }], max_tokens: 700, feature: 'dangal_' + hook }))
-      );
-    } catch (e) {
-      counters[hook].errors += 1;
-      return fallback(hook, inp, e && e.code === 'AI_TIMEOUT' ? 'timeout' : 'provider_error');
+      return await runInner();
+    } finally {
+      flushStats(false).catch(() => {});
     }
-    const data = parseJson(out && out.text);
-    if (!SCHEMAS[hook](data, inp) || !isSafe(data) || (hook === 'coachExplain' && (!chessGrounded(inp, data) || !cardsGrounded(inp, data)))) {
-      counters[hook].rejected += 1;
-      return fallback(hook, inp, 'invalid_output');
+
+    async function runInner() {
+      if (!enabled()) return fallback(hook, inp, 'ai_off');
+      if (hookDisabled(hook, env)) return fallback(hook, inp, 'hook_off');
+      if (PREPARE[hook]) {
+        const prepared = PREPARE[hook](inp);
+        if (!prepared) return fallback(hook, inp, 'no_context');
+        inp = prepared;
+      }
+      const key = cacheKey(hook, inp);
+      const cached = cacheGet(key);
+      if (cached) {
+        bump(hook, 'cacheHits');
+        return { data: cached, source: 'cache' };
+      }
+      if (!userAllows(uid, hook)) return fallback(hook, inp, 'user_cap');
+      const block = await globalBlock(hook);
+      if (block) return fallback(hook, inp, block);
+      let out;
+      try {
+        bumpUser(uid, hook);
+        await bumpGlobal(hook);
+        bump(hook, 'aiCalls');
+        bump(hook, 'costUsd', COST_BY_TIER[policy.tier] || COST_PER_CALL_USD);
+        out = await withTimeout(
+          Promise.resolve(callAI({ tier: policy.tier, system: SYSTEM, messages: [{ role: 'user', content: PROMPTS[hook](inp) }], max_tokens: 700, feature: 'dangal_' + hook })),
+          d.timeoutMs || policy.timeoutMs || TIMEOUT_MS
+        );
+      } catch (e) {
+        bump(hook, 'errors');
+        return fallback(hook, inp, e && e.code === 'AI_TIMEOUT' ? 'timeout' : 'provider_error');
+      }
+      let data = parseJson(out && out.text);
+      if (!SCHEMAS[hook](data, inp) || !isSafe(data) || (hook === 'coachExplain' && (!chessGrounded(inp, data) || !cardsGrounded(inp, data)))) {
+        bump(hook, 'rejected');
+        return fallback(hook, inp, 'invalid_output');
+      }
+      if (FINISH[hook]) data = FINISH[hook](data, inp);
+      cacheSet(key, data);
+      return { data, source: 'ai' };
     }
-    cacheSet(key, data);
-    return { data, source: 'ai' };
+  }
+
+  /** Spend outside run() (scheduler jobs) counts in the same telemetry; false when switched off. */
+  function hookAllowed(name) {
+    return enabled() && !hookDisabled(name, env);
+  }
+  function recordExternal(name, delta) {
+    const x = delta || {};
+    COUNTER_KEYS.concat('costUsd').forEach((k) => x[k] && bump(name, k, Number(x[k]) || 0));
+    return flushStats(true);
   }
 
   function telemetry() {
     const out = {};
     let calls = 0;
-    HOOKS.forEach((h) => {
-      out[h] = Object.assign({}, counters[h]);
+    let cost = 0;
+    Object.keys(counters).forEach((h) => {
+      out[h] = Object.assign({}, counters[h], { costUsd: Math.round(counters[h].costUsd * 10000) / 10000 });
       calls += counters[h].aiCalls;
+      cost += counters[h].costUsd;
     });
-    return { hooks: out, aiCalls: calls, costUsdEst: Math.round(calls * COST_PER_CALL_USD * 10000) / 10000, enabled: enabled() };
+    return { day: countersDay || dayKeyUTC(now()), hooks: out, aiCalls: calls, costUsdEst: Math.round(cost * 10000) / 10000, enabled: enabled(), policy: policyTable(env) };
   }
 
-  const api = { run, telemetry, enabled };
+  const api = { run, telemetry, enabled, hookOn, hookAllowed, recordExternal, flushStats };
   HOOKS.forEach((h) => (api[h] = (input, ctx) => run(h, input, ctx)));
   return api;
 }
@@ -553,6 +863,12 @@ function sharedAI(deps) {
 
 module.exports = {
   HOOKS,
+  HOOK_POLICY,
+  EXTERNAL_HOOKS,
+  COST_BY_TIER,
+  hookDisabled,
+  hookUserCaps,
+  policyTable,
   SCHEMAS,
   FALLBACKS,
   isSafe,

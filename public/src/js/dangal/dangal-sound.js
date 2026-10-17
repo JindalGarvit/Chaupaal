@@ -28,7 +28,11 @@
     'ui.invalid': 'error',
   };
 
+  // Rules sheet → Game settings → Sound (dangal-assist-ui.js) stores the off switch per device.
   let enabled = true;
+  try {
+    enabled = localStorage.getItem('dangal_sound_off') !== '1';
+  } catch (e) {}
 
   function allowed() {
     if (!enabled) return false;

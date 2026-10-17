@@ -618,7 +618,7 @@ function openTipTap(ctx) {
       } catch (e) {}
     }
     try {
-      if (typeof recordGameResult === 'function') recordGameResult('tiptap', won, false, { score: s.score, level: n, scoreOnly: true });
+      if (typeof recordGameResult === 'function') recordGameResult('tiptap', won, false, { score: s.score, level: n, scoreOnly: true, tipStats: { level: n, score: s.score, movesLeft: Number.isFinite(s.moves) ? s.moves : undefined } });
     } catch (e) {}
     Hub.feedback(GAME, won ? 'win' : 'lose');
     if (won && typeof launchConfetti === 'function' && !Hub.reducedMotion(GAME) && stars === 3) launchConfetti();

@@ -6002,7 +6002,7 @@
       } else {
         bodyActions = `
           <p class="pc-hint pc-tp-bust">${iBust ? 'You’re bust' : oBust ? 'Opponent bust' : 'Can’t continue'} — table over</p>
-          <button type="button" class="cs-hit" data-leave>Cash out table</button>`;
+          <button type="button" class="cs-hit" data-leave>Leave table</button>`;
       }
 
       const rankBit = o.rankLine ? `<p class="pc-hint">${esc(o.rankLine)}</p>` : '';

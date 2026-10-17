@@ -569,8 +569,19 @@
       '<ul class="dangal-rules__glance">' + glance + '</ul>' +
       '<details class="dangal-rules__full"><summary>Full rules</summary>' + rules +
       '<p class="dangal-rules__source">' + esc(g.ruleset.source) + simplified + '</p></details>' +
+      extrasHtml(canon(id), house.length ? normalize(id, o.variants) : null) +
       '</div>'
     );
+  }
+
+  /** "Ask about the rules", game settings and Licences (dangal-assist-ui.js); none in Node. */
+  function extrasHtml(id, variants) {
+    try {
+      const ui = typeof window !== 'undefined' && window.DangalAssistUI;
+      return ui && typeof ui.rulesExtrasHtml === 'function' ? ui.rulesExtrasHtml(id, variants) : '';
+    } catch (e) {
+      return '';
+    }
   }
 
   function liveVariantsFor(id) {

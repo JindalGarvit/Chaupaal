@@ -166,15 +166,28 @@ async function loadBudget(db) {
 async function bumpBudget(db, admin, { calls = 1, tokensEst = 400 } = {}) {
   const day = dayKeyUTC();
   const ref = db.collection('chaupaalMeta').doc('aiBudget');
+  // A new UTC day starts from zero (incrementing would carry yesterday's spend into today's cap).
+  let fresh = false;
+  try {
+    const snap = await ref.get();
+    fresh = !snap.exists || (snap.data() || {}).day !== day;
+  } catch (e) {}
+  const FV = admin.firestore.FieldValue;
   await ref.set(
     {
       day,
-      calls: admin.firestore.FieldValue.increment(calls),
-      tokensEst: admin.firestore.FieldValue.increment(tokensEst),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      calls: fresh ? calls : FV.increment(calls),
+      tokensEst: fresh ? tokensEst : FV.increment(tokensEst),
+      updatedAt: FV.serverTimestamp(),
     },
     { merge: true }
   );
+  // update() replaces the whole map, clearing yesterday's per-hook Dangal counts.
+  if (fresh && typeof ref.update === 'function') {
+    try {
+      await ref.update({ dangalHooks: {} });
+    } catch (e) {}
+  }
 }
 
 function budgetAllows(budget) {

@@ -1107,6 +1107,12 @@
       const won = r && r.winner === mySide() && !o.spectator;
       if (shell.gs && typeof shell.gs.setOutcome === 'function' && !o.spectator) shell.gs.setOutcome(r ? (won ? 'won' : 'lost') : 'draw');
       if (!o.spectator) buzz(won ? 'win' : 'lose');
+      if (!o.spectator) {
+        try {
+          const bs = BM().statsOf(pub);
+          if (window.DangalAssistUI) DangalAssistUI.showPostGameTip(GAME, { won, winners: bs.winners[mySide()], oppWinners: bs.winners[1 - mySide()], longest: bs.longest }, { live: !!o.live });
+        } catch (e) {}
+      }
       const lines = state.games.map((g) => `<span class="bd-game-line">${g.score[mySide()]}–${g.score[1 - mySide()]}</span>`).join('');
       const layer = layerHtml(`<div class="bd-result">
         <div class="bd-result-mark">${typeof gameMarkHtml === 'function' ? gameMarkHtml(GAME, { size: 56 }) : '🏸'}</div>

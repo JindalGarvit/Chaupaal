@@ -452,6 +452,30 @@
   registerSearchProvider('groups', searchGroupsProvider);
   registerSearchProvider('games', async (query, { limit = SEE_MORE_LIMIT } = {}) => {
     const q = normalizeQuery(query);
+    // P16: names, aliases and needs ("poker with friends", "daily word game") via DangalAssist;
+    // retired titles resolve to the retired screen instead of "no results".
+    const DA = typeof window !== 'undefined' ? window.DangalAssist : null;
+    if (DA && typeof DA.searchGames === 'function') {
+      // Same visibility as Manch: under-18 accounts never see the 18+ card titles.
+      const reg = typeof getGames === 'function' ? getGames({ dangal: true }) : [];
+      const byId = {};
+      reg.forEach((g) => (byId[g.id] = g));
+      const hits = DA.searchGames(query, { limit })
+        .filter((h) => !reg.length || byId[h.id])
+        .map((h) => ({
+        type: 'game',
+        category: 'games',
+        id: h.id,
+        title: (byId[h.id] && byId[h.id].name) || h.name,
+        subtitle: (byId[h.id] && (byId[h.id].tagline || byId[h.id].desc)) || 'Dangal',
+        score: h.score,
+      }));
+      if (!hits.length) {
+        const r = DA.resolveGame(query);
+        if (r && r.retired) hits.push({ type: 'game', category: 'games', id: r.retired, retired: true, title: r.name, subtitle: 'No longer in Dangal — see what replaced it', score: 50 });
+      }
+      if (hits.length) return hits.slice(0, limit);
+    }
     const catalog =
       typeof getGames === 'function'
         ? getGames({ dangal: true }).map((g) => ({
@@ -547,6 +571,7 @@
     }
     if (r.type === 'game' || r.category === 'games') {
       document.querySelector('.bottom-tabs .tab-btn[data-tab="dangal"]')?.click();
+      if (r.retired && typeof openRetiredGameScreen === 'function') return openRetiredGameScreen(r.id);
       if (r.id && typeof handleDangalGameTap === 'function') handleDangalGameTap(r.id);
       return;
     }

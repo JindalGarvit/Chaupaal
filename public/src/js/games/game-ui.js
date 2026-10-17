@@ -1827,6 +1827,12 @@
 
     saveDangalProgress(data);
     maybeCelebrateMissions(data);
+    // P16: one short post-game tip from the match stats (never mid-game; off via Rules → Game settings).
+    try {
+      if (o.tip !== false && window.DangalAssistUI && typeof DangalAssistUI.showPostGameTip === 'function') {
+        DangalAssistUI.showPostGameTip(id, Object.assign({ won: o.won === true, draw: !!o.drew }, o.tipStats || {}), { live: !!o.live, rated: !!o.rated, stake: o.stake, midGame: !!o.midGame });
+      }
+    } catch (e) {}
     try {
       if (typeof tickKhelDailies === 'function') tickKhelDailies(id, { won: o.won === true, drew: !!o.drew });
     } catch (e) {}
@@ -2274,6 +2280,7 @@
   function shouldReduceGameMotion() {
     try {
       if (typeof quietMode !== 'undefined' && quietMode) return true;
+      if (localStorage.getItem('dangal_reduce_motion') === '1') return true;
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
     } catch (e) {}
     return false;

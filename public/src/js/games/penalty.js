@@ -1372,7 +1372,10 @@
         const rec = readJson(KEY_RECORD, { w: 0, l: 0 });
         rec[won ? 'w' : 'l'] += 1;
         writeJson(KEY_RECORD, rec);
-        if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { mode: 'practice', difficulty: cfg.level });
+        const mine = records.filter((r) => r.side === human);
+        const theirs = records.filter((r) => r.side !== human);
+        const tipStats = { goals: mine.filter((r) => r.result === 'goal').length, kicks: mine.length, saves: theirs.filter((r) => r.result === 'save').length };
+        if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { mode: 'practice', difficulty: cfg.level, tipStats });
         else if (typeof recordDangalSession === 'function') recordDangalSession(GAME, { won, difficulty: cfg.level });
         sfx(won ? 'ui.win' : 'ui.lose');
       } else {

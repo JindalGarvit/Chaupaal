@@ -264,7 +264,8 @@ function memDb() {
 
   // ─── 4. AI contract ─────────────────────────────────────────────────────
   const AI = require(path.join(root, 'server-lib/dangal-ai.js'));
-  assert(JSON.stringify(AI.HOOKS) === JSON.stringify(['coachExplain', 'commentary', 'generateQuestions', 'generateWordPack', 'botPersona']), 'five AI hooks');
+  const CORE_HOOKS = ['coachExplain', 'commentary', 'generateQuestions', 'generateWordPack', 'botPersona'];
+  assert(JSON.stringify(AI.HOOKS.slice(0, 5)) === JSON.stringify(CORE_HOOKS) && AI.HOOKS.every((h) => AI.HOOK_POLICY[h] && AI.FALLBACKS[h] && AI.SCHEMAS[h]), 'the five P1 AI hooks (P16 adds rulesQA + rerankGames under the same contract)');
   const off = AI.createDangalAI({ env: { AI_FEATURES_ENABLED: 'TRUE' }, callAI: () => { throw new Error('must not call'); } });
   const INPUTS = {
     coachExplain: { gameId: 'chess', move: 'e4' },
@@ -273,7 +274,7 @@ function memDb() {
     generateWordPack: { game: 'imposter', count: 6 },
     botPersona: { gameId: 'poker', level: 'shark' },
   };
-  for (const h of AI.HOOKS) {
+  for (const h of CORE_HOOKS) {
     const out = await off.run(h, INPUTS[h]);
     assert(out.source === 'fallback' && AI.SCHEMAS[h](out.data) && AI.isSafe(out.data), h + ': AI off → valid fallback (only exact "true" enables)');
   }
@@ -282,11 +283,11 @@ function memDb() {
     commentary: { line: 'Top corner!' },
     generateQuestions: { questions: [{ q: 'Largest planet?', options: ['Mars', 'Jupiter', 'Earth', 'Venus'], answer: 1 }] },
     generateWordPack: { words: ['Moon', 'Star', 'Comet', 'Orbit'] },
-    botPersona: { name: 'Nova', style: { aggression: 0.4, bluff: 0.2, speed: 0.7, chattiness: 0.3 } },
+    botPersona: { name: 'Nova Bot', style: { aggression: 0.4, bluff: 0.2, speed: 0.7, chattiness: 0.3 } },
   };
   let calls = 0;
   const on = AI.createDangalAI({ env: { AI_FEATURES_ENABLED: 'true', AI_DAILY_CALL_CAP: '100' }, userCap: 50, callAI: async (o) => { calls++; const h = o.feature.replace('dangal_', ''); return { text: 'Here: ' + JSON.stringify(GOOD[h]) }; } });
-  for (const h of AI.HOOKS) {
+  for (const h of CORE_HOOKS) {
     const out = await on.run(h, INPUTS[h], { uid: 'u1' });
     assert(out.source === 'ai' && JSON.stringify(out.data) === JSON.stringify(GOOD[h]), h + ': mocked provider output passes schema');
   }

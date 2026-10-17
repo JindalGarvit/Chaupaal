@@ -673,7 +673,8 @@
           recorded = true;
           const won = p.ranking[0] === 0;
           C.fx(won ? 'win' : 'lose');
-          if (typeof recordGameResult === 'function') recordGameResult(GAME, won);
+          const hand = p.seats && p.seats[0] && p.seats[0].hand;
+          if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { tipStats: { cardsLeft: Array.isArray(hand) ? hand.length : undefined } });
         }
         el.innerHTML = `<div class="cl-result"><div class="cl-result-title">${esc(p.ranking[0] === 0 ? tr('youWin', 'You win!') : p.seats[p.ranking[0]].name + ' ' + tr('wins', 'wins!'))}</div>${roundSummaryHtml(p, 0)}${leaderboardHtml(p, 0)}
           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${esc(tr('again', 'Play again'))}</button>

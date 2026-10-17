@@ -1407,7 +1407,7 @@
       }
       if (typeof recordGameResult === 'function') {
         try {
-          recordGameResult(GAME, won, tied, { score: myRuns, mode: chase ? 'chase' : 'practice', variant: format, difficulty: tier });
+          recordGameResult(GAME, won, tied, { score: myRuns, mode: chase ? 'chase' : 'practice', variant: format, difficulty: tier, tipStats: myInn ? { runs: myRuns, wickets: myInn.wkts, balls: myInn.legal, dots: myInn.dots, boundaries: (myInn.fours || 0) + (myInn.sixes || 0) } : { runs: myRuns } });
         } catch (e) {}
       }
       view.setOutcome(won ? 'win' : tied ? 'draw' : 'loss');

@@ -2118,6 +2118,15 @@
       } else {
         pendingHint = { r, c, n: h.digit };
         statusMsg = h.text + ' Tap Hint again to fill it in.';
+        // P16: the solver's step stays the truth; AI (when on) may only re-word it with the same digits.
+        const ph = pendingHint;
+        if (window.DangalAssistUI && typeof DangalAssistUI.explainHint === 'function') {
+          DangalAssistUI.explainHint('ankjod', { text: h.text, digit: h.digit, technique: h.techName || '', cell: 'row ' + (r + 1) + ', column ' + (c + 1) }, h.text).then((text) => {
+            if (!text || pendingHint !== ph) return;
+            statusMsg = text + ' Tap Hint again to fill it in.';
+            refreshPlay();
+          });
+        }
       }
       fb('select');
       scheduleSave();
@@ -2971,6 +2980,7 @@
             difficulty: saveDiff,
             daily: isDaily && !puzzle.archive,
             dailyKey: puzzle.dailyKey || null,
+            tipStats: { hints: hintsUsed, minutes: Math.round(secs / 60) },
           });
         } catch (e) {}
       }

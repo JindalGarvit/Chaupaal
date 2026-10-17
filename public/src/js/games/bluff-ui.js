@@ -521,7 +521,8 @@
         if (!recorded) {
           recorded = true;
           fx(won ? 'win' : 'lose');
-          if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { mode: 'practice', level: s.level, style: s.style });
+          const my = (st.stats && st.stats[0]) || {};
+          if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { mode: 'practice', level: s.level, style: s.style, tipStats: { caught: my.caught || 0, goodCalls: my.good || 0, badCalls: my.bad || 0 } });
         }
         const place = st.seats[0].place || st.ranking.indexOf(0) + 1;
         el.innerHTML = `<div class="cl-result"><div class="rm-result-line">${esc(won ? tr('youWon', 'You emptied your hand — you win!') : tr('placeN', 'You finished') + ' #' + place)}</div>

@@ -571,7 +571,11 @@ function renderDangalGamesGrid() {
         state.genre === 'party' && window.PartyHub && typeof window.PartyHub.open === 'function'
           ? '<button type="button" class="dangal-partynight" style="grid-column:1/-1" data-party-night><span aria-hidden="true">🎉</span><span><strong>Party night</strong><small>Several games, one group — no re-invites</small></span></button>'
           : '';
-      manchGrid.innerHTML = partyNight + list.map(dangalTileHtml).join('') + gateCard;
+      const suggest =
+        !state.genre && !state.live && (!state.mode || state.mode === 'all') && window.DangalAssistUI
+          ? '<button type="button" class="dangal-suggest-btn" style="grid-column:1/-1" data-suggest-open><span aria-hidden="true">🎲</span><span><strong>What should we play?</strong><small>Pick players, place and time — get a few good fits</small></span></button>'
+          : '';
+      manchGrid.innerHTML = suggest + partyNight + list.map(dangalTileHtml).join('') + gateCard;
       wireDangalTiles(manchGrid);
     }
     manchGrid.querySelector('[data-age-gate]')?.addEventListener('click', () => {
@@ -836,6 +840,9 @@ async function recordGameResult(key,won,drew,extra){
       live:e.live,
       level:e.level,
       wave:e.wave,
+      rated:e.rated,
+      tipStats:e.tipStats,
+      tip:e.tip,
     });
   }
   if(typeof markGamePlayed==='function') markGamePlayed(key==='wordguess'?'wordguess':key);

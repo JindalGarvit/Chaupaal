@@ -2857,3 +2857,49 @@ button.rm-card{cursor:grab;touch-action:none;}
   .pk-btn:active,.pk-card:active{transform:none;}
 }
 
+/* ---------- P16 light AI: rules Q&A, game settings, tips, suggestions ---------- */
+.dangal-rules__ask{margin:14px 0 8px;padding:10px 12px;border-radius:14px;background:var(--cream,#f6f1e9);}
+.dangal-rules__label{display:block;font-weight:700;font-size:13px;margin-bottom:6px;color:var(--ink,#1a1a1a);}
+.dangal-rules__askrow{display:flex;gap:8px;}
+.dangal-rules__q{flex:1;min-width:0;min-height:42px;padding:0 12px;border-radius:12px;border:1px solid var(--line,#e0d8cc);background:#fff;font-size:15px;}
+.dangal-rules__askbtn{min-height:42px;padding:0 16px;border-radius:12px;border:none;background:var(--saffron,#E85D04);color:#fff;font-weight:700;cursor:pointer;}
+.dangal-rules__answer:empty{display:none;}
+.dangal-rules__answer{margin-top:10px;}
+.dangal-rules__a{margin:0 0 4px;line-height:1.45;}
+.dangal-rules__cite{font-size:12px;color:var(--muted,#777);}
+.dangal-rules__sug{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted,#777);align-items:center;}
+.dangal-rules__chip{border:1px solid var(--line,#e0d8cc);background:#fff;border-radius:999px;padding:5px 10px;font-size:12px;cursor:pointer;}
+.dangal-rules__settings{margin-top:10px;}
+.dangal-rules__settings summary{cursor:pointer;font-weight:700;margin:4px 0 8px;}
+.dangal-rules__toggle{display:flex;align-items:center;gap:10px;min-height:40px;font-size:14px;}
+.dangal-rules__toggle input{width:20px;height:20px;}
+.dangal-rules__link{border:none;background:none;padding:8px 0;color:var(--saffron,#E85D04);font-weight:700;cursor:pointer;text-decoration:underline;}
+.dangal-licences h4{margin:12px 0 4px;font-size:14px;}
+.dangal-licences p{margin:0 0 8px;font-size:13px;line-height:1.45;}
+.dangal-tip-card{position:absolute;left:12px;right:12px;bottom:calc(16px + var(--safe-bottom,0px));z-index:900;display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:#1d1a2b;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.35);animation:dangalTipIn .25s ease-out;}
+.dangal-tip-card__icon{font-size:22px;line-height:1;}
+.dangal-tip-card__body{flex:1;min-width:0;}
+.dangal-tip-card__label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.6);}
+.dangal-tip-card__text{font-size:14px;line-height:1.4;margin:2px 0 4px;}
+.dangal-tip-card__off{border:none;background:none;padding:0;color:rgba(255,255,255,.6);font-size:12px;text-decoration:underline;cursor:pointer;}
+.dangal-tip-card__close{border:none;background:none;color:#fff;font-size:20px;line-height:1;min-width:32px;min-height:32px;cursor:pointer;}
+@keyframes dangalTipIn{from{transform:translateY(12px);opacity:0;}to{transform:none;opacity:1;}}
+.dangal-suggest-btn{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:18px;border:2px dashed var(--line,#e0d8cc);background:var(--white,#fff);color:var(--ink,#1a1a1a);text-align:left;cursor:pointer;font:inherit;}
+.dangal-suggest-btn > span:first-child{font-size:26px;}
+.dangal-suggest-btn strong{display:block;font:700 15px var(--font-display,'Space Grotesk',sans-serif);}
+.dangal-suggest-btn small{display:block;font-size:12px;color:var(--muted,#777);margin-top:2px;}
+.dangal-suggest__row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;}
+.dangal-suggest__step{display:flex;align-items:center;gap:12px;}
+.dangal-suggest__step button{width:40px;height:40px;border-radius:12px;border:1px solid var(--line,#e0d8cc);background:var(--cream,#f6f1e9);font-size:20px;cursor:pointer;}
+.dangal-suggest__seg{display:flex;gap:6px;}
+.dangal-suggest__seg button{min-height:38px;padding:0 12px;border-radius:12px;border:1.5px solid var(--line,#e0d8cc);background:var(--cream,#f6f1e9);font-weight:600;cursor:pointer;}
+.dangal-suggest__seg button.is-on{border-color:var(--saffron,#E85D04);background:rgba(232,93,4,.1);}
+.dangal-suggest__game{display:flex;align-items:center;gap:12px;width:100%;padding:12px;margin:0 0 8px;border-radius:14px;border:2px solid var(--line,#e0d8cc);background:var(--cream,#f6f1e9);text-align:left;cursor:pointer;font:inherit;}
+.dangal-suggest__game strong{display:block;}
+.dangal-suggest__game small{display:block;color:var(--muted,#777);font-size:12px;margin-top:2px;}
+.dangal-suggest__empty{color:var(--muted,#777);font-size:13px;}
+.ph-suggest{margin:4px 0 10px;padding:10px 12px;border-radius:12px;background:rgba(255,213,79,.12);border:1px solid rgba(255,213,79,.35);font-size:13px;line-height:1.4;}
+.sf-hint{margin:10px auto 0;max-width:340px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.08);font-size:13px;line-height:1.45;}
+.dangal-reduce-motion *,.dangal-reduce-motion *::before,.dangal-reduce-motion *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}
+@media (prefers-reduced-motion:reduce){.dangal-tip-card{animation:none;}}
+

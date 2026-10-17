@@ -448,6 +448,11 @@ async function runQuizJobs({ db, admin, now, deps }) {
     result.generation = { skipped: 'paused' };
     return result;
   }
+  const DAI = require('./dangal-ai');
+  if (DAI.hookDisabled('quizPipeline', d.env)) {
+    result.generation = { skipped: 'hook_off' };
+    return result;
+  }
   try {
     const enrich = require('./ai-enrichment');
     const budget = d.budget || (await enrich.loadBudget(db));
@@ -493,6 +498,10 @@ async function runQuizJobs({ db, admin, now, deps }) {
     Object.keys(used).forEach((k) => t - used[k] < 30 * 86400000 && (keepUsed[k] = used[k]));
     await runRef.set({ day, calls: (Number(run.calls) || 0) + gen.calls, used: keepUsed, at: t });
     if (gen.calls) await enrich.bumpBudget(db, admin, { calls: gen.calls, tokensEst: gen.calls * 1200 });
+    // Same telemetry as the request hooks (admin view=dangal_ai); verify passes run on the balanced tier.
+    try {
+      await DAI.sharedAI({ db, admin }).recordExternal('quizPipeline', { calls: 1, aiCalls: gen.calls, rejected: Object.values(gen.rejected || {}).reduce((a, b) => a + b, 0), costUsd: gen.calls * (DAI.COST_BY_TIER.fast + DAI.COST_BY_TIER.balanced) / 2 });
+    } catch (e) {}
     result.generation = gen;
   } catch (e) {
     const code = e && e.code;

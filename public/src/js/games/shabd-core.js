@@ -339,7 +339,92 @@
     return { played, wins, winPct: played ? Math.round((100 * wins) / played) : 0, streak, maxStreak: max, dist };
   }
 
+  // ---------------------------------------------------------------- deduction hint (P16)
+
+  /** What the colours so far prove: greens by spot, ambers (with spots they're not in), greys, minimum counts. */
+  function knowledge(guesses, answer) {
+    const greens = new Array(LEN).fill(null);
+    const notAt = {};
+    const minCount = {};
+    const grey = new Set();
+    (guesses || []).forEach((gw) => {
+      const g = norm(gw);
+      if (g.length !== LEN) return;
+      const s = evaluate(g, answer);
+      const cnt = {};
+      for (let i = 0; i < LEN; i++) {
+        const l = g[i];
+        if (s[i] === 'correct') greens[i] = l;
+        else if (s[i] === 'present') (notAt[l] = notAt[l] || new Set()).add(i);
+        if (s[i] !== 'absent') cnt[l] = (cnt[l] || 0) + 1;
+      }
+      for (let i = 0; i < LEN; i++) if (s[i] === 'absent' && !cnt[g[i]]) grey.add(g[i]);
+      Object.keys(cnt).forEach((l) => (minCount[l] = Math.max(minCount[l] || 0, cnt[l])));
+    });
+    return { greens, notAt, minCount, grey };
+  }
+
+  /** True when `word` fits everything the guesses proved (used to count words left — never to show one). */
+  function consistent(word, k) {
+    const w = norm(word);
+    if (w.length !== LEN) return false;
+    for (let i = 0; i < LEN; i++) {
+      if (k.greens[i] && w[i] !== k.greens[i]) return false;
+      if (k.grey.has(w[i])) return false;
+    }
+    const have = {};
+    for (let i = 0; i < LEN; i++) have[w[i]] = (have[w[i]] || 0) + 1;
+    for (const l of Object.keys(k.minCount)) if ((have[l] || 0) < k.minCount[l]) return false;
+    for (const l of Object.keys(k.notAt)) for (const i of k.notAt[l]) if (w[i] === l) return false;
+    return true;
+  }
+
+  /** Grey letters typed again after they were shown grey (for the post-game tip). */
+  function greyReused(guesses, answer) {
+    let n = 0;
+    const seen = new Set();
+    (guesses || []).forEach((gw) => {
+      const g = norm(gw);
+      new Set(g.split('')).forEach((l) => seen.has(l) && n++);
+      knowledge([g], answer).grey.forEach((l) => seen.add(l));
+    });
+    return n;
+  }
+
+  /**
+   * Next logical step in plain English — what is proven and how many answer words still fit.
+   * Never names a candidate word. countFn(predicate) → number of answers matching (lexicon).
+   * Returns { text, facts } (facts are what the AI explainer may use).
+   */
+  function deductionHint(guesses, answer, countFn) {
+    const ord = ['1st', '2nd', '3rd', '4th', '5th'];
+    const list = (guesses || []).map(norm).filter((g) => g.length === LEN);
+    if (!list.length) {
+      return { text: 'Start with a word that uses common, different letters — two or three vowels is a good opener.', facts: { guesses: [], left: null } };
+    }
+    const k = knowledge(list, answer);
+    const greens = k.greens.map((l, i) => (l ? ord[i] + ' is ' + l : '')).filter(Boolean);
+    const ambers = Object.keys(k.notAt)
+      .filter((l) => !k.greens.includes(l) || (k.minCount[l] || 0) > k.greens.filter((x) => x === l).length)
+      .map((l) => l + ' (not ' + Array.from(k.notAt[l]).sort().map((i) => ord[i]).join(' or ') + ')');
+    const grey = Array.from(k.grey).sort();
+    const left = typeof countFn === 'function' ? countFn((w) => consistent(w, k)) : null;
+    const open = k.greens.map((l, i) => (l ? '' : ord[i])).filter(Boolean);
+    const bits = [];
+    if (greens.length) bits.push('Known: ' + greens.join(', ') + '.');
+    if (ambers.length) bits.push('In the word somewhere else: ' + ambers.join(', ') + '.');
+    if (grey.length) bits.push('Ruled out: ' + grey.join(' ') + '.');
+    if (left != null) bits.push(left === 1 ? 'Only one word fits everything so far.' : left + ' words still fit.');
+    if (open.length && ambers.length) bits.push('Next: try the amber letters in the open spots (' + open.join(', ') + ').');
+    else if (open.length) bits.push('Next: test fresh letters in the open spots (' + open.join(', ') + ').');
+    return { text: bits.join(' '), facts: { guesses: list, greens, ambers, ruledOut: grey, openSpots: open, left } };
+  }
+
   return {
+    knowledge,
+    consistent,
+    greyReused,
+    deductionHint,
     LEN,
     MAX_GUESSES,
     EPOCH_UTC,

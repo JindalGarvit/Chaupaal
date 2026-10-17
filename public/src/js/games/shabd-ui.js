@@ -398,7 +398,7 @@
     function finish() {
       st.over = true;
       gs.setOutcome(st.won ? 'won' : 'lost');
-      if (typeof recordGameResult === 'function') recordGameResult(GAME, st.won);
+      if (typeof recordGameResult === 'function') recordGameResult(GAME, st.won, false, { tipStats: { guesses: st.guesses.length, greyReused: Core().greyReused ? Core().greyReused(st.guesses, answer) : 0 } });
       if (typeof gameFeedback === 'function') gameFeedback(st.won ? 'win' : 'lose');
       if (!st.recorded) {
         st.recorded = true;
@@ -447,6 +447,7 @@
           if (why) return rejectGuess(why);
         }
         st.guesses.push(g);
+        st.hint = null;
         st.current = '';
         st.revealing = st.guesses.length - 1;
         setFlag(HARD_KEY, st.hard);
@@ -611,20 +612,41 @@
     }
 
     let tick = null;
+    /** Deterministic deduction (what's proven + how many words fit); AI may only rephrase it. */
+    function showHint() {
+      if (mode === 'daily' || st.over) return;
+      const h = Core().deductionHint(st.guesses, answer, Lex() && Lex().countMatching);
+      st.hint = h.text;
+      st.hints = (st.hints || 0) + 1;
+      render();
+      const asked = st.guesses.length;
+      if (window.DangalAssistUI && typeof DangalAssistUI.explainHint === 'function') {
+        DangalAssistUI.explainHint(GAME, h.facts, h.text).then((text) => {
+          if (!text || !gs.alive() || st.over || st.guesses.length !== asked || text.toUpperCase().indexOf(answer) >= 0) return;
+          st.hint = text;
+          render();
+        });
+      }
+    }
+
     function render() {
       if (!gs.alive()) return;
-      const right = `<button type="button" class="game-chrome-action" data-act="stats" aria-label="${esc(tr('stats', 'Statistics'))}">📊</button><button type="button" class="game-chrome-action" data-act="more" aria-label="${esc(tr('more', 'More'))}">⋯</button>`;
+      // Hints in Practice / archive / challenge only — the Daily stays hint-free for everyone's streak.
+      const hintBtn = mode !== 'daily' && !(st.over || st.recorded) ? `<button type="button" class="game-chrome-action" data-act="hint" aria-label="${esc(tr('hint', 'Hint'))}">💡</button>` : '';
+      const right = `${hintBtn}<button type="button" class="game-chrome-action" data-act="stats" aria-label="${esc(tr('stats', 'Statistics'))}">📊</button><button type="button" class="game-chrome-action" data-act="more" aria-label="${esc(tr('more', 'More'))}">⋯</button>`;
       const chrome =
         typeof gameChromeHtml === 'function'
           ? gameChromeHtml({ title: LABEL, subtitle: subtitle() + (st.hard ? ' · ' + tr('hard', 'Hard') : ''), backId: 'wgBack', rightHtml: right })
           : `<div class="sf-top"><button type="button" id="wgBack">‹</button><b>${esc(LABEL)}</b>${right}</div>`;
       const done = st.over || st.recorded;
-      overlay.innerHTML = `${chrome}<div class="sf-main">${tilesHtml()}${resultHtml()}</div>${done ? '' : keyboardHtml()}`;
+      const hintNote = !done && st.hint ? `<p class="sf-hint" role="status" aria-live="polite" data-sf-hint>💡 ${esc(st.hint)}</p>` : '';
+      overlay.innerHTML = `${chrome}<div class="sf-main">${tilesHtml()}${hintNote}${resultHtml()}</div>${done ? '' : keyboardHtml()}`;
       overlay.querySelector('#wgBack').addEventListener('click', askLeave);
       overlay.querySelectorAll('[data-act]').forEach((b) =>
         b.addEventListener('click', () => {
           const a = b.dataset.act;
           if (a === 'more') return openMore();
+          if (a === 'hint') return showHint();
           go(a);
         })
       );

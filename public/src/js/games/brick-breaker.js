@@ -528,7 +528,7 @@ function openBrickBreaker(opts) {
         if (typeof setGamePB === 'function') setGamePB('brickbreaker', score);
       }
       try {
-        if (typeof recordGameResult === 'function') recordGameResult('brickbreaker', won, false, { score, level: levelNo, scoreOnly: true });
+        if (typeof recordGameResult === 'function') recordGameResult('brickbreaker', won, false, { score, level: levelNo, scoreOnly: true, tipStats: { level: levelNo, score, livesLost: lost } });
       } catch (e) {}
       Hub.feedback(GAME, won ? 'win' : 'lose');
       const beat = challenge && Number.isFinite(challenge.beatScore) ? (score > challenge.beatScore ? 'You beat the challenge! 🎯' : 'Challenge not beaten this time') : '';
