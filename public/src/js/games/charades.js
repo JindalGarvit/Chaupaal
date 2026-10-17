@@ -343,6 +343,7 @@
       <div class="im-error" data-err role="alert"></div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
     </div>`);
+    shell.setBack(() => renderHome(shell));
     const editor = Kit().mountTeamEditor(body.querySelector('[data-editor]'), {
       teams: loadTeams(),
       teamNames: Core().TEAM_NAMES,
@@ -382,6 +383,7 @@
       Kit().refreshRetired(GAME);
       const game = Core().createGame(teams, settings, { lang: lang(), custom: customTitles, exclude: Kit().retiredCached(GAME) });
       const session = { players, settings: game.settings, pub: game.pub, hidden: game.hidden };
+      shell.guard = true;
       renderPassReady(shell, session);
     });
   }
@@ -510,6 +512,7 @@
     const nm = passNm(session);
     const st = session.pub;
     if (session.clock) session.clock.stop();
+    shell.guard = false;
     shell.setSubtitle('Final');
     const roster = Object.keys(session.players).map((id) => ({ id, name: session.players[id] }));
     Kit().reportPass(GAME, { players: roster, scores: st.actorPoints || {}, state: { teams: st.teams, teamScores: st.teamScores, winner: st.winner } });

@@ -12,7 +12,7 @@ let activeChatAttachDocClick = null;
  * tears down listeners / realtime / mic / suggestion timers.
  */
 function closeChatScreen(opts = {}) {
-  const { updateHistory = true, animate = true } = opts;
+  const { animate = true } = opts;
 
   // Mehfil must die with the chat — no orphan A/V over wrong thread
   if (typeof isMehfilOpen === 'function' && isMehfilOpen()) {
@@ -72,17 +72,6 @@ function closeChatScreen(opts = {}) {
     } else {
       finish();
     }
-  }
-
-  if (updateHistory && !opts.fromHistory) {
-    try {
-      const onDeepRoute =
-        history.state?.chaupaalDeep ||
-        (location.pathname && location.pathname !== '/' && /\/(?:chat|c)\//.test(location.pathname));
-      if (onDeepRoute) {
-        history.back();
-      }
-    } catch (e) {}
   }
 
   try {
@@ -539,12 +528,8 @@ function openChatScreen(chat){
   }
   if (typeof enableSwipeBack === 'function') {
     enableSwipeBack(screen, () => {
-      if (typeof hasNavLayers === 'function' && hasNavLayers()) {
-        try {
-          history.back();
-        } catch (e) {
-          if (typeof dismissTopNavLayer === 'function') dismissTopNavLayer();
-        }
+      if (typeof hasNavLayers === 'function' && hasNavLayers() && typeof navBack === 'function') {
+        navBack();
         return;
       }
       closeChatScreen({ updateHistory: true, animate: true });
@@ -566,19 +551,14 @@ function openChatScreen(chat){
   try{
     const cid=chat.firestoreId||chat.id;
     if(cid&&typeof buildDeepLink==='function') {
-      const url = buildDeepLink('chat', cid);
-      history.replaceState({ ...(history.state || {}), chaupaalDeep: true, chaupaalLayer: history.state?.chaupaalLayer || true }, '', url);
+      if (typeof setNavLayerUrl === 'function') setNavLayerUrl(screen, buildDeepLink('chat', cid));
     }
   }catch(e){}
 
   document.getElementById('chatBack').addEventListener('click', () => {
     // Dismiss overlays (song picker, sheets) before leaving chat — one Back = one layer
-    if (typeof hasNavLayers === 'function' && hasNavLayers()) {
-      try {
-        history.back();
-      } catch (e) {
-        if (typeof dismissTopNavLayer === 'function') dismissTopNavLayer();
-      }
+    if (typeof hasNavLayers === 'function' && hasNavLayers() && typeof navBack === 'function') {
+      navBack();
       return;
     }
     closeChatScreen({ updateHistory: true, animate: true });

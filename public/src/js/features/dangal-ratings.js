@@ -763,6 +763,7 @@ function setDangalSection(section, opts) {
   }
   const target = host.querySelector(`[data-dangal-section="${dangalSection}"]`);
   target?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  if (typeof navStackSync === 'function') navStackSync();
 }
 window.setDangalSection = setDangalSection;
 

@@ -4758,13 +4758,8 @@
 
     if (typeof enableSwipeBack === 'function') {
       enableSwipeBack(el, () => {
-        if (typeof hasNavLayers === 'function' && hasNavLayers()) {
-          try {
-            history.back();
-          } catch (e) {
-            leaveMehfil();
-          }
-        } else leaveMehfil();
+        if (typeof hasNavLayers === 'function' && hasNavLayers() && typeof navBack === 'function') navBack();
+        else leaveMehfil();
       });
     }
 

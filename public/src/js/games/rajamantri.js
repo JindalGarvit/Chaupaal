@@ -288,6 +288,7 @@
       <div class="pk-meta" data-meta></div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
     </div>`);
+    shell.setBack(() => renderHome(shell));
     const editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), {
       names: loadNames(),
       min: Core().MIN_PLAYERS,
@@ -337,6 +338,7 @@
       pub: Core().createRound(ids, dealt.settings),
     };
     shell.setSubtitle('Round ' + session.roundNo + ' of ' + session.settings.rounds);
+    shell.guard = true;
     renderPassDeal(shell, session, 0);
   }
 
@@ -458,6 +460,7 @@
   }
 
   function renderPassFinal(shell, session) {
+    shell.guard = false;
     shell.setSubtitle('Final');
     Kit().reportPass(GAME, { players: session.players, scores: session.scores });
     const body = shell.render(`<div class="pk-page">

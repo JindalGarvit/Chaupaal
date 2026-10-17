@@ -2292,7 +2292,11 @@
   function confirmLeaveGame(opts) {
     const o = opts || {};
     return new Promise((resolve) => {
-      document.getElementById('gameLeaveConfirm')?.remove();
+      const prev = document.getElementById('gameLeaveConfirm');
+      if (prev) {
+        if (typeof prev.__leaveDone === 'function') prev.__leaveDone(false);
+        else prev.remove();
+      }
       const sheet = document.createElement('div');
       sheet.id = 'gameLeaveConfirm';
       sheet.className = 'game-pause-scrim';
@@ -2306,11 +2310,27 @@
         <button type="button" class="btn btn--secondary game-tap-target" data-leave-go>Leave</button>
       </div>`;
       const host = document.querySelector('.device') || document.body;
-      host.appendChild(sheet);
+      const owner = Array.from(document.querySelectorAll('.game-overlay')).pop() || null;
+      // Inside the game: on the shell it would sit under the nav-stack's z-indexed overlays.
+      if (owner) sheet.style.zIndex = '1000';
+      (owner || host).appendChild(sheet);
+      let settled = false;
+      let watch = null;
       const done = (v) => {
+        if (settled) return;
+        settled = true;
+        if (watch) watch.disconnect();
         sheet.remove();
         resolve(!!v);
       };
+      sheet.__leaveDone = done;
+      // The game closed under the prompt — never leave its blurred scrim stranded on the app.
+      if (owner && typeof MutationObserver === 'function') {
+        watch = new MutationObserver(() => {
+          if (!owner.isConnected) done(false);
+        });
+        watch.observe(host, { childList: true });
+      }
       sheet.querySelector('[data-leave-stay]')?.addEventListener('click', () => done(false));
       sheet.querySelector('[data-leave-go]')?.addEventListener('click', () => done(true));
     });

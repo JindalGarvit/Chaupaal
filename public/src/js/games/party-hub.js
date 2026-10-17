@@ -576,6 +576,7 @@
       <div data-editor></div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${night ? 'Save players' : 'Start the night'}</button>
     </div>`);
+    if (night) shell.setBack(() => renderPassNight(shell));
     const editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), { names, min: 3, max: Core().MAX_HUB });
     body.querySelector('[data-start]').addEventListener('click', () => startPassNight(shell, editor.list()));
   }
@@ -645,6 +646,7 @@
       <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-finish>Finish · clear tonight</button>
       <button type="button" class="pk-link" data-resume>Keep playing</button>
     </div>`);
+    shell.setBack(() => renderPassNight(shell));
     body.querySelector('[data-share-night]').addEventListener('click', () => shareNight(rows, night.history));
     body.querySelector('[data-save-group]').addEventListener('click', () => askSaveGroup(night.players));
     body.querySelector('[data-resume]').addEventListener('click', () => renderPassNight(shell));

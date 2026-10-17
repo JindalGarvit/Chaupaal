@@ -772,6 +772,7 @@
       <div class="pk-meta" data-meta></div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
     </div>`);
+    shell.setBack(() => renderHome(shell));
     let editor = null;
     const rawNames = () => Array.from(body.querySelectorAll('[data-pk-name]')).map((i) => i.value);
     const paintMeta = () => {
@@ -834,6 +835,7 @@
       };
       session.players.forEach((p) => (session.scores[p.id] = 0));
       Kit().refreshRetired(GAME);
+      shell.guard = true;
       startPassRound(shell, session);
     });
   }
@@ -1066,6 +1068,7 @@
 
   function renderPassFinal(shell, session) {
     const nm = (id) => nameOf(session, id);
+    shell.guard = false;
     shell.setSubtitle('Final');
     Kit().reportPass(GAME, { players: session.players, scores: session.scores });
     const body = shell.render(`<div class="pk-page">

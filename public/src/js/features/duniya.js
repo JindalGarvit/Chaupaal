@@ -1366,10 +1366,14 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
     e.stopPropagation();
     openDuniyaPostLikers(post);
   });
-  document.getElementById('duniyaDetailBack').addEventListener('click',()=>{
+  const closeDetail=()=>{
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();
-    detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
-    try{ history.pushState({},'', '/'); }catch(e){}
+    detail.classList.remove('open');setTimeout(()=>{ if(!detail.classList.contains('open')) detail.classList.add('hidden'); },300);
+  };
+  if(typeof pushNavLayer==='function') pushNavLayer(detail, closeDetail);
+  document.getElementById('duniyaDetailBack').addEventListener('click',()=>{
+    if(typeof removeNavLayer==='function') removeNavLayer(detail);
+    closeDetail();
   });
   detail.querySelector('[data-duniya-edit]')?.addEventListener('click',(e)=>{
     e.stopPropagation();
@@ -1377,7 +1381,7 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
   });
   try{
     const pid=post.firestoreId||post.id;
-    if(pid&&typeof buildDeepLink==='function') history.pushState({chaupaalDeep:true},'',buildDeepLink('post',pid));
+    if(pid&&typeof buildDeepLink==='function'&&typeof setNavLayerUrl==='function') setNavLayerUrl(detail, buildDeepLink('post',pid));
   }catch(e){}
 
   const listEl = document.getElementById('duniyaCommentsList');

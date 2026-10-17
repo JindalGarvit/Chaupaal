@@ -1881,8 +1881,7 @@ function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={})
   const close=()=>{
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();
     sheet.classList.remove('open');
-    setTimeout(()=>sheet.classList.add('hidden'),220);
-    try{ history.pushState({},'', '/'); }catch(e){}
+    setTimeout(()=>{ if(!sheet.classList.contains('open')) sheet.classList.add('hidden'); },220);
   };
   sheet.classList.remove('hidden');
   sheet.innerHTML=`
@@ -1907,12 +1906,12 @@ function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={})
       <button class="btn btn--primary comment-send cp-tap-target" id="peepalSheetCommentSend">Post</button>
     </div>
   `;
-  sheet.querySelector('[data-close-comments]')?.addEventListener('click',close);
-  if(typeof openLayer==='function') layerHandle=openLayer(sheet, close, { role:'dialog', label: typeof t==='function'?t('comment_sheet_title'):'Comments' });
+  if(typeof openLayer==='function') layerHandle=openLayer(sheet, close, { role:'dialog', remove:false, label: typeof t==='function'?t('comment_sheet_title'):'Comments' });
+  sheet.querySelector('[data-close-comments]')?.addEventListener('click',()=>layerHandle?layerHandle.close():close());
   requestAnimationFrame(()=>sheet.classList.add('open'));
   try{
     const pid=q.firestoreId||q.id;
-    if(pid&&typeof buildDeepLink==='function') history.pushState({chaupaalDeep:true},'',buildDeepLink('post',pid));
+    if(pid&&typeof buildDeepLink==='function'&&typeof setNavLayerUrl==='function') setNavLayerUrl(sheet, buildDeepLink('post',pid));
   }catch(e){}
 
   const listEl=sheet.querySelector('#peepalSheetCommentsList');
@@ -2144,11 +2143,15 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
       <button class="btn btn--primary comment-send cp-tap-target" id="commentSend">Post</button>
     </div>
   `;
-  document.getElementById('peepalDetailBack').addEventListener('click',()=>{
+  const closeDetail=()=>{
     if(typeof closeAiKeyboard==='function') closeAiKeyboard();
-    detail.classList.remove('open');setTimeout(()=>detail.classList.add('hidden'),300);
-    try{ history.pushState({},'', '/'); }catch(e){}
+    detail.classList.remove('open');setTimeout(()=>{ if(!detail.classList.contains('open')) detail.classList.add('hidden'); },300);
     try{ if(typeof restoreAppShell==='function') restoreAppShell('peepal_detail_back'); }catch(e){}
+  };
+  if(typeof pushNavLayer==='function') pushNavLayer(detail, closeDetail);
+  document.getElementById('peepalDetailBack').addEventListener('click',()=>{
+    if(typeof removeNavLayer==='function') removeNavLayer(detail);
+    closeDetail();
   });
   detail.querySelector('[data-peepal-edit]')?.addEventListener('click',(e)=>{
     e.stopPropagation();
@@ -2210,7 +2213,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
   });
   try{
     const pid=q.firestoreId||q.id;
-    if(pid&&typeof buildDeepLink==='function') history.pushState({chaupaalDeep:true},'',buildDeepLink('post',pid));
+    if(pid&&typeof buildDeepLink==='function'&&typeof setNavLayerUrl==='function') setNavLayerUrl(detail, buildDeepLink('post',pid));
   }catch(e){}
 
   const listEl = document.getElementById('peepalCommentsList');

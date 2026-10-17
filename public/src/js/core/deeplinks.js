@@ -67,9 +67,20 @@
     let path = pathOrName;
     if (id != null) path = buildDeepLink(pathOrName, id);
     if (!path.startsWith('/')) path = '/' + path;
-    history.pushState({ chaupaalDeep: true }, '', path);
-    return handleDeepLink(parseDeepLink(path));
+    return showDeepLinkInApp(path);
   }
+
+  /** Open an in-app route; the URL rides on the screen it opens (nav-stack owns history). */
+  async function showDeepLinkInApp(path) {
+    const before = typeof navStackDebug === 'function' ? navStackDebug().stack.length : 0;
+    const out = await handleDeepLink(parseDeepLink(String(path).split('?')[0]));
+    try {
+      const after = typeof navStackDebug === 'function' ? navStackDebug().stack.length : 0;
+      if (after > before && typeof setNavLayerUrl === 'function') setNavLayerUrl(null, path);
+    } catch (e) {}
+    return out;
+  }
+  window.showDeepLinkInApp = showDeepLinkInApp;
 
   function switchTab(tab) {
     document.querySelectorAll('.tab-btn').forEach((b) => {

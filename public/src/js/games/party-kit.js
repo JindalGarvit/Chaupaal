@@ -88,8 +88,9 @@
   // ---------------- shell overlay ----------------
 
   /**
-   * Full-screen game overlay with shared chrome. Back button asks before leaving (when confirmLeave
-   * returns true); system back closes directly — it never steps back to a previous card.
+   * Full-screen game overlay with shared chrome. System back and the ← button share one path:
+   * a screen's `back` (setup → home) first, else ask before leaving while `guard` / confirmLeave()
+   * holds, else close. Back never steps back to a previous secret card.
    * @param {{ gameId: string, title: string, subtitle?: string, onClose?: Function, confirmLeave?: () => boolean }} opts
    */
   const openShells = {};
@@ -126,17 +127,33 @@
     } else {
       host.appendChild(el);
     }
+    let screenBack = null;
     const shell = {
       el,
       body: el.querySelector('[data-pk-body]'),
+      /** True while a round is in progress — Back asks before ending it. */
+      guard: false,
       get closed() {
         return closed;
       },
-      render(html) {
+      /**
+       * @param {string} html
+       * @param {{ back?: Function, root?: boolean }} [ro] back: what Back does on this screen
+       *   (e.g. setup → game home); back/root also mark the round as over (no leave prompt).
+       */
+      render(html, ro) {
         if (closed) return null;
+        const r = ro || {};
+        screenBack = typeof r.back === 'function' ? r.back : null;
+        if (screenBack || r.root) this.guard = false;
         this.body.innerHTML = html;
         this.body.scrollTop = 0;
         return this.body;
+      },
+      /** Back on the current screen runs `fn` (one step back inside the game) instead of leaving. */
+      setBack(fn) {
+        screenBack = typeof fn === 'function' ? fn : null;
+        if (screenBack) this.guard = false;
       },
       close() {
         if (layer && typeof layer.close === 'function') layer.close();
@@ -150,10 +167,20 @@
         if (sub) sub.textContent = text || '';
       },
     };
+    let asking = false;
     el.querySelector('#pkBack_' + o.gameId)?.addEventListener('click', async () => {
-      const ask = typeof o.confirmLeave === 'function' ? o.confirmLeave() : false;
+      if (asking) return;
+      if (screenBack) {
+        const back = screenBack;
+        screenBack = null;
+        back();
+        return;
+      }
+      const ask = shell.guard || (typeof o.confirmLeave === 'function' ? o.confirmLeave() : false);
       if (ask && typeof confirmLeaveGame === 'function') {
+        asking = true;
         const go = await confirmLeaveGame({ title: 'Leave the game?', body: o.leaveBody || 'This round will end for everyone on this phone.' });
+        asking = false;
         if (!go) return;
       }
       shell.close();

@@ -200,15 +200,15 @@
       }
       // /invite/{code} → home with ref preserved in storage already
       if (/^\/invite\//i.test(path)) {
-        history.replaceState({ chaupaalDeep: true }, '', '/' + (search || ''));
+        history.replaceState(history.state, '', '/' + (search || ''));
         return true;
       }
       const full = path + search;
-      history.pushState({ chaupaalDeep: true }, '', full);
-      const route =
-        typeof parseDeepLink === 'function' ? parseDeepLink(path) : null;
-      if (route && typeof handleDeepLink === 'function') {
-        await handleDeepLink(route);
+      if (typeof showDeepLinkInApp === 'function') {
+        await showDeepLinkInApp(full);
+      } else {
+        const route = typeof parseDeepLink === 'function' ? parseDeepLink(path) : null;
+        if (route && typeof handleDeepLink === 'function') await handleDeepLink(route);
       }
       if (typeof checkViralLink === 'function') checkViralLink();
       return true;

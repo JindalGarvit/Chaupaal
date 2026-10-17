@@ -1168,13 +1168,11 @@
   // ─── Escape closes the topmost overlay (keyboard / desktop) ─────────────────
   function initEscapeToClose() {
     document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       if (typeof hasNavLayers === 'function' && hasNavLayers()) {
-        try {
-          history.back();
-        } catch (err) {
-          if (typeof dismissTopNavLayer === 'function') dismissTopNavLayer();
-        }
+        e.preventDefault();
+        if (typeof navBack === 'function') navBack();
+        else if (typeof dismissTopNavLayer === 'function') dismissTopNavLayer();
         return;
       }
       const viewer = document.getElementById('cpImageViewer');

@@ -260,7 +260,7 @@ function memDb() {
     const oh = read('public/src/js/games/ohno-ui.js');
     assert(/function eventText\(e, nameOf, me\)/.test(oh) && !/function eventText[\s\S]{0,1500}\bui\./.test(oh.slice(oh.indexOf('function eventText'), oh.indexOf('function eventText') + 1500)), 'Oh No! round log no longer throws (ui is not defined)');
     const ns = read('public/src/js/core/nav-stack.js');
-    assert(/navClosing/.test(ns) && /game-overlay/.test(ns) && /document\.querySelector\('\.chess-sheet \.chess-sheet__cancel'\)/.test(ns), 'hardware Back: games own their exit (confirm, cancel, no history desync)');
+    assert(/function backOnce\(/.test(ns) && /game-overlay/.test(ns) && /document\.querySelector\('\.chess-sheet \.chess-sheet__cancel'\)/.test(ns), 'hardware Back: games own their exit (confirm, cancel, no history desync)');
     assert(/data-leave-stay data-overlay-dismiss/.test(read('public/src/js/games/game-ui.js')), 'leave confirm resolves when dismissed');
     const kit = read('public/src/js/games/party-kit.js');
     assert(/function buzz\(\) \{\s*const p = feedbackPrefs\(\);/.test(kit) && /function ding\(\) \{\s*const p = feedbackPrefs\(\);/.test(kit) && /if \(p\.sound && window\.Sound\)/.test(kit), 'party sounds / haptics respect the toggles');

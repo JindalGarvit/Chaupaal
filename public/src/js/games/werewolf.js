@@ -643,6 +643,7 @@
       <div data-meta></div>
       <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
     </div>`);
+    shell.setBack(() => renderHome(shell));
     const editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), {
       names: loadNames(),
       min: Core().MIN_PLAYERS,
