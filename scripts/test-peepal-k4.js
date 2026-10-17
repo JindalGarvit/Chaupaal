@@ -24,7 +24,7 @@ const refs = read('public/src/js/core/referrals.js');
 const first = read('public/src/js/core/first-run.js');
 const index = read('public/index.html');
 const gest = read('public/src/js/core/tab-gestures.js');
-const i18n = read('public/src/js/core/i18n.js');
+const en = require('./lib/i18n-runtime').loadI18n({ region: false });
 
 // Surface split
 assert(/do not mount people-discovery|K0: do not mount|K3: no people/.test(cats), '1 Vriksha hides discovery');
@@ -66,7 +66,7 @@ assert(/quiet-mode|prefers-reduced-motion/.test(read('public/src/js/core/tab-ges
 const apiCount = fs.readdirSync(path.join(root, 'api')).filter((f) => f.endsWith('.js')).length;
 assert(apiCount === 12, `23 api/*.js === 12 (got ${apiCount})`);
 
-assert(/Find on Khoj/.test(index) || /peepal_find_btn:'Find on Khoj'/.test(i18n), 'Vriksha Find copy → Khoj');
-assert(/peepal_find_btn:'Find on Khoj'/.test(i18n), 'i18n Find on Khoj');
+assert(/Find on Khoj/.test(index) || en.t('peepal_find_btn') === 'Find on Khoj', 'Vriksha Find copy → Khoj');
+assert(en.t('peepal_find_btn') === 'Find on Khoj', 'i18n Find on Khoj');
 
 console.log('\nPeepal/Khoj K4 dogfood checks passed.');

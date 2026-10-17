@@ -1775,6 +1775,8 @@ function wireAuthEvents() {
           phoneVerified: !!(regPhoneVerified || credUser.phoneNumber),
           city: regData.city,
           lang: regData.lang,
+          ...(typeof getContentLangs === 'function' ? { contentLangs: getContentLangs() } : {}),
+          ...(typeof ChaupaalRegion !== 'undefined' ? { region: ChaupaalRegion.getRegion() } : {}),
           gender: regData.gender || '',
           dob: regData.dob,
           age: regData.age,

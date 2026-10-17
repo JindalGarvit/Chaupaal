@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-va35e4d';
+const CACHE = 'chaupaal-v59cb08';
 const ASSETS = [
   '/index.html',
   '/icon-charpai-v2as.png',
@@ -44,12 +44,45 @@ self.addEventListener('install', (e) => {
   );
 });
 
+/** Language packs (/src/i18n/{code}.json?v=hash) outlive app versions — a pack is only refetched when its hash changes. */
+const I18N_CACHE = 'chaupaal-i18n';
+
+function isI18nPack(url) {
+  try {
+    const u = new URL(url);
+    return u.origin === self.location.origin && /^\/src\/i18n\/[a-z-]+\.json$/.test(u.pathname);
+  } catch (e) {
+    return false;
+  }
+}
+
+async function i18nPackFirst(request) {
+  const cache = await caches.open(I18N_CACHE);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) {
+      const path = new URL(request.url).pathname;
+      // Keep one version per language for offline use.
+      const old = (await cache.keys()).filter((r) => new URL(r.url).pathname === path);
+      await Promise.all(old.map((r) => cache.delete(r)));
+      await cache.put(request, res.clone());
+    }
+    return res;
+  } catch (e) {
+    const path = new URL(request.url).pathname;
+    const stale = (await cache.keys()).find((r) => new URL(r.url).pathname === path);
+    return (stale && (await cache.match(stale))) || Response.error();
+  }
+}
+
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      // Drop every cache that is not this version (v43–v46/etc).
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      // Drop every cache that is not this version (v43–v46/etc). Language packs keep their own cache.
+      await Promise.all(keys.filter((k) => k !== CACHE && k !== I18N_CACHE).map((k) => caches.delete(k)));
       await self.clients.claim();
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       await Promise.all(
@@ -93,6 +126,11 @@ self.addEventListener('fetch', (e) => {
   // Cache-first here leaves PWAs on a stale index.html that points at old ?v= assets.
   if (isHtmlShell(e.request)) {
     e.respondWith(networkFirstShell(e.request));
+    return;
+  }
+
+  if (isI18nPack(e.request.url)) {
+    e.respondWith(i18nPackFirst(e.request));
     return;
   }
 

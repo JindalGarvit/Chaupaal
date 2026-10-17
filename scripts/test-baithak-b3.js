@@ -19,7 +19,8 @@ const data = read('public/src/js/features/baithak-data.js');
 const baithak = read('public/src/js/features/baithak.js');
 const referrals = read('public/src/js/core/referrals.js');
 const chat = read('public/src/js/features/baithak-chat.js');
-const i18n = read('public/src/js/core/i18n.js');
+const en = require('./lib/i18n-runtime').loadI18n({ region: false });
+const i18n = require('./lib/i18n-runtime').englishCopy();
 const index = read('public/index.html');
 const gestures = read('public/src/js/core/tab-gestures.js');
 const conventions = read('CONVENTIONS.md');
@@ -37,7 +38,7 @@ assert(/stashPendingAction\('baithak_split_camera'\)/.test(chat), 'camera soft-a
 assert(/aria-label="Splits"/.test(index), 'HTML tray aria Split');
 assert(/New Split/.test(gestures) || /shortcut_baithak_instant/.test(gestures), 'morph New Split');
 assert(/Leave a Split/.test(i18n) && /Share Split/.test(i18n), 'i18n Split capitalization');
-assert(!/"instants_leave_note": "Leave a split"/.test(i18n), 'no lowercase Leave a split in EN');
+assert(en.t('instants_leave_note') !== 'Leave a split', 'no lowercase Leave a split in EN');
 assert(/Baithak B3/.test(conventions), 'CONVENTIONS documents B3');
 
 // Alias map sanity (internal instant → UI Split)

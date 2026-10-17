@@ -28,6 +28,23 @@ function publicPath(urlPath) {
   return path.join(ROOT, 'public', rel);
 }
 
+// Language packs are lazy-loaded, so their hashes live in i18n.js (stamped before i18n.js is hashed).
+const I18N_DIR = path.join(ROOT, 'public', 'src', 'i18n');
+const I18N_JS = path.join(ROOT, 'public', 'src', 'js', 'core', 'i18n.js');
+if (fs.existsSync(I18N_DIR) && fs.existsSync(I18N_JS)) {
+  const versions = {};
+  fs.readdirSync(I18N_DIR)
+    .filter((f) => f.endsWith('.json'))
+    .sort()
+    .forEach((f) => (versions[f.replace(/\.json$/, '')] = hashFile(path.join(I18N_DIR, f))));
+  const js = fs.readFileSync(I18N_JS, 'utf8');
+  const next = js.replace(/const I18N_PACK_VERSIONS = \{[^}]*\};/, `const I18N_PACK_VERSIONS = ${JSON.stringify(versions)};`);
+  if (next === js && !js.includes('const I18N_PACK_VERSIONS = ' + JSON.stringify(versions))) {
+    console.warn('[bust] could not find I18N_PACK_VERSIONS in i18n.js');
+  }
+  fs.writeFileSync(I18N_JS, next);
+}
+
 let html = fs.readFileSync(INDEX, 'utf8');
 let updated = 0;
 let missing = 0;

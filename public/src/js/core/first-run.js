@@ -285,8 +285,10 @@
           <strong>${tt('day0_meet', 'Meet')}</strong>
           <span>${tt('day0_meet_sub', 'Invite friends, find contacts, or search on Peepal')}</span>
         </button>
+        ${typeof ChaupaalLangPicker !== 'undefined' ? ChaupaalLangPicker.chipHtml() : ''}
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
+    if (typeof ChaupaalLangPicker !== 'undefined') ChaupaalLangPicker.wireChip(sheet);
     const close = () => {
       markForkDone();
       if (typeof removeNavLayer === 'function') removeNavLayer(sheet);

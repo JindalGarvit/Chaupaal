@@ -89,14 +89,9 @@ if (auth) {
           }
         } catch (e) {}
       }
-      if (userProfile.lang) {
-        if (typeof setAppLanguage === 'function') setAppLanguage(userProfile.lang, { persistRemote: false });
-        else {
-          currentLang = userProfile.lang;
-          const langSelect = document.getElementById('langSelect');
-          if (langSelect) langSelect.value = currentLang;
-        }
-      }
+      // UI language, languages I read and region: profile wins; this device fills what's missing.
+      if (typeof hydrateLocaleFromProfile === 'function') hydrateLocaleFromProfile(userProfile);
+      else if (userProfile.lang && typeof setAppLanguage === 'function') setAppLanguage(userProfile.lang, { persistRemote: false });
       if (typeof hydrateIcebreakersFromUserDoc === 'function') hydrateIcebreakersFromUserDoc(userProfile);
       if (typeof hydratePromptsFromUserDoc === 'function') hydratePromptsFromUserDoc(userProfile);
       if (typeof hydrateProfileTypeFromUserDoc === 'function') hydrateProfileTypeFromUserDoc(userProfile);

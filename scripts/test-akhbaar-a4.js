@@ -14,19 +14,19 @@ function assert(cond, msg) {
 const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
-const i18n = read('public/src/js/core/i18n.js');
+const en = require('./lib/i18n-runtime').loadI18n({ region: false });
 const modes = read('public/src/js/core/section-modes.js');
 const akhbaar = read('public/src/js/features/akhbaar.js');
 const streak = read('public/src/js/features/streak.js');
 const conventions = read('CONVENTIONS.md');
 
 assert(
-  /"surkhiya_band_today":\s*"Highlights"/.test(i18n) &&
-    /"surkhiya_band_week":\s*"Also worth a look"/.test(i18n) &&
-    /"surkhiya_band_month":\s*"More picks"/.test(i18n),
+  en.t('surkhiya_band_today') === 'Highlights' &&
+    en.t('surkhiya_band_week') === 'Also worth a look' &&
+    en.t('surkhiya_band_month') === 'More picks',
   'i18n Surkhiya bands honest (not Today/This week)'
 );
-assert(!/"surkhiya_band_today":\s*"Today"/.test(i18n), 'no calendar Today band label in i18n');
+assert(en.t('surkhiya_band_today') !== 'Today', 'no calendar Today band label in i18n');
 assert(/Jump to Khabar|surkhiya_jump_khabar/.test(modes), 'Surkhiya Jump to Khabar');
 assert(/wireSaathiFeed|activateSaathiItem/.test(modes), 'Saathi wired');
 assert(/saveStreak\(\{requireLive:true\}\)/.test(akhbaar), 'finish-set live streak');

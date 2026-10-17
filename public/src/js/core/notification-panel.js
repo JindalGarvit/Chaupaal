@@ -301,6 +301,14 @@
     return '🔔';
   }
 
+  /** Rich bundle copy: tHtml escapes the message + every param, keeping only <strong>/<b>/<em>. */
+  function htt(key, fallback, vars) {
+    if (typeof tHtml === 'function') return tHtml(key, vars || {}, fallback);
+    const safe = {};
+    Object.entries(vars || {}).forEach(([k, v]) => (safe[k] = escapeHtml(v)));
+    return tt(key, fallback, safe);
+  }
+
   function formatBundledText(n) {
     if (n.text) return n.text;
     const actors = Array.isArray(n.actors) ? n.actors : [];
@@ -313,74 +321,74 @@
 
     if (n.grouped && family === 'like') {
       return others
-        ? tt(
+        ? htt(
             'notif_group_like_posts',
             '<strong>{{actor}}</strong> and {{n}} others liked your posts',
-            { actor: escapeHtml(actor), n: String(others) }
+            { actor: actor, n: String(others) }
           )
-        : tt('notif_bundle_like', '<strong>{{actor}}</strong> liked your post', { actor: escapeHtml(actor) });
+        : htt('notif_bundle_like', '<strong>{{actor}}</strong> liked your post', { actor: actor });
     }
     if (n.grouped && family === 'comment') {
       return others
-        ? tt(
+        ? htt(
             'notif_group_comment_posts',
             '<strong>{{actor}}</strong> and {{n}} others commented on your posts',
-            { actor: escapeHtml(actor), n: String(others) }
+            { actor: actor, n: String(others) }
           )
-        : tt('notif_bundle_comment', '<strong>{{actor}}</strong> commented{{preview}}', {
-            actor: escapeHtml(actor),
-            preview: preview ? `: ${escapeHtml(preview.slice(0, 80))}` : '',
+        : htt('notif_bundle_comment', '<strong>{{actor}}</strong> commented{{preview}}', {
+            actor: actor,
+            preview: preview ? `: ${preview.slice(0, 80)}` : '',
           });
     }
     if (n.grouped && family === 'follow') {
       return others
-        ? tt(
+        ? htt(
             'notif_group_follow_many',
             '<strong>{{actor}}</strong> and {{n}} others started following you',
-            { actor: escapeHtml(actor), n: String(others) }
+            { actor: actor, n: String(others) }
           )
-        : tt('notif_bundle_follow', '<strong>{{actor}}</strong> started following you', { actor: escapeHtml(actor) });
+        : htt('notif_bundle_follow', '<strong>{{actor}}</strong> started following you', { actor: actor });
     }
 
     if (type === 'friend_request') {
-      return tt('notif_bundle_friend_request', '<strong>{{actor}}</strong> sent you a friend request', { actor: escapeHtml(actor) });
+      return htt('notif_bundle_friend_request', '<strong>{{actor}}</strong> sent you a friend request', { actor: actor });
     }
     if (type === 'friend_accept') {
-      return tt('notif_bundle_friend_accept', '<strong>{{actor}}</strong> accepted your friend request', { actor: escapeHtml(actor) });
+      return htt('notif_bundle_friend_accept', '<strong>{{actor}}</strong> accepted your friend request', { actor: actor });
     }
     if (type === 'follow') {
       return others
-        ? tt('notif_bundle_follow_many', '<strong>{{actor}}</strong> + {{n}} others started following you', {
-            actor: escapeHtml(actor),
+        ? htt('notif_bundle_follow_many', '<strong>{{actor}}</strong> + {{n}} others started following you', {
+            actor: actor,
             n: String(others),
           })
-        : tt('notif_bundle_follow', '<strong>{{actor}}</strong> started following you', { actor: escapeHtml(actor) });
+        : htt('notif_bundle_follow', '<strong>{{actor}}</strong> started following you', { actor: actor });
     }
     if (type.includes('message') || type === 'dm') {
-      const body = preview ? `: ${escapeHtml(preview.slice(0, 80))}` : '';
-      return tt('notif_bundle_message', '<strong>{{actor}}</strong> sent you a message{{body}}', {
-        actor: escapeHtml(actor),
+      const body = preview ? `: ${preview.slice(0, 80)}` : '';
+      return htt('notif_bundle_message', '<strong>{{actor}}</strong> sent you a message{{body}}', {
+        actor: actor,
         body,
       });
     }
     if (type.includes('comment') || type === 'story_comment') {
       return others
-        ? tt('notif_bundle_comment_many', '<strong>{{actor}}</strong> + {{n}} others commented', {
-            actor: escapeHtml(actor),
+        ? htt('notif_bundle_comment_many', '<strong>{{actor}}</strong> + {{n}} others commented', {
+            actor: actor,
             n: String(others),
           })
-        : tt('notif_bundle_comment', '<strong>{{actor}}</strong> commented{{preview}}', {
-            actor: escapeHtml(actor),
-            preview: preview ? `: ${escapeHtml(preview.slice(0, 80))}` : '',
+        : htt('notif_bundle_comment', '<strong>{{actor}}</strong> commented{{preview}}', {
+            actor: actor,
+            preview: preview ? `: ${preview.slice(0, 80)}` : '',
           });
     }
     if (type.includes('like') || type.includes('reaction') || type === 'story_like') {
       return others
-        ? tt('notif_bundle_like_many', '<strong>{{actor}}</strong> + {{n}} others liked your post', {
-            actor: escapeHtml(actor),
+        ? htt('notif_bundle_like_many', '<strong>{{actor}}</strong> + {{n}} others liked your post', {
+            actor: actor,
             n: String(others),
           })
-        : tt('notif_bundle_like', '<strong>{{actor}}</strong> liked your post', { actor: escapeHtml(actor) });
+        : htt('notif_bundle_like', '<strong>{{actor}}</strong> liked your post', { actor: actor });
     }
     if (preview) {
       return `<strong>${escapeHtml(actor)}</strong> ${escapeHtml(preview)}`;

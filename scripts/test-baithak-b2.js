@@ -19,7 +19,7 @@ const baithak = read('public/src/js/features/baithak.js');
 const sectionModes = read('public/src/js/core/section-modes.js');
 const firstRun = read('public/src/js/core/first-run.js');
 const tabGestures = read('public/src/js/core/tab-gestures.js');
-const i18n = read('public/src/js/core/i18n.js');
+const i18n = require('./lib/i18n-runtime').englishCopy() + read('public/src/i18n/legacy-keys.js');
 const conventions = read('CONVENTIONS.md');
 
 assert(/function filterBaithakSectionChats/.test(data), 'filterBaithakSectionChats defined');

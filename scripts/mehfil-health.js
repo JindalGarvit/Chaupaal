@@ -29,7 +29,7 @@ const mehfilCss = read('public/src/styles/mehfil.css');
 const mediaConfig = read('api/media-config.js');
 const access = read('server-lib/mehfil-access.js');
 const agoraToken = read('server-lib/agora-token.js');
-const i18n = read('public/src/js/core/i18n.js');
+const i18n = read('public/src/js/core/i18n.js') + read('public/src/i18n/legacy-keys.js') + read('public/src/i18n/en.js');
 const deeplinks = read('public/src/js/core/deeplinks.js');
 const indexHtml = read('public/index.html');
 

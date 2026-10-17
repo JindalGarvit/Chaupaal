@@ -385,7 +385,7 @@ function graduation() {
     assert(chipCash.length === 0, 'chips: no purchase or cash-out path in any game (' + chipCash.slice(0, 3).join(', ') + ')');
     const moneyServer = fs.readdirSync(path.join(root, 'server-lib')).filter((f) => /money/i.test(f)).map((f) => read('server-lib/' + f)).join('\n');
     assert(!/wallet\/chips|collection\('wallet'\)\.doc\('chips'\)/.test(moneyServer), 'Chaupaal Money never writes the chip wallet (chips can’t be bought)');
-    assert(/No cash withdrawal\. Dangal chips are separate game tokens, not real money/.test(read('public/src/js/core/i18n.js')), 'Chaupaal Money copy: chips are separate tokens, not real money');
+    assert(/No cash withdrawal\. Dangal chips are separate game tokens, not real money/.test(require('./lib/i18n-runtime').englishCopy()), 'Chaupaal Money copy: chips are separate tokens, not real money');
     // 18+ gate in every entry point.
     const PD = require(path.join(root, 'server-lib/party-deal.js'));
     assert(PD.GAMES.teenpatti && (PD.GAMES.teenpatti.ageGated || PD.GAMES.teenpatti.ageCheck) && PD.GAMES.rummy && (PD.GAMES.rummy.ageGated || PD.GAMES.rummy.ageCheck), 'server: Teen Patti + Rummy chip tables are age-checked on every op that joins money');

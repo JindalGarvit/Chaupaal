@@ -38,7 +38,7 @@
   <link rel="stylesheet" href="/src/styles/duniya.css?v=1d8633ea">
   <link rel="stylesheet" href="/src/styles/duniya-compose.css?v=61803d06">
   <link rel="stylesheet" href="/src/styles/duniya-story.css?v=2c5ecc69">
-  <link rel="stylesheet" href="/src/styles/components.css?v=faf360d0">
+  <link rel="stylesheet" href="/src/styles/components.css?v=72e40f50">
   <link rel="stylesheet" href="/src/styles/archive-hub.css?v=54c17508">
   <link rel="stylesheet" href="/src/styles/social-comments.css?v=29c5fd81">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=019d0b92">
@@ -294,15 +294,6 @@
                   <label class="auth-input-label" for="regLanguage">Preferred language</label>
                   <select class="auth-input" id="regLanguage">
                     <option value="en">English</option>
-                    <option value="hi">हिंदी</option>
-                    <option value="bn">বাংলা</option>
-                    <option value="te">తెలుగు</option>
-                    <option value="ta">தமிழ்</option>
-                    <option value="mr">मराठी</option>
-                    <option value="gu">ગુજરાતી</option>
-                    <option value="kn">ಕನ್ನಡ</option>
-                    <option value="ml">മലയാളം</option>
-                    <option value="pa">ਪੰਜਾਬੀ</option>
                   </select>
                 </div>
                 <button type="button" class="auth-guest-btn auth-skip-optionals" id="authSkipOptionals">Skip extras — go to account access →</button>
@@ -675,7 +666,37 @@
         <summary class="settings-cat-summary" data-i18n="settings_language">Language</summary>
         <div class="settings-cat-body">
           <p class="toggle-desc" id="langChromeHint" style="margin:0 0 8px;" data-i18n="lang_chrome_hint">App UI follows your pick. Missing strings fall back to English.</p>
-          <select class="modal-select" id="langSelect"></select>
+          <button type="button" class="settings-link-row" id="langPickerBtn">
+            <span class="settings-link-icon" aria-hidden="true">🌐</span>
+            <span class="settings-link-text">
+              <strong data-i18n="settings.app_language">App language</strong>
+              <small id="langPickerValue">English</small>
+            </span>
+            <span class="settings-link-chevron" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="settings-link-row" id="contentLangsBtn">
+            <span class="settings-link-icon" aria-hidden="true">📖</span>
+            <span class="settings-link-text">
+              <strong data-i18n="settings.content_langs">Languages I read</strong>
+              <small id="contentLangsValue">English</small>
+            </span>
+            <span class="settings-link-chevron" aria-hidden="true">›</span>
+          </button>
+          <select class="modal-select" id="langSelect" hidden aria-hidden="true" tabindex="-1"></select>
+        </div>
+      </details>
+
+      <details class="settings-cat">
+        <summary class="settings-cat-summary" data-i18n="settings.region">Region</summary>
+        <div class="settings-cat-body">
+          <button type="button" class="settings-link-row" id="regionPickerBtn">
+            <span class="settings-link-icon" aria-hidden="true">📍</span>
+            <span class="settings-link-text">
+              <strong id="regionPickerValue">—</strong>
+              <small data-i18n="settings.region_desc">Sets currency, phone code, dates and units. Detected from your device.</small>
+            </span>
+            <span class="settings-link-chevron" aria-hidden="true">›</span>
+          </button>
         </div>
       </details>
 
@@ -919,7 +940,7 @@
   <script src="/src/js/core/swipe-pager.js?v=4e3be9d6"></script>
   <script src="/src/js/core/section-swipe.js?v=e2e06a92"></script>
   <script src="/src/js/core/section-modes.js?v=503be35b"></script>
-  <script src="/src/js/core/first-run.js?v=ec44d595"></script>
+  <script src="/src/js/core/first-run.js?v=caf6ac10"></script>
   <script src="/src/js/core/contacts-find.js?v=ce5b9fce"></script>
   <script src="/src/js/core/teen-mode.js?v=fba4d750"></script>
   <script src="/src/js/core/professional-badge.js?v=390dbc9d"></script>
@@ -928,7 +949,7 @@
   <script src="/src/js/core/profile-shell.js?v=1d5342b7"></script>
   <script src="/src/js/core/profile-section-mount.js?v=de3d0388"></script>
   <script src="/src/js/core/push-prefs.js?v=9771b318"></script>
-  <script src="/src/js/core/notification-panel.js?v=7f0068e2"></script>
+  <script src="/src/js/core/notification-panel.js?v=91d2a229"></script>
   <script src="/src/js/core/fcm-client.js?v=dc39a6ec"></script>
   <script src="/src/js/core/micro.js?v=014dea03"></script>
   <script src="/src/js/core/tab-gestures.js?v=a9495f3a"></script>
@@ -959,7 +980,7 @@
   <script src="/src/js/core/discovery-core.js?v=835c9b00"></script>
   <script src="/src/js/core/profile-btn.js?v=dd9c3b92"></script>
   <script src="/src/js/core/username.js?v=47b3509e"></script>
-  <script src="/src/js/auth/auth-ui.js?v=b6160e11"></script>
+  <script src="/src/js/auth/auth-ui.js?v=f798ebfd"></script>
   <script src="/src/js/auth/phone-otp.js?v=3315dcd2"></script>
   <script src="/src/js/auth/auth-profiles.js?v=8052275c"></script>
   <script src="/src/js/features/akhbaar.js?v=f458cf02"></script>
@@ -992,8 +1013,11 @@
   <script src="/src/js/features/baithak.js?v=69434dc0"></script>
   <script src="/src/js/features/profile-preview.js?v=fe94674a"></script>
   <script src="/src/js/features/profile.js?v=7e49ab7f"></script>
-  <script src="/src/js/core/i18n.js?v=b58b02ba"></script>
-  <script src="/src/js/core/i18n-locales.js?v=5812eb81"></script>
+  <script src="/src/i18n/en.js?v=1c0832bf"></script>
+  <script src="/src/i18n/legacy-keys.js?v=56133b74"></script>
+  <script src="/src/js/core/i18n.js?v=2cc94e02"></script>
+  <script src="/src/js/core/region.js?v=aa214603"></script>
+  <script src="/src/js/core/lang-picker.js?v=cd512e26"></script>
   <script src="/src/js/features/categories.js?v=f6f95f65"></script>
   <script src="/src/js/features/category-prefs.js?v=48846ae2"></script>
   <script src="/src/js/features/peepal.js?v=086f28c6"></script>
@@ -1121,6 +1145,6 @@
   <script src="/src/js/core/polish.js?v=7e64eadd"></script>
   <script src="/src/js/features/fairness.js?v=1c0002db"></script>
   <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
-  <script src="/src/js/auth/auth-events.js?v=64176421"></script>
+  <script src="/src/js/auth/auth-events.js?v=2ef88c4b"></script>
 </body>
 </html>

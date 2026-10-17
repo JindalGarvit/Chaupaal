@@ -5,6 +5,7 @@ Binding rules for navigation, overlays, media, and persistence. All new features
 Implementation lives primarily in:
 
 - `public/src/js/core/nav-stack.js` — overlay history stack
+- `public/src/js/core/i18n.js` + `public/src/i18n/` — languages, message packs (§9b); `core/region.js` — region
 - `public/src/js/core/overlay-scope.js` — scoped cleanup when parent views close
 - `public/src/js/core/media-player.js` — shared seek/skip controls
 - `public/src/js/features/music-card.js` — in-app music preview
@@ -278,9 +279,20 @@ See `.cursor/rules/auth-identity.mdc`.
 ## 9. Service worker / PWA updates
 
 - `public/sw.js` must call `skipWaiting()` on install and `clients.claim()` inside the activate `waitUntil`.
-- Activate must delete every Cache Storage entry whose name is not the current `CACHE`.
+- Activate must delete every Cache Storage entry whose name is not the current `CACHE` — except `chaupaal-i18n` (language packs, cache-first by `?v=` hash, one version per language).
 - HTML shell (`/`, `/index.html`, navigations, `destination=document`) is **network-first**; never cache-first. Do not return `index.html` as a fallback for failed JS/CSS fetches.
 - Client (`service-worker.js`) shows a tap-to-reload banner on updates and reloads once when the SW cache version changes.
+
+## 9b. Languages, translation & region (Global L0)
+
+- **Library (16):** en hi bn ta te mr ur ar es fr pt (pt-BR) de id ja ko zh (zh-Hans) — `LANG_CATALOG` in `core/i18n.js` is the single source (picker, `<html lang/dir>`, TTS tag). Removed codes live in `I18N_RETIRED_LANGS` only; a saved retired language shows English + a one-time dismissible notice. Their last packs are in `scripts/i18n-retired/` so a language can return.
+- **Files:** `public/src/i18n/en.js` (English source + fallback, bundled) · `public/src/i18n/{code}.json` (lazy on selection; sw.js + localStorage cache; `?v=` hash stamped into `I18N_PACK_VERSIONS` by `bust-assets.js`) · `legacy-keys.js` (pre-L0 flat key → namespaced key; never add to it). Validate with `node scripts/i18n-check.js`.
+- **Keys** are namespaced by surface: `common. auth. onboarding. profile. settings. baithak. chat. mehfil. music. duniya. akhbaar. peepal. khoj. vriksha. dangal. games.<id>. errors. notifications.` New strings go into `en.js` under one of these; never add flat keys.
+- **Format:** `{{name}}` params; `{n, plural, =0 {…} one {# …} other {# …}}` (Intl.PluralRules — write every form a language needs); `{g, select, … other {…}}`; brand / surface / proper-noun game names are `{{@id}}` tokens from `I18N_GLOSSARY` and are never translated (i18n-check fails a pack that drops or spells one).
+- **API:** `t(key, params | fallbackString)` → plain text (for `textContent` / attributes); `tHtml(key, params, fallback)` → escaped HTML keeping only `<strong> <b> <em> <i> <br>` (use for `innerHTML`; params are escaped — pass raw values); `tn(key, count, params)` for plurals. Lookup: language → English → caller fallback → the key (dev console warning). Never a blank.
+- **Switching:** `setAppLanguage(code, { persistRemote })` applies without a reload (`<html lang/dir>`, `data-i18n*` chrome) and fires `chaupaal:lang-changed` once the pack is in — surfaces that render copy in JS re-render on it. First run picks the best `navigator.languages` match.
+- **Reading languages:** `getContentLangs()` / `setContentLangs()` → `users/{uid}.contentLangs` (feeds + Translate target). **Region:** `ChaupaalRegion` (`core/region.js`) detects from the device time zone, then language region subtags, then the UI language's home region (no IP); `users/{uid}.region = { country, source: 'auto'|'user' }` (user beats auto). Read every region default through `getRegionPrefs()` (currency, calling code, time zone, first day of week, 12/24 h, measurement, `contentRegion` / `contentArea`).
+- **Sign-in:** `hydrateLocaleFromProfile(profile)` — the profile wins; missing fields are filled from this device.
 
 ## 10. Firebase App Check
 
