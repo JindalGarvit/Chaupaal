@@ -122,7 +122,7 @@ const enrichSrc = fs.readFileSync(path.join(__dirname, '..', 'server-lib/ai-enri
 assert(/embedBudgetAllows/.test(enrichSrc) && /cursorHeld/.test(enrichSrc), 'embed jobs mid-cap hold cursor');
 assert(/out\.ops\s*=/.test(enrichSrc), 'enrichment ops tally for scheduler');
 
-const disclosure = fs.readFileSync(path.join(__dirname, '..', 'public/src/js/core/first-run.js'), 'utf8');
+const disclosure = require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(__dirname, '..', 'public/src/js/core/first-run.js'), 'utf8'));
 assert(/never call an AI model at request time/.test(disclosure), 'disclosure: no request-time LLM');
 assert(/public posts|content embeddings|embeddings \(profiles/.test(disclosure), 'disclosure mentions offline embeddings honestly');
 assert(!/embeddings never exist|never store embeddings/i.test(disclosure), 'disclosure does not deny embeddings');

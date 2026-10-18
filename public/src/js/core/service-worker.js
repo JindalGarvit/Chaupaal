@@ -11,7 +11,7 @@
       if (typeof reportClientError === 'function') {
         reportClientError({
           feature: 'service_worker',
-          message: String(message || 'SW registration failed').slice(0, 500),
+          message: String(message || t('common.sw_registration_failed')).slice(0, 500),
           stack: String(stack || '').slice(0, 1200),
           screen: 'boot',
         });
@@ -28,7 +28,7 @@
     el.type = 'button';
     el.id = 'chaupaalSwUpdate';
     el.setAttribute('data-nav-ignore', '1');
-    el.textContent = 'New version available — tap to reload';
+    el.textContent = t('common.new_version_available_tap_to_reload');
     el.style.cssText =
       'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:99999;' +
       'padding:14px 16px;border:none;border-radius:14px;background:#1a1a2e;color:#fff;' +
@@ -60,8 +60,8 @@
       'background:rgba(27,31,59,.94);color:#fff;font:600 13px/1.35 Inter,system-ui,sans-serif;' +
       'box-shadow:0 8px 24px rgba(0,0,0,.22);';
     el.innerHTML =
-      '<span style="flex:1;min-width:0">Offline &amp; install features unavailable right now</span>' +
-      '<button type="button" data-sw-dismiss aria-label="Dismiss" style="border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 10px;font-weight:700;cursor:pointer;">OK</button>';
+      '<span style="flex:1;min-width:0">' + tHtml('common.offline_install_features_unavailable_right') + '</span>' +
+      '<button type="button" data-sw-dismiss aria-label="' + tHtml('common.dismiss') + '" style="border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 10px;font-weight:700;cursor:pointer;">OK</button>';
     el.querySelector('[data-sw-dismiss]')?.addEventListener('click', hideOfflineBanner);
     document.body.appendChild(el);
     offlineBannerEl = el;
@@ -103,7 +103,7 @@
 
   function registerWhenReady() {
     if (!('serviceWorker' in navigator)) {
-      reportSwFailure('serviceWorker unsupported');
+      reportSwFailure(t('common.serviceworker_unsupported'));
       showOfflineBanner('unsupported');
       return;
     }
@@ -140,7 +140,7 @@
       })
       .catch((err) => {
         reportSwFailure(err?.message || String(err), err?.stack || '');
-        showOfflineBanner(err?.message || 'register failed');
+        showOfflineBanner(err?.message || t('common.register_failed'));
       });
   }
 

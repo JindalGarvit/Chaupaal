@@ -196,7 +196,10 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
   const ratings = read('public/src/js/features/dangal-ratings.js');
   assert(/chipEsc\(pending\.challenger\)/.test(ratings) && /chipEsc\(gName\)/.test(ratings), 'challenge chip escapes URL-provided names');
   const onboarding = read('public/src/js/features/onboarding.js');
-  assert(/vEsc\(challenger\)/.test(onboarding) && /vEsc\(gName\)/.test(onboarding) && !/on \$\{gName\}/.test(onboarding), 'viral banner escapes URL-provided names and games');
+  // tHtml escapes every param (Global L2); vEsc was the hand-rolled equivalent.
+  const viralEscaped = (/vEsc\(challenger\)/.test(onboarding) && /vEsc\(gName\)/.test(onboarding)) ||
+    (/tHtml\('onboarding\.viral_challenge',\{name:challenger,game:gName\}\)/.test(onboarding) && /tHtml\('onboarding\.viral_akhbaar',\{name:challenger\}\)/.test(onboarding));
+  assert(viralEscaped && !/on \$\{gName\}/.test(onboarding), 'viral banner escapes URL-provided names and games');
   assert(/\.game-howto-btn::before\{[^}]*height:44px/.test(read('public/src/styles/components.css')), 'How-to pill has a 44px hit area');
 
   {

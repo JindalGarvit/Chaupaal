@@ -56,7 +56,7 @@
         (up && (up.username || up.profile?.username)) ||
         '';
       if (uname) return String(uname).replace(/^@/, '');
-      return 'You';
+      return t('common.you');
     }
     return cleaned;
   }
@@ -65,7 +65,7 @@
   function selfListLabel() {
     const name = selfDisplayName();
     return {
-      title: 'You',
+      title: t('profile.you'),
       name,
       subtitle: name && name !== 'You' ? name : '',
       uid: typeof currentUser !== 'undefined' ? currentUser?.uid : '',

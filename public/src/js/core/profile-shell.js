@@ -7,7 +7,7 @@
   'use strict';
 
   const CORE_TABS = [
-    { id: 'digital', label: 'Digital', builtin: true },
+    { id: 'digital', label: t('profile.digital'), builtin: true },
     { id: 'duniya', label: 'Duniya', builtin: true },
     { id: 'peepal', label: 'Peepal', builtin: true },
   ];
@@ -127,7 +127,7 @@
         if (c.privacy === 'private' && !(isOwner || editMode)) return null;
         return {
           id: c.id,
-          label: c.name || 'Section',
+          label: c.name || t('profile.section'),
           builtin: false,
           type: c.type || 'grid',
           privacy: c.privacy || 'public',
@@ -154,16 +154,17 @@
       .slice(0, 6)
       .map(
         (p) =>
-          `<div class="cp-prompt-card"><span>${esc(p.prompt || p.question || 'Prompt')}</span><p>${esc(p.answer)}</p></div>`
+          `<div class="cp-prompt-card"><span>${esc(p.prompt || p.question || t('profile.prompt'))}</span><p>${esc(p.answer)}</p></div>`
       )
       .join('');
   }
 
   function aboutRows(dp, view) {
     const rows = [];
-    const push = (label, val) => {
+    const push = (label, val, group) => {
       if (val == null || val === '' || (Array.isArray(val) && !val.length)) return;
-      rows.push(`<div class="cp-about-row"><dt>${esc(label)}</dt><dd>${esc(Array.isArray(val) ? val.join(', ') : val)}</dd></div>`);
+      const show = (v) => (group ? optionLabel(group, v) : v);
+      rows.push(`<div class="cp-about-row"><dt>${esc(label)}</dt><dd>${esc(Array.isArray(val) ? val.map(show).join(', ') : show(val))}</dd></div>`);
     };
     // Locked / empty view.fields must not fall through to raw dp (preview honesty).
     if (view?.locked) return '';
@@ -174,33 +175,33 @@
         .join('');
     }
     if (view && Array.isArray(view.fields) && view.fields.length === 0) return '';
-    push('City', dp.currentCity);
-    push('Occupation', dp.occupation);
-    push('Looking for', dp.lookingFor);
-    push('Relationship', dp.relationshipStatus);
-    push('Height', dp.height);
-    push('Languages', dp.languages);
+    push(t('profile.field_city'), dp.currentCity);
+    push(t('profile.field_occupation'), dp.occupation);
+    push(t('profile.looking_for'), dp.lookingFor, 'intent');
+    push(t('profile.field_relationship'), dp.relationshipStatus, 'relationshipStatus');
+    push(t('profile.field_height'), dp.height);
+    push(t('profile.field_languages'), dp.languages, 'languages');
     return rows.join('');
   }
 
   function customBlockBody(block) {
     if (block.type === 'emoji') {
-      return `<div class="dp-mood-card"><span class="dp-mood-emoji">${esc(block.emoji || '✨')}</span><p>${esc(block.body || block.label || 'Mood')}</p></div>`;
+      return `<div class="dp-mood-card"><span class="dp-mood-emoji">${esc(block.emoji || '✨')}</span><p>${esc(block.body || block.label || t('profile.mood'))}</p></div>`;
     }
     if (block.type === 'quote') {
       const q = block.quote || block.body || '';
       return q
         ? `<blockquote class="dp-quote-card">“${esc(q)}”</blockquote>`
-        : `<div class="public-profile-posts-empty">Add a quote</div>`;
+        : `<div class="public-profile-posts-empty">${tHtml('profile.add_a_quote')}</div>`;
     }
     if (block.type === 'links' && Array.isArray(block.items) && block.items.length) {
       return `<div class="profile-links-list">${block.items
         .slice(0, 8)
-        .map((l) => `<a class="profile-link-chip" href="${esc(l.url || '#')}" data-external-link="1">${esc(l.label || 'Link')}</a>`)
+        .map((l) => `<a class="profile-link-chip" href="${esc(l.url || '#')}" data-external-link="1">${esc(l.label || t('profile.link'))}</a>`)
         .join('')}</div>`;
     }
     if (block.type === 'voice' && block.voiceUrl) {
-      return `<div class="dp-voice-card"><audio controls src="${esc(block.voiceUrl)}" preload="metadata"></audio><p>${esc(block.body || 'Voice note')}</p></div>`;
+      return `<div class="dp-voice-card"><audio controls src="${esc(block.voiceUrl)}" preload="metadata"></audio><p>${esc(block.body || t('profile.voice_note'))}</p></div>`;
     }
     if ((block.type === 'video' || block.videoUrl) && block.videoUrl) {
       return `<div class="dp-featured-media dp-featured-video"><video src="${esc(block.videoUrl)}" controls playsinline preload="metadata"></video>${block.body ? `<p>${esc(block.body)}</p>` : ''}</div>`;
@@ -213,7 +214,7 @@
         typeof linkifyText === 'function' ? linkifyText(block.body) : esc(block.body)
       }</div>`;
     }
-    return `<div class="public-profile-posts-empty">Empty block</div>`;
+    return `<div class="public-profile-posts-empty">${tHtml('profile.empty_block')}</div>`;
   }
 
   function openDigitalBlockEditSheet(blockId, onDone) {
@@ -235,11 +236,11 @@
 
     const typeFields = () => {
       if (type === 'quote') {
-        return `<label class="story-editor-field">Quote<textarea data-ed-quote rows="4" maxlength="400">${escAttr(block.quote || block.body || '')}</textarea></label>`;
+        return `<label class="story-editor-field">${tHtml('profile.quote')}<textarea data-ed-quote rows="4" maxlength="400">${escAttr(block.quote || block.body || '')}</textarea></label>`;
       }
       if (type === 'emoji') {
-        return `<label class="story-editor-field">Emoji<input type="text" data-ed-emoji maxlength="8" value="${escAttr(block.emoji || '✨')}"></label>
-          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="80" value="${escAttr(block.body || '')}"></label>`;
+        return `<label class="story-editor-field">${tHtml('profile.emoji')}<input type="text" data-ed-emoji maxlength="8" value="${escAttr(block.emoji || '✨')}"></label>
+          <label class="story-editor-field">${tHtml('profile.caption')}<input type="text" data-ed-body maxlength="80" value="${escAttr(block.body || '')}"></label>`;
       }
       if (type === 'links') {
         return `<div class="dp-link-edit-list" data-ed-links>
@@ -247,7 +248,7 @@
             .map(
               (i) =>
                 `<div class="dp-link-edit-row">
-                  <input type="text" data-link-label placeholder="Label" value="${escAttr(items[i]?.label || '')}">
+                  <input type="text" data-link-label placeholder="${tHtml('profile.label')}" value="${escAttr(items[i]?.label || '')}">
                   <input type="url" data-link-url placeholder="https://" value="${escAttr(items[i]?.url || '')}">
                 </div>`
             )
@@ -256,39 +257,39 @@
       }
       if (type === 'media') {
         return `<div class="dp-media-edit">
-          ${mediaUrl ? `<img class="dp-edit-preview" src="${escAttr(mediaUrl)}" alt="">` : '<p class="public-profile-posts-empty">No photo yet</p>'}
-          <label class="btn">Choose photo<input type="file" accept="image/*" data-ed-file-photo hidden></label>
-          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="120" value="${escAttr(block.body || '')}"></label>
+          ${mediaUrl ? `<img class="dp-edit-preview" src="${escAttr(mediaUrl)}" alt="">` : '<p class="public-profile-posts-empty">' + tHtml('profile.no_photo_yet') + '</p>'}
+          <label class="btn">${tHtml('profile.choose_photo')}<input type="file" accept="image/*" data-ed-file-photo hidden></label>
+          <label class="story-editor-field">${tHtml('profile.caption')}<input type="text" data-ed-body maxlength="120" value="${escAttr(block.body || '')}"></label>
         </div>`;
       }
       if (type === 'video') {
         return `<div class="dp-media-edit">
-          ${videoUrl ? `<video class="dp-edit-preview" src="${escAttr(videoUrl)}" controls playsinline></video>` : '<p class="public-profile-posts-empty">No video yet</p>'}
-          <label class="btn">Choose video (≤30s)<input type="file" accept="video/*" data-ed-file-video hidden></label>
-          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="120" value="${escAttr(block.body || '')}"></label>
+          ${videoUrl ? `<video class="dp-edit-preview" src="${escAttr(videoUrl)}" controls playsinline></video>` : '<p class="public-profile-posts-empty">' + tHtml('profile.no_video_yet') + '</p>'}
+          <label class="btn">${tHtml('profile.choose_video_30s')}<input type="file" accept="video/*" data-ed-file-video hidden></label>
+          <label class="story-editor-field">${tHtml('profile.caption')}<input type="text" data-ed-body maxlength="120" value="${escAttr(block.body || '')}"></label>
         </div>`;
       }
       if (type === 'voice') {
         return `<div class="dp-media-edit">
-          ${voiceUrl ? `<audio controls src="${escAttr(voiceUrl)}"></audio>` : '<p class="public-profile-posts-empty">No voice note yet</p>'}
-          <label class="btn">Choose audio<input type="file" accept="audio/*,.m4a,.mp3,.webm" data-ed-file-voice hidden></label>
-          <label class="story-editor-field">Caption<input type="text" data-ed-body maxlength="80" value="${escAttr(block.body || '')}"></label>
+          ${voiceUrl ? `<audio controls src="${escAttr(voiceUrl)}"></audio>` : '<p class="public-profile-posts-empty">' + tHtml('profile.no_voice_note_yet') + '</p>'}
+          <label class="btn">${tHtml('profile.choose_audio')}<input type="file" accept="audio/*,.m4a,.mp3,.webm" data-ed-file-voice hidden></label>
+          <label class="story-editor-field">${tHtml('profile.caption')}<input type="text" data-ed-body maxlength="80" value="${escAttr(block.body || '')}"></label>
         </div>`;
       }
-      return `<label class="story-editor-field">Title<input type="text" data-ed-label maxlength="40" value="${escAttr(block.label || '')}"></label>
-        <label class="story-editor-field">Text<textarea data-ed-body rows="5" maxlength="800">${escAttr(block.body || '')}</textarea></label>`;
+      return `<label class="story-editor-field">${tHtml('profile.title')}<input type="text" data-ed-label maxlength="40" value="${escAttr(block.label || '')}"></label>
+        <label class="story-editor-field">${tHtml('profile.text')}<textarea data-ed-body rows="5" maxlength="800">${escAttr(block.body || '')}</textarea></label>`;
     };
 
     sheet.innerHTML = `
       <div class="archive-header">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-dismiss' }) : '<button type="button" data-dismiss class="cp-back-btn">←</button>'}
-        <div style="flex:1"><strong>Edit · ${esc(block.label || type)}</strong></div>
+        <div style="flex:1"><strong>${tHtml('profile.edit_block', { name: block.label || type })}</strong></div>
       </div>
       <div class="dp-block-edit-body" style="padding:16px;overflow:auto;">
         ${type !== 'flexible' && type !== 'emoji' && type !== 'quote' && type !== 'links' ? '' : ''}
-        <label class="story-editor-field">Section name<input type="text" data-ed-label maxlength="40" value="${escAttr(block.label || '')}"></label>
+        <label class="story-editor-field">${tHtml('profile.section_name')}<input type="text" data-ed-label maxlength="40" value="${escAttr(block.label || '')}"></label>
         ${typeFields()}
-        <button type="button" class="btn btn--primary btn--block" data-ed-save style="margin-top:16px;">Save to Base</button>
+        <button type="button" class="btn btn--primary btn--block" data-ed-save style="margin-top:16px;">${tHtml('profile.save_to_base')}</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
@@ -300,7 +301,7 @@
 
     async function uploadFile(file, kind) {
       if (!file) return null;
-      if (typeof showToast === 'function') showToast('Uploading…');
+      if (typeof showToast === 'function') showToast(t('profile.uploading'));
       let remote = null;
       try {
         if (kind === 'photo' && typeof uploadOptimizedImage === 'function') {
@@ -314,7 +315,7 @@
           remote = up.secure_url || up.url;
         }
       } catch (e) {
-        if (typeof showToast === 'function') showToast('Upload failed');
+        if (typeof showToast === 'function') showToast(t('profile.upload_failed'));
         return null;
       }
       return remote;
@@ -341,7 +342,7 @@
       if (url) {
         videoUrl = url;
         if (typeof DigitalLayout.arcadeBurst === 'function') DigitalLayout.arcadeBurst(sheet);
-        if (typeof showToast === 'function') showToast('Video ready');
+        if (typeof showToast === 'function') showToast(t('profile.video_ready'));
       }
     });
     sheet.querySelector('[data-ed-file-voice]')?.addEventListener('change', async (e) => {
@@ -350,7 +351,7 @@
       if (url) {
         voiceUrl = url;
         if (typeof DigitalLayout.arcadeBurst === 'function') DigitalLayout.arcadeBurst(sheet);
-        if (typeof showToast === 'function') showToast('Voice ready');
+        if (typeof showToast === 'function') showToast(t('profile.voice_ready'));
       }
     });
 
@@ -371,7 +372,7 @@
         sheet.querySelectorAll('.dp-link-edit-row').forEach((row) => {
           const label = row.querySelector('[data-link-label]')?.value?.trim() || '';
           const url = row.querySelector('[data-link-url]')?.value?.trim() || '';
-          if (url) nextItems.push({ label: label || 'Link', url });
+          if (url) nextItems.push({ label: label || t('profile.link'), url });
         });
         patch.items = nextItems;
       }
@@ -380,7 +381,7 @@
       if (type === 'voice') patch.voiceUrl = voiceUrl;
       await DigitalLayout.updateDigitalBlock(blockId, patch);
       DigitalLayout.arcadeBurst(sheet);
-      if (typeof showToast === 'function') showToast('Block saved');
+      if (typeof showToast === 'function') showToast(t('profile.block_saved'));
       close();
       if (typeof onDone === 'function') onDone();
     });
@@ -430,13 +431,13 @@
           ? typeof linkifyText === 'function'
             ? linkifyText(bio)
             : esc(bio)
-          : `<div class="public-profile-posts-empty">${isOwner ? 'Add a bio — build your Base' : 'No bio yet'}</div>`;
+          : `<div class="public-profile-posts-empty">${isOwner ? tHtml('profile.add_a_bio_build_your_base') : tHtml('profile.no_bio_yet')}</div>`;
       }
       if (id === 'prompts') {
         return prompts
           ? `<div class="cp-prompt-stack">${prompts}</div>`
           : isOwner
-            ? `<div class="public-profile-posts-empty">Add prompts · Chat openers live in discovery/chat</div>`
+            ? `<div class="public-profile-posts-empty">${tHtml('profile.add_prompts_chat_openers_live_in')}</div>`
             : '';
       }
       if (id === 'about') return about ? `<dl class="cp-about-dl">${about}</dl>` : '';
@@ -462,14 +463,14 @@
             const collapsed = blockStartsCollapsed(b.id, editable);
             const editChrome = editable
               ? `<div class="dp-block-chrome">
-                  <button type="button" class="dp-drag-handle" data-dp-drag="${esc(b.id)}" title="Drag to reorder" aria-label="Reorder">⠿</button>
+                  <button type="button" class="dp-drag-handle" data-dp-drag="${esc(b.id)}" title="${tHtml('profile.drag_to_reorder')}" aria-label="${tHtml('profile.reorder')}">⠿</button>
                   <span class="dp-block-label">${esc(b.label || b.id)}</span>
-                  <button type="button" class="dp-chip" data-dp-hide="${esc(b.id)}">${b.visible === false ? 'Unhide' : 'Hide'}</button>
+                  <button type="button" class="dp-chip" data-dp-hide="${esc(b.id)}">${b.visible === false ? tHtml('profile.unhide') : tHtml('profile.hide')}</button>
                   <button type="button" class="dp-chip" data-dp-privacy="${esc(b.id)}" data-privacy="${esc(b.privacy || 'public')}">${esc(b.privacy || 'public')}</button>
                   ${
                     isBuiltin
                       ? ''
-                      : `<button type="button" class="dp-chip" data-dp-edit="${esc(b.id)}">Edit</button><button type="button" class="dp-chip dp-chip--danger" data-dp-remove="${esc(b.id)}">Remove</button>`
+                      : `<button type="button" class="dp-chip" data-dp-edit="${esc(b.id)}">${tHtml('profile.edit')}</button><button type="button" class="dp-chip dp-chip--danger" data-dp-remove="${esc(b.id)}">${tHtml('profile.exclusion_remove')}</button>`
                   }
                 </div>`
               : `<button type="button" class="cp-digital-h cp-collapse-btn" data-dp-collapse="${esc(b.id)}" aria-expanded="${collapsed ? 'false' : 'true'}">
@@ -478,7 +479,7 @@
                 </button>`;
             return `<section class="cp-digital-block dp-arcade-block${hiddenMark}${collapsed && !editable ? ' is-collapsed' : ''}" data-digital-block="${esc(b.id)}" data-block-id="${esc(b.id)}" style="--block-accent:${accent}">
               ${editChrome}
-              <div class="dp-block-body"${collapsed && !editable ? ' hidden' : ''}>${inner || `<div class="public-profile-posts-empty">Empty — fill or hide</div>`}</div>
+              <div class="dp-block-body"${collapsed && !editable ? ' hidden' : ''}>${inner || `<div class="public-profile-posts-empty">${tHtml('profile.empty_fill_or_hide')}</div>`}</div>
             </section>`;
           })
           .join('')
@@ -488,7 +489,7 @@
       return `
       <div class="cp-digital-pane" data-dp-root>
         <section class="cp-digital-block" data-digital-block="bio">
-          <h3 class="cp-digital-h">About</h3>
+          <h3 class="cp-digital-h">${tHtml('profile.about')}</h3>
           <div class="profile-flexible-block">${builtinInner('bio')}</div>
         </section>
       </div>`;
@@ -499,10 +500,10 @@
         ${
           editable
             ? `<div class="dp-edit-toolbar">
-                <button type="button" class="btn btn--primary dp-add-block-btn" data-dp-add>＋ Add section</button>
-                <button type="button" class="btn" data-dp-theme>Base palette</button>
-                <button type="button" class="btn" data-dp-undo title="Undo last layout change">Undo</button>
-                <span class="dp-edit-hint">Drag ⠿ · Hide · Privacy · Undo</span>
+                <button type="button" class="btn btn--primary dp-add-block-btn" data-dp-add>${tHtml('profile.add_section_2')}</button>
+                <button type="button" class="btn" data-dp-theme>${tHtml('profile.base_palette')}</button>
+                <button type="button" class="btn" data-dp-undo title="${tHtml('profile.undo_last_layout_change')}">${tHtml('profile.undo')}</button>
+                <span class="dp-edit-hint">${tHtml('profile.drag_hide_privacy_undo')}</span>
               </div>`
             : ''
         }
@@ -520,7 +521,7 @@
     sheet.innerHTML = `
       <div class="archive-header">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-dismiss' }) : '<button type="button" data-dismiss class="cp-back-btn">←</button>'}
-        <div style="flex:1"><strong>Add to your Base</strong></div>
+        <div style="flex:1"><strong>${tHtml('profile.add_to_your_base')}</strong></div>
       </div>
       <div class="dp-catalog-grid">
         ${catalog
@@ -574,23 +575,23 @@
     sheet.innerHTML = `
       <div class="archive-header">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-dismiss' }) : '<button type="button" data-dismiss class="cp-back-btn">←</button>'}
-        <div style="flex:1"><strong>Base palette</strong></div>
+        <div style="flex:1"><strong>${tHtml('profile.base_palette')}</strong></div>
       </div>
-      <div class="dp-palette-section"><h4>Colors</h4>
+      <div class="dp-palette-section"><h4>${tHtml('profile.colors')}</h4>
         <div class="dp-palette-row">${DL.PALETTES.map(
           (p) =>
-            `<button type="button" class="dp-swatch${unlocked.has(p.id) ? '' : ' is-locked'}${theme.paletteId === p.id ? ' is-active' : ''}" data-palette="${esc(p.id)}" style="--sw:${esc(p.accent)}" ${unlocked.has(p.id) ? '' : 'disabled'} title="${unlocked.has(p.id) ? esc(p.name) : `Reach ${p.unlockAt}% to unlock`}">
+            `<button type="button" class="dp-swatch${unlocked.has(p.id) ? '' : ' is-locked'}${theme.paletteId === p.id ? ' is-active' : ''}" data-palette="${esc(p.id)}" style="--sw:${esc(p.accent)}" ${unlocked.has(p.id) ? '' : 'disabled'} title="${unlocked.has(p.id) ? esc(p.name) : tHtml('profile.reach_unlockat_to_unlock', { unlockAt: p.unlockAt })}">
               <span></span>${esc(p.name)}${unlocked.has(p.id) ? '' : ` · ${p.unlockAt}%`}
             </button>`
         ).join('')}</div>
       </div>
-      <div class="dp-palette-section"><h4>Frames</h4>
+      <div class="dp-palette-section"><h4>${tHtml('profile.frames')}</h4>
         <div class="dp-palette-row">${DL.FRAMES.map(
           (f) =>
             `<button type="button" class="dp-swatch${unlocked.has(f.id) ? '' : ' is-locked'}${theme.frameId === f.id ? ' is-active' : ''}" data-frame="${esc(f.id)}" ${unlocked.has(f.id) ? '' : 'disabled'}>${esc(f.name)}${unlocked.has(f.id) ? '' : ` · ${f.unlockAt}%`}</button>`
         ).join('')}</div>
       </div>
-      <div class="dp-palette-section"><h4>Highlight rings</h4>
+      <div class="dp-palette-section"><h4>${tHtml('profile.highlight_rings')}</h4>
         <div class="dp-palette-row">${DL.RINGS.map(
           (r) =>
             `<button type="button" class="dp-swatch${unlocked.has(r.id) ? '' : ' is-locked'}${theme.ringId === r.id ? ' is-active' : ''}" data-ring="${esc(r.id)}" ${unlocked.has(r.id) ? '' : 'disabled'}>${esc(r.name)}${unlocked.has(r.id) ? '' : ` · ${r.unlockAt}%`}</button>`
@@ -615,7 +616,7 @@
           unlocked: [...unlocked],
         });
         DL.arcadeBurst(sheet);
-        if (typeof showToast === 'function') showToast(`Base: ${pal.name}`);
+        if (typeof showToast === 'function') showToast(t('profile.base_name', { name: pal.name }));
         close();
         if (typeof onDone === 'function') onDone(next);
       });
@@ -683,10 +684,10 @@
       const ok = await DigitalLayout.undoDigitalLayout?.();
       if (ok) {
         DigitalLayout.arcadeBurst?.(pane);
-        if (typeof showToast === 'function') showToast('Layout restored');
+        if (typeof showToast === 'function') showToast(t('profile.layout_restored'));
         if (typeof reload === 'function') reload();
       } else if (typeof showToast === 'function') {
-        showToast('Nothing to undo');
+        showToast(t('profile.nothing_to_undo'));
       }
     });
 
@@ -743,7 +744,7 @@
           const ids = [...stack.querySelectorAll('[data-block-id]')].map((el) => el.dataset.blockId);
           dragId = null;
           await DigitalLayout.reorderDigitalBlocks(ids);
-          if (typeof showToast === 'function') showToast('Base order saved');
+          if (typeof showToast === 'function') showToast(t('profile.base_order_saved'));
         });
         handle.addEventListener('pointermove', (e) => {
           if (!dragId) return;
@@ -764,7 +765,7 @@
   async function fillPostGrid(bodyEl, col, profileUid, { isOwner, includeArchived, cols } = {}) {
     if (!bodyEl || !db || !profileUid) return;
     if (typeof renderSkeleton === 'function') renderSkeleton(bodyEl, { variant: 'feed', count: 2 });
-    else bodyEl.innerHTML = '<div class="public-profile-posts-empty">Loading…</div>';
+    else bodyEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('profile.loading') + '</div>';
     try {
       let snap;
       try {
@@ -794,19 +795,19 @@
       if (!posts.length) {
         const label = col === 'duniya' ? 'Duniya' : 'Peepal';
         bodyEl.innerHTML = `<div class="cp-grid-empty">
-          <strong>${isOwner ? `Your ${label} grid is waiting` : `No ${label} yet`}</strong>
+          <strong>${isOwner ? tHtml('profile.your_label_grid_is_waiting', { label }) : tHtml('profile.no_label_yet', { label })}</strong>
           <p>${
             isOwner
               ? col === 'duniya'
-                ? 'Share a moment — it lands here as a photo tile.'
-                : 'Plant a Peepal thought — your grid fills in.'
-              : 'Nothing public on this grid yet.'
+                ? tHtml('profile.share_a_moment_it_lands_here')
+                : tHtml('profile.plant_a_peepal_thought_your_grid')
+              : tHtml('profile.nothing_public_on_this_grid_yet')
           }</p>
           ${
             isOwner && typeof openComposer === 'function'
               ? ''
               : isOwner
-                ? `<p class="cp-grid-empty-hint">Open ${label} to post.</p>`
+                ? `<p class="cp-grid-empty-hint">${tHtml('profile.open_surface_to_post', { surface: label })}</p>`
                 : ''
           }
         </div>`;
@@ -818,7 +819,7 @@
           .slice(0, limit)
           .map((p) => {
             const media = p.thumb || p.media || p.image || (Array.isArray(p.slides) && p.slides[0] && (p.slides[0].thumb || p.slides[0].media)) || '';
-            const cellCaption = esc((p.caption || 'Post').slice(0, 40));
+            const cellCaption = esc((p.caption || t('profile.post')).slice(0, 40));
             return `<button type="button" class="cp-post-cell" data-open-post="duniya" data-post-id="${esc(p.id)}">
               ${media ? `<img src="${esc(media)}" alt="" loading="lazy" decoding="async" width="120" height="120">` : `<span>${cellCaption}</span>`}
             </button>`;
@@ -858,18 +859,18 @@
               }
             }
           } catch (e) {}
-          if (typeof showToast === 'function') showToast('Could not open post');
+          if (typeof showToast === 'function') showToast(t('profile.could_not_open_post'));
         });
       });
     } catch (e) {
       if (typeof renderErrorState === 'function') {
         renderErrorState(bodyEl, {
-          title: 'Posts unavailable',
-          message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+          title: t('common.posts_unavailable'),
+          message: typeof friendlyError === 'function' ? friendlyError(e) : t('profile.please_try_again'),
           onRetry: () => fillPostGrid(bodyEl, col, profileUid, { isOwner, includeArchived, cols }),
         });
       } else {
-        bodyEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+        bodyEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('common.posts_unavailable') + '</div>';
       }
     }
   }
@@ -879,11 +880,11 @@
     const body =
       typeof renderCustomSectionBody === 'function'
         ? renderCustomSectionBody({ ...tab, layout, type: tab.type || layout })
-        : '<div class="public-profile-posts-empty">Empty section</div>';
+        : '<div class="public-profile-posts-empty">' + tHtml('profile.empty_section') + '</div>';
     return `<div class="cp-custom-pane" data-layout="${esc(layout)}" data-section-id="${esc(tab.id)}">
       ${editable ? `<div class="cp-custom-toolbar">
-        <button type="button" class="btn" data-edit-custom="${esc(tab.id)}">Edit section</button>
-        <span class="profile-section-drag" data-tab-drag="${esc(tab.id)}" title="Long-press tabs to reorder">⠿</span>
+        <button type="button" class="btn" data-edit-custom="${esc(tab.id)}">${tHtml('profile.edit_section')}</button>
+        <span class="profile-section-drag" data-tab-drag="${esc(tab.id)}" title="${tHtml('profile.long_press_tabs_to_reorder')}">⠿</span>
       </div>` : ''}
       <div class="cp-custom-body" data-custom-layout="${esc(layout)}">${body}</div>
     </div>`;
@@ -925,14 +926,14 @@
       }, 280);
       await persistTabOrder(order);
       if (typeof onPersist === 'function') onPersist(order);
-      if (typeof showToast === 'function') showToast('Tab order saved');
+      if (typeof showToast === 'function') showToast(t('profile.tab_order_saved'));
     };
 
     customButtons().forEach((btn) => {
       if (btn.dataset.reorderWired) return;
       btn.dataset.reorderWired = '1';
-      btn.title = 'Long-press to reorder';
-      btn.setAttribute('aria-label', `${btn.textContent || 'Tab'} — long-press to reorder`);
+      btn.title = t('profile.long_press_to_reorder');
+      btn.setAttribute('aria-label', t('profile.tab_long_press_to_reorder', { tab: btn.textContent || t('profile.tab') }));
 
       btn.addEventListener(
         'click',
@@ -1115,15 +1116,15 @@
 
       let body = '';
       if (step.kind === 'bio') {
-        body = `<label class="story-editor-field">Your line
-          <textarea data-step-bio maxlength="280" rows="3" placeholder="A line or two about you">${escAttr(dp.bio || '')}</textarea>
+        body = `<label class="story-editor-field">${tHtml('profile.your_line')}
+          <textarea data-step-bio maxlength="280" rows="3" placeholder="${tHtml('profile.a_line_or_two_about_you')}">${escAttr(dp.bio || '')}</textarea>
         </label>`;
       } else if (step.kind === 'city') {
         body = `<div class="dp-chips" data-step-city-chips style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-          ${cities.map((c) => `<button type="button" class="dp-chip${dp.currentCity === c ? ' active' : ''}" data-city="${escAttr(c)}">${esc(c)}</button>`).join('')}
+          ${cities.map((c) => `<button type="button" class="dp-chip${dp.currentCity === c ? ' active' : ''}" data-city="${escAttr(c)}">${optionLabelHtml('city', c)}</button>`).join('')}
         </div>
-        <label class="story-editor-field">Other city
-          <input type="text" data-step-city-other maxlength="60" placeholder="Type your city" value="${escAttr(
+        <label class="story-editor-field">${tHtml('profile.other_city')}
+          <input type="text" data-step-city-other maxlength="60" placeholder="${tHtml('profile.type_your_city')}" value="${escAttr(
             cities.includes(dp.currentCity) ? '' : dp.currentCity || ''
           )}">
         </label>`;
@@ -1132,44 +1133,44 @@
           ${interests
             .map(
               (c) =>
-                `<button type="button" class="dp-chip${selectedInterests.includes(c) ? ' active' : ''}" data-interest="${escAttr(c)}">${esc(c)}</button>`
+                `<button type="button" class="dp-chip${selectedInterests.includes(c) ? ' active' : ''}" data-interest="${escAttr(c)}">${optionLabelHtml('interest', c)}</button>`
             )
             .join('')}
         </div>
-        <p class="digital-canvas-deepen-hint" style="margin-top:8px;">Pick a few — or skip and add later.</p>`;
+        <p class="digital-canvas-deepen-hint" style="margin-top:8px;">${tHtml('profile.pick_a_few_or_skip_and')}</p>`;
       } else if (step.kind === 'intent') {
-        body = `<p class="digital-canvas-deepen-hint">Used for matching · friends see this by default — change anytime in Edit.</p>
+        body = `<p class="digital-canvas-deepen-hint">${tHtml('profile.used_for_matching_friends_see_this')}</p>
         <div class="dp-chips" data-step-intent-chips style="display:flex;flex-wrap:wrap;gap:6px;">
           ${intents
             .map(
               (c) =>
-                `<button type="button" class="dp-chip${(dp.lookingFor || dp.matchIntent) === c ? ' active' : ''}" data-intent="${escAttr(c)}">${esc(c)}</button>`
+                `<button type="button" class="dp-chip${(dp.lookingFor || dp.matchIntent) === c ? ' active' : ''}" data-intent="${escAttr(c)}">${optionLabelHtml('intent', c)}</button>`
             )
             .join('')}
         </div>`;
       } else if (step.kind === 'prompt') {
-        body = `<label class="story-editor-field">Prompt
+        body = `<label class="story-editor-field">${tHtml('profile.prompt')}
           <select data-step-prompt-id>
             ${pick.map((p) => `<option value="${escAttr(p.id)}">${esc(p.text)}</option>`).join('')}
           </select>
         </label>
-        <label class="story-editor-field">Your answer
-          <textarea data-step-prompt-ans maxlength="500" rows="2" placeholder="Shows on your Digital tab">${escAttr(
+        <label class="story-editor-field">${tHtml('profile.your_answer')}
+          <textarea data-step-prompt-ans maxlength="500" rows="2" placeholder="${tHtml('profile.shows_on_your_digital_tab')}">${escAttr(
             (Array.isArray(dp.prompts) && dp.prompts[0]?.answer) || ''
           )}</textarea>
         </label>
-        <button type="button" class="btn" data-step-reroll style="margin-top:8px;font-size:12px;">Shuffle prompts</button>`;
+        <button type="button" class="btn" data-step-reroll style="margin-top:8px;font-size:12px;">${tHtml('profile.shuffle_prompts')}</button>`;
       } else if (step.kind === 'industry') {
         body = `<div class="dp-chips" data-step-industry-chips style="display:flex;flex-wrap:wrap;gap:6px;">
           ${industries
             .map(
               (c) =>
-                `<button type="button" class="dp-chip${dp.industry === c ? ' active' : ''}" data-industry="${escAttr(c)}">${esc(c)}</button>`
+                `<button type="button" class="dp-chip${dp.industry === c ? ' active' : ''}" data-industry="${escAttr(c)}">${optionLabelHtml('industry', c)}</button>`
             )
             .join('')}
         </div>
-        <label class="story-editor-field">Other
-          <input type="text" data-step-industry-other maxlength="80" placeholder="Your industry" value="${escAttr(
+        <label class="story-editor-field">${tHtml('profile.other')}
+          <input type="text" data-step-industry-other maxlength="80" placeholder="${tHtml('common.your_industry')}" value="${escAttr(
             industries.includes(dp.industry) ? '' : dp.industry || ''
           )}">
         </label>`;
@@ -1178,7 +1179,7 @@
           ${purposes
             .map(
               (c) =>
-                `<button type="button" class="dp-chip${dp.purpose === c ? ' active' : ''}" data-purpose="${escAttr(c)}">${esc(c)}</button>`
+                `<button type="button" class="dp-chip${dp.purpose === c ? ' active' : ''}" data-purpose="${escAttr(c)}">${optionLabelHtml('purpose', c)}</button>`
             )
             .join('')}
         </div>`;
@@ -1188,7 +1189,7 @@
           ${skills
             .map(
               (c) =>
-                `<button type="button" class="dp-chip${sel.includes(c) ? ' active' : ''}" data-skill="${escAttr(c)}">${esc(c)}</button>`
+                `<button type="button" class="dp-chip${sel.includes(c) ? ' active' : ''}" data-skill="${escAttr(c)}">${optionLabelHtml('skill', c)}</button>`
             )
             .join('')}
         </div>`;
@@ -1196,20 +1197,20 @@
 
       sheet.innerHTML = `
         <div class="archive-header">
-          ${typeof backButtonHtml === 'function' ? backButtonHtml({ label: 'Later', attrs: 'data-overlay-dismiss' }) : '<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Later">←</button>'}
+          ${typeof backButtonHtml === 'function' ? backButtonHtml({ label: t('profile.later'), attrs: 'data-overlay-dismiss' }) : '<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('profile.later') + '">←</button>'}
           <div style="flex:1"><strong>${esc(step.title)}</strong><div style="font-size:11px;color:var(--muted);font-weight:500;">${esc(progress)}</div></div>
-          <button type="button" class="btn" data-deepen-skip style="font-size:12px;">Later</button>
+          <button type="button" class="btn" data-deepen-skip style="font-size:12px;">${tHtml('profile.later')}</button>
         </div>
         <div class="digital-canvas-deepen-body dp-deepen-arcade">
           <p class="digital-canvas-deepen-hint" style="margin:0 0 10px;font-size:13px;line-height:1.4;">${esc(step.payoff || '')}</p>
           <div class="auth-profile-canvas digital-canvas-deepen-preview dp-arcade-block" style="--block-accent:var(--dp-accent,var(--red))">
             <div class="auth-profile-canvas-hero">
               <div class="auth-profile-canvas-avatar" aria-hidden="true">🪑</div>
-              <div class="auth-canvas-live-name">${esc(dp.displayName || 'Your name')}</div>
+              <div class="auth-canvas-live-name">${esc(dp.displayName || t('common.your_name'))}</div>
               <div class="auth-canvas-live-handle">@${esc((dp.username || 'username').replace(/^@/, ''))}</div>
-              <p class="digital-canvas-live-bio" data-live-bio>${esc(dp.bio || 'Your bio will show here')}</p>
+              <p class="digital-canvas-live-bio" data-live-bio>${esc(dp.bio || t('profile.your_bio_will_show_here'))}</p>
               <p class="digital-canvas-live-city" data-live-city>${esc(
-                dp.currentCity ? `📍 ${dp.currentCity}` : 'City on your profile'
+                dp.currentCity ? `📍 ${dp.currentCity}` : t('profile.city_on_your_profile')
               )}</p>
               <p class="digital-canvas-live-extra" data-live-extra style="font-size:12px;color:var(--muted);margin-top:6px;"></p>
             </div>
@@ -1217,9 +1218,9 @@
           </div>
           <div style="display:flex;gap:8px;margin-top:14px;">
             <button type="button" class="btn btn--primary" data-deepen-next style="flex:1;">${
-              stepIdx >= steps.length - 1 ? 'Save & finish' : 'Save & next'
+              stepIdx >= steps.length - 1 ? tHtml('profile.save_finish') : tHtml('profile.save_next')
             }</button>
-            <button type="button" class="btn" data-deepen-skip-step>Skip</button>
+            <button type="button" class="btn" data-deepen-skip-step>${tHtml('profile.skip')}</button>
           </div>
         </div>`;
 
@@ -1232,21 +1233,21 @@
       const liveExtra = sheet.querySelector('[data-live-extra]');
       const syncLive = () => {
         const b = sheet.querySelector('[data-step-bio]')?.value?.trim() || dp.bio || '';
-        if (liveBio) liveBio.textContent = b || 'Your bio will show here';
+        if (liveBio) liveBio.textContent = b || t('profile.your_bio_will_show_here');
         const cityChip = sheet.querySelector('[data-step-city-chips] .dp-chip.active')?.dataset?.city;
         const cityOther = sheet.querySelector('[data-step-city-other]')?.value?.trim();
         const c = cityChip || cityOther || dp.currentCity || '';
-        if (liveCity) liveCity.textContent = c ? `📍 ${c}` : 'City on your profile';
+        if (liveCity) liveCity.textContent = c ? `📍 ${c}` : t('profile.city_on_your_profile');
         if (liveExtra) {
           if (step.kind === 'interests') {
             const n = sheet.querySelectorAll('[data-step-interest-chips] .dp-chip.active').length;
-            liveExtra.textContent = n ? `${n} interest${n === 1 ? '' : 's'} selected` : '';
+            liveExtra.textContent = n ? tn('profile.interests_selected', n) : '';
           } else if (step.kind === 'intent') {
             const i = sheet.querySelector('[data-step-intent-chips] .dp-chip.active')?.dataset?.intent;
-            liveExtra.textContent = i ? `Open to: ${i}` : '';
+            liveExtra.textContent = i ? t('profile.open_to_i', { i: optionLabel('intent', i) }) : '';
           } else if (step.kind === 'skills') {
             const n = sheet.querySelectorAll('[data-step-skill-chips] .dp-chip.active').length;
-            liveExtra.textContent = n ? `${n} skill${n === 1 ? '' : 's'}` : '';
+            liveExtra.textContent = n ? tn('profile.skills_count', n) : '';
           } else liveExtra.textContent = '';
         }
       };
@@ -1314,7 +1315,7 @@
         if (stepIdx >= steps.length) {
           markDone();
           celebrate(sheet);
-          if (typeof showToast === 'function') showToast('Looking good — edit anytime');
+          if (typeof showToast === 'function') showToast(t('profile.looking_good_edit_anytime'));
           close();
           return;
         }
@@ -1368,7 +1369,7 @@
         stepIdx += 1;
         if (stepIdx >= steps.length) {
           markDone();
-          if (typeof showToast === 'function') showToast('Base updated — looking like you');
+          if (typeof showToast === 'function') showToast(t('profile.base_updated_looking_like_you'));
           close();
           return;
         }
@@ -1475,7 +1476,7 @@
                 `<button type="button" class="cp-profile-tab${t.id === initial || (!tabs.find((x) => x.id === initial) && i === 0) ? ' is-active' : ''}" role="tab" data-tab="${esc(t.id)}" aria-selected="${t.id === initial || (!tabs.find((x) => x.id === initial) && i === 0) ? 'true' : 'false'}">${esc(t.label)}</button>`
             )
             .join('')}
-          ${editable ? `<button type="button" class="cp-profile-tab cp-profile-tab--add" data-add-tab aria-label="Add section">＋</button>` : ''}
+          ${editable ? `<button type="button" class="cp-profile-tab cp-profile-tab--add" data-add-tab aria-label="${tHtml('profile.add_section')}">＋</button>` : ''}
         </div>
         <div class="cp-profile-panes" data-profile-panes>
           ${tabs

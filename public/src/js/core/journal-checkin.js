@@ -7,24 +7,22 @@
 
   const ABUSE_CAP = 1000;
   const EDIT_MS = 24 * 60 * 60 * 1000;
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  const PROMPTS = {
+  const PROMPTS = /* i18n-copy */ {
     morning: [
-      'How’s the morning treating you?',
-      'What’s on your mind as the day begins?',
-      'One hope for today — anything goes.',
-      'How did you sleep — and how do you feel now?',
+      t('settings.how_s_the_morning_treating_you'),
+      t('settings.what_s_on_your_mind_as'),
+      t('settings.one_hope_for_today_anything_goes'),
+      t('settings.how_did_you_sleep_and_how'),
     ],
     evening: [
-      'How was your day, really?',
-      'Anything worth keeping from today?',
-      'How are you winding down?',
-      'What made you smile — or sigh — today?',
+      t('settings.how_was_your_day_really'),
+      t('settings.anything_worth_keeping_from_today'),
+      t('settings.how_are_you_winding_down'),
+      t('settings.what_made_you_smile_or_sigh'),
     ],
     anytime: [
-      'What’s sitting with you right now?',
-      'A few honest lines — only you will see them.',
+      t('settings.what_s_sitting_with_you_right'),
+      t('settings.a_few_honest_lines_only_you'),
     ],
   };
 
@@ -110,9 +108,7 @@
       d = new Date(y, (m || 1) - 1, day || 1);
     } else d = new Date();
     if (typeof formatDate === 'function') return formatDate(d, 'medium');
-    const p = istParts(d);
-    const month = MONTHS[p.m - 1] || '';
-    return `${String(p.d).padStart(2, '0')} ${month} ${p.y}`;
+    return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }); // i18n-format fallback
   }
 
   function formatExpandedTime(createdAtMs) {
@@ -199,7 +195,7 @@
           max_tokens: 120,
           feature: 'journal_analysis',
           system:
-            'You summarize a private journal entry into 1 warm sentence of personal insight. No diagnosis.' +
+            'You summarize a private journal entry into 1 warm sentence of personal insight. No diagnosis.' + // i18n-ignore (LLM system prompt)
             hint,
           messages: [{ role: 'user', content: clean.slice(0, 800) }],
         });
@@ -221,7 +217,7 @@
     micBtn.addEventListener('click', () => {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) {
-        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_voice_unsupported') : 'Voice typing unavailable');
+        if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_voice_unsupported') : t('settings.voice_typing_unavailable'));
         return;
       }
       if (micBtn.classList.contains('recording')) {
@@ -245,20 +241,20 @@
   }
 
   function composeBodyHtml({ prompt, initialText, editing } = {}) {
-    const ph = esc(prompt || 'A few honest lines…');
+    const ph = esc(prompt || t('settings.a_few_honest_lines'));
     return `
       <div class="journal-checkin-body">
         <p class="journal-checkin-prompt">${ph}</p>
         <div class="journal-compose-wrap">
-          <textarea data-journal-text rows="4" maxlength="4000" placeholder="Write freely — only you can see this">${esc(initialText || '')}</textarea>
-          <button type="button" class="journal-compose-mic" data-journal-mic aria-label="Voice typing">${ico('mic', 20)}</button>
+          <textarea data-journal-text rows="4" maxlength="4000" placeholder="${tHtml('settings.write_freely_only_you_can_see')}">${esc(initialText || '')}</textarea>
+          <button type="button" class="journal-compose-mic" data-journal-mic aria-label="${tHtml('settings.voice_typing')}">${ico('mic', 20)}</button>
         </div>
         <label class="archive-journal-consent journal-analysis-consent">
           <input type="checkbox" data-journal-ai checked>
-          Allow soft analysis for personal insights (optional)
+          ${tHtml('settings.allow_soft_analysis_for_personal_insights')}
         </label>
-        <button type="button" class="btn btn--primary btn--block" data-journal-save>${editing ? 'Save changes' : 'Save to Journal'}</button>
-        ${editing ? '' : '<button type="button" class="journal-checkin-dismiss" data-journal-dismiss>Not now</button>'}
+        <button type="button" class="btn btn--primary btn--block" data-journal-save>${editing ? tHtml('settings.save_changes') : tHtml('settings.save_to_journal')}</button>
+        ${editing ? '' : '<button type="button" class="journal-checkin-dismiss" data-journal-dismiss>' + tHtml('settings.display_geo_prompt_deny') + '</button>'}
       </div>`;
   }
 
@@ -266,10 +262,10 @@
     const win = opts.window || journalWindow() || 'anytime';
     const prompt = opts.prompt || pickPrompt(win === 'anytime' ? 'anytime' : win);
     const editing = !!opts.entryId;
-    const title = editing ? 'Edit journal' : win === 'morning' ? 'Morning check-in' : win === 'evening' ? 'Evening check-in' : 'Journal';
+    const title = editing ? t('settings.edit_journal') : win === 'morning' ? t('settings.morning_check_in') : win === 'evening' ? t('settings.evening_check_in') : t('settings.journal');
 
     if (typeof openHalfSheet !== 'function') {
-      if (typeof showToast === 'function') showToast('Journal unavailable');
+      if (typeof showToast === 'function') showToast(t('settings.journal_unavailable'));
       return null;
     }
 
@@ -309,16 +305,16 @@
               entryId: opts.entryId || null,
               window: opts.markWindow !== false ? (win === 'anytime' ? null : win) : null,
             });
-            if (typeof showToast === 'function') showToast(editing ? 'Updated' : 'Saved to journal');
+            if (typeof showToast === 'function') showToast(editing ? t('common.ptr_done') : t('settings.saved_to_journal'));
             if (typeof opts.onSaved === 'function') opts.onSaved();
             close();
           } catch (e) {
             const msg =
               e?.message === 'EMPTY'
-                ? 'Write something first'
+                ? t('settings.write_something_first')
                 : e?.message === 'CAP'
-                  ? 'Journal is full for now'
-                  : 'Could not save';
+                  ? t('settings.journal_is_full_for_now')
+                  : t('settings.could_not_save');
             if (typeof showToast === 'function') showToast(msg);
           }
         });

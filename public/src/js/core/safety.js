@@ -8,19 +8,19 @@
  */
 (function () {
   const REPORT_REASONS = [
-    { code: 'spam', label: 'Spam' },
-    { code: 'harassment', label: 'Harassment' },
-    { code: 'fake_profile', label: 'Fake profile' },
-    { code: 'inappropriate', label: 'Inappropriate content' },
-    { code: 'impersonation', label: 'Impersonation' },
-    { code: 'custom', label: 'Other (type your reason)' },
+    { code: 'spam', label: t('common.spam') },
+    { code: 'harassment', label: t('common.harassment') },
+    { code: 'fake_profile', label: t('common.fake_profile') },
+    { code: 'inappropriate', label: t('common.inappropriate_content') },
+    { code: 'impersonation', label: t('common.impersonation') },
+    { code: 'custom', label: t('common.other_type_your_reason') },
   ];
 
   const SAFETY_UNDO_REASONS = [
-    { code: 'mistake', label: 'Blocked/reported by mistake' },
-    { code: 'resolved', label: 'Issue resolved' },
-    { code: 'changed_mind', label: 'Changed my mind' },
-    { code: 'other', label: 'Other' },
+    { code: 'mistake', label: t('common.blocked_reported_by_mistake') },
+    { code: 'resolved', label: t('common.issue_resolved') },
+    { code: 'changed_mind', label: t('common.changed_my_mind') },
+    { code: 'other', label: t('common.other') },
   ];
 
   // Back-compat alias used by older call sites
@@ -70,7 +70,7 @@
   async function blockUser(uid, name, opts = {}) {
     if (!uid) return;
     if (typeof currentUser !== 'undefined' && currentUser && uid === currentUser.uid) {
-      if (typeof showToast === 'function') showToast("You can't block yourself");
+      if (typeof showToast === 'function') showToast(t('common.you_can_t_block_yourself'));
       return;
     }
     if (typeof dismissedUids !== 'undefined') dismissedUids.add(uid);
@@ -103,13 +103,13 @@
       }
     }
     if (!opts.silent) {
-      showSafetyUndo(`${name || 'User'} blocked`, async () => {
+      showSafetyUndo(t('common.name_blocked_short', { name: name || t('common.user') }), async () => {
         await unblockUser(uid, name, { silent: true, skipReason: true });
-        if (typeof showToast === 'function') showToast('Block undone');
+        if (typeof showToast === 'function') showToast(t('common.block_undone'));
         if (typeof refreshSettingsSafetyLists === 'function') refreshSettingsSafetyLists();
       });
     } else if (typeof showToast === 'function') {
-      showToast(`${name || 'User'} blocked. You won't see their content.`);
+      showToast(t('common.name_blocked', { name: name || t('common.user') }));
     }
   }
 
@@ -117,7 +117,7 @@
     if (!uid) return;
     const reason = opts.reason || null;
     if (!opts.skipReason && !reason && opts.requireReason !== false && opts.fromSettings) {
-      const picked = await pickSafetyReasonSheet('Why unblock?');
+      const picked = await pickSafetyReasonSheet(t('common.why_unblock'));
       if (!picked) return;
       opts.reason = picked;
     }
@@ -133,7 +133,7 @@
         .catch(() => {});
     }
     if (!opts.silent && typeof showToast === 'function') {
-      showToast(`${name || 'User'} unblocked`);
+      showToast(t('common.name_unblocked', { name: name || t('common.user') }));
     }
   }
 
@@ -278,10 +278,10 @@
         flagId,
       });
     }
-    if (typeof addNotification === 'function') addNotification('system', '⚑', 'Report submitted for review.');
+    if (typeof addNotification === 'function') addNotification('system', '⚑', t('common.report_submitted_for_review'));
 
     if (!opts.silent) {
-      showSafetyUndo('Report submitted', async () => {
+      showSafetyUndo(t('common.report_submitted'), async () => {
         await withdrawReport(uid, {
           flagId,
           name: opts.name,
@@ -289,7 +289,7 @@
           silent: true,
           skipReason: true,
         });
-        if (typeof showToast === 'function') showToast('Report withdrawn');
+        if (typeof showToast === 'function') showToast(t('common.report_withdrawn'));
         if (typeof refreshSettingsSafetyLists === 'function') refreshSettingsSafetyLists();
       });
     }
@@ -300,7 +300,7 @@
     if (!uid) return;
     let reason = opts.reason || null;
     if (!opts.skipReason && opts.requireReason !== false && opts.fromSettings) {
-      const picked = await pickSafetyReasonSheet('Why remove this report?');
+      const picked = await pickSafetyReasonSheet(t('common.why_remove_this_report'));
       if (!picked) return;
       reason = picked;
     }
@@ -355,7 +355,7 @@
         .catch(() => {});
     }
     if (!opts.silent && typeof showToast === 'function') {
-      showToast(`Report on ${opts.name || 'user'} removed`);
+      showToast(t('common.report_on_name_removed', { name: opts.name || t('common.user') }));
     }
   }
 
@@ -420,11 +420,11 @@
           (r) =>
             `<button type="button" class="cp-menu-item safety-reason-item" data-reason="${r.code}" role="listitem">${r.label}</button>`
         ).join('')}
-        <button type="button" class="btn btn--block" data-reason-cancel style="margin-top:8px;">Cancel</button>
+        <button type="button" class="btn btn--block" data-reason-cancel style="margin-top:8px;">${tHtml('common.cancel')}</button>
       </div>`;
       openHalfSheet({
         id: 'safetyReasonSheet',
-        title: title || 'Reason',
+        title: title || t('common.reason'),
         snap: 'compact',
         accent: 'baithak',
         bodyHtml,
@@ -474,20 +474,20 @@
     sheet.className = 'flag-sheet';
     sheet.dataset.navManaged = '1';
     sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-label', 'Report or block');
+    sheet.setAttribute('aria-label', t('common.report_or_block'));
     sheet.innerHTML = `
       <div class="flag-sheet-handle" aria-hidden="true"></div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Something off?</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Help keep Chaupaal kind — report ${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name||'this person',user):(user.name||'this person')} or take a break from them.</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">${tHtml('common.something_off')}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">${tHtml('common.report_sheet_intro', { name: typeof formatDisplayNameHtml === 'function' ? { html: formatDisplayNameHtml(user.name || t('common.this_person'), user) } : user.name || t('common.this_person') })}</div>
       ${REPORT_REASONS.map(
         (r) => `<div class="flag-option" data-code="${r.code}">${r.label}</div>`
       ).join('')}
       <div id="flagCustomWrap" class="hidden" style="margin:8px 0 12px;">
-        <textarea id="flagCustomText" placeholder="Tell us what happened…" style="width:100%;min-height:72px;border:2px solid var(--line);border-radius:12px;padding:10px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
-        <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="flagCustomSubmit" style="width:100%;margin-top:8px;">Submit report</button>
+        <textarea id="flagCustomText" placeholder="${tHtml('common.tell_us_what_happened')}" style="width:100%;min-height:72px;border:2px solid var(--line);border-radius:12px;padding:10px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+        <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="flagCustomSubmit" style="width:100%;margin-top:8px;">${tHtml('common.submit_report')}</button>
       </div>
-      <div class="flag-option" data-block="1" style="color:var(--red);">Block ${user.name || 'user'}</div>
-      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Not now</button>
+      <div class="flag-option" data-block="1" style="color:var(--red);">${tHtml('common.block_name', { name: user.name || t('common.user') })}</div>
+      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">${tHtml('common.not_now')}</button>
     `;
 
     const device = document.querySelector('.device');
@@ -543,7 +543,7 @@
           });
           close();
         } catch (e) {
-          if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+          if (typeof showToast === 'function') showToast(t('common.couldn_t_submit_report_try_again'));
         }
       });
     });
@@ -551,7 +551,7 @@
     sheet.querySelector('#flagCustomSubmit')?.addEventListener('click', async () => {
       const text = sheet.querySelector('#flagCustomText')?.value?.trim();
       if (!text) {
-        if (typeof showToast === 'function') showToast('Please enter a reason');
+        if (typeof showToast === 'function') showToast(t('common.please_enter_a_reason'));
         return;
       }
       try {
@@ -563,7 +563,7 @@
         });
         close();
       } catch (e) {
-        if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+        if (typeof showToast === 'function') showToast(t('common.couldn_t_submit_report_try_again'));
       }
     });
 
@@ -572,7 +572,7 @@
         await blockUser(user.uid, user.name);
         close();
       } catch (e) {
-        if (typeof showToast === 'function') showToast('Couldn’t block — try again');
+        if (typeof showToast === 'function') showToast(t('common.couldn_t_block_try_again'));
       }
     });
   }
@@ -597,8 +597,8 @@
     overlay.className = 'archive-overlay';
     overlay.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'blockedBack' }):'<button id="blockedBack" class="cp-back-btn" aria-label="Back">←</button>'}
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Blocked users</div>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'blockedBack' }):'<button id="blockedBack" class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${tHtml('common.blocked_users')}</div>
       </div>
       <div id="blockedList" style="flex:1;overflow:auto;padding:12px 16px 24px;"></div>`;
     document.querySelector('.device')?.appendChild(overlay);
@@ -611,8 +611,8 @@
       if (typeof renderEmptyState === 'function') {
         renderEmptyState(list, {
           icon: '🚫',
-          title: 'No blocked users',
-          message: 'People you block won’t show up in your feeds.',
+          title: t('common.no_blocked_users'),
+          message: t('common.people_you_block_won_t_show'),
         });
       }
       return;
@@ -621,7 +621,7 @@
       .map(
         (u) => `<div class="recovery-row">
         <div class="recovery-preview">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(u.name,u):u.name}${u.username ? ` · @${u.username}` : ''}</div>
-        <button type="button" class="btn btn--secondary ui-state-btn" data-unblock="${u.uid}" data-name="${u.name}">Unblock</button>
+        <button type="button" class="btn btn--secondary ui-state-btn" data-unblock="${u.uid}" data-name="${u.name}">${tHtml('common.unblock')}</button>
       </div>`
       )
       .join('');
@@ -643,12 +643,12 @@
 
     if (blockedHost) {
       if (typeof renderSkeleton === 'function') renderSkeleton(blockedHost, { variant: 'list', count: 3 });
-      else blockedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
+      else blockedHost.innerHTML = '<div class="toggle-desc">' + tHtml('common.loading') + '</div>';
       try {
         const rows = await listBlockedUsers();
       if (blockedCount) blockedCount.textContent = String(rows.length);
       if (!rows.length) {
-        blockedHost.innerHTML = '<div class="toggle-desc">No blocked people.</div>';
+        blockedHost.innerHTML = '<div class="toggle-desc">' + tHtml('common.no_blocked_people') + '</div>';
       } else {
         blockedHost.innerHTML = rows
           .map(
@@ -657,7 +657,7 @@
               <strong>${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(u.name, u) : u.name}</strong>
               ${u.username ? `<span class="toggle-desc">@${u.username}</span>` : ''}
             </div>
-            <button type="button" class="btn btn--secondary" data-settings-unblock="${u.uid}" data-name="${(u.name || '').replace(/"/g, '&quot;')}">Unblock</button>
+            <button type="button" class="btn btn--secondary" data-settings-unblock="${u.uid}" data-name="${(u.name || '').replace(/"/g, '&quot;')}">${tHtml('common.unblock')}</button>
           </div>`
           )
           .join('');
@@ -674,7 +674,7 @@
       } catch (e) {
         if (typeof renderErrorState === 'function') {
           renderErrorState(blockedHost, {
-            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            message: typeof friendlyError === 'function' ? friendlyError(e) : t('common.please_try_again'),
             onRetry: () => renderSettingsSafetyLists(),
           });
         }
@@ -683,12 +683,12 @@
 
     if (reportedHost) {
       if (typeof renderSkeleton === 'function') renderSkeleton(reportedHost, { variant: 'list', count: 3 });
-      else reportedHost.innerHTML = '<div class="toggle-desc">Loading…</div>';
+      else reportedHost.innerHTML = '<div class="toggle-desc">' + tHtml('common.loading') + '</div>';
       try {
         const rows = await listReportedUsers();
       if (reportedCount) reportedCount.textContent = String(rows.length);
       if (!rows.length) {
-        reportedHost.innerHTML = '<div class="toggle-desc">No active reports.</div>';
+        reportedHost.innerHTML = '<div class="toggle-desc">' + tHtml('common.no_active_reports') + '</div>';
       } else {
         reportedHost.innerHTML = rows
           .map(
@@ -698,7 +698,7 @@
               ${u.username ? `<span class="toggle-desc">@${u.username}</span>` : ''}
               ${u.reason ? `<span class="toggle-desc">${u.reason}</span>` : ''}
             </div>
-            <button type="button" class="btn btn--secondary" data-settings-unreport="${u.uid}" data-flag="${u.flagId || ''}" data-name="${(u.name || '').replace(/"/g, '&quot;')}">Remove report</button>
+            <button type="button" class="btn btn--secondary" data-settings-unreport="${u.uid}" data-flag="${u.flagId || ''}" data-name="${(u.name || '').replace(/"/g, '&quot;')}">${tHtml('common.remove_report')}</button>
           </div>`
           )
           .join('');
@@ -717,7 +717,7 @@
       } catch (e) {
         if (typeof renderErrorState === 'function') {
           renderErrorState(reportedHost, {
-            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            message: typeof friendlyError === 'function' ? friendlyError(e) : t('common.please_try_again'),
             onRetry: () => renderSettingsSafetyLists(),
           });
         }
@@ -802,13 +802,13 @@
         if (typeof showToast === 'function') {
           showToast(
             signal === 'more_like'
-              ? "Noted — we'll show more like this"
-              : "Got it — we'll show less like this"
+              ? t('common.noted_we_ll_show_more_like')
+              : t('common.got_it_we_ll_show_less')
           );
         }
       } catch (e) {
         if (typeof showToast === 'function') {
-          showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Could not save preference');
+          showToast(typeof friendlyError === 'function' ? friendlyError(e) : t('common.could_not_save_preference'));
         }
       }
     };
@@ -818,24 +818,24 @@
 
     const items = [];
     if ((isOwn || isCollab) && surface === 'duniya') {
-      items.push({ id: 'edit_post', label: 'Edit post', icon: 'pen' });
+      items.push({ id: 'edit_post', label: t('common.edit_post'), icon: 'pen' });
     }
     if (isOwn && surface === 'peepal') {
-      items.push({ id: 'edit_post', label: 'Edit post', icon: 'pen' });
+      items.push({ id: 'edit_post', label: t('common.edit_post'), icon: 'pen' });
     }
     if (!isOwn && authorUid) {
-      items.push({ id: 'more_like', label: 'More like this', icon: 'heart' });
-      items.push({ id: 'not_interested', label: 'Not interested', icon: 'thumbs-down' });
+      items.push({ id: 'more_like', label: t('common.more_like_this'), icon: 'heart' });
+      items.push({ id: 'not_interested', label: t('common.not_interested'), icon: 'thumbs-down' });
     }
     // Peepal cards already expose Share on the footer action bar — one affordance.
     if (surface !== 'peepal') {
-      items.push({ id: 'share', label: 'Share', icon: 'share' });
+      items.push({ id: 'share', label: t('common.share'), icon: 'share' });
     }
-    if (shareUrlValue) items.push({ id: 'copy', label: 'Copy link', icon: 'link' });
+    if (shareUrlValue) items.push({ id: 'copy', label: t('common.share_copy_link'), icon: 'link' });
     if (!isOwn && authorUid) {
-      items.push({ id: 'hide', label: 'Hide', icon: 'eye-off' });
-      items.push({ id: 'report', label: 'Report…', icon: 'triangle-alert', danger: true });
-      items.push({ id: 'block', label: `Block ${user.name || 'user'}`, icon: 'ban', danger: true });
+      items.push({ id: 'hide', label: t('common.hide'), icon: 'eye-off' });
+      items.push({ id: 'report', label: t('common.report'), icon: 'triangle-alert', danger: true });
+      items.push({ id: 'block', label: t('common.block_name', { name: user.name || t('common.user') }), icon: 'ban', danger: true });
     }
 
     const bodyHtml = `<div class="cp-post-menu-list cp-menu-list" role="menu">
@@ -888,16 +888,16 @@
         if (close) close();
         try {
           await navigator.clipboard.writeText(shareUrlValue);
-          if (typeof showToast === 'function') showToast('Link copied');
+          if (typeof showToast === 'function') showToast(t('common.link_copied'));
         } catch (e) {
-          if (typeof showToast === 'function') showToast('Could not copy link');
+          if (typeof showToast === 'function') showToast(t('common.could_not_copy_link'));
         }
         return;
       }
       if (act === 'hide') {
         if (close) close();
         hideContentLocally();
-        if (typeof showToast === 'function') showToast('Hidden from your feed');
+        if (typeof showToast === 'function') showToast(t('common.hidden_from_your_feed'));
         return;
       }
       if (act === 'report') {
@@ -910,7 +910,7 @@
         try {
           await blockUser(authorUid, user.name);
         } catch (e) {
-          if (typeof showToast === 'function') showToast("Couldn't block — try again");
+          if (typeof showToast === 'function') showToast(t('common.couldn_t_block_try_again_2'));
         }
       }
     };
@@ -918,7 +918,7 @@
     if (typeof openHalfSheet === 'function') {
       openHalfSheet({
         id: 'cpContentMenu',
-        title: 'Post options',
+        title: t('common.post_options'),
         accent: surface === 'duniya' ? 'duniya' : 'peepal',
         snap: 'mid',
         bodyHtml,
@@ -933,7 +933,7 @@
 
     if (typeof showActionSheet === 'function') {
       showActionSheet(
-        'Post options',
+        t('common.post_options'),
         items.map((it) => ({
           label: it.label,
           icon: it.icon,
@@ -967,7 +967,7 @@
     const idx = opts.idx != null ? opts.idx : 0;
     const questionKey = akhbaarQuestionKey(data, idx);
     if (_akhbaarFlaggedSession.has(questionKey)) {
-      if (typeof showToast === 'function') showToast('Already reported this question');
+      if (typeof showToast === 'function') showToast(t('common.already_reported_this_question'));
       return { flagId: null, duplicate: true };
     }
 
@@ -1005,7 +1005,7 @@
           sessionStorage.setItem('chaupaal_pending_action', 'akhbaar_flag');
         } catch (e) {}
       }
-      if (typeof showToast === 'function') showToast('Sign in to submit a report');
+      if (typeof showToast === 'function') showToast(t('common.sign_in_to_submit_a_report'));
       if (typeof openAuthSheet === 'function') openAuthSheet('login');
       else if (typeof showAuth === 'function') showAuth();
       return { flagId: null, needAuth: true };
@@ -1055,16 +1055,16 @@
           { merge: true }
         );
     } catch (e) {
-      if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+      if (typeof showToast === 'function') showToast(t('common.couldn_t_submit_report_try_again'));
       return { flagId: null, error: true };
     }
 
     _akhbaarFlaggedSession.add(questionKey);
-    if (typeof addNotification === 'function') addNotification('system', '⚑', 'Report submitted for review.');
+    if (typeof addNotification === 'function') addNotification('system', '⚑', t('common.report_submitted_for_review'));
 
     if (!opts.silent) {
       const mirrorDocId = `akhbaar_${questionKey}`.slice(0, 80);
-      showSafetyUndo('Report submitted for review', async () => {
+      showSafetyUndo(t('common.report_submitted_for_review_2'), async () => {
         await withdrawReport(AKHBAAR_FLAG_SENTINEL, {
           flagId,
           name: 'Akhbaar question',
@@ -1091,7 +1091,7 @@
             .catch(() => {});
         }
         _akhbaarFlaggedSession.delete(questionKey);
-        if (typeof showToast === 'function') showToast('Report withdrawn');
+        if (typeof showToast === 'function') showToast(t('common.report_withdrawn'));
         if (typeof refreshSettingsSafetyLists === 'function') refreshSettingsSafetyLists();
       });
     }
@@ -1119,18 +1119,18 @@
     sheet.className = 'flag-sheet';
     sheet.dataset.navManaged = '1';
     sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-label', 'Report question');
-    const preview = String(data?.q || 'this question').slice(0, 100);
+    sheet.setAttribute('aria-label', t('common.report_question'));
+    const preview = String(data?.q || t('common.this_question')).slice(0, 100);
     sheet.innerHTML = `
       <div class="flag-sheet-handle" aria-hidden="true"></div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">Report question</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:4px;">${tHtml('common.report_question')}</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">“${preview.replace(/</g, '')}${preview.length >= 100 ? '…' : ''}”</div>
       ${REPORT_REASONS.map((r) => `<div class="flag-option" data-code="${r.code}">${r.label}</div>`).join('')}
       <div id="flagCustomWrap" class="hidden" style="margin:8px 0 12px;">
-        <textarea id="flagCustomText" placeholder="Tell us what’s wrong…" style="width:100%;min-height:72px;border:2px solid var(--line);border-radius:12px;padding:10px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
-        <button type="button" class="btn btn--primary btn--block" id="flagCustomSubmit" style="width:100%;margin-top:8px;">Submit report</button>
+        <textarea id="flagCustomText" placeholder="${tHtml('common.tell_us_what_s_wrong')}" style="width:100%;min-height:72px;border:2px solid var(--line);border-radius:12px;padding:10px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+        <button type="button" class="btn btn--primary btn--block" id="flagCustomSubmit" style="width:100%;margin-top:8px;">${tHtml('common.submit_report')}</button>
       </div>
-      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">Not now</button>
+      <button type="button" id="closeFlagSheet" data-overlay-dismiss style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;">${tHtml('common.not_now')}</button>
     `;
 
     const device = document.querySelector('.device');
@@ -1178,7 +1178,7 @@
           await reportAkhbaarQuestion(data, code, opts);
           close();
         } catch (e) {
-          if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+          if (typeof showToast === 'function') showToast(t('common.couldn_t_submit_report_try_again'));
         }
       });
     });
@@ -1186,14 +1186,14 @@
     sheet.querySelector('#flagCustomSubmit')?.addEventListener('click', async () => {
       const text = sheet.querySelector('#flagCustomText')?.value?.trim();
       if (!text) {
-        if (typeof showToast === 'function') showToast('Please enter a reason');
+        if (typeof showToast === 'function') showToast(t('common.please_enter_a_reason'));
         return;
       }
       try {
         await reportAkhbaarQuestion(data, 'custom', { ...opts, customText: text });
         close();
       } catch (e) {
-        if (typeof showToast === 'function') showToast('Couldn’t submit report — try again');
+        if (typeof showToast === 'function') showToast(t('common.couldn_t_submit_report_try_again'));
       }
     });
   }

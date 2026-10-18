@@ -983,7 +983,7 @@ module.exports = async function handler(req, res) {
           type: 'peepal_reaction',
           refId: postId,
           actor,
-          preview: 'reacted to your Peepal',
+          previewKey: 'notifications.push.peepal_reaction',
           deepLink: { section: 'peepal', postId, path: `/post/${postId}` },
         });
       } catch (e) {

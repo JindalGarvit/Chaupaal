@@ -102,23 +102,23 @@
   function resolveHonestNudge(tab) {
     const unread = unreadOn(tab);
     if (unread > 0) {
-      const n = unread === 1 ? '1 new notification' : `${unread} new notifications`;
-      return { text: `You have ${n} in ${tabLabel(tab)}.` };
+      const n = tn('common.new_notifications', unread);
+      return { text: t('common.you_have_n_in_tablabel', { n, tabLabel: tabLabel(tab) }) };
     }
     if (tab === 'akhbaar' && streakAtRisk()) {
       const streak = Number(window.streakCount || window.userStreak) || 0;
-      return { text: `Your ${streak}-day Akhbaar streak needs a play today to stay alive.` };
+      return { text: t('common.your_streak_day_akhbaar_streak_needs', { streak }) };
     }
     if (tab === 'peepal') {
       const reqs = pendingFriendRequests();
       if (reqs > 0) {
         return {
-          text: reqs === 1 ? 'You have a friend request waiting.' : `You have ${reqs} friend requests waiting.`,
+          text: reqs === 1 ? t('common.you_have_a_friend_request_waiting') : t('common.you_have_reqs_friend_requests_waiting', { reqs }),
         };
       }
     }
     if (tab === 'dangal' && dangalPendingToday()) {
-      return { text: 'Today’s Dangal challenge is still open — jump in when you’re ready.' };
+      return { text: t('common.today_s_dangal_challenge_is_still') };
     }
     return null;
   }

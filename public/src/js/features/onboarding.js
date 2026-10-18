@@ -10,7 +10,7 @@ function checkViralLink(){
   const gameFromPath=pathMatch?decodeURIComponent(pathMatch[1]):null;
   const challengerRaw=params.get('name')||params.get('challenge');
   if(!challengerRaw&&!gameFromPath)return;
-  const challenger=challengerRaw?decodeURIComponent(challengerRaw):'Someone';
+  const challenger=challengerRaw?decodeURIComponent(challengerRaw):t('common.someone');
   const category=params.get('cat')||'GK';
   const target=params.get('score');
   const game=gameFromPath||params.get('game')||'quiz';
@@ -24,12 +24,11 @@ function checkViralLink(){
   // Show guest / soft signup banner — Akhbaar = score challenge (not a live Muqabala room)
   document.querySelector('.guest-banner[data-viral-challenge]')?.remove();
   const banner=document.createElement('div');banner.className='guest-banner';banner.dataset.viralChallenge='1';
-  const vEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const vTarget=target!=null&&Number.isFinite(Number(target))?Number(target):null;
   const viralCopy=isAkhbaarBeat
-    ?`<strong>${vEsc(challenger)}</strong> shared a score${vTarget!=null?` of ${vTarget}`:''} on Akhbaar — try to beat it`
-    :`<strong>${vEsc(challenger)}</strong> challenged you! Beat their score${vTarget!=null?` of ${vTarget}`:''} on ${vEsc(gName)}`;
-  banner.innerHTML=`<div>${viralCopy}</div><button class="guest-signup-btn" id="guestSignupBtn" type="button">${typeof currentUser!=='undefined'&&currentUser?'Keep playing':'Sign up to keep score!'}</button>`;
+    ?(vTarget!=null?tHtml('onboarding.viral_akhbaar_score',{name:challenger,score:vTarget}):tHtml('onboarding.viral_akhbaar',{name:challenger}))
+    :(vTarget!=null?tHtml('onboarding.viral_challenge_score',{name:challenger,score:vTarget,game:gName}):tHtml('onboarding.viral_challenge',{name:challenger,game:gName}));
+  banner.innerHTML=`<div>${viralCopy}</div><button class="guest-signup-btn" id="guestSignupBtn" type="button">${typeof currentUser!=='undefined'&&currentUser?tHtml('onboarding.keep_playing'):tHtml('onboarding.sign_up_to_keep_score')}</button>`;
   document.getElementById('topbar')?.after(banner);
   document.getElementById('guestSignupBtn')?.addEventListener('click',()=>{
     banner.remove();
@@ -75,9 +74,9 @@ function generateChallengeLink(score,category,gameId){
         score,
         meta:category||'GK',
         cat:category||'GK',
-        text:`Can you beat my score of ${score} on Chaupaal? Play now!`,
+        text:t('onboarding.can_you_beat_my_score_of', { score }),
       })
-    : {scoreLine:String(score),score,meta:category||'GK',cat:category||'GK',text:`Can you beat my score of ${score} on Chaupaal? Play now!`};
+    : {scoreLine:String(score),score,meta:category||'GK',cat:category||'GK',text:t('onboarding.can_you_beat_my_score_of', { score })};
   if(typeof shareGameResult==='function'){
     shareGameResult(gid, stats);
     return;
@@ -85,7 +84,7 @@ function generateChallengeLink(score,category,gameId){
   const url=typeof buildBeatScoreLink==='function'
     ? buildBeatScoreLink(gid, score, {cat: category||'GK'})
     : `${window.location.origin}/challenge/${encodeURIComponent(gid)}?score=${score}&cat=${encodeURIComponent(category||'GK')}&name=${encodeURIComponent(userProfile?.name||'Someone')}`;
-  if(navigator.share){navigator.share({title:'Beat my score on Chaupaal!',text:`Can you beat my score of ${score} on Chaupaal? Play now!`,url});}
+  if(navigator.share){navigator.share({title:t('onboarding.beat_my_score_on_chaupaal'),text:t('onboarding.can_you_beat_my_score_of', { score }),url});}
   else{navigator.clipboard.writeText(url).then(()=>showToast(t('onboard_challenge_copied')));}
 }
 
@@ -95,63 +94,63 @@ function generateChallengeLink(score,category,gameId){
 function renderFriendDiscovery(container){
   const section=document.createElement('div');section.className='friend-discover-section';
   section.innerHTML=`
-    <div class="friend-discover-label">Find by username</div>
+    <div class="friend-discover-label">${tHtml('onboarding.find_by_username')}</div>
     <div class="phone-search-row">
-      <input class="phone-search-input" type="search" id="friendDiscoverSearch" placeholder="Name or @username" autocomplete="off">
-      <button class="phone-search-btn" id="friendDiscoverSearchBtn">Search</button>
+      <input class="phone-search-input" type="search" id="friendDiscoverSearch" placeholder="${tHtml('onboarding.name_or_username')}" autocomplete="off">
+      <button class="phone-search-btn" id="friendDiscoverSearchBtn">${tHtml('onboarding.search')}</button>
     </div>
-    <div class="friend-discover-label" style="margin-top:8px;">Phone numbers</div>
-    <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:12px;">Phone lookup stays private on Chaupaal — search by username instead, or ask a friend to share theirs.</div>
-    <div class="friend-discover-label">Results</div>
+    <div class="friend-discover-label" style="margin-top:8px;">${tHtml('onboarding.phone_numbers')}</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:12px;">${tHtml('onboarding.phone_lookup_stays_private_on_chaupaal')}</div>
+    <div class="friend-discover-label">${tHtml('onboarding.results')}</div>
     <div id="friendDiscoverResults"></div>
   `;
   container.appendChild(section);
   const resultsEl=section.querySelector('#friendDiscoverResults');
   async function runDiscoverSearch(){
     const q=section.querySelector('#friendDiscoverSearch')?.value.trim()||'';
-    if(!q){ if(typeof showToast==='function') showToast('Enter a name or username'); return; }
+    if(!q){ if(typeof showToast==='function') showToast(t('onboarding.enter_a_name_or_username')); return; }
     if(!currentUser){
       if(typeof showAuth==='function') showAuth();
-      else if(typeof showToast==='function') showToast('Sign in to add friends');
+      else if(typeof showToast==='function') showToast(t('onboarding.sign_in_to_add_friends'));
       return;
     }
-    resultsEl.innerHTML='<div style="padding:10px;color:var(--muted);font-size:13px;">Searching…</div>';
+    resultsEl.innerHTML='<div style="padding:10px;color:var(--muted);font-size:13px;">' + tHtml('onboarding.searching') + '</div>';
     try{
       const rows=typeof searchUsersProvider==='function'?await searchUsersProvider(q,{limit:12}):[];
       if(!rows.length){
-        resultsEl.innerHTML='<div style="padding:10px;color:var(--muted);font-size:13px;">No people found</div>';
+        resultsEl.innerHTML='<div style="padding:10px;color:var(--muted);font-size:13px;">' + tHtml('onboarding.no_people_found') + '</div>';
         return;
       }
       resultsEl.innerHTML=rows.map(u=>`
         <div class="discover-user-card" data-uid="${u.uid}" data-name="${(u.name||u.username||'').replace(/"/g,'&quot;')}">
           <div class="discover-avatar">${u.photoURL?`<img src="${u.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:'👤'}</div>
-          <div class="discover-info"><div class="discover-name">${u.name||u.username||'User'}</div><div class="discover-meta">@${u.username||'user'}</div></div>
-          <button class="discover-add-btn" data-uid="${u.uid}" data-name="${(u.name||u.username||'').replace(/"/g,'&quot;')}">+ Add</button>
+          <div class="discover-info"><div class="discover-name">${u.name||u.username||t('common.user')}</div><div class="discover-meta">@${u.username||'user'}</div></div>
+          <button class="discover-add-btn" data-uid="${u.uid}" data-name="${(u.name||u.username||'').replace(/"/g,'&quot;')}">${tHtml('onboarding.add')}</button>
         </div>`).join('');
       resultsEl.querySelectorAll('.discover-add-btn').forEach(btn=>{
         btn.addEventListener('click',async()=>{
           const uid=btn.dataset.uid;
-          if(!uid||uid===currentUser?.uid){ if(typeof showToast==='function') showToast("That's you"); return; }
-          if(typeof requestFriend!=='function'){ if(typeof showToast==='function') showToast('Friend requests unavailable'); return; }
+          if(!uid||uid===currentUser?.uid){ if(typeof showToast==='function') showToast(t('onboarding.that_s_you')); return; }
+          if(typeof requestFriend!=='function'){ if(typeof showToast==='function') showToast(t('onboarding.friend_requests_unavailable')); return; }
           btn.disabled=true;
           try{
             const result=await requestFriend(uid);
-            btn.textContent=result?.autoAccepted||result?.accepted?'Friends ✓':'Requested';
+            btn.textContent=result?.autoAccepted||result?.accepted?t('onboarding.friends'):t('onboarding.requested');
             btn.style.background='rgba(51,196,129,0.1)';
             btn.style.color='var(--green)';
             if(typeof showToast==='function'){
               showToast(result?.autoAccepted||result?.accepted
-                ? `You're now friends with ${btn.dataset.name}`
-                : `Friend request sent to ${btn.dataset.name}`);
+                ? t('onboarding.you_re_now_friends_with_name', { name: btn.dataset.name })
+                : t('onboarding.friend_request_sent_to_name', { name: btn.dataset.name }));
             }
           }catch(e){
             btn.disabled=false;
-            if(typeof showToast==='function') showToast(e?.message||'Could not add friend');
+            if(typeof showToast==='function') showToast(errorText(e, t('onboarding.could_not_add_friend')));
           }
         });
       });
     }catch(e){
-      resultsEl.innerHTML='<div style="padding:10px;color:var(--red);font-size:13px;">Search failed</div>';
+      resultsEl.innerHTML='<div style="padding:10px;color:var(--red);font-size:13px;">' + tHtml('common.search_failed') + '</div>';
     }
   }
   section.querySelector('#friendDiscoverSearchBtn')?.addEventListener('click',runDiscoverSearch);
@@ -169,16 +168,16 @@ function renderFriendDiscovery(container){
 
 // ===================== DUEL SPECTATOR MODE =====================
 function broadcastDuelResult(friendName,myScore,theirScore,groupIds=[]){
-  const won=myScore>theirScore;const userName=userProfile?.name?.split(' ')[0]||'You';
+  const won=myScore>theirScore;const userName=userProfile?.name?.split(' ')[0]||t('common.you');
   const friendFirst=friendName.split(' ')[0];
-  const text=won?`${userName} beat ${friendFirst} ${myScore}-${theirScore} in Muqabala`:myScore===theirScore?`${userName} and ${friendFirst} tied ${myScore}-${theirScore}`:`${friendFirst} beat ${userName} ${theirScore}-${myScore}`;
+  const text=won?t('onboarding.username_beat_friendfirst_myscore_theirsco', { userName, friendFirst, myScore, theirScore }):myScore===theirScore?t('onboarding.username_and_friendfirst_tied_myscore_thei', { userName, friendFirst, myScore, theirScore }):`${friendFirst} beat ${userName} ${theirScore}-${myScore}`;
   // Guest-only Demo fixtures — never mutate SAMPLE_* while signed in (Trust T0)
   if(!(typeof currentUser!=='undefined'&&currentUser)){
     if(typeof SAMPLE_STORIES!=='undefined'&&Array.isArray(SAMPLE_STORIES)){
       SAMPLE_STORIES.unshift({id:`ds_${Date.now()}`,name:'Duel result',avatar:'🪑',type:'score',score:myScore,total:theirScore,text,seen:false,auto:true,deletable:true,isSample:true,isDemo:true,sharedGameId:'quiz'});
     }
     if(typeof SAMPLE_CHATS!=='undefined'&&SAMPLE_CHATS.find(c=>c.type==='group')){
-      const grp=SAMPLE_CHATS.find(c=>c.type==='group');grp.preview=text;grp.time='just now';
+      const grp=SAMPLE_CHATS.find(c=>c.type==='group');grp.preview=text;grp.time=t('common.just_now_2');
     }
   }
   // Real Baithak story when signed in
@@ -210,12 +209,12 @@ async function checkBreakingNews(){
   if(!newItems.length)return;
   // Add to notification center
   newItems.forEach(item=>{
-    addNotification({type:'breaking',icon:'🔴',text:`<strong>Taaza Khabar:</strong> ${item.headline}`,section:'akhbaar'});
+    addNotification({type:'breaking',icon:'🔴',text:`<strong>${tHtml('onboarding.taaza_khabar')}</strong> ${item.headline}`,section:'akhbaar'});
   });
   try{localStorage.setItem('chaupaal_taaza_cache',JSON.stringify(newItems[0]));}catch(e){}
   localStorage.setItem('chaupaal_taaza_seen',String(Date.now()));
   // Show toast for latest
-  showToast(`🔴 Taaza Khabar: ${newItems[0].headline.replace('🔴 ','').slice(0,50)}...`);
+  showToast(t('onboarding.breaking_toast',{headline:newItems[0].headline.replace('🔴 ','').slice(0,50)}));
 }
 
 // Check for breaking news every 10 minutes
@@ -294,11 +293,11 @@ function renderNotifications() {
     if (typeof renderEmptyState === 'function') {
       renderEmptyState(list, {
         icon: '🔔',
-        title: 'No notifications yet',
-        message: 'Duels, replies, and discoveries will show up here.',
+        title: t('onboarding.no_notifications_yet'),
+        message: t('onboarding.duels_replies_and_discoveries_will_show'),
       });
     } else {
-      list.innerHTML = '<div class="notif-empty">No notifications yet 🔔</div>';
+      list.innerHTML = '<div class="notif-empty">' + tHtml('onboarding.no_notifications_yet_2') + '</div>';
     }
     return;
   }
@@ -362,14 +361,14 @@ if(window.speechSynthesis){loadVoiceList();window.speechSynthesis.onvoiceschange
  * Diversity is in match patterns (Indic / East Asian / American / European), not labels.
  */
 const VOICE_CATALOG = [
-  { id: 'asha', label: 'Asha', patterns: [/veena/i, /heera/i, /google हिन्दी/i, /hindi.*female/i], langPref: ['hi'] },
-  { id: 'arjun', label: 'Arjun', patterns: [/ravi/i, /hemant/i, /hindi.*male/i], langPref: ['hi'] },
-  { id: 'maya', label: 'Maya', patterns: [/samantha/i, /zira/i, /aria/i, /google us english female/i, /female.*en-us/i], langPref: ['en'] },
-  { id: 'noah', label: 'Noah', patterns: [/\balex\b/i, /\bdavid\b/i, /\bmark\b/i, /google us english male/i, /guy/i], langPref: ['en'] },
-  { id: 'yuki', label: 'Yuki', patterns: [/kyoko/i, /haruka/i, /google 日本語/i, /^ja/i], langPref: ['ja'] },
-  { id: 'mei', label: 'Mei', patterns: [/ting-ting|tingting/i, /xiaoxiao/i, /google.*(普通话|中文)|普通话/i, /^zh/i], langPref: ['zh'] },
-  { id: 'elena', label: 'Elena', patterns: [/monica/i, /paulina/i, /elvira/i, /google español/i, /^es/i], langPref: ['es', 'pt'] },
-  { id: 'luca', label: 'Luca', patterns: [/thomas/i, /hortense/i, /google français/i, /^fr/i, /^de/i, /^it/i], langPref: ['fr', 'de', 'it'] },
+  { id: 'asha', label: t('onboarding.asha'), patterns: [/veena/i, /heera/i, /google हिन्दी/i, /hindi.*female/i], langPref: ['hi'] },
+  { id: 'arjun', label: t('onboarding.arjun'), patterns: [/ravi/i, /hemant/i, /hindi.*male/i], langPref: ['hi'] },
+  { id: 'maya', label: t('onboarding.maya'), patterns: [/samantha/i, /zira/i, /aria/i, /google us english female/i, /female.*en-us/i], langPref: ['en'] },
+  { id: 'noah', label: t('onboarding.noah'), patterns: [/\balex\b/i, /\bdavid\b/i, /\bmark\b/i, /google us english male/i, /guy/i], langPref: ['en'] },
+  { id: 'yuki', label: t('onboarding.yuki'), patterns: [/kyoko/i, /haruka/i, /google 日本語/i, /^ja/i], langPref: ['ja'] },
+  { id: 'mei', label: t('onboarding.mei'), patterns: [/ting-ting|tingting/i, /xiaoxiao/i, /google.*(普通话|中文)|普通话/i, /^zh/i], langPref: ['zh'] },
+  { id: 'elena', label: t('onboarding.elena'), patterns: [/monica/i, /paulina/i, /elvira/i, /google español/i, /^es/i], langPref: ['es', 'pt'] },
+  { id: 'luca', label: t('onboarding.luca'), patterns: [/thomas/i, /hortense/i, /google français/i, /^fr/i, /^de/i, /^it/i], langPref: ['fr', 'de', 'it'] },
 ];
 
 function resolveCatalogVoice(entry, voices) {
@@ -467,7 +466,7 @@ function previewSelectedVoice() {
     return;
   }
   const sample =
-    typeof t === 'function' ? t('settings_voice_desc', 'Voice used for Listen to post') : 'Hello from Chaupaal';
+    typeof t === 'function' ? t('settings_voice_desc', 'Voice used for Listen to post') : t('onboarding.hello_from_chaupaal');
   window.speechSynthesis.cancel();
   const utter = new SpeechSynthesisUtterance(sample);
   const v = getSelectedVoice();
@@ -483,7 +482,7 @@ function speakText(text, btnEl) {
   if (!window.speechSynthesis) return;
   if (typeof quietMode !== 'undefined' && quietMode) {
     if (typeof showToast === 'function')
-      showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : 'Quiet mode is on');
+      showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : t('onboarding.quiet_mode_is_on'));
     return;
   }
   if (currentlySpeaking === btnEl) {
@@ -527,8 +526,8 @@ function wirePeepalAttachments(sheet){
   const attachRow=document.createElement('div');
   attachRow.className='peepal-attach-row';
   attachRow.innerHTML=`
-    <button class="peepal-attach-btn" id="peepalAttachPhoto">📷 Photo</button>
-    <button class="peepal-attach-btn" id="peepalAttachLink">🔗 Link</button>
+    <button class="peepal-attach-btn" id="peepalAttachPhoto">${tHtml('onboarding.photo')}</button>
+    <button class="peepal-attach-btn" id="peepalAttachLink">${tHtml('onboarding.link')}</button>
     <input type="file" id="peepalPhotoInput" accept="image/*" style="display:none">
   `;
   const textarea=sheet.querySelector('#peepalQText');
@@ -542,16 +541,16 @@ function wirePeepalAttachments(sheet){
   document.getElementById('peepalPhotoInput').addEventListener('change',async e=>{
     const file=e.target.files[0];if(!file)return;
     pendingPeepalAttachment={type:'image',file,data:URL.createObjectURL(file)};
-    previewArea.innerHTML=`<div class="peepal-attach-preview"><img src="${pendingPeepalAttachment.data}"><button class="peepal-attach-remove" id="removeAttach">✕</button><div style="font-size:11px;color:var(--muted);padding:4px 0;">Will compress & upload on Post</div></div>`;
+    previewArea.innerHTML=`<div class="peepal-attach-preview"><img src="${pendingPeepalAttachment.data}"><button class="peepal-attach-remove" id="removeAttach">✕</button><div style="font-size:11px;color:var(--muted);padding:4px 0;">${tHtml('onboarding.will_compress_upload_on_post')}</div></div>`;
     document.getElementById('removeAttach').addEventListener('click',()=>{pendingPeepalAttachment=null;previewArea.innerHTML='';});
   });
   document.getElementById('peepalAttachLink').addEventListener('click', async ()=>{
     const url =
       typeof promptNameSheet === 'function'
         ? await promptNameSheet({
-            title: 'Share a link',
+            title: t('onboarding.share_a_link'),
             placeholder: 'https://…',
-            confirmLabel: 'Attach',
+            confirmLabel: t('onboarding.attach'),
             maxlength: 500,
           })
         : null;
@@ -602,15 +601,15 @@ let digitalProfile = {
 digitalProfile.photos = digitalProfile.photos || [];
 
 const DP_FIELDS = [
-  {key:'bio',label:'About me',type:'textarea',placeholder:'Tell people who you are in a few lines...'},
-  {key:'occupation',label:'Occupation',type:'text',placeholder:'e.g. Software Engineer, Student, Teacher'},
-  {key:'education',label:'Education',type:'text',placeholder:'e.g. B.Tech from IIT Delhi'},
-  {key:'birthPlace',label:'Birth place',type:'text',placeholder:'e.g. Jaipur, Rajasthan'},
-  {key:'currentCity',label:'Current city',type:'text',placeholder:'e.g. Mumbai, Maharashtra'},
-  {key:'relationshipStatus',label:'Relationship status',type:'chips',options:['Single','In a relationship','Engaged','Married','It\'s complicated','Prefer not to say']},
-  {key:'languages',label:'Languages known',type:'chips-multi',options:['Hindi','English','Bengali','Telugu','Tamil','Marathi','Gujarati','Kannada','Malayalam','Punjabi','Urdu','Other']},
-  {key:'dreams',label:'Dreams & aspirations',type:'textarea',placeholder:'What do you hope to achieve someday?'},
-  {key:'hobbies',label:'Hobbies & interests',type:'textarea',placeholder:'What do you love doing in your free time?'},
+  {key:'bio',label:t('onboarding.about_me'),type:'textarea',placeholder:t('onboarding.tell_people_who_you_are_in')},
+  {key:'occupation',label:t('onboarding.occupation'),type:'text',placeholder:t('onboarding.e_g_software_engineer_student_teacher')},
+  {key:'education',label:t('onboarding.education'),type:'text',placeholder:t('onboarding.e_g_b_tech_from_iit')},
+  {key:'birthPlace',label:t('onboarding.birth_place'),type:'text',placeholder:t('onboarding.e_g_jaipur_rajasthan')},
+  {key:'currentCity',label:t('common.current_city'),type:'text',placeholder:t('onboarding.e_g_mumbai_maharashtra')},
+  {key:'relationshipStatus',label:t('onboarding.relationship_status'),type:'chips',options:['Single','In a relationship','Engaged','Married','It\'s complicated','Prefer not to say']},
+  {key:'languages',label:t('onboarding.languages_known'),type:'chips-multi',options:['Hindi','English','Bengali','Telugu','Tamil','Marathi','Gujarati','Kannada','Malayalam','Punjabi','Urdu','Other']},
+  {key:'dreams',label:t('onboarding.dreams_aspirations'),type:'textarea',placeholder:t('onboarding.what_do_you_hope_to_achieve')},
+  {key:'hobbies',label:t('onboarding.hobbies_interests'),type:'textarea',placeholder:t('onboarding.what_do_you_love_doing_in')},
 ];
 
 function calcProfileCompletionLegacy(){
@@ -639,11 +638,11 @@ function renderDPField(f){
     return `<div class="dp-field-row"><div class="dp-field-label">${f.label}</div><textarea class="dp-field-input dp-field-textarea" id="dp_${f.key}" placeholder="${f.placeholder}">${val||''}</textarea></div>`;
   }
   if(f.type==='chips'){
-    return `<div class="dp-field-row"><div class="dp-field-label">${f.label}</div><div class="dp-chip-row" data-field="${f.key}">${f.options.map(o=>`<button class="dp-chip ${val===o?'selected':''}" data-val="${o}">${o}</button>`).join('')}</div></div>`;
+    return `<div class="dp-field-row"><div class="dp-field-label">${f.label}</div><div class="dp-chip-row" data-field="${f.key}">${f.options.map(o=>`<button class="dp-chip ${val===o?'selected':''}" data-val="${o}">${optionLabelHtml(f.key,o)}</button>`).join('')}</div></div>`;
   }
   if(f.type==='chips-multi'){
     const vals=val||[];
-    return `<div class="dp-field-row"><div class="dp-field-label">${f.label}</div><div class="dp-chip-row" data-field-multi="${f.key}">${f.options.map(o=>`<button class="dp-chip ${vals.includes(o)?'selected':''}" data-val="${o}">${o}</button>`).join('')}</div></div>`;
+    return `<div class="dp-field-row"><div class="dp-field-label">${f.label}</div><div class="dp-chip-row" data-field-multi="${f.key}">${f.options.map(o=>`<button class="dp-chip ${vals.includes(o)?'selected':''}" data-val="${o}">${optionLabelHtml(f.key,o)}</button>`).join('')}</div></div>`;
   }
   return '';
 }
@@ -679,11 +678,11 @@ function renderFamilyList(){
   const list=document.getElementById('dpFamilyList');
   if(!list)return;
   const family=digitalProfile.family||[];
-  if(!family.length){list.innerHTML='<div class="dp-empty-prompt">No family details added yet</div>';return;}
+  if(!family.length){list.innerHTML='<div class="dp-empty-prompt">' + tHtml('onboarding.no_family_details_added_yet') + '</div>';return;}
   list.innerHTML='';
   family.forEach((m,i)=>{
     const row=document.createElement('div');row.className='dp-family-item';
-    row.innerHTML=`<input class="dp-field-input" placeholder="Relation (e.g. Mother)" value="${m.relation}" data-i="${i}" data-k="relation"><input class="dp-field-input" placeholder="Name" value="${m.name}" data-i="${i}" data-k="name"><button class="dp-photo-remove" style="position:static;width:28px;height:28px;background:var(--cream);color:var(--muted);" data-remove="${i}">✕</button>`;
+    row.innerHTML=`<input class="dp-field-input" placeholder="${tHtml('onboarding.relation_e_g_mother')}" value="${m.relation}" data-i="${i}" data-k="relation"><input class="dp-field-input" placeholder="${tHtml('onboarding.name')}" value="${m.name}" data-i="${i}" data-k="name"><button class="dp-photo-remove" style="position:static;width:28px;height:28px;background:var(--cream);color:var(--muted);" data-remove="${i}">✕</button>`;
     row.querySelectorAll('input').forEach(inp=>{
       inp.addEventListener('input',()=>{family[inp.dataset.i][inp.dataset.k]=inp.value;});
     });
@@ -698,11 +697,11 @@ let aiKbHistory=[];
 
 async function openAiKeyboard(targetInput,context=''){
   if(typeof isAiFeaturesEnabledSync==='function' && !isAiFeaturesEnabledSync()){
-    if(typeof showToast==='function') showToast(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:'AI is temporarily paused.');
+    if(typeof showToast==='function') showToast(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:t('onboarding.ai_is_temporarily_paused'));
     return;
   }
   if(await aiKbLimitReached()){
-    showToast(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):`Free AI limit reached (${AI_KB_LIMIT}/day). Add Chaupaal Money or join Pradhan / Sarpanch.`);
+    showToast(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):t('onboarding.free_ai_limit_reached_ai_kb', { AI_KB_LIMIT }));
     return;
   }
   document.getElementById('aiKeyboardEl')?.remove();
@@ -710,14 +709,14 @@ async function openAiKeyboard(targetInput,context=''){
   kb.className='ai-keyboard';kb.id='aiKeyboardEl';
   kb.innerHTML=`
     <div class="ai-keyboard-header">
-      <div class="ai-keyboard-title">✨ Chaupaal AI</div>
+      <div class="ai-keyboard-title">${tHtml('onboarding.chaupaal_ai')}</div>
       <button class="ai-keyboard-close" id="aiKbClose">✕</button>
     </div>
     <div class="ai-keyboard-messages" id="aiKbMessages">
-      <div class="ai-kb-msg ai"><div class="ai-kb-label">Chaupaal AI</div>Ask me anything — search, explain, summarise news, draft replies, or just chat.</div>
+      <div class="ai-kb-msg ai"><div class="ai-kb-label">Chaupaal AI</div>${tHtml('onboarding.ask_me_anything_search_explain_summarise')}</div>
     </div>
     <div class="ai-keyboard-input-row">
-      <input class="ai-keyboard-input" id="aiKbInput" placeholder="Ask anything...">
+      <input class="ai-keyboard-input" id="aiKbInput" placeholder="${tHtml('onboarding.ask_anything')}">
       <button class="ai-keyboard-send" id="aiKbSend">→</button>
     </div>
   `;
@@ -729,7 +728,7 @@ async function openAiKeyboard(targetInput,context=''){
     const inp=document.getElementById('aiKbInput');
     const query=inp?.value.trim();if(!query)return;
     if(typeof isAiFeaturesEnabled==='function' && !(await isAiFeaturesEnabled())){
-      if(typeof showToast==='function') showToast(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:'AI is temporarily paused.');
+      if(typeof showToast==='function') showToast(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:t('onboarding.ai_is_temporarily_paused'));
       return;
     }
     inp.value='';
@@ -744,8 +743,8 @@ async function openAiKeyboard(targetInput,context=''){
         typing.remove();
         const err=document.createElement('div');err.className='ai-kb-msg ai';
         err.textContent=qe?.code==='DAILY_LIMIT'||qe?.code==='WEEKLY_LIMIT'
-          ?(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):`Free AI limit reached (${AI_KB_LIMIT}/day).`)
-          :'Couldn’t verify AI limit — try again shortly';
+          ?(typeof t==='function'?t('ai_kb_limit',{n:AI_KB_LIMIT}):t('onboarding.free_ai_limit_reached_ai_kb_2', { AI_KB_LIMIT }))
+          :t('onboarding.couldn_t_verify_ai_limit_try');
         msgs.appendChild(err);
         return;
       }
@@ -753,17 +752,17 @@ async function openAiKeyboard(targetInput,context=''){
         tier:'balanced',
         max_tokens:600,
         feature:'assistant_keyboard',
-        system:`You are Chaupaal AI, an intelligent assistant in Chaupaal — India's social news and discovery app. Help users search for information, summarise news, write replies, explain topics, or answer anything. ${context?`Context: ${context}.`:''}Be concise, friendly, conversational. Never mention Claude or Anthropic — you are Chaupaal AI. Use light markdown (headings, bold, lists) when it helps readability.`,
+        system:`You are Chaupaal AI, an intelligent assistant in Chaupaal — India's social news and discovery app. Help users search for information, summarise news, write replies, explain topics, or answer anything. ${context?`Context: ${context}.`:''}Be concise, friendly, conversational. Never mention Claude or Anthropic — you are Chaupaal AI. Use light markdown (headings, bold, lists) when it helps readability.`, // i18n-ignore (LLM system prompt)
         messages:aiKbHistory
       });
-      const text=data.text||data.content?.map(b=>b.text||'').join('')||'Sorry, I couldn\'t get a response right now.';
+      const text=data.text||data.content?.map(b=>b.text||'').join('')||t('onboarding.sorry_i_couldn_t_get_a');
       aiKbHistory.push({role:'assistant',content:text});
       typing.remove();
       const aiMsg=document.createElement('div');aiMsg.className='ai-kb-msg ai';
       const bodyHtml=typeof renderMarkdown==='function'?renderMarkdown(text):text.replace(/\n/g,'<br>');
       aiMsg.innerHTML=`<div class="ai-kb-label">Chaupaal AI</div><div class="ai-md">${bodyHtml}</div>`;
       if(targetInput){
-        const insertBtn=document.createElement('button');insertBtn.className='ai-kb-insert-btn';insertBtn.textContent='↑ Insert into message';
+        const insertBtn=document.createElement('button');insertBtn.className='ai-kb-insert-btn';insertBtn.textContent=t('onboarding.insert_into_message');
         insertBtn.addEventListener('click',()=>{targetInput.value=text;targetInput.focus();kb.classList.remove('open');setTimeout(()=>kb.remove(),300);});
         aiMsg.appendChild(insertBtn);
       }
@@ -771,7 +770,7 @@ async function openAiKeyboard(targetInput,context=''){
     }catch(e){
       typing.remove();
       const err=document.createElement('div');err.className='ai-kb-msg ai';
-      err.textContent=(e&&e.code==='AI_DISABLED')?(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:e.message):'Connection error. Please try again.';
+      err.textContent=(e&&e.code==='AI_DISABLED')?(typeof AI_DISABLED_MSG==='string'?AI_DISABLED_MSG:errorText(e)):t('onboarding.connection_error_please_try_again');
       msgs.appendChild(err);
     }
     msgs.scrollTop=msgs.scrollHeight;
@@ -785,7 +784,7 @@ function wireAiKbToInput(inputEl,contextLabel){
   if(!inputEl)return;
   const trigger=document.createElement('button');
   trigger.className='ai-kb-trigger';trigger.style.cssText='margin-bottom:6px;display:inline-flex;';
-  trigger.innerHTML='✨ Ask Chaupaal';
+  trigger.innerHTML=tHtml('onboarding.ask_chaupaal');
   trigger.addEventListener('click',()=>openAiKeyboard(inputEl,contextLabel));
   inputEl.parentElement?.insertBefore(trigger,inputEl);
 }

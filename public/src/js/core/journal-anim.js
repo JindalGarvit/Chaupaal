@@ -38,7 +38,7 @@
       } catch (e) {}
     }
     setTimeout(() => lantern.remove(), 1600);
-    if (typeof showToast === 'function') showToast('Entry closed for tonight');
+    if (typeof showToast === 'function') showToast(t('settings.entry_closed_for_tonight'));
   }
 
   function plantSvg(stage) {

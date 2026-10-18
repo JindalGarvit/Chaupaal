@@ -170,7 +170,7 @@
       bar.className = 'list-filter-bar search-field';
       bar.setAttribute('data-list-filter', '1');
       bar.innerHTML = `<input type="search" class="search-field-input list-filter-input" data-list-filter-input placeholder="${String(
-        o.placeholder || 'Search…'
+        o.placeholder || t('common.search')
       ).replace(/"/g, '&quot;')}" autocomplete="off" enterkeyhint="search">`;
       host.insertBefore(bar, host.firstChild);
     }

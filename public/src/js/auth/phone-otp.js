@@ -53,15 +53,15 @@
     const code = String(err?.code || '');
     const msg = String(err?.message || '');
     if (code === 'auth/invalid-phone-number' || /invalid.*phone/i.test(msg)) {
-      return { kind: 'invalid_phone', text: 'Enter a valid 10-digit Indian mobile (+91)' };
+      return { kind: 'invalid_phone', text: t('auth.enter_a_valid_10_digit_indian') };
     }
     if (code === 'auth/too-many-requests' || /too many/i.test(msg)) {
-      return { kind: 'rate_limit', text: 'Too many attempts — wait a few minutes, then resend' };
+      return { kind: 'rate_limit', text: t('auth.too_many_attempts_wait_a_few') };
     }
     if (code === 'auth/quota-exceeded' || /quota/i.test(msg)) {
       return {
         kind: 'quota',
-        text: 'SMS quota exceeded. Add a Firebase test number for local/dev, or check billing.',
+        text: t('auth.sms_quota_exceeded_add_a_firebase'),
       };
     }
     if (
@@ -71,32 +71,33 @@
     ) {
       return {
         kind: 'captcha',
-        text: 'Security check failed — complete the captcha, or try again in a moment',
+        text: t('auth.security_check_failed_complete_the_captcha'),
       };
     }
     if (code === 'auth/code-expired' || /expired/i.test(msg)) {
-      return { kind: 'expired', text: 'Code expired — tap Resend for a new OTP' };
+      return { kind: 'expired', text: t('auth.code_expired_tap_resend_for_a') };
     }
     if (
       code === 'auth/invalid-verification-code' ||
       code === 'auth/invalid-verification-id' ||
       /invalid.*code|wrong.*code/i.test(msg)
     ) {
-      return { kind: 'wrong', text: 'Incorrect code — check the SMS and try again' };
+      return { kind: 'wrong', text: t('auth.incorrect_code_check_the_sms_and') };
     }
     if (code === 'auth/missing-verification-code') {
-      return { kind: 'not_sent', text: 'Enter the 6-digit code from your SMS' };
+      return { kind: 'not_sent', text: t('auth.enter_the_6_digit_code_from_2') };
     }
     if (code === 'auth/network-request-failed') {
-      return { kind: 'network', text: 'Network error — check connection and retry' };
+      return { kind: 'network', text: t('auth.network_error_check_connection_and_retry') };
     }
     if (code === 'auth/operation-not-allowed') {
       return {
         kind: 'disabled',
-        text: 'Phone sign-in is disabled in Firebase Console (Authentication → Phone)',
+        text: t('auth.phone_sign_in_is_disabled_in'),
       };
     }
-    return { kind: 'unknown', text: msg || 'Could not complete phone verification' };
+    if (msg) console.warn('[phone-otp]', code, msg);
+    return { kind: 'unknown', text: t('auth.could_not_complete_phone_verification') };
   }
 
   async function clearVerifier(containerId) {
@@ -120,6 +121,7 @@
     }
     ensureContainer(containerId);
     await clearVerifier(containerId);
+    if (typeof syncFirebaseAuthLanguage === 'function') syncFirebaseAuthLanguage();
     const verifier = new firebase.auth.RecaptchaVerifier(containerId, {
       size: size || 'invisible',
       callback: () => {},
@@ -170,6 +172,7 @@
     for (const mode of modes) {
       try {
         const verifier = await createVerifier(containerId, mode);
+        if (typeof syncFirebaseAuthLanguage === 'function') syncFirebaseAuthLanguage();
         const confirmation = await auth.signInWithPhoneNumber(phone, verifier);
         state[containerId] = state[containerId] || {};
         state[containerId].lastSendAt = Date.now();
@@ -250,10 +253,13 @@
       const remain = cooldownRemaining(containerId);
       if (remain > 0) {
         btn.disabled = true;
-        btn.textContent = 'Resend in ' + Math.ceil(remain / 1000) + 's';
+        const secs = Math.ceil(remain / 1000);
+        btn.textContent = t('auth.resend_in', {
+          time: typeof formatUnit === 'function' ? formatUnit(secs, 'second', { unitDisplay: 'narrow', maximumFractionDigits: 0 }) : secs + 's',
+        });
       } else {
         btn.disabled = false;
-        btn.textContent = btn.dataset.defaultLabel || 'Resend OTP';
+        btn.textContent = btn.dataset.defaultLabel || t('common.resend_otp');
       }
     };
     tick();

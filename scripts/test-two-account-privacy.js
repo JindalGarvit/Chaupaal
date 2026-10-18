@@ -22,6 +22,7 @@ function loadBrowserScript(rel, sandbox) {
 }
 
 const sandbox = {
+  ...require('./lib/i18n-node-shim').globals,
   console,
   window: {},
   document: { createElement: () => ({ style: {}, classList: { add() {}, remove() {} } }) },

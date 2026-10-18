@@ -104,7 +104,7 @@
     let items = loadMedia();
     const room = CAPS.photo - countByType(items, 'photo');
     if (room <= 0) {
-      if (typeof showToast === 'function') showToast(`Max ${CAPS.photo} photos`);
+      if (typeof showToast === 'function') showToast(t('profile.max_photo_photos', { photo: CAPS.photo }));
       return items;
     }
     for (const file of [...files].slice(0, room)) {
@@ -130,11 +130,11 @@
   async function addVideoFile(file) {
     let items = loadMedia();
     if (countByType(items, 'video') >= CAPS.video) {
-      if (typeof showToast === 'function') showToast(`Max ${CAPS.video} short videos`);
+      if (typeof showToast === 'function') showToast(t('profile.max_video_short_videos', { video: CAPS.video }));
       return items;
     }
     if (file.size > 50 * 1024 * 1024) {
-      if (typeof showToast === 'function') showToast('Video must be under 50MB');
+      if (typeof showToast === 'function') showToast(t('profile.video_must_be_under_50mb'));
       return items;
     }
     // Duration check when possible
@@ -154,12 +154,12 @@
         v.src = url;
       });
       if (dur > VIDEO_MAX_MS + 500) {
-        if (typeof showToast === 'function') showToast('Keep videos to ~30 seconds');
+        if (typeof showToast === 'function') showToast(t('profile.keep_videos_to_30_seconds'));
         return items;
       }
     } catch (e) {}
 
-    if (typeof showToast === 'function') showToast('Uploading video…');
+    if (typeof showToast === 'function') showToast(t('profile.uploading_video'));
     let remote = null;
     try {
       remote = await uploadMediaFile(file, 'video');
@@ -180,7 +180,7 @@
   async function addVoiceBlob(blob, durationSec) {
     let items = loadMedia();
     if (countByType(items, 'voice') >= CAPS.voice) {
-      if (typeof showToast === 'function') showToast(`Max ${CAPS.voice} voice notes`);
+      if (typeof showToast === 'function') showToast(t('profile.max_voice_voice_notes', { voice: CAPS.voice }));
       return items;
     }
     const file = new File([blob], `voice_${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
@@ -209,23 +209,23 @@
         if (item.type === 'photo')
           return `<div class="profile-media-cell" data-i="${i}">
         <img src="${src}" alt="">
-        <button type="button" data-remove-media="${i}" aria-label="Remove">✕</button>
+        <button type="button" data-remove-media="${i}" aria-label="${tHtml('profile.exclusion_remove')}">✕</button>
       </div>`;
         if (item.type === 'video')
           return `<div class="profile-media-cell profile-media-cell--video" data-i="${i}" data-play-video="${src}">
         <video src="${src}" muted playsinline preload="metadata"></video>
         <span class="profile-media-badge">▶</span>
         <span class="profile-media-scrub" aria-hidden="true"><i></i></span>
-        <button type="button" data-remove-media="${i}" aria-label="Remove">✕</button>
+        <button type="button" data-remove-media="${i}" aria-label="${tHtml('profile.exclusion_remove')}">✕</button>
       </div>`;
         if (item.type === 'voice') {
           const d = item.duration || 0;
-          const label = d ? `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}` : 'Voice';
+          const label = d ? `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}` : t('profile.voice');
           return `<div class="profile-media-cell profile-media-cell--voice" data-i="${i}" data-play-voice="${src}">
         <span class="profile-media-voice-icon">🎙️</span>
         <span class="profile-media-voice-label">${label}</span>
         <span class="profile-media-badge profile-media-play">▶</span>
-        <button type="button" data-remove-media="${i}" aria-label="Remove">✕</button>
+        <button type="button" data-remove-media="${i}" aria-label="${tHtml('profile.exclusion_remove')}">✕</button>
       </div>`;
         }
         return '';
@@ -239,27 +239,24 @@
     const section = document.createElement('div');
     section.className = 'profile-media-section';
     section.innerHTML = `
-    <div class="profile-media-title">Photos, video & voice</div>
-    <div class="profile-media-hint">
-      Up to ${CAPS.photo} photos, ${CAPS.video} short videos (≤30s), and ${CAPS.voice} voice notes.
-      Shown on your profile · not used for matching text yet.
-    </div>
+    <div class="profile-media-title">${tHtml('profile.photos_video_voice')}</div>
+    <div class="profile-media-hint">${tHtml('profile.media_caps_hint', { photos: CAPS.photo, videos: CAPS.video, voice: CAPS.voice })}</div>
     <div class="profile-media-actions">
-      <label class="profile-media-action">📷 Photo<input type="file" accept="image/*" id="profileMediaPhoto" hidden multiple></label>
-      <label class="profile-media-action">🎬 Video<input type="file" accept="video/*" id="profileMediaVideo" hidden></label>
-      <button type="button" class="profile-media-action" id="profileVoiceBtn">🎙️ Voice</button>
+      <label class="profile-media-action">${tHtml('profile.photo_2')}<input type="file" accept="image/*" id="profileMediaPhoto" hidden multiple></label>
+      <label class="profile-media-action">${tHtml('profile.video')}<input type="file" accept="video/*" id="profileMediaVideo" hidden></label>
+      <button type="button" class="profile-media-action" id="profileVoiceBtn">${tHtml('profile.voice_2')}</button>
     </div>
     <div id="profileMediaGrid" class="profile-media-grid"></div>
     <div id="voiceRecorder" class="profile-voice-recorder" hidden>
-      <div class="profile-media-title" style="font-size:13px;margin-bottom:6px;">Record a voice note</div>
-      <div class="profile-media-hint" style="margin-bottom:10px;">Max ${VOICE_MAX_S}s. Speak naturally — this stays on your profile strip.</div>
+      <div class="profile-media-title" style="font-size:13px;margin-bottom:6px;">${tHtml('profile.record_a_voice_note')}</div>
+      <div class="profile-media-hint" style="margin-bottom:10px;">${tHtml('profile.voice_max_hint', { seconds: VOICE_MAX_S })}</div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button type="button" id="voiceRecordStart" class="btn btn--primary">Record</button>
-        <button type="button" id="voiceRecordStop" class="btn" hidden>Stop</button>
+        <button type="button" id="voiceRecordStart" class="btn btn--primary">${tHtml('profile.record')}</button>
+        <button type="button" id="voiceRecordStop" class="btn" hidden>${tHtml('profile.stop')}</button>
         <div id="voiceTimer" class="profile-voice-timer" hidden>0:00</div>
       </div>
       <audio id="voicePreview" controls hidden style="width:100%;margin-top:10px;"></audio>
-      <button type="button" id="voiceSave" class="btn btn--primary btn--block" hidden style="margin-top:8px;">Save voice note</button>
+      <button type="button" id="voiceSave" class="btn btn--primary btn--block" hidden style="margin-top:8px;">${tHtml('profile.save_voice_note')}</button>
     </div>`;
     el.appendChild(section);
 
@@ -316,7 +313,7 @@
     refresh(mediaItems);
 
     section.querySelector('#profileMediaPhoto').addEventListener('change', async (e) => {
-      if (typeof showToast === 'function') showToast('Adding photos…');
+      if (typeof showToast === 'function') showToast(t('profile.adding_photos'));
       const next = await addPhotoFiles(e.target.files);
       refresh(next);
       e.target.value = '';
@@ -373,7 +370,7 @@
           }
         }, 1000);
       } catch (err) {
-        if (typeof showToast === 'function') showToast('Microphone access needed for voice notes');
+        if (typeof showToast === 'function') showToast(t('profile.microphone_access_needed_for_voice_notes'));
       }
     });
 
@@ -387,14 +384,14 @@
 
     section.querySelector('#voiceSave').addEventListener('click', async () => {
       if (!pendingBlob) return;
-      if (typeof showToast === 'function') showToast('Saving voice note…');
+      if (typeof showToast === 'function') showToast(t('profile.saving_voice_note'));
       const next = await addVoiceBlob(pendingBlob, voiceSecs);
       refresh(next);
       section.querySelector('#voiceRecorder').hidden = true;
       section.querySelector('#voicePreview').hidden = true;
       section.querySelector('#voiceSave').hidden = true;
       pendingBlob = null;
-      if (typeof showToast === 'function') showToast('Voice note saved');
+      if (typeof showToast === 'function') showToast(t('profile.voice_note_saved'));
     });
   }
 
@@ -411,7 +408,7 @@
     wrap.appendChild(audio);
     const close = document.createElement('button');
     close.type = 'button';
-    close.textContent = 'Close';
+    close.textContent = t('common.close');
     close.style.cssText = 'margin-top:8px;width:100%;padding:10px;border:none;background:var(--cream);border-radius:10px;font-weight:700;cursor:pointer;';
     close.addEventListener('click', () => wrap.remove());
     wrap.appendChild(close);

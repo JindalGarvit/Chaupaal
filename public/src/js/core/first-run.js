@@ -10,29 +10,29 @@
 
   const MODE_JOBS = {
     peepal: {
-      khoj: { brand: 'Khoj', job: 'Find people who match your vibe' },
-      vriksha: { brand: 'Vriksha', job: 'Discussions & discovery feed' },
-      mashhoor: { brand: 'Mashhoor', job: 'Trending discussions this week' },
+      khoj: { brand: 'Khoj', job: t('onboarding.find_people_who_match_your_vibe') },
+      vriksha: { brand: 'Vriksha', job: t('onboarding.discussions_discovery_feed') },
+      mashhoor: { brand: 'Mashhoor', job: t('onboarding.trending_discussions_this_week') },
     },
     duniya: {
-      vishwa: { brand: 'Vishwa', job: 'Photos, stories & posts' },
-      lehar: { brand: 'Lehar', job: 'Short clips' },
-      prasidha: { brand: 'Prasidha', job: 'Trending this week' },
+      vishwa: { brand: 'Vishwa', job: t('onboarding.photos_stories_posts') },
+      lehar: { brand: 'Lehar', job: t('onboarding.short_clips') },
+      prasidha: { brand: 'Prasidha', job: t('onboarding.trending_this_week') },
     },
     baithak: {
-      sabha: { brand: 'Sabha', job: 'All your chats' },
-      sambhavanayein: { brand: 'Sambhavanayein', job: 'New connections' },
-      mitra: { brand: 'Mitra', job: 'Friends & groups' },
+      sabha: { brand: 'Sabha', job: t('onboarding.all_your_chats') },
+      sambhavanayein: { brand: 'Sambhavanayein', job: t('onboarding.new_connections') },
+      mitra: { brand: 'Mitra', job: t('onboarding.friends_groups') },
     },
     akhbaar: {
-      surkhiya: { brand: 'Surkhiya', job: 'Digest · Jump to play' },
-      all: { brand: 'Khabar', job: 'News & quizzes' },
-      saathi: { brand: 'Saathi', job: 'Friends’ updates' },
+      surkhiya: { brand: 'Surkhiya', job: t('onboarding.digest_jump_to_play') },
+      all: { brand: 'Khabar', job: t('onboarding.news_quizzes') },
+      saathi: { brand: 'Saathi', job: t('onboarding.friends_updates') },
     },
     dangal: {
-      khel: { brand: 'Khel', job: 'Game of the day' },
-      manch: { brand: 'Manch', job: 'Game library' },
-      maidan: { brand: 'Maidan', job: 'Resume a match' },
+      khel: { brand: 'Khel', job: t('common.shortcut_dangal_gotd') },
+      manch: { brand: 'Manch', job: t('onboarding.game_library') },
+      maidan: { brand: 'Maidan', job: t('onboarding.resume_a_match') },
     },
   };
 
@@ -121,27 +121,27 @@
       window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
     sheet.innerHTML = `
       <div class="archive-header">
-        <div style="flex:1"><strong>${tt('coach_title', 'Quick tips')}</strong></div>
-        <button type="button" class="btn" data-coach-skip style="font-size:12px;">${tt('coach_skip', 'Skip')}</button>
+        <div style="flex:1"><strong>${tt('onboarding.coach_title', 'Quick tips')}</strong></div>
+        <button type="button" class="btn" data-coach-skip style="font-size:12px;">${tt('onboarding.coach_skip', 'Skip')}</button>
       </div>
       <div class="first-run-coach-body${quiet ? ' is-quiet' : ''}">
         <div class="first-run-coach-card" data-coach-card="0">
           <div class="first-run-coach-ico" aria-hidden="true">↔️</div>
-          <h3>${tt('coach_swipe_title', 'Swipe to switch modes')}</h3>
-          <p>${tt('coach_swipe_body', 'On Peepal, swipe the feed: Khoj · Vriksha · Mashhoor. Same idea on Baithak, Duniya & Akhbaar.')}</p>
+          <h3>${tt('onboarding.coach_swipe_title', 'Swipe to switch modes')}</h3>
+          <p>${tt('onboarding.coach_swipe_body', 'On Peepal, swipe the feed: Khoj · Vriksha · Mashhoor. Same idea on Baithak, Duniya & Akhbaar.')}</p>
         </div>
         <div class="first-run-coach-card" data-coach-card="1" hidden>
           <div class="first-run-coach-ico" aria-hidden="true">长</div>
-          <h3>${tt('coach_hold_title', 'Press & hold a tab')}</h3>
-          <p>${tt('coach_hold_body', 'Hold the bottom tab to open shortcuts — post, find people, switch sections fast.')}</p>
+          <h3>${tt('onboarding.coach_hold_title', 'Press & hold a tab')}</h3>
+          <p>${tt('onboarding.coach_hold_body', 'Hold the bottom tab to open shortcuts — post, find people, switch sections fast.')}</p>
         </div>
         <div class="first-run-coach-card" data-coach-card="2" hidden>
           <div class="first-run-coach-ico" aria-hidden="true">👆👆</div>
-          <h3>${tt('coach_dbl_title', 'Double-tap for notifications')}</h3>
-          <p>${tt('coach_dbl_body', 'Double-tap any tab to open that tab’s notifications — empty is fine (“No new notifications”).')}</p>
+          <h3>${tt('onboarding.coach_dbl_title', 'Double-tap for notifications')}</h3>
+          <p>${tt('onboarding.coach_dbl_body', 'Double-tap any tab to open that tab’s notifications — empty is fine (“No new notifications”).')}</p>
         </div>
         <div class="first-run-coach-dots" aria-hidden="true"><i class="is-on"></i><i></i><i></i></div>
-        <button type="button" class="btn btn--primary btn--block" data-coach-next>${tt('coach_next', 'Next')}</button>
+        <button type="button" class="btn btn--primary btn--block" data-coach-next>${tt('onboarding.coach_next', 'Next')}</button>
       </div>`;
     // Fix hold icon - use text not chinese
     sheet.querySelector('[data-coach-card="1"] .first-run-coach-ico').textContent = '☰';
@@ -165,7 +165,7 @@
         d.classList.toggle('is-on', i === step);
       });
       const next = sheet.querySelector('[data-coach-next]');
-      if (next) next.textContent = step >= 2 ? tt('coach_got_it', 'Got it') : tt('coach_next', 'Next');
+      if (next) next.textContent = step >= 2 ? tt('onboarding.coach_got_it', 'Got it') : tt('onboarding.coach_next', 'Next');
     };
     sheet.querySelector('[data-coach-skip]')?.addEventListener('click', close);
     sheet.querySelector('[data-coach-next]')?.addEventListener('click', () => {
@@ -272,18 +272,18 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        <div style="flex:1"><strong>${tt('day0_fork_title', 'What first?')}</strong></div>
-        <button type="button" class="btn" data-fork-skip style="font-size:12px;">${tt('day0_fork_skip', 'Skip')}</button>
+        <div style="flex:1"><strong>${tt('onboarding.day0_fork_title', 'What first?')}</strong></div>
+        <button type="button" class="btn" data-fork-skip style="font-size:12px;">${tt('onboarding.day0_fork_skip', 'Skip')}</button>
       </div>
       <div class="day0-fork-body">
-        <p class="day0-fork-lead">${tt('day0_fork_lead', 'One step — play solo or meet someone. You can do both later.')}</p>
+        <p class="day0-fork-lead">${tt('onboarding.day0_fork_lead', 'One step — play solo or meet someone. You can do both later.')}</p>
         <button type="button" class="day0-fork-card" data-fork="play">
-          <strong>${tt('day0_play', 'Play')}</strong>
-          <span>${tt('day0_play_sub', 'A short practice quiz — no account needed')}</span>
+          <strong>${tt('onboarding.day0_play', 'Play')}</strong>
+          <span>${tt('onboarding.day0_play_sub', 'A short practice quiz — no account needed')}</span>
         </button>
         <button type="button" class="day0-fork-card" data-fork="meet">
-          <strong>${tt('day0_meet', 'Meet')}</strong>
-          <span>${tt('day0_meet_sub', 'Invite friends, find contacts, or search on Peepal')}</span>
+          <strong>${tt('onboarding.day0_meet', 'Meet')}</strong>
+          <span>${tt('onboarding.day0_meet_sub', 'Invite friends, find contacts, or search on Peepal')}</span>
         </button>
         ${typeof ChaupaalLangPicker !== 'undefined' ? ChaupaalLangPicker.chipHtml() : ''}
       </div>`;
@@ -320,12 +320,12 @@
     sheet.innerHTML = `
       <div class="archive-header">
         ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-dismiss' }) : '<button type="button" data-dismiss class="cp-back-btn">←</button>'}
-        <div style="flex:1"><strong>${tt('day0_meet', 'Meet')}</strong></div>
+        <div style="flex:1"><strong>${tt('onboarding.day0_meet', 'Meet')}</strong></div>
       </div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
         <button type="button" class="btn btn--primary btn--block" data-meet="invite">${tt('contacts_invite_cta', 'Invite friends')}</button>
-        <button type="button" class="btn btn--block" data-meet="contacts">${tt('day0_contacts', 'Find from contacts')}</button>
-        <button type="button" class="btn btn--block" data-meet="khoj">${tt('day0_khoj', 'Find on Peepal')}</button>
+        <button type="button" class="btn btn--block" data-meet="contacts">${tt('onboarding.day0_contacts', 'Find from contacts')}</button>
+        <button type="button" class="btn btn--block" data-meet="khoj">${tt('onboarding.day0_khoj', 'Find on Peepal')}</button>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
     const close = () => {
@@ -392,10 +392,10 @@
     const isPrivacy = k === 'privacy';
     const isCollects = k === 'collects' || k === 'data' || k === 'what-we-collect';
     const title = isCollects
-      ? 'What Chaupaal collects'
+      ? t('common.what_chaupaal_collects')
       : isPrivacy
-        ? 'Privacy Policy'
-        : 'Terms of Service';
+        ? t('common.privacy_policy')
+        : t('onboarding.terms_of_service');
     document.getElementById('legalSheetV1')?.remove();
     const sheet = document.createElement('div');
     sheet.id = 'legalSheetV1';
@@ -405,64 +405,64 @@
     let body;
     if (isCollects) {
       body = `
-        <p class="legal-v1-lead">Plain English. No charts. No per-signal editor — just what we collect, why, and how you control it.</p>
+        <p class="legal-v1-lead">${tHtml('onboarding.plain_english_no_charts_no_per')}</p>
 
-        <h3 class="legal-v1-h">What we collect</h3>
+        <h3 class="legal-v1-h">${tHtml('common.what_we_collect')}</h3>
         <ul class="legal-v1-list">
-          <li><strong>Profile you enter</strong> — name, username, bio, interests, photos, and other fields you fill in. Visibility follows your Public / Friends / Private choices and each show* toggle. Friends-only and Private profiles keep gated fields off the world-readable public document (client sync + Firestore rules); friends use a separate friend projection.</li>
-          <li><strong>Activity signals</strong> (on by default) — scrolls, likes, comments, saves, game completes, Mehfil join/leave duration, and similar. Used to improve feed, games, and people discovery.</li>
-          <li><strong>Hashed search</strong> — a fingerprint of search text, never the raw query string.</li>
-          <li><strong>Device &amp; session basics</strong> — signed-in sessions, push tokens, and crash/error reports needed to keep the app running.</li>
-          <li><strong>Journal</strong> — your Archive journal stays yours. Soft analysis only happens when you check consent on that entry.</li>
+          <li><strong>${tHtml('onboarding.profile_you_enter')}</strong> ${tHtml('onboarding.name_username_bio_interests_photos_and')}</li>
+          <li><strong>${tHtml('onboarding.activity_signals')}</strong> ${tHtml('onboarding.on_by_default_scrolls_likes_comments')}</li>
+          <li><strong>${tHtml('onboarding.hashed_search')}</strong> ${tHtml('onboarding.a_fingerprint_of_search_text_never')}</li>
+          <li><strong>${tHtml('onboarding.device_session_basics')}</strong> ${tHtml('onboarding.signed_in_sessions_push_tokens_and')}</li>
+          <li><strong>${tHtml('common.chaupaal_journal')}</strong> ${tHtml('onboarding.your_archive_journal_stays_yours_soft')}</li>
         </ul>
 
-        <h3 class="legal-v1-h">What we use it for</h3>
+        <h3 class="legal-v1-h">${tHtml('onboarding.what_we_use_it_for')}</h3>
         <ul class="legal-v1-list">
-          <li>Better people, games, and content recommendations — with short, readable “why” reasons on the server side.</li>
-          <li>Safety (block / mute / report), account recovery, and essential service messages.</li>
-          <li>Optional tips &amp; wishes from Chaupaal (separate toggle).</li>
+          <li>${tHtml('onboarding.better_people_games_and_content_recommenda')}</li>
+          <li>${tHtml('onboarding.safety_block_mute_report_account_recovery')}</li>
+          <li>${tHtml('onboarding.optional_tips_wishes_from_chaupaal_separat')}</li>
         </ul>
 
-        <h3 class="legal-v1-h">What we never collect or infer</h3>
+        <h3 class="legal-v1-h">${tHtml('onboarding.what_we_never_collect_or_infer')}</h3>
         <ul class="legal-v1-list">
-          <li>Raw message (DM) text, raw search text, contacts lists, or precise GPS coordinates for personalization.</li>
-          <li>Journal text sent to any AI provider <em>without</em> per-entry consent.</li>
-          <li>Sensitive attributes we never invent: religion, caste, sexuality, health, or income as inferred labels. Declared fields stay yours and respect show* toggles.</li>
-          <li>We do not sell your personal data.</li>
+          <li>${tHtml('onboarding.raw_message_dm_text_raw_search')}</li>
+          <li>${tHtml('onboarding.journal_text_sent_to_any_ai')} <em>${tHtml('onboarding.without')}</em> ${tHtml('onboarding.per_entry_consent')}</li>
+          <li>${tHtml('onboarding.sensitive_attributes_we_never_invent_relig')}</li>
+          <li>${tHtml('onboarding.we_do_not_sell_your_personal')}</li>
         </ul>
 
-        <h3 class="legal-v1-h">How long we keep it</h3>
+        <h3 class="legal-v1-h">${tHtml('onboarding.how_long_we_keep_it')}</h3>
         <ul class="legal-v1-list">
-          <li><strong>Activity signal stream</strong> — pruned on a short rolling window (about two weeks of raw events; rollups may last longer for the model).</li>
-          <li><strong>Archive / soft-delete</strong> — Deleted tab recovery is on this device (~30 days). Hidden posts stay in Archive until you restore or delete them.</li>
-          <li><strong>Live stories</strong> — expire after 24 hours unless saved as Highlights / story archive.</li>
-          <li><strong>Account deletion</strong> — signs you out and revokes sessions now; full purge completes in about 30 days.</li>
+          <li><strong>${tHtml('onboarding.activity_signal_stream')}</strong> ${tHtml('onboarding.pruned_on_a_short_rolling_window')}</li>
+          <li><strong>${tHtml('onboarding.archive_soft_delete')}</strong> ${tHtml('onboarding.deleted_tab_recovery_is_on_this')}</li>
+          <li><strong>${tHtml('onboarding.live_stories')}</strong> ${tHtml('onboarding.expire_after_24_hours_unless_saved')}</li>
+          <li><strong>${tHtml('onboarding.account_deletion')}</strong> ${tHtml('onboarding.signs_you_out_and_revokes_sessions')}</li>
         </ul>
 
-        <h3 class="legal-v1-h">Your choices</h3>
-        <p>These open Settings to the matching control:</p>
+        <h3 class="legal-v1-h">${tHtml('onboarding.your_choices')}</h3>
+        <p>${tHtml('onboarding.these_open_settings_to_the_matching')}</p>
         <div class="legal-v1-actions">
-          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleActivitySignals">Personalization &amp; activity</button>
-          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleCompanionOutreach">Tips &amp; wishes</button>
-          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleOpenToMeet">Open to meeting people</button>
-          <button type="button" class="btn btn--secondary btn--block" data-collects-go="export">Download my data</button>
-          <button type="button" class="btn btn--secondary btn--block" data-collects-go="archive">Open Archive</button>
-          <button type="button" class="btn btn--ghost btn--block" data-collects-go="privacy">Short Privacy Policy</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleActivitySignals">${tHtml('common.personalization_activity')}</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleCompanionOutreach">${tHtml('onboarding.tips_wishes')}</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleOpenToMeet">${tHtml('onboarding.open_to_meeting_people')}</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-go="export">${tHtml('common.download_my_data')}</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-go="archive">${tHtml('common.open_archive')}</button>
+          <button type="button" class="btn btn--ghost btn--block" data-collects-go="privacy">${tHtml('onboarding.short_privacy_policy')}</button>
         </div>
-        <p class="legal-v1-note">Ranking and matching read stored fields only — they never call an AI model at request time. Offline enrichment may store topic labels and embeddings (profiles and public posts) for ranking when present; those jobs are optional and pauseable.</p>`;
+        <p class="legal-v1-note">${tHtml('onboarding.ranking_and_matching_read_stored_fields')}</p>`;
     } else if (isPrivacy) {
-      body = `         <p>Chaupaal (“we”) values your privacy. We collect account info you provide (name, username, email or phone), profile content you post, consented activity signals, hashed search fingerprints, and basic device/session data to run the app.</p>
-         <p><strong>How we use it:</strong> to authenticate you, show your profile and posts to people you choose, improve discovery and safety, and send essential service messages.</p>
-         <p><strong>Sharing:</strong> we don’t sell your personal data. Content you mark public can be seen by other members. Friends-only / Private profiles keep gated fields off the world-readable public document (enforced in sync + Firestore rules); friends read a separate friend projection. We use trusted processors (hosting, push) under contracts.</p>
-         <p><strong>Your choices:</strong> edit visibility and show* toggles, turn off personalization, sign out, export your data, or request account deletion via Settings.</p>
-         <p><button type="button" class="btn btn--secondary btn--sm" data-legal="collects">What Chaupaal collects — full plain list</button></p>
-         <p class="legal-v1-note">This is a short v1 summary for early access. The “What we collect” page is the detailed disclosure.</p>`;
+      body = `         <p>${tHtml('onboarding.chaupaal_we_values_your_privacy_we')}</p>
+         <p><strong>${tHtml('onboarding.how_we_use_it')}</strong> ${tHtml('onboarding.to_authenticate_you_show_your_profile')}</p>
+         <p><strong>${tHtml('onboarding.sharing')}</strong> ${tHtml('onboarding.we_don_t_sell_your_personal')}</p>
+         <p><strong>${tHtml('onboarding.your_choices_2')}</strong> ${tHtml('onboarding.edit_visibility_and_show_toggles_turn')}</p>
+         <p><button type="button" class="btn btn--secondary btn--sm" data-legal="collects">${tHtml('onboarding.what_chaupaal_collects_full_plain_list')}</button></p>
+         <p class="legal-v1-note">${tHtml('onboarding.this_is_a_short_v1_summary')}</p>`;
     } else {
-      body = `<p>By creating a Chaupaal account you confirm you are 13+ and agree to use the product respectfully.</p>
-         <p><strong>Your content:</strong> you own what you post. You grant Chaupaal a license to host and display it as needed to operate the service.</p>
-         <p><strong>Rules:</strong> no harassment, illegal content, spam, or impersonation. We may remove content or restrict accounts that break these rules.</p>
-         <p><strong>The service:</strong> Chaupaal is provided “as is” during early access; features may change. We’re not liable for indirect damages from use of the app.</p>
-         <p class="legal-v1-note">This is a short v1 Terms summary. Full Terms will replace it when published.</p>`;
+      body = `<p>${tHtml('onboarding.by_creating_a_chaupaal_account_you')}</p>
+         <p><strong>${tHtml('onboarding.your_content')}</strong> ${tHtml('onboarding.you_own_what_you_post_you')}</p>
+         <p><strong>${tHtml('onboarding.rules')}</strong> ${tHtml('onboarding.no_harassment_illegal_content_spam_or')}</p>
+         <p><strong>${tHtml('onboarding.the_service')}</strong> ${tHtml('onboarding.chaupaal_is_provided_as_is_during')}</p>
+         <p class="legal-v1-note">${tHtml('onboarding.this_is_a_short_v1_terms')}</p>`;
     }
 
     sheet.innerHTML = `

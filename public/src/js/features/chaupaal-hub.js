@@ -20,7 +20,7 @@
     document.getElementById('chaupaalHubSheet')?.remove();
     const p = typeof userProfile !== 'undefined' ? userProfile || {} : {};
     const dp = typeof digitalProfile !== 'undefined' ? digitalProfile || {} : {};
-    const name = dp.displayName || p.name || 'You';
+    const name = dp.displayName || p.name || t('common.you');
     const teen = typeof isTeenModeUser === 'function' && isTeenModeUser();
 
     let balanceStr = '…';
@@ -41,10 +41,10 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="chaupaal-hub-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-hub-back' }):'<button type="button" data-hub-back class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-hub-back' }):'<button type="button" data-hub-back class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div>
-          <strong>Chaupaal Profile</strong>
-          <div class="chaupaal-hub-sub">Your space on the charpai</div>
+          <strong>${tHtml('profile.chaupaal_profile')}</strong>
+          <div class="chaupaal-hub-sub">${tHtml('profile.your_space_on_the_charpai')}</div>
         </div>
       </div>
       <div class="chaupaal-hub-body">
@@ -52,7 +52,7 @@
           <div class="chaupaal-hub-avatar">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml({...p,profile:dp,uid:typeof currentUser!=='undefined'?currentUser?.uid:''},{decorative:true}):(p.photoURL?`<img src="${p.photoURL}" alt="">`:'🪑')}</div>
           <div>
             <div class="chaupaal-hub-name">${name}</div>
-            <div class="chaupaal-hub-meta">@${p.username || 'username'}${teen ? ' · Teen Mode' : ''}</div>
+            <div class="chaupaal-hub-meta">@${p.username || tHtml('profile.username')}${teen ? tHtml('profile.teen_mode') : ''}</div>
           </div>
         </div>
         <div class="chaupaal-hub-recap">
@@ -62,49 +62,49 @@
                 ? resolveHonestProfileStats(dp, { isOwner: true, userMeta: p })
                 : [];
             if (!cells.length) {
-              return `<div class="chaupaal-hub-recap-empty">Activity fills in as you use Chaupaal.</div>`;
+              return `<div class="chaupaal-hub-recap-empty">${tHtml('profile.activity_fills_in_as_you_use')}</div>`;
             }
-            return cells.map((c) => `<div><span>${c.value}</span>${c.label === 'streak' ? 'day streak' : c.label}</div>`).join('');
+            return cells.map((c) => `<div><span>${c.value}</span>${c.label === 'streak' ? tHtml('common.day_streak') : c.label}</div>`).join('');
           })()}
         </div>
-        <button type="button" class="chaupaal-hub-glance" data-hub-money aria-label="Chaupaal Money account">
+        <button type="button" class="chaupaal-hub-glance" data-hub-money aria-label="${tHtml('profile.chaupaal_money_account')}">
           <span class="chaupaal-hub-glance-icon" aria-hidden="true">💰</span>
           <span class="chaupaal-hub-glance-copy">
-            <strong>Chaupaal Money</strong>
+            <strong>${tHtml('profile.chaupaal_money')}</strong>
             <small>${balanceStr}</small>
           </span>
           <span class="chaupaal-hub-glance-chev" aria-hidden="true">›</span>
         </button>
-        <button type="button" class="chaupaal-hub-glance" data-hub-membership aria-label="Membership">
+        <button type="button" class="chaupaal-hub-glance" data-hub-membership aria-label="${tHtml('profile.membership')}">
           <span class="chaupaal-hub-glance-icon" aria-hidden="true">⭐</span>
           <span class="chaupaal-hub-glance-copy">
-            <strong>Membership</strong>
+            <strong>${tHtml('profile.membership')}</strong>
             <small>${membershipStr}</small>
           </span>
           <span class="chaupaal-hub-glance-chev" aria-hidden="true">›</span>
         </button>
         <div class="chaupaal-hub-section">
-          <h3>Trust & safety</h3>
-          <p>${teen ? 'Teen Mode keeps messaging friend-first and AI age-aware.' : 'Flag, block, and report tools live on every post and chat.'}</p>
-          <button type="button" class="btn" data-hub-blocked>Blocked users</button>
-          <button type="button" class="btn" data-hub-sessions>Devices & sessions</button>
+          <h3>${tHtml('profile.trust_safety')}</h3>
+          <p>${teen ? tHtml('profile.teen_mode_keeps_messaging_friend_first') : tHtml('profile.flag_block_and_report_tools_live')}</p>
+          <button type="button" class="btn" data-hub-blocked>${tHtml('common.blocked_users')}</button>
+          <button type="button" class="btn" data-hub-sessions>${tHtml('common.devices_sessions')}</button>
         </div>
         <div class="chaupaal-hub-section">
-          <h3>Dashboard</h3>
-          <button type="button" class="btn" data-hub-archive>Archive & journal</button>
-          <button type="button" class="btn" data-hub-interactions>Interactions</button>
-          <button type="button" class="btn" data-hub-wrap>Monthly wrap</button>
-          <button type="button" class="btn" data-hub-settings>Settings</button>
+          <h3>${tHtml('profile.dashboard')}</h3>
+          <button type="button" class="btn" data-hub-archive>${tHtml('profile.archive_journal')}</button>
+          <button type="button" class="btn" data-hub-interactions>${tHtml('profile.interactions')}</button>
+          <button type="button" class="btn" data-hub-wrap>${tHtml('profile.monthly_wrap')}</button>
+          <button type="button" class="btn" data-hub-settings>${tHtml('common.settings')}</button>
         </div>
         <div class="chaupaal-hub-section">
-          <h3>Companion</h3>
-          <p>Chaupaal’s own profile — monthly summary, stats, and membership — separate from yours.</p>
-          <button type="button" class="btn" data-hub-ai>Open Chaupaal AI profile</button>
+          <h3>${tHtml('profile.companion')}</h3>
+          <p>${tHtml('profile.chaupaal_s_own_profile_monthly_summary')}</p>
+          <button type="button" class="btn" data-hub-ai>${tHtml('profile.cai_open_ai')}</button>
         </div>
       </div>`;
     const layer =
       typeof openLayer === 'function'
-        ? openLayer(overlay, null, { label: 'Chaupaal hub' })
+        ? openLayer(overlay, null, { label: t('profile.chaupaal_hub') })
         : null;
     if (!layer) {
       document.querySelector('.device')?.appendChild(overlay);

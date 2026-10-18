@@ -21,7 +21,7 @@ window.ownProfileForAvatar = ownProfileForAvatar;
 function renderProfileModal(){
   const el=document.getElementById('profileContent');
   if(!currentUser){
-    el.innerHTML=`<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">Sign in to see your profile, add friends and challenge people.</p><button class="btn btn--primary btn--block btn--lg auth-btn" onclick="document.getElementById('profileModal').classList.add('hidden');showAuth()">Sign in / Sign up</button>`;
+    el.innerHTML=`<p style="color:var(--muted);font-size:14px;margin-bottom:16px;">${tHtml('profile.sign_in_to_see_your_profile')}</p><button class="btn btn--primary btn--block btn--lg auth-btn" onclick="document.getElementById('profileModal').classList.add('hidden');showAuth()">${tHtml('profile.sign_in_sign_up')}</button>`;
     return;
   }
   const p=userProfile||{};
@@ -35,7 +35,7 @@ function renderProfileModal(){
       ? renderOwnPreviewChromeHtml(dp, p, { isFriend: previewAsFriend })
       : (typeof renderStrangerPreviewHtml==='function'
         ? renderStrangerPreviewHtml(dp, p)
-        : '<p style="color:var(--muted);">Preview unavailable</p>');
+        : '<p style="color:var(--muted);">' + tHtml('profile.preview_unavailable') + '</p>');
     setTimeout(()=>{
       if(typeof wirePreviewToggle==='function'){
         wirePreviewToggle(el, ()=>renderProfileModal());
@@ -94,7 +94,7 @@ function renderProfileModal(){
   // Completeness (shared Phase 3 helper)
   const stats=typeof calcProfileCompletion==='function'?calcProfileCompletion(dp):{pct:0,missing:[]};
   const pct=stats.pct;
-  const displayName=dp.displayName||p.name||'Your Name';
+  const displayName=dp.displayName||p.name||t('profile.your_name');
   const nameHtml=typeof formatDisplayNameHtml==='function'
     ? formatDisplayNameHtml(displayName, typeof getProfileType==='function'?getProfileType():dp.profileType)
     : displayName;
@@ -105,35 +105,35 @@ function renderProfileModal(){
   const showAvatarToggle=typeof hasUserProfilePhoto==='function'&&hasUserProfilePhoto(avatarProfile);
   const avatarMode=typeof getAvatarDisplay==='function'?getAvatarDisplay(avatarProfile):'photo';
   const avatarToggleLabel=avatarMode==='gift'
-    ?(typeof t==='function'&&t('avatar_use_photo')!=='avatar_use_photo'?t('avatar_use_photo'):'Use my photo')
-    :(typeof t==='function'&&t('avatar_use_gift')!=='avatar_use_gift'?t('avatar_use_gift'):'Use Chaupaal avatar');
+    ?(typeof t==='function'&&t('avatar_use_photo')!=='avatar_use_photo'?t('avatar_use_photo'):t('profile.avatar_use_photo'))
+    :(typeof t==='function'&&t('avatar_use_gift')!=='avatar_use_gift'?t('avatar_use_gift'):t('profile.avatar_use_gift'));
 
   el.innerHTML=`
     ${typeof renderPreviewToggleHtml==='function'?renderPreviewToggleHtml():''}
-    ${p.needsEmailForPasswordLogin?`<div class="profile-password-login-note" style="margin:0 0 12px;padding:12px 14px;border-radius:12px;background:rgba(230,57,70,0.08);border:1.5px solid rgba(230,57,70,0.22);font-size:12px;line-height:1.45;color:var(--ink);">Add an email to enable password login with your phone number.</div>`:''}
+    ${p.needsEmailForPasswordLogin?`<div class="profile-password-login-note" style="margin:0 0 12px;padding:12px 14px;border-radius:12px;background:rgba(230,57,70,0.08);border:1.5px solid rgba(230,57,70,0.22);font-size:12px;line-height:1.45;color:var(--ink);">${tHtml('profile.add_an_email_to_enable_password')}</div>`:''}
     <div class="dp-hero dp-hero--premium">
       <div class="dp-hero-top">
         <div class="dp-hero-avatar-wrap">
           <div id="ownProfileStoryAvatar" class="dp-hero-avatar squircle-avatar">
             ${avatarHtml}
           </div>
-          <label class="dp-hero-edit" title="Change photo">
+          <label class="dp-hero-edit" title="${tHtml('profile.change_photo')}">
             ✎<input type="file" accept="image/*" id="profilePhotoInput" style="display:none;">
           </label>
           ${showAvatarToggle?`<button type="button" class="dp-avatar-mode-btn" id="toggleAvatarDisplayBtn">${avatarToggleLabel}</button>`:''}
         </div>
-        <div class="dp-hero-actions" role="group" aria-label="Profile tools">
-          <button type="button" class="icon-btn dp-hero-action" id="profileArchiveBtn" aria-label="Archive" title="Archive">${typeof iconHtml==='function'?iconHtml('archive',{size:20}):''}</button>
-          <button type="button" class="icon-btn dp-hero-action" id="profileSettingsGear" aria-label="Settings" title="Settings">${typeof iconHtml==='function'?iconHtml('settings',{size:20}):''}</button>
+        <div class="dp-hero-actions" role="group" aria-label="${tHtml('profile.profile_tools')}">
+          <button type="button" class="icon-btn dp-hero-action" id="profileArchiveBtn" aria-label="${tHtml('profile.archive_title')}" title="${tHtml('profile.archive_title')}">${typeof iconHtml==='function'?iconHtml('archive',{size:20}):''}</button>
+          <button type="button" class="icon-btn dp-hero-action" id="profileSettingsGear" aria-label="${tHtml('common.settings')}" title="${tHtml('common.settings')}">${typeof iconHtml==='function'?iconHtml('settings',{size:20}):''}</button>
         </div>
       </div>
       <div class="dp-hero-copy">
-        <div class="dp-hero-name" data-account-switch data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}" style="cursor:pointer;" title="Switch account">${nameHtml}</div>
-        <div class="dp-hero-handle" data-account-switch style="cursor:pointer;" title="Switch account">@${p.username||'username'}</div>
-        <div class="dp-hero-meta">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||'Add your city & job'}</div>
+        <div class="dp-hero-name" data-account-switch data-pro-badge-self data-pro-badge-name="${(displayName||'').replace(/"/g,'&quot;')}" style="cursor:pointer;" title="${tHtml('profile.switch_account')}">${nameHtml}</div>
+        <div class="dp-hero-handle" data-account-switch style="cursor:pointer;" title="${tHtml('profile.switch_account')}">@${p.username||tHtml('profile.username')}</div>
+        <div class="dp-hero-meta">${[dp.currentCity,dp.occupation].filter(Boolean).join(' · ')||tHtml('profile.add_your_city_job')}</div>
         ${pct < 95 ? `<div class="dp-hero-complete">
           <div class="dp-hero-complete-row">
-            <span>Profile</span>
+            <span>${tHtml('profile.tab_digital')}</span>
             <span data-ui="profile-completion-pct">${pct}%</span>
           </div>
           <div class="dp-hero-complete-track">
@@ -143,7 +143,7 @@ function renderProfileModal(){
             ${['identity','social','relationship','career','trust'].map((id)=>{
               const sec=stats.sections?.[id]||{pct:0};
               const hide=id==='relationship' && (stats.hideRelationship || (typeof teenHideDatingIntents==='function' && teenHideDatingIntents()));
-              const labels={identity:'Identity',social:'Social',relationship:'Relationship',career:'Career',trust:'Trust'};
+              const labels={identity:t('common.identity'),social:t('profile.social'),relationship:t('profile.relationship_section'),career:t('profile.career'),trust:t('profile.trust')};
               return `<button type="button" class="dp-hero-section${sec.complete?' is-complete':''}" data-complete-section="${id}" ${hide?'hidden':''} role="listitem">
                 <span class="dp-hero-section-lab">${labels[id]}</span>
                 <span class="dp-hero-section-track"><span data-section-bar style="width:${sec.pct||0}%"></span></span>
@@ -151,61 +151,61 @@ function renderProfileModal(){
               </button>`;
             }).join('')}
           </div>
-          <div data-ui="profile-completion-hint" class="dp-hero-complete-hint">${stats.missing?.length?`Next: ${stats.missing.slice(0,2).join(', ')}`:'Looking good — this Profile feels like you.'}</div>
+          <div data-ui="profile-completion-hint" class="dp-hero-complete-hint">${stats.missing?.length?tHtml('profile.completion_next', { items: typeof formatList === 'function' ? formatList(stats.missing.slice(0,2)) : stats.missing.slice(0,2).join(', ') }):tHtml('profile.looking_good_this_profile_feels_like')}</div>
         </div>` : ''}
       </div>
     </div>
     <div class="dp-rel-strip">
-      <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
+      <div data-profile-relationship-counts class="relationship-counts-loading">${tHtml('profile.loading_relationships')}</div>
       <div data-friend-requests></div>
     </div>
-    <button type="button" class="chaupaal-id-card" data-open-chaupaal-card aria-label="Chaupaal card">
+    <button type="button" class="chaupaal-id-card" data-open-chaupaal-card aria-label="${tHtml('common.chaupaal_card_title')}">
       <span class="chaupaal-id-card-mark" aria-hidden="true">🪑</span>
       <span class="chaupaal-id-card-copy">
-        <strong data-i18n="chaupaal_card_title">Chaupaal card</strong>
-        <small data-i18n="chaupaal_card_sub">Shareable identity · Hub · Membership</small>
+        <strong data-i18n="chaupaal_card_title">${tHtml('common.chaupaal_card_title')}</strong>
+        <small data-i18n="chaupaal_card_sub">${tHtml('profile.shareable_identity_hub_membership')}</small>
       </span>
       <span class="chaupaal-id-card-chev" aria-hidden="true">›</span>
     </button>
     <div class="own-profile-edit-toolbar dp-toolbar dp-hub-row">
-      <button type="button" class="btn profile-notif-entry" data-open-notif="all" aria-label="Notifications">
-        <span data-i18n="profile_notifications">Inbox</span>
+      <button type="button" class="btn profile-notif-entry" data-open-notif="all" aria-label="${tHtml('profile.notifications')}">
+        <span data-i18n="profile_notifications">${tHtml('profile.inbox')}</span>
         <span class="notif-dot hidden" data-notif-dot="all" aria-hidden="true"></span>
       </button>
-      <button type="button" class="btn" data-dp-hub="interactions">Activity</button>
-      <button type="button" class="btn" data-push-history>Notif history</button>
-      <button type="button" class="btn" data-dp-hub="journal">Journal</button>
-      <button type="button" class="btn" data-dp-hub="stories">Highlights</button>
-      <button type="button" class="btn" data-dp-more-hub>More</button>
-      <button type="button" class="btn btn--primary" id="profileAddSectionBtn" title="Add section">＋</button>
+      <button type="button" class="btn" data-dp-hub="interactions">${tHtml('profile.archive_tab_activity')}</button>
+      <button type="button" class="btn" data-push-history>${tHtml('profile.notif_history')}</button>
+      <button type="button" class="btn" data-dp-hub="journal">${tHtml('profile.archive_tab_journal')}</button>
+      <button type="button" class="btn" data-dp-hub="stories">${tHtml('profile.highlights')}</button>
+      <button type="button" class="btn" data-dp-more-hub>${tHtml('common.more')}</button>
+      <button type="button" class="btn btn--primary" id="profileAddSectionBtn" title="${tHtml('profile.add_section')}">＋</button>
     </div>
     <div class="own-edit-sections" data-own-edit-sections></div>
-    <p class="dp-reorder-hint">Highlights sit above tabs · Profile / Duniya / Peepal are fixed · ＋ adds custom tabs · edit section items drag to rearrange</p>
+    <p class="dp-reorder-hint">${tHtml('profile.highlights_sit_above_tabs_profile_duniya')}</p>
     <div class="dp-field-tabs" id="profileSectionTabs">
       ${(typeof ProfileTaxonomy?.isProfessional === 'function' && ProfileTaxonomy.isProfessional()
-        ? ['About', 'Career', 'Links', 'More']
-        : ['About', 'Looking for', 'Lifestyle', 'More']
+        ? /* i18n-values: section */ ['About', 'Career', 'Links', 'More']
+        : /* i18n-values: section */ ['About', 'Looking for', 'Lifestyle', 'More']
       )
-        .map((s, i) => `<button type="button" class="profile-section-tab${i === 0 ? ' active' : ''}" data-sec="${s}">${s}</button>`)
+        .map((s, i) => `<button type="button" class="profile-section-tab${i === 0 ? ' active' : ''}" data-sec="${s}">${optionLabelHtml('section', s)}</button>`)
         .join('')}
     </div>
     <div id="profileSectionContent" class="dp-field-body"></div>
     <div class="dp-account-strip">
-      <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>Chaupaal Hub · trust, Money, devices</button>
-      <button type="button" class="btn btn--block" id="switchProfileBtn">Switch / add account</button>
-      <button type="button" class="logout-btn" id="logoutBtn">Log out</button>
+      <button type="button" class="btn btn--primary btn--block" data-dp-open-hub>${tHtml('profile.chaupaal_hub_trust_money_devices')}</button>
+      <button type="button" class="btn btn--block" id="switchProfileBtn">${tHtml('profile.switch_add_account')}</button>
+      <button type="button" class="logout-btn" id="logoutBtn">${tHtml('common.logout')}</button>
     </div>
   `;
 
   // Section rendering — Glance/Act first; Power under More. Personal vs Professional templates.
   const TX = typeof ProfileTaxonomy !== 'undefined' ? ProfileTaxonomy : {};
-  const interestChips = TX.INTEREST_CHIPS || ['Travel', 'Food', 'Films', 'Music', 'Fitness', 'Books', 'Tech', 'Sports', 'Gaming'];
-  const cityChips = TX.CITY_CHIPS || ['Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Pune'];
-  const matchIntents = TX.MATCH_INTENTS || ['Friendship', 'Dating', 'Networking / Professional connections'];
+  const interestChips = TX.INTEREST_CHIPS || /* i18n-values: interest */ ['Travel', 'Food', 'Films', 'Music', 'Fitness', 'Books', 'Tech', 'Sports', 'Gaming'];
+  const cityChips = TX.CITY_CHIPS || /* i18n-values: city */ ['Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Pune'];
+  const matchIntents = TX.MATCH_INTENTS || /* i18n-values: intent */ ['Friendship', 'Dating', 'Networking / Professional connections'];
   const proIntents = TX.PRO_INTENTS || matchIntents;
-  const industries = TX.INDUSTRIES || ['Technology', 'Education', 'Media & Entertainment', 'Entrepreneur', 'Other'];
-  const purposes = TX.PURPOSES || ['Grow my network', 'Find collaborators', 'Share my work'];
-  const skillChips = TX.SKILL_CHIPS || ['Leadership', 'Writing', 'Coding', 'Design', 'Marketing'];
+  const industries = TX.INDUSTRIES || /* i18n-values: industry */ ['Technology', 'Education', 'Media & Entertainment', 'Entrepreneur', 'Other'];
+  const purposes = TX.PURPOSES || /* i18n-values: purpose */ ['Grow my network', 'Find collaborators', 'Share my work'];
+  const skillChips = TX.SKILL_CHIPS || /* i18n-values: skill */ ['Leadership', 'Writing', 'Coding', 'Design', 'Marketing'];
 
   function privacyInline(key, label) {
     const def = (TX.SENSITIVE_DEFAULTS && TX.SENSITIVE_DEFAULTS[key]) || 'friends';
@@ -226,13 +226,14 @@ function renderProfileModal(){
       : def;
     const matching =
       TX.FIELD_META && TX.FIELD_META[key]?.matching
-        ? `<div style="font-size:11px;color:var(--muted);margin:4px 0 0;line-height:1.35;">Used for matching when visible.</div>`
+        ? `<div style="font-size:11px;color:var(--muted);margin:4px 0 0;line-height:1.35;">${tHtml('profile.used_for_matching_when_visible')}</div>`
         : '';
+    const audienceLabel = { public: t('profile.public'), friends: t('profile.friends'), private: t('profile.private') };
     if (!showKey) {
-      return `<div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;">Default: ${def} · change in Privacy under More</div>${matching}`;
+      return `<div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;">${tHtml('profile.privacy_default_hint', { audience: audienceLabel[def] || def })}</div>${matching}`;
     }
     return `<div class="dp-privacy-inline" data-privacy-for="${key}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-6px 0 12px;">
-      <span style="font-size:11px;color:var(--muted);">Who sees ${label || 'this'}?</span>
+      <span style="font-size:11px;color:var(--muted);">${tHtml('profile.who_sees_field', { field: label || t('profile.this') })}</span>
       ${['public', 'friends', 'private']
         .map((a) => {
           const active =
@@ -242,7 +243,7 @@ function renderProfileModal(){
             (a === 'private' && dp[showKey] !== true && def === 'private' && dp[showKey] !== false);
           // friends mapped as show* = false for relationship? P0: showRelationship false hides from public.
           // public = show true; private/friends = show false (friends still get friend_projection when Friends only profile).
-          return `<button type="button" class="dp-chip${active ? ' active' : ''}" data-privacy-key="${showKey}" data-privacy-audience="${a}" style="padding:4px 10px;font-size:11px;border-radius:999px;border:1.5px solid ${active ? 'var(--red)' : 'var(--line)'};background:${active ? 'rgba(230,57,70,0.08)' : 'var(--white)'};color:${active ? 'var(--red)' : 'var(--ink)'};cursor:pointer;">${a}</button>`;
+          return `<button type="button" class="dp-chip${active ? ' active' : ''}" data-privacy-key="${showKey}" data-privacy-audience="${a}" style="padding:4px 10px;font-size:11px;border-radius:999px;border:1.5px solid ${active ? 'var(--red)' : 'var(--line)'};background:${active ? 'rgba(230,57,70,0.08)' : 'var(--white)'};color:${active ? 'var(--red)' : 'var(--ink)'};cursor:pointer;">${audienceLabel[a]}</button>`;
         })
         .join('')}
     </div>${matching}`;
@@ -260,95 +261,95 @@ function renderProfileModal(){
       const pro = typeof TX.isProfessional === 'function' && TX.isProfessional();
       return `
       ${typeof renderProfileTypeToggleHtml === 'function' ? renderProfileTypeToggleHtml() : ''}
-      ${profileField('Name', 'displayName', 'text', 'Your full name')}
-      ${profileField('Bio', 'bio', 'textarea', 'A short bio about yourself...')}
+      ${profileField(t('profile.name'), 'displayName', 'text', t('profile.your_full_name'))}
+      ${profileField(t('profile.bio'), 'bio', 'textarea', t('profile.a_short_bio_about_yourself'))}
       ${payoffLine('bio')}
-      ${profileField('Gender', 'gender', 'select', '', ['', 'Male', 'Female', 'Non-binary', 'Prefer not to say'])}
-      ${profileField('Pronouns', 'pronouns', 'select', '', ['', 'He/Him', 'She/Her', 'They/Them', 'Any'])}
-      ${profileField('Date of Birth', 'dateOfBirth', 'date', '')}
-      ${profileField('Current City', 'currentCity', 'chips-single', 'City', cityChips)}
+      ${profileField(t('common.gender'), 'gender', 'select', '', ['', 'Male', 'Female', 'Non-binary', 'Prefer not to say'])}
+      ${profileField(t('profile.pronouns'), 'pronouns', 'select', '', ['', 'He/Him', 'She/Her', 'They/Them', 'Any'])}
+      ${profileField(t('profile.date_of_birth'), 'dateOfBirth', 'date', '')}
+      ${profileField(t('profile.current_city'), 'currentCity', 'chips-single', t('profile.city'), cityChips)}
       ${payoffLine('currentCity')}
-      ${profileField('Languages spoken', 'languages', 'chips', 'Add languages', ['Hindi', 'English', 'Tamil', 'Telugu', 'Marathi', 'Bengali', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Urdu'])}
-      ${profileField('Things that excite me', 'interests', 'chips', 'Add interests', interestChips)}
+      ${profileField(t('profile.languages_spoken'), 'languages', 'chips', t('profile.add_languages'), ['Hindi', 'English', 'Tamil', 'Telugu', 'Marathi', 'Bengali', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Urdu'])}
+      ${profileField(t('profile.things_that_excite_me'), 'interests', 'chips', t('profile.add_interests'), interestChips)}
       ${payoffLine('interests')}
-      ${profileField('Interests in your words', 'interestsFreeText', 'textarea', 'Optional — whatever you care about, in your own words')}
+      ${profileField(t('profile.interests_in_your_words'), 'interestsFreeText', 'textarea', t('profile.optional_whatever_you_care_about_in'))}
       <div class="dp-ask-chaupaal" data-for="interestsFreeText" style="margin:-6px 0 14px;"></div>
       ${pro ? '' : typeof renderProfilePromptsBlock === 'function' ? renderProfilePromptsBlock() : ''}
-      ${pro ? `${profileField('Occupation / Role', 'occupation', 'text', 'What do you do?')}${payoffLine('occupation')}` : ''}
+      ${pro ? `${profileField(t('profile.occupation_role'), 'occupation', 'text', t('profile.what_do_you_do'))}${payoffLine('occupation')}` : ''}
     `;
     },
     'Looking for': () => {
       const teen = typeof teenHideDatingIntents === 'function' && teenHideDatingIntents();
       if (teen) {
-        return `<p style="font-size:13px;color:var(--muted);line-height:1.45;padding:8px 0;">Dating asks stay off in Teen Mode. Friendship and study intents can live in Interests.</p>`;
+        return `<p style="font-size:13px;color:var(--muted);line-height:1.45;padding:8px 0;">${tHtml('profile.dating_asks_stay_off_in_teen')}</p>`;
       }
       return `
-      ${profileField('Relationship status', 'relationshipStatus', 'select', '', ['', 'Single', 'In a relationship', 'Married', 'Prefer not to say', 'It\'s complicated'])}
-      ${privacyInline('relationshipStatus', 'relationship')}
-      ${profileField('Looking for', 'lookingFor', 'chips-single', '', matchIntents)}
-      ${privacyInline('lookingFor', 'looking for')}
+      ${profileField(t('profile.relationship_status'), 'relationshipStatus', 'select', '', ['', 'Single', 'In a relationship', 'Married', 'Prefer not to say', 'It\'s complicated'])}
+      ${privacyInline('relationshipStatus', t('profile.relationship'))}
+      ${profileField(t('profile.looking_for'), 'lookingFor', 'chips-single', '', matchIntents)}
+      ${privacyInline('lookingFor', t('profile.looking_for_2'))}
       ${payoffLine('lookingFor')}
     `;
     },
     Career: () => `
-      ${profileField('Occupation / Job title', 'occupation', 'text', 'What do you do?')}
+      ${profileField(t('profile.occupation_job_title'), 'occupation', 'text', t('profile.what_do_you_do'))}
       <div class="dp-ask-chaupaal" data-for="occupation" style="margin:-6px 0 14px;"></div>
-      ${profileField('Company / Organisation', 'company', 'text', 'Where do you work?')}
-      ${profileField('Industry', 'industry', 'chips-single', '', industries)}
+      ${profileField(t('profile.company_organisation'), 'company', 'text', t('profile.where_do_you_work'))}
+      ${profileField(t('common.industry'), 'industry', 'chips-single', '', industries)}
       ${payoffLine('industry')}
-      ${profileField('Purpose on Chaupaal', 'purpose', 'chips-single', '', purposes)}
+      ${profileField(t('common.purpose_on_chaupaal'), 'purpose', 'chips-single', '', purposes)}
       ${payoffLine('purpose')}
-      ${profileField('Open to', 'lookingFor', 'chips-single', '', proIntents)}
-      ${profileField('Skills', 'skills', 'chips', 'Add skills', skillChips)}
+      ${profileField(t('profile.open_to'), 'lookingFor', 'chips-single', '', proIntents)}
+      ${profileField(t('profile.skills'), 'skills', 'chips', t('profile.add_skills'), skillChips)}
       ${payoffLine('skills')}
-      ${profileField('Work mode', 'workMode', 'select', '', ['', 'In-office', 'Remote', 'Hybrid', 'Freelance', 'Between jobs'])}
-      ${profileField('Career level', 'careerLevel', 'select', '', ['', 'Student / Intern', 'Entry level (0-2 yrs)', 'Mid level (3-6 yrs)', 'Senior (7-10 yrs)', 'Lead / Manager', 'Director / VP', 'C-Suite / Founder'])}
-      ${profileField('Annual income (optional)', 'annualIncome', 'select', '', ['', 'Prefer not to say', 'Under ₹3L', '₹3L-6L', '₹6L-10L', '₹10L-20L', '₹20L-40L', 'Above ₹40L'])}
-      ${privacyInline('annualIncome', 'income')}
+      ${profileField(t('profile.work_mode'), 'workMode', 'select', '', ['', 'In-office', 'Remote', 'Hybrid', 'Freelance', 'Between jobs'])}
+      ${profileField(t('profile.career_level'), 'careerLevel', 'select', '', ['', 'Student / Intern', 'Entry level (0-2 yrs)', 'Mid level (3-6 yrs)', 'Senior (7-10 yrs)', 'Lead / Manager', 'Director / VP', 'C-Suite / Founder'])}
+      ${profileField(t('profile.annual_income_optional'), 'annualIncome', 'select', '', ['', 'Prefer not to say', 'Under ₹3L', '₹3L-6L', '₹6L-10L', '₹10L-20L', '₹20L-40L', 'Above ₹40L'])}
+      ${privacyInline('annualIncome', t('profile.income'))}
     `,
     Links: () => `
-      ${profileField('LinkedIn', 'linkedin', 'text', 'Profile URL or username')}
+      ${profileField(t('profile.linkedin'), 'linkedin', 'text', t('profile.profile_url_or_username'))}
       ${payoffLine('linkedin')}
-      ${profileField('Website / portfolio', 'website', 'text', 'https://')}
+      ${profileField(t('profile.website_portfolio'), 'website', 'text', 'https://')}
       ${payoffLine('website')}
-      ${profileField('Instagram', 'instagram', 'text', '@username')}
-      ${profileField('YouTube', 'youtube', 'text', 'Channel name')}
+      ${profileField(t('profile.instagram'), 'instagram', 'text', t('common.username'))}
+      ${profileField(t('profile.youtube'), 'youtube', 'text', t('profile.channel_name'))}
     `,
     Lifestyle: () => `
-      ${profileField('Diet', 'diet', 'select', '', ['', 'Omnivore', 'Vegetarian', 'Eggetarian', 'Vegan', 'Jain', 'Other'])}
-      ${profileField('Drinking', 'drinking', 'select', '', ['', 'Never', 'Socially', 'Occasionally', 'Regularly', 'Prefer not to say'])}
-      ${profileField('Smoking', 'smoking', 'select', '', ['', 'Never', 'Occasionally', 'Regularly', 'Trying to quit', 'Prefer not to say'])}
-      ${profileField('Fitness', 'fitness', 'select', '', ['', 'Very active (daily workout)', 'Active (3-4x/week)', 'Moderately active', 'Occasionally active', 'Not into fitness'])}
-      ${profileField('Core values', 'coreValues', 'chips', 'Add values', ['Family', 'Ambition', 'Freedom', 'Creativity', 'Loyalty', 'Honesty', 'Adventure', 'Growth', 'Humour', 'Empathy'])}
+      ${profileField(t('profile.diet'), 'diet', 'select', '', ['', 'Omnivore', 'Vegetarian', 'Eggetarian', 'Vegan', 'Jain', 'Other'])}
+      ${profileField(t('profile.drinking'), 'drinking', 'select', '', ['', 'Never', 'Socially', 'Occasionally', 'Regularly', 'Prefer not to say'])}
+      ${profileField(t('profile.smoking'), 'smoking', 'select', '', ['', 'Never', 'Occasionally', 'Regularly', 'Trying to quit', 'Prefer not to say'])}
+      ${profileField(t('profile.fitness'), 'fitness', 'select', '', ['', 'Very active (daily workout)', 'Active (3-4x/week)', 'Moderately active', 'Occasionally active', 'Not into fitness'])}
+      ${profileField(t('profile.core_values'), 'coreValues', 'chips', t('profile.add_values'), ['Family', 'Ambition', 'Freedom', 'Creativity', 'Loyalty', 'Honesty', 'Adventure', 'Growth', 'Humour', 'Empathy'])}
     `,
     More: () => {
       const pro = typeof TX.isProfessional === 'function' && TX.isProfessional();
       return `
-      <div style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.4;">Power layer — optional details. Nothing here is required.</div>
-      ${profileField('Hometown', 'hometown', 'text', 'Where you grew up')}
-      ${profileField('Height', 'height', 'select', '', ['', 'Under 5ft', '5ft', '5ft 2in', '5ft 4in', '5ft 6in', '5ft 8in', '5ft 10in', '6ft', '6ft+'])}
-      ${profileField('Religion', 'religion', 'select', '', ['', 'Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Atheist', 'Agnostic', 'Spiritual but not religious', 'Prefer not to say'])}
-      ${privacyInline('religion', 'religion')}
-      ${profileField('Politics', 'politics', 'select', '', ['', 'Progressive', 'Liberal', 'Centrist', 'Conservative', 'Apolitical', 'Prefer not to say'])}
+      <div style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.4;">${tHtml('profile.power_layer_optional_details_nothing_here')}</div>
+      ${profileField(t('profile.hometown'), 'hometown', 'text', t('profile.where_you_grew_up'))}
+      ${profileField(t('profile.height'), 'height', 'select', '', ['', 'Under 5ft', '5ft', '5ft 2in', '5ft 4in', '5ft 6in', '5ft 8in', '5ft 10in', '6ft', '6ft+'])}
+      ${profileField(t('profile.religion'), 'religion', 'select', '', ['', 'Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Atheist', 'Agnostic', 'Spiritual but not religious', 'Prefer not to say'])}
+      ${privacyInline('religion', t('profile.religion_2'))}
+      ${profileField(t('profile.politics'), 'politics', 'select', '', ['', 'Progressive', 'Liberal', 'Centrist', 'Conservative', 'Apolitical', 'Prefer not to say'])}
       ${profileField('MBTI', 'mbti', 'select', '', ['', 'INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP', 'Don\'t know'])}
-      ${pro ? '' : typeof renderProfileIcebreakerBlock === 'function' ? `<div style="margin:12px 0 8px;font-size:12px;font-weight:700;color:var(--muted);">Chat openers (not on Digital)</div>${renderProfileIcebreakerBlock()}` : ''}
-      ${!pro ? `${profileField('Have children?', 'haveChildren', 'select', '', ['', 'No', 'Yes — live with me', 'Yes — don\'t live with me', 'Prefer not to say'])}${privacyInline('haveChildren', 'this')}` : ''}
-      ${profileField('Instagram', 'instagram', 'text', '@username')}
-      ${profileField('Twitter / X', 'twitter', 'text', '@username')}
-      ${pro ? '' : `${profileField('LinkedIn', 'linkedin', 'text', 'Profile URL')}${profileField('Website', 'website', 'text', 'https://')}`}
+      ${pro ? '' : typeof renderProfileIcebreakerBlock === 'function' ? `<div style="margin:12px 0 8px;font-size:12px;font-weight:700;color:var(--muted);">${tHtml('profile.chat_openers_not_on_digital')}</div>${renderProfileIcebreakerBlock()}` : ''}
+      ${!pro ? `${profileField(t('profile.have_children'), 'haveChildren', 'select', '', ['', 'No', 'Yes — live with me', 'Yes — don\'t live with me', 'Prefer not to say'])}${privacyInline('haveChildren', t('profile.this'))}` : ''}
+      ${profileField(t('profile.instagram'), 'instagram', 'text', t('common.username'))}
+      ${profileField(t('profile.twitter_x'), 'twitter', 'text', t('common.username'))}
+      ${pro ? '' : `${profileField(t('profile.linkedin'), 'linkedin', 'text', t('profile.profile_url'))}${profileField(t('profile.website'), 'website', 'text', 'https://')}`}
       <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:8px;">Privacy</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">Collection stays on so Chaupaal can match you better — turn off anything you don’t want shared.</div>
-        ${profileToggle('Show age publicly', 'showAge')}
-        ${profileToggle('Show location publicly', 'showLocation')}
-        ${profileToggle('Show relationship / looking for', 'showRelationship')}
-        ${profileToggle('Show income range', 'showIncome')}
-        ${profileToggle('Show religion', 'showReligion')}
-        ${profileField('Profile visibility', 'profileVisibility', 'select', '', ['public', 'Friends only', 'Private'])}
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:8px;">${tHtml('profile.privacy')}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">${tHtml('profile.collection_stays_on_so_chaupaal_can')}</div>
+        ${profileToggle(t('profile.show_age_publicly'), 'showAge')}
+        ${profileToggle(t('profile.show_location_publicly'), 'showLocation')}
+        ${profileToggle(t('profile.show_relationship_looking_for'), 'showRelationship')}
+        ${profileToggle(t('profile.show_income_range'), 'showIncome')}
+        ${profileToggle(t('profile.show_religion'), 'showReligion')}
+        ${profileField(t('profile.profile_visibility'), 'profileVisibility', 'select', '', ['public', 'Friends only', 'Private'])}
       </div>
       <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">Optional GPS for Peepal proximity. Never required.</div>
-        <button type="button" class="btn btn--block" id="setMatchLocationBtn">Set my location for matching</button>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4;">${tHtml('profile.optional_gps_for_peepal_proximity_never')}</div>
+        <button type="button" class="btn btn--block" id="setMatchLocationBtn">${tHtml('profile.set_my_location_for_matching')}</button>
       </div>
     `;
     },
@@ -364,7 +365,7 @@ function renderProfileModal(){
       const presets=options||[];
       const selected=val||'';
       const isCustom=!!(selected && !presets.includes(selected));
-      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips dp-chips-single" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${presets.map(o=>`<button type="button" class="dp-chip${selected===o?' active':''}" data-val="${String(o).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected===o?'var(--red)':'var(--line)'};background:${selected===o?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected===o?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${o}</button>`).join('')}${isCustom?`<button type="button" class="dp-chip active" data-val="${String(selected).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--red);background:rgba(230,57,70,0.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;">${selected} ✕</button>`:''}</div><div class="dp-chip-custom" data-key="${key}" data-single="1" style="display:flex;gap:8px;margin-top:8px;"><input type="text" maxlength="60" placeholder="${placeholder||'Other — type your own'}" style="flex:1;padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;"><button type="button" class="dp-chip-add" style="padding:8px 12px;border:0;border-radius:10px;background:var(--cream);font-weight:700;font-size:12px;cursor:pointer;">Add</button></div></div>`;
+      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips dp-chips-single" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${presets.map(o=>`<button type="button" class="dp-chip${selected===o?' active':''}" data-val="${String(o).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected===o?'var(--red)':'var(--line)'};background:${selected===o?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected===o?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${optionLabelHtml(key,o)}</button>`).join('')}${isCustom?`<button type="button" class="dp-chip active" data-val="${String(selected).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--red);background:rgba(230,57,70,0.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;">${selected} ✕</button>`:''}</div><div class="dp-chip-custom" data-key="${key}" data-single="1" style="display:flex;gap:8px;margin-top:8px;"><input type="text" maxlength="60" placeholder="${placeholder||tHtml('profile.other_type_your_own')}" style="flex:1;padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;"><button type="button" class="dp-chip-add" style="padding:8px 12px;border:0;border-radius:10px;background:var(--cream);font-weight:700;font-size:12px;cursor:pointer;">${tHtml('profile.exclusion_add')}</button></div></div>`;
     }
     if(type==='select'){
       const OTHER='__dp_other__';
@@ -376,10 +377,10 @@ function renderProfileModal(){
       return`<div class="dp-select-wrap" data-key="${key}" style="margin-bottom:14px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div>
         <select class="dp-field dp-select" data-key="${key}" data-has-other="1" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);color:var(--ink);outline:none;cursor:pointer;">
-          ${presets.map(o=>`<option value="${esc(o)}" ${selectVal===o?'selected':''}>${o||'Select...'}</option>`).join('')}
-          <option value="${OTHER}" ${selectVal===OTHER?'selected':''}>Other (type your own)</option>
+          ${presets.map(o=>`<option value="${esc(o)}" ${selectVal===o?'selected':''}>${o?optionLabelHtml(key,o):tHtml('profile.select')}</option>`).join('')}
+          <option value="${OTHER}" ${selectVal===OTHER?'selected':''}>${tHtml('profile.other_type_your_own_2')}</option>
         </select>
-        <input class="dp-other-input" data-key="${key}" type="text" maxlength="120" value="${isCustom?esc(val):''}" placeholder="Type your own…" style="width:100%;margin-top:8px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;box-sizing:border-box;${isCustom?'':'display:none;'}">
+        <input class="dp-other-input" data-key="${key}" type="text" maxlength="120" value="${isCustom?esc(val):''}" placeholder="${tHtml('profile.type_your_own')}" style="width:100%;margin-top:8px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;box-sizing:border-box;${isCustom?'':'display:none;'}">
       </div>`;
     }
     if(type==='textarea'){
@@ -389,7 +390,7 @@ function renderProfileModal(){
       const selected=Array.isArray(val)?val:[];
       const presets=options||[];
       const customOnly=selected.filter(s=>!presets.includes(s));
-      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${presets.map(o=>`<button type="button" class="dp-chip${selected.includes(o)?' active':''}" data-val="${o}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected.includes(o)?'var(--red)':'var(--line)'};background:${selected.includes(o)?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected.includes(o)?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${o}</button>`).join('')}${customOnly.map(o=>`<button type="button" class="dp-chip active" data-val="${String(o).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--red);background:rgba(230,57,70,0.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;">${o} ✕</button>`).join('')}</div><div class="dp-chip-custom" data-key="${key}" style="display:flex;gap:8px;margin-top:8px;"><input type="text" maxlength="40" placeholder="Write your own…" style="flex:1;padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;"><button type="button" class="dp-chip-add" style="padding:8px 12px;border:0;border-radius:10px;background:var(--cream);font-weight:700;font-size:12px;cursor:pointer;">Add</button></div></div>`;
+      return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><div class="dp-chips" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;">${presets.map(o=>`<button type="button" class="dp-chip${selected.includes(o)?' active':''}" data-val="${o}" style="padding:6px 12px;border-radius:999px;border:2px solid ${selected.includes(o)?'var(--red)':'var(--line)'};background:${selected.includes(o)?'rgba(230,57,70,0.08)':'var(--white)'};color:${selected.includes(o)?'var(--red)':'var(--ink)'};font-size:12px;font-weight:600;cursor:pointer;">${optionLabelHtml(key,o)}</button>`).join('')}${customOnly.map(o=>`<button type="button" class="dp-chip active" data-val="${String(o).replace(/"/g,'&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--red);background:rgba(230,57,70,0.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer;">${o} ✕</button>`).join('')}</div><div class="dp-chip-custom" data-key="${key}" style="display:flex;gap:8px;margin-top:8px;"><input type="text" maxlength="40" placeholder="${tHtml('profile.write_your_own_2')}" style="flex:1;padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;"><button type="button" class="dp-chip-add" style="padding:8px 12px;border:0;border-radius:10px;background:var(--cream);font-weight:700;font-size:12px;cursor:pointer;">${tHtml('profile.exclusion_add')}</button></div></div>`;
     }
     return`<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">${label}</div><input class="dp-field" data-key="${key}" type="${type}" value="${val||''}" placeholder="${placeholder}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;box-sizing:border-box;"></div>`;
   }
@@ -408,7 +409,7 @@ function renderProfileModal(){
       return;
     }
     const btn=hostEl?.querySelector('button');
-    if(btn){ btn.disabled=true; btn.textContent='Thinking…'; }
+    if(btn){ btn.disabled=true; btn.textContent=t('profile.thinking'); }
     try{
       const mine={
         interests: dp.interests, hobbies: dp.hobbies,
@@ -442,7 +443,7 @@ function renderProfileModal(){
     }catch(e){
       if(typeof showToast==='function') showToast(t('profile_ask_failed'));
     }finally{
-      if(btn){ btn.disabled=false; btn.textContent='✨ Take help from Chaupaal'; }
+      if(btn){ btn.disabled=false; btn.textContent=t('profile.take_help_from_chaupaal'); }
     }
   }
 
@@ -453,7 +454,7 @@ function renderProfileModal(){
     const OTHER='__dp_other__';
     content.querySelectorAll('.dp-ask-chaupaal').forEach(host=>{
       const key=host.dataset.for;
-      host.innerHTML=`<button type="button" class="ai-kb-trigger" style="margin:0;font-size:12px;">✨ Take help from Chaupaal</button>`;
+      host.innerHTML=`<button type="button" class="ai-kb-trigger" style="margin:0;font-size:12px;">${tHtml('profile.take_help_from_chaupaal')}</button>`;
       host.querySelector('button')?.addEventListener('click',()=>askChaupaalForField(key, host));
     });
     // Wire events — selects with "Other" handled separately so we never persist the sentinel
@@ -605,12 +606,12 @@ function renderProfileModal(){
     });
     el.querySelector('[data-dp-more-hub]')?.addEventListener('click',()=>{
       if(typeof showActionSheet==='function'){
-        showActionSheet('More on your profile',[
-          {label:'Monthly wrap',icon:'calendar',fn:()=>{ if(typeof showMonthlyWrap==='function') showMonthlyWrap(); }},
-          {label:'Devices & sessions',icon:'laptop',fn:()=>{ if(typeof openSessionsSheet==='function') openSessionsSheet(); }},
-          {label:'Blocked users',icon:'ban',fn:()=>{ if(typeof openBlockedUsersSheet==='function') openBlockedUsersSheet(); }},
-          {label:'Chaupaal Hub',icon:'user',fn:()=>{ if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub(); }},
-          {label:'Chaupaal AI profile',icon:'brain',fn:()=>{ if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile(); }},
+        showActionSheet(t('profile.more_on_your_profile'),[
+          {label:t('profile.monthly_wrap'),icon:'calendar',fn:()=>{ if(typeof showMonthlyWrap==='function') showMonthlyWrap(); }},
+          {label:t('common.devices_sessions'),icon:'laptop',fn:()=>{ if(typeof openSessionsSheet==='function') openSessionsSheet(); }},
+          {label:t('common.blocked_users'),icon:'ban',fn:()=>{ if(typeof openBlockedUsersSheet==='function') openBlockedUsersSheet(); }},
+          {label:t('common.chaupaal_hub'),icon:'user',fn:()=>{ if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub(); }},
+          {label:t('profile.chaupaal_ai_profile'),icon:'brain',fn:()=>{ if(typeof openChaupaalAiProfile==='function') openChaupaalAiProfile(); }},
         ]);
       } else if(typeof openChaupaalProfileHub==='function') openChaupaalProfileHub();
     });
@@ -639,7 +640,7 @@ function renderProfileModal(){
         const pro = typeof ProfileTaxonomy?.isProfessional === 'function' && ProfileTaxonomy.isProfessional();
         const map = pro
           ? { identity: 'About', social: 'About', relationship: 'Career', career: 'Career', trust: 'About' }
-          : { identity: 'About', social: 'About', relationship: 'Looking for', career: 'Lifestyle', trust: 'About' };
+          : { identity: 'About', social: 'About', relationship: 'Looking for', career: 'Lifestyle', trust: 'About' }; // i18n-ignore (section ids)
         const sec=map[id]||'About';
         const tab=document.querySelector(`#profileSectionTabs .profile-section-tab[data-sec="${sec}"]`);
         if(tab) tab.click();
@@ -740,7 +741,7 @@ function renderProfileModal(){
         if(typeof updateProfileBtn==='function') updateProfileBtn();
         showToast(t('profile_photo_updated'));
       }catch(err){
-        showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('profile_photo_fail')));
+        showToast(errorText(err, t('profile_photo_fail')));
       }
     });
     if(typeof mountOwnRelationshipPanel==='function') mountOwnRelationshipPanel(document.getElementById('profileContent'));
@@ -768,7 +769,7 @@ function saveProfileField(key, value){
     try{
       const age=typeof ageFromDob==='function'?ageFromDob(value):0;
       if(typeof isBlockedAge==='function'&&isBlockedAge(age)){
-        if(typeof showToast==='function') showToast('Chaupaal is for ages 13 and up');
+        if(typeof showToast==='function') showToast(t('profile.chaupaal_is_for_ages_13_and'));
         digitalProfile[key]=prev[key];
         return;
       }
@@ -789,7 +790,7 @@ function saveProfileField(key, value){
         if(typeof needsParentalConsent==='function'&&needsParentalConsent({...userProfile,age,teenMode:true})&&typeof openParentalConsentSheet==='function'){
           setTimeout(()=>openParentalConsentSheet(),400);
         }else if(typeof showToast==='function'){
-          showToast('Teen Mode on — some features stay friend-only until a parent verifies');
+          showToast(t('profile.teen_mode_on_some_features_stay'));
         }
       }
     }catch(e){}

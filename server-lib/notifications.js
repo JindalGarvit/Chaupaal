@@ -11,6 +11,36 @@ const ACTOR_STORE_MAX = 3;
 const PRUNE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DM_THROTTLE_MS = 2 * 60 * 1000; // skip spammy DM notifs for same chat
 const { resolveActiveProfileName, resolveDisplayNameFromData } = require('./profile-display');
+const i18nServer = require('./i18n-server');
+
+/** previewKey params are stored with the bundle (language-neutral): short strings only. */
+function cleanPreviewParams(params) {
+  const out = {};
+  if (!params || typeof params !== 'object') return out;
+  Object.keys(params)
+    .slice(0, 6)
+    .forEach((k) => {
+      if (!/^\w{1,24}$/.test(k)) return;
+      const v = params[k];
+      if (v == null || typeof v === 'object') return;
+      out[k] = String(v).slice(0, 120);
+    });
+  return out;
+}
+
+/**
+ * Push copy in the recipient's UI language (users/{uid}.lang), English fallback.
+ * User-written previews (comment / message text) go out as written.
+ */
+async function renderPushCopy(db, recipientUid, { actorName, previewKey, previewParams, previewText }) {
+  const lang = await i18nServer.langForUser(db, recipientUid);
+  let body = String(previewText || '');
+  if (!body && previewKey && i18nServer.hasKey(previewKey)) {
+    body = i18nServer.serverT(lang, previewKey, Object.assign({ body: '', preview: '' }, previewParams || {}, { actor: actorName }));
+  }
+  if (!body) body = i18nServer.serverT(lang, 'notifications.push_generic');
+  return { title: actorName, body, lang };
+}
 
 function sanitizeIdPart(raw) {
   return String(raw || '')
@@ -126,7 +156,7 @@ function itemsRef(db, uid) {
  * Upsert a bundled notification for recipientUid.
  * @returns {Promise<{ bundleId: string, created: boolean, skipped?: string }|null>}
  */
-async function upsertNotification(adminApp, recipientUid, { type, refId, actor, preview, deepLink } = {}) {
+async function upsertNotification(adminApp, recipientUid, { type, refId, actor, preview, previewKey, previewParams, deepLink } = {}) {
   if (!adminApp || !recipientUid) return null;
   const db = adminApp.firestore();
   const FieldValue = adminApp.firestore.FieldValue;
@@ -142,6 +172,9 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
   const bundleId = makeBundleId(t, rid);
   const ref = itemsRef(db, recipientUid).doc(bundleId);
   const previewText = String(preview || '').slice(0, 280);
+  // A catalog key (rendered per reader) only when there is no user-written preview.
+  const pKey = !previewText && previewKey ? String(previewKey).slice(0, 80) : null;
+  const pParams = pKey ? cleanPreviewParams(previewParams) : null;
   const link = deepLink && typeof deepLink === 'object' ? deepLink : null;
   const section = (link && link.section) || sectionForType(t);
 
@@ -157,6 +190,8 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
         actors: [a],
         actorCount: 1,
         preview: previewText,
+        previewKey: pKey,
+        previewParams: pParams,
         deepLink: link,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -182,7 +217,9 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
           section,
           actors: merged.actors,
           actorCount: merged.actorCount,
-          preview: previewText || data.preview || '',
+          preview: pKey ? '' : previewText || data.preview || '',
+          previewKey: pKey || (previewText ? null : data.previewKey || null),
+          previewParams: pKey ? pParams : previewText ? null : data.previewParams || null,
           deepLink: link || data.deepLink || null,
           updatedAt: FieldValue.serverTimestamp(),
           updatedAtMs: now,
@@ -199,7 +236,9 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
       {
         actors: merged.actors,
         actorCount: merged.actorCount,
-        preview: previewText || data.preview || '',
+        preview: pKey ? '' : previewText || data.preview || '',
+        previewKey: pKey || (previewText ? null : data.previewKey || null),
+        previewParams: pKey ? pParams : previewText ? null : data.previewParams || null,
         deepLink: link || data.deepLink || null,
         updatedAt: FieldValue.serverTimestamp(),
         updatedAtMs: now,
@@ -213,15 +252,16 @@ async function upsertNotification(adminApp, recipientUid, { type, refId, actor, 
     if (result && !result.skipped) {
       try {
         const fcm = require('./fcm');
-        const actorName = a.name || 'Someone';
         const path = hrefFromDeepLink(link, { type: t, refId: rid });
-        fcm
-          .sendToUser(adminApp, recipientUid, {
-            title: actorName,
-            body: previewText || 'New activity on Chaupaal',
-            link: path,
-            data: { type: t, refId: rid, section, url: path },
-          })
+        renderPushCopy(db, recipientUid, { actorName: a.name, previewKey: pKey, previewParams: pParams, previewText })
+          .then(({ title, body }) =>
+            fcm.sendToUser(adminApp, recipientUid, {
+              title,
+              body,
+              link: path,
+              data: { type: t, refId: rid, section, url: path },
+            })
+          )
           .catch(() => {});
       } catch (e) {}
     }
@@ -349,7 +389,8 @@ async function maybeNotifyDm(adminApp, { chatId, recipientUid, actor, preview })
     type: 'message',
     refId: chatId,
     actor,
-    preview: preview || 'New message',
+    preview: preview || '',
+    previewKey: 'notifications.bundle_message',
     deepLink: { chatId },
   });
 }
@@ -396,4 +437,6 @@ module.exports = {
   maybeNotifyDm,
   resolveActor,
   hrefFromDeepLink,
+  cleanPreviewParams,
+  renderPushCopy,
 };

@@ -196,22 +196,22 @@
   /** Warm templated copy (i18n keys flagged for later batch translate) */
   const TEMPLATES = {
     app_update: [
-      { titleKey: 'push_app_update_t', title: 'Something new on Chaupaal', bodyKey: 'push_app_update_b', body: 'A small polish just landed — come see.' },
+      { titleKey: 'push_app_update_t', title: t('notifications.push_app_update_t'), bodyKey: 'push_app_update_b', body: t('notifications.push_app_update_b') },
     ],
     milestone: [
-      { titleKey: 'push_milestone_t', title: 'Nice streak, {{name}}', bodyKey: 'push_milestone_b', body: 'Your profile is filling out. One more detail keeps the vibe warm.' },
+      { titleKey: 'push_milestone_t', title: 'Nice streak, {{name}}', bodyKey: 'push_milestone_b', body: t('notifications.push_milestone_b') },
     ],
     social: [
-      { titleKey: 'push_social_t', title: '{{actor}} thought of you', bodyKey: 'push_social_b', body: 'A soft ping from your circle — tap to open.' },
+      { titleKey: 'push_social_t', title: t('notifications.push_social_t'), bodyKey: 'push_social_b', body: t('notifications.push_social_b') },
     ],
     recommend: [
-      { titleKey: 'push_rec_t', title: 'A {{category}} pick for you', bodyKey: 'push_rec_b', body: 'Based on what you’ve been into — no rush, just a nudge.' },
+      { titleKey: 'push_rec_t', title: t('notifications.push_rec_t'), bodyKey: 'push_rec_b', body: t('notifications.push_rec_b') },
     ],
     challenge: [
-      { titleKey: 'push_chal_t', title: 'A challenge is waiting', bodyKey: 'push_chal_b', body: 'Someone left a Muqabala at your door.' },
+      { titleKey: 'push_chal_t', title: t('notifications.push_chal_t'), bodyKey: 'push_chal_b', body: t('notifications.push_chal_b') },
     ],
     time_sensitive: [
-      { titleKey: 'push_ts_t', title: 'Happening now', bodyKey: 'push_ts_b', body: 'A live moment won’t wait long — jump in if you’re free.' },
+      { titleKey: 'push_ts_t', title: t('notifications.push_ts_t'), bodyKey: 'push_ts_b', body: t('notifications.push_ts_b') },
     ],
   };
 
@@ -244,9 +244,9 @@
         if (sug) vars.category = sug.name;
       } catch (e) {}
     }
-    if (!vars.category) vars.category = 'Music';
+    if (!vars.category) vars.category = t('notifications.sample_category');
     if (!vars.name) vars.name = 'friend';
-    if (!vars.actor) vars.actor = 'Someone';
+    if (!vars.actor) vars.actor = t('common.someone');
     return {
       title: fill(title, vars),
       body: fill(body, vars),
@@ -298,10 +298,10 @@
     const { cap, tier, bias } = dailyCap();
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
-        <div style="flex:1"><strong>Notification activity</strong></div>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
+        <div style="flex:1"><strong>${tHtml('notifications.notification_activity')}</strong></div>
       </div>
-      <div class="push-hist-meta">Pace: ${tier} · ~${cap}/day · bias ${bias >= 0 ? '+' : ''}${bias}</div>
+      <div class="push-hist-meta">${tHtml('notifications.push_pace_meta', { tier, cap, bias: (bias >= 0 ? '+' : '') + bias })}</div>
       <div class="notif-panel-list" data-push-hist>
         ${
           hist.length
@@ -317,7 +317,7 @@
             </div>`
                 )
                 .join('')
-            : `<div class="notif-empty">No push history yet</div>`
+            : `<div class="notif-empty">${tHtml('notifications.no_push_history_yet')}</div>`
         }
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);

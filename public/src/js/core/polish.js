@@ -21,8 +21,8 @@ function launchConfetti(origin, count=60){
     // Random horizontal spread
     const dx = (Math.random()-0.5)*160;
     el.animate([
-      {transform:`translate(0,0) rotate(0deg)`,opacity:1},
-      {transform:`translate(${dx}px,${120+Math.random()*200}px) rotate(${360+Math.random()*360}deg)`,opacity:0}
+      {transform:'translate(0,0) rotate(0deg)',opacity:1},
+      {transform:`translate(${dx}px,${120+Math.random()*200}px) rotate(${360+Math.random()*360}deg)`,opacity:0} // i18n-ignore
     ],{duration:1200+Math.random()*1500,delay:Math.random()*400,easing:'cubic-bezier(0,0,0.2,1)',fill:'forwards'}).onfinish=()=>el.remove();
     container.appendChild(el);
   }
@@ -56,7 +56,7 @@ function wireRipples(){
 if(typeof createSkeleton!=='function'){
   function createSkeleton(rows=3, variant='card'){
     const wrap=document.createElement('div');wrap.className='skeleton-wrap';
-    wrap.textContent='Loading…';
+    wrap.textContent=t('common.loading');
     return wrap;
   }
 }
@@ -147,9 +147,9 @@ window.setButtonLoading=setButtonLoading;
 /** In-app name sheet — replaces native prompt() for Highlights etc. */
 function promptNameSheet(opts={}){
   const {
-    title='Name',
-    placeholder='Enter a name',
-    confirmLabel='Save',
+    title=t('common.name'),
+    placeholder=t('common.enter_a_name'),
+    confirmLabel=t('common.save'),
     allowBlank=false,
     initial='',
     inputMode='',
@@ -167,7 +167,7 @@ function promptNameSheet(opts={}){
         <div class="name-prompt-title">${title}</div>
         <input class="auth-input name-prompt-input" type="text" maxlength="${maxlength}" placeholder="${placeholder}" value="${String(initial||'').replace(/"/g,'&quot;')}" data-np-input${inputMode?` inputmode="${inputMode}"`:''}>
         <div class="name-prompt-actions">
-          <button type="button" class="btn" data-np-cancel>Cancel</button>
+          <button type="button" class="btn" data-np-cancel>${tHtml('common.cancel')}</button>
           <button type="button" class="btn btn--primary" data-np-ok>${confirmLabel}</button>
         </div>
       </div>`;
@@ -187,7 +187,7 @@ function promptNameSheet(opts={}){
     sheet.querySelectorAll('[data-np-cancel]').forEach(el=>el.addEventListener('click',()=>finish(null)));
     sheet.querySelector('[data-np-ok]')?.addEventListener('click',()=>{
       const v=(input?.value||'').trim();
-      if(!v&&!allowBlank){if(typeof showToast==='function')showToast('Enter a name');return;}
+      if(!v&&!allowBlank){if(typeof showToast==='function')showToast(t('common.enter_a_name'));return;}
       finish(v);
     });
     input?.addEventListener('keydown',(e)=>{
@@ -202,10 +202,10 @@ window.promptNameSheet=promptNameSheet;
 /** In-app confirm sheet — replaces native confirm(). */
 function confirmSheet(opts={}){
   const {
-    title='Confirm',
+    title=t('common.confirm'),
     message='',
-    confirmLabel='Confirm',
-    cancelLabel='Cancel',
+    confirmLabel=t('common.confirm'),
+    cancelLabel=t('common.cancel'),
     danger=false,
   }=opts;
   return new Promise((resolve)=>{
@@ -363,39 +363,39 @@ window.initPeepal=async function(){
 (function () {
   const POOLS = {
     baithak_search: [
-      { hours: [5, 11], text: 'Search morning chats…' },
-      { hours: [11, 17], text: 'Find a friend or group…' },
-      { hours: [17, 22], text: 'Who are you catching up with?' },
-      { hours: [22, 5], text: 'Quiet night — search chats…' },
-      { weekday: 0, text: 'Sunday plans — search…' },
-      { weekday: 5, text: 'Friday vibes — find someone…' },
-      { text: 'Search chats, groups…' },
+      { hours: [5, 11], text: t('common.search_morning_chats') },
+      { hours: [11, 17], text: t('common.find_a_friend_or_group') },
+      { hours: [17, 22], text: t('common.who_are_you_catching_up_with') },
+      { hours: [22, 5], text: t('common.quiet_night_search_chats') },
+      { weekday: 0, text: t('common.sunday_plans_search') },
+      { weekday: 5, text: t('common.friday_vibes_find_someone') },
+      { text: t('common.search_chats_groups') },
     ],
     peepal_intent: [
-      { hours: [5, 12], text: 'Who would brighten your morning?' },
-      { hours: [12, 18], text: 'Describe who you’re hoping to meet…' },
-      { hours: [18, 23], text: 'Looking for good evening company?' },
-      { text: 'Type anything — we’ll find matching people…' },
+      { hours: [5, 12], text: t('common.who_would_brighten_your_morning') },
+      { hours: [12, 18], text: t('common.describe_who_you_re_hoping_to') },
+      { hours: [18, 23], text: t('common.looking_for_good_evening_company') },
+      { text: t('common.type_anything_we_ll_find_matching') },
     ],
     khoj_intent: [
-      { hours: [5, 12], text: 'Seek someone for today…' },
-      { hours: [12, 18], text: 'Who are you hoping to meet?' },
-      { text: 'Type anything — Khoj filters matching people…' },
+      { hours: [5, 12], text: t('common.seek_someone_for_today') },
+      { hours: [12, 18], text: t('common.who_are_you_hoping_to_meet') },
+      { text: t('common.type_anything_khoj_filters_matching_people') },
     ],
     chaupaal_search: [
-      { hours: [5, 12], text: 'Search Chaupaal this morning…' },
-      { hours: [12, 18], text: 'People, posts, groups…' },
-      { hours: [18, 23], text: 'Evening search — Log, Duniya, Dangal…' },
-      { text: 'Search everything on Chaupaal…' },
+      { hours: [5, 12], text: t('common.search_chaupaal_this_morning') },
+      { hours: [12, 18], text: t('common.people_posts_groups') },
+      { hours: [18, 23], text: t('common.evening_search_log_duniya_dangal') },
+      { text: t('common.search_everything_on_chaupaal') },
     ],
     share_search: [
-      { text: 'Search people to share with…' },
-      { hours: [18, 23], text: 'Who should see this tonight?' },
+      { text: t('common.search_people_to_share_with') },
+      { hours: [18, 23], text: t('common.who_should_see_this_tonight') },
     ],
     instant_note: [
-      { hours: [5, 12], text: 'Morning Split for friends…' },
-      { hours: [17, 23], text: 'Leave an evening Split…' },
-      { text: 'Leave a Split…' },
+      { hours: [5, 12], text: t('common.morning_split_for_friends') },
+      { hours: [17, 23], text: t('common.leave_an_evening_split') },
+      { text: t('common.leave_a_split') },
     ],
   };
 

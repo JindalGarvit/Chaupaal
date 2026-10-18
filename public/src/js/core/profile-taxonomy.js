@@ -23,7 +23,7 @@
 (function () {
   'use strict';
 
-  const CITY_CHIPS = [
+  const CITY_CHIPS = /* i18n-values: city */ [
     'Mumbai',
     'Delhi',
     'Bengaluru',
@@ -41,7 +41,7 @@
     'Surat',
   ];
 
-  const INTEREST_CHIPS = [
+  const INTEREST_CHIPS = /* i18n-values: interest */ [
     'Travel',
     'Food',
     'Films',
@@ -64,7 +64,7 @@
     'Animals',
   ];
 
-  const MATCH_INTENTS = [
+  const MATCH_INTENTS = /* i18n-values: intent */ [
     'Friendship',
     'Dating',
     'Serious relationship',
@@ -81,7 +81,7 @@
   ];
 
   /** Professional "open to" — no dating-style intents. */
-  const PRO_INTENTS = [
+  const PRO_INTENTS = /* i18n-values: intent */ [
     'Networking / Professional connections',
     'Hiring',
     'Looking for work',
@@ -92,7 +92,7 @@
     'Nothing specific',
   ];
 
-  const INDUSTRIES = [
+  const INDUSTRIES = /* i18n-values: industry */ [
     'Technology',
     'Finance & Banking',
     'Healthcare',
@@ -113,7 +113,7 @@
     'Creator / Influencer',
   ];
 
-  const PURPOSES = [
+  const PURPOSES = /* i18n-values: purpose */ [
     'Grow my network',
     'Find collaborators',
     'Hire talent',
@@ -124,7 +124,7 @@
     'Find clients',
   ];
 
-  const SKILL_CHIPS = [
+  const SKILL_CHIPS = /* i18n-values: skill */ [
     'Leadership',
     'Public speaking',
     'Writing',
@@ -155,18 +155,18 @@
   };
 
   const FIELD_META = {
-    bio: { layer: 'glance', templates: ['personal', 'professional'], structured: false, matching: true, payoff: 'People get a feel for you before they tap Message' },
-    currentCity: { layer: 'glance', templates: ['personal', 'professional'], structured: true, matching: true, payoff: 'Unlocks nearby people in Khoj' },
-    interests: { layer: 'act', templates: ['personal', 'professional'], structured: true, matching: true, payoff: 'Better people in Khoj who share your world' },
-    prompts: { layer: 'act', templates: ['personal'], structured: false, matching: true, payoff: 'Conversation starters on your Digital tab' },
-    lookingFor: { layer: 'act', templates: ['personal'], structured: true, matching: true, sensitive: true, defaultAudience: 'friends', payoff: 'Used for matching — friends see this by default' },
-    matchIntent: { layer: 'act', templates: ['personal', 'professional'], structured: true, matching: true, payoff: 'Helps Khoj know what you’re open to' },
-    occupation: { layer: 'act', templates: ['personal', 'professional'], structured: false, matching: true, payoff: 'Shows up on your card' },
-    industry: { layer: 'act', templates: ['professional'], structured: true, matching: true, payoff: 'Helps professionals find you' },
-    purpose: { layer: 'act', templates: ['professional'], structured: true, matching: true, payoff: 'Says why you’re here' },
-    skills: { layer: 'act', templates: ['professional'], structured: true, matching: true, payoff: 'Credibility on your portfolio' },
-    linkedin: { layer: 'act', templates: ['professional'], structured: false, matching: false, payoff: 'One tap to your work' },
-    website: { layer: 'act', templates: ['professional'], structured: false, matching: false, payoff: 'Portfolio or shop link' },
+    bio: { layer: 'glance', templates: ['personal', 'professional'], structured: false, matching: true, payoff: t('profile.people_get_a_feel_for_you') },
+    currentCity: { layer: 'glance', templates: ['personal', 'professional'], structured: true, matching: true, payoff: t('profile.unlocks_nearby_people_in_khoj') },
+    interests: { layer: 'act', templates: ['personal', 'professional'], structured: true, matching: true, payoff: t('profile.better_people_in_khoj_who_share') },
+    prompts: { layer: 'act', templates: ['personal'], structured: false, matching: true, payoff: t('profile.conversation_starters_on_your_digital_tab') },
+    lookingFor: { layer: 'act', templates: ['personal'], structured: true, matching: true, sensitive: true, defaultAudience: 'friends', payoff: t('profile.used_for_matching_friends_see_this_2') },
+    matchIntent: { layer: 'act', templates: ['personal', 'professional'], structured: true, matching: true, payoff: t('profile.helps_khoj_know_what_you_re') },
+    occupation: { layer: 'act', templates: ['personal', 'professional'], structured: false, matching: true, payoff: t('profile.shows_up_on_your_card') },
+    industry: { layer: 'act', templates: ['professional'], structured: true, matching: true, payoff: t('profile.helps_professionals_find_you') },
+    purpose: { layer: 'act', templates: ['professional'], structured: true, matching: true, payoff: t('profile.says_why_you_re_here') },
+    skills: { layer: 'act', templates: ['professional'], structured: true, matching: true, payoff: t('profile.credibility_on_your_portfolio') },
+    linkedin: { layer: 'act', templates: ['professional'], structured: false, matching: false, payoff: t('profile.one_tap_to_your_work') },
+    website: { layer: 'act', templates: ['professional'], structured: false, matching: false, payoff: t('profile.portfolio_or_shop_link') },
     religion: { layer: 'power', templates: ['personal'], structured: true, sensitive: true, defaultAudience: 'private' },
     annualIncome: { layer: 'power', templates: ['personal', 'professional'], structured: true, sensitive: true, defaultAudience: 'private' },
     relationshipStatus: { layer: 'act', templates: ['personal'], structured: true, sensitive: true, defaultAudience: 'friends' },
@@ -242,19 +242,19 @@
     const pro = String(profileType || '').toLowerCase() === 'professional';
     if (pro) {
       return [
-        { id: 'bio', key: 'bio', title: 'Headline spark', payoff: FIELD_META.bio.payoff, kind: 'bio' },
-        { id: 'city', key: 'currentCity', title: 'Where you’re based', payoff: FIELD_META.currentCity.payoff, kind: 'city' },
-        { id: 'industry', key: 'industry', title: 'Industry', payoff: FIELD_META.industry.payoff, kind: 'industry' },
-        { id: 'purpose', key: 'purpose', title: 'Why you’re here', payoff: FIELD_META.purpose.payoff, kind: 'purpose' },
-        { id: 'skills', key: 'skills', title: 'Skills', payoff: FIELD_META.skills.payoff, kind: 'skills' },
+        { id: 'bio', key: 'bio', title: t('profile.headline_spark'), payoff: FIELD_META.bio.payoff, kind: 'bio' },
+        { id: 'city', key: 'currentCity', title: t('profile.where_you_re_based'), payoff: FIELD_META.currentCity.payoff, kind: 'city' },
+        { id: 'industry', key: 'industry', title: t('common.industry'), payoff: FIELD_META.industry.payoff, kind: 'industry' },
+        { id: 'purpose', key: 'purpose', title: t('profile.why_you_re_here'), payoff: FIELD_META.purpose.payoff, kind: 'purpose' },
+        { id: 'skills', key: 'skills', title: t('profile.skills'), payoff: FIELD_META.skills.payoff, kind: 'skills' },
       ];
     }
     return [
-      { id: 'bio', key: 'bio', title: 'A line about you', payoff: FIELD_META.bio.payoff, kind: 'bio' },
-      { id: 'city', key: 'currentCity', title: 'Your city', payoff: FIELD_META.currentCity.payoff, kind: 'city' },
-      { id: 'interests', key: 'interests', title: 'Things that excite you', payoff: FIELD_META.interests.payoff, kind: 'interests' },
-      { id: 'intent', key: 'lookingFor', title: 'What you’re open to', payoff: FIELD_META.lookingFor.payoff, kind: 'intent', sensitive: true },
-      { id: 'prompt', key: 'prompts', title: 'One prompt', payoff: FIELD_META.prompts.payoff, kind: 'prompt' },
+      { id: 'bio', key: 'bio', title: t('profile.a_line_about_you'), payoff: FIELD_META.bio.payoff, kind: 'bio' },
+      { id: 'city', key: 'currentCity', title: t('profile.your_city'), payoff: FIELD_META.currentCity.payoff, kind: 'city' },
+      { id: 'interests', key: 'interests', title: t('profile.things_that_excite_you'), payoff: FIELD_META.interests.payoff, kind: 'interests' },
+      { id: 'intent', key: 'lookingFor', title: t('profile.what_you_re_open_to'), payoff: FIELD_META.lookingFor.payoff, kind: 'intent', sensitive: true },
+      { id: 'prompt', key: 'prompts', title: t('profile.one_prompt'), payoff: FIELD_META.prompts.payoff, kind: 'prompt' },
     ];
   }
 

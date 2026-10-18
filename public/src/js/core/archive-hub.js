@@ -82,12 +82,12 @@
 
   function renderGuestGate(host) {
     host.innerHTML = `<div class="archive-guest-gate">
-      <p>${ahT('archive_sign_in', 'Sign in to view your Archive — journal, posts, stories, and activity are private to you.')}</p>
-      <button type="button" class="btn btn--primary" data-ah-sign-in>${ahT('auth_sign_in_short', 'Sign in')}</button>
+      <p>${ahT('archive_sign_in', t('profile.archive_sign_in'))}</p>
+      <button type="button" class="btn btn--primary" data-ah-sign-in>${ahT('auth_sign_in_short', t('common.sign_in'))}</button>
     </div>`;
     host.querySelector('[data-ah-sign-in]')?.addEventListener('click', () => {
       if (typeof showAuth === 'function') showAuth();
-      else if (typeof requireSignIn === 'function') requireSignIn(ahT('auth_sign_in_short', 'Sign in'));
+      else if (typeof requireSignIn === 'function') requireSignIn(ahT('auth_sign_in_short', t('common.sign_in')));
     });
   }
 
@@ -129,7 +129,7 @@
     try {
       const doc = await db.collection(collection).doc(postId).get();
       if (!doc.exists) {
-        if (typeof showToast === 'function') showToast('Post not found');
+        if (typeof showToast === 'function') showToast(t('profile.post_not_found'));
         return;
       }
       const raw = { id: doc.id, ...doc.data() };
@@ -148,7 +148,7 @@
         }
       }
     } catch (e) {
-      if (typeof showToast === 'function') showToast('Could not open post');
+      if (typeof showToast === 'function') showToast(t('profile.could_not_open_post'));
     }
   }
 
@@ -166,22 +166,22 @@
     const archived = p.archived === true;
     const label = collection === 'duniya' ? 'Duniya' : 'Peepal';
     const title =
-      collection === 'duniya' ? (p.caption || 'Post').slice(0, 80) : (p.question || 'Question').slice(0, 80);
+      collection === 'duniya' ? (p.caption || t('profile.post')).slice(0, 80) : (p.question || t('profile.question')).slice(0, 80);
     const thumb = p.thumb || p.media || p.attachment?.thumb || p.attachment?.data || '';
-    const visLabel = archived ? 'Show on profile' : 'Hide from profile';
+    const visLabel = archived ? t('profile.show_on_profile') : t('profile.hide_from_profile');
     const visIcon = archived ? 'eye' : 'eye-off';
     return `<div class="archive-post-row" data-id="${esc(p.id)}" data-col="${collection}">
-      <button type="button" class="archive-post-main" data-archive-open aria-label="Open post">
+      <button type="button" class="archive-post-main" data-archive-open aria-label="${tHtml('profile.open_post')}">
         ${thumb ? `<img class="archive-thumb" src="${esc(thumb)}" alt="">` : '<div class="archive-thumb archive-thumb--empty">◇</div>'}
         <div class="archive-post-meta">
           <strong>${label}</strong>
           <p>${esc(title)}</p>
-          <small class="${archived ? 'is-archived' : ''}">${archived ? 'Hidden from profile' : 'Live on profile'}</small>
+          <small class="${archived ? 'is-archived' : ''}">${archived ? tHtml('profile.archive_hidden_profile') : tHtml('profile.archive_live_profile')}</small>
         </div>
       </button>
       <div class="archive-post-actions">
         <button type="button" class="archive-post-icon-btn" data-toggle-profile-vis="${archived ? '0' : '1'}" aria-label="${visLabel}" title="${visLabel}">${ico(visIcon, 18)}</button>
-        <button type="button" class="archive-post-icon-btn" data-archive-edit aria-label="Edit post" title="Edit">${ico('pen', 16)}</button>
+        <button type="button" class="archive-post-icon-btn" data-archive-edit aria-label="${tHtml('profile.edit_post')}" title="${tHtml('profile.edit')}">${ico('pen', 16)}</button>
       </div>
     </div>`;
   }
@@ -198,11 +198,11 @@
         try {
           await setPostArchived(rowEl.dataset.col, rowEl.dataset.id, archived);
           if (typeof showToast === 'function') {
-            showToast(archived ? 'Hidden from profile' : 'Shown on profile');
+            showToast(archived ? t('profile.archive_hidden_profile') : t('profile.shown_on_profile'));
           }
           if (typeof onDone === 'function') onDone();
         } catch (err) {
-          if (typeof showToast === 'function') showToast('Could not update');
+          if (typeof showToast === 'function') showToast(t('profile.rel_update_fail'));
         }
       });
       rowEl.querySelector('[data-archive-edit]')?.addEventListener('click', async (e) => {
@@ -223,7 +223,7 @@
             openPeepalEditSheet(post);
           }
         } catch (err) {
-          if (typeof showToast === 'function') showToast('Could not open editor');
+          if (typeof showToast === 'function') showToast(t('profile.could_not_open_editor'));
         }
       });
     });
@@ -233,7 +233,7 @@
     host.querySelectorAll('[data-open-interaction]').forEach((row) => {
       row.addEventListener('click', async () => {
         if (row.dataset.tombstone === '1') {
-          if (typeof showToast === 'function') showToast(ahT('archive_tombstone_toast', 'Original content is no longer available'));
+          if (typeof showToast === 'function') showToast(ahT('archive_tombstone_toast', t('profile.original_content_is_no_longer_available')));
           return;
         }
         const col = row.dataset.collection;
@@ -246,8 +246,8 @@
             row.dataset.tombstone = '1';
             row.classList.add('is-tombstone');
             const meta = row.querySelector('.archive-post-meta small');
-            if (meta) meta.textContent = ahT('archive_tombstone', 'Content no longer available');
-            if (typeof showToast === 'function') showToast(ahT('archive_tombstone_toast', 'Original content is no longer available'));
+            if (meta) meta.textContent = ahT('archive_tombstone', t('profile.content_no_longer_available'));
+            if (typeof showToast === 'function') showToast(ahT('archive_tombstone_toast', t('profile.original_content_is_no_longer_available')));
             return;
           }
         } catch (e) {}
@@ -300,7 +300,7 @@
               btn.dataset.tombstone = '1';
               btn.classList.add('is-tombstone');
               const small = btn.querySelector('small');
-              if (small) small.textContent = ahT('archive_tombstone', 'Content no longer available');
+              if (small) small.textContent = ahT('archive_tombstone', t('profile.content_no_longer_available'));
             }
           }
         } catch (e) {}
@@ -371,25 +371,25 @@
 
   function renderJournalComposeHtml() {
     const prompt =
-      jc()?.pickPrompt?.(jc()?.journalWindow?.() || 'anytime') || 'What’s sitting with you right now?';
+      jc()?.pickPrompt?.(jc()?.journalWindow?.() || 'anytime') || t('profile.what_s_sitting_with_you_right');
     return `<div class="archive-journal-compose" data-ah-journal-compose>
       <p class="journal-checkin-prompt">${esc(prompt)}</p>
       <div class="journal-compose-wrap">
-        <textarea data-ah-journal-input rows="3" maxlength="4000" placeholder="Write freely — only you can see this"></textarea>
-        <button type="button" class="journal-compose-mic" data-ah-journal-mic aria-label="Voice typing">${ico('mic', 20)}</button>
+        <textarea data-ah-journal-input rows="3" maxlength="4000" placeholder="${tHtml('profile.write_freely_only_you_can_see')}"></textarea>
+        <button type="button" class="journal-compose-mic" data-ah-journal-mic aria-label="${tHtml('profile.voice_typing')}">${ico('mic', 20)}</button>
       </div>
       <label class="archive-journal-consent journal-analysis-consent">
         <input type="checkbox" data-ah-journal-ai checked>
-        Allow soft analysis for personal insights (optional)
+        ${tHtml('profile.allow_soft_analysis_for_personal_insights')}
       </label>
-      <button type="button" class="btn btn--primary" data-ah-journal-save>Save entry</button>
+      <button type="button" class="btn btn--primary" data-ah-journal-save>${tHtml('profile.save_entry')}</button>
     </div>`;
   }
 
   function journalRowHtml(e) {
     const api = jc();
     const ms = api?.entryCreatedMs?.(e) || 0;
-    const collapsedDate = api?.formatCollapsedDate?.(ms, e.date) || String(e.date || '').slice(0, 10) || 'Entry';
+    const collapsedDate = api?.formatCollapsedDate?.(ms, e.date) || String(e.date || '').slice(0, 10) || t('profile.entry');
     const expandedDate = api?.formatExpandedDate?.(ms, e.date) || collapsedDate;
     const expandedTime = api?.formatExpandedTime?.(ms) || '';
     const canEdit = api?.canEditEntry?.(e);
@@ -406,22 +406,22 @@
       <div class="archive-journal-row-actions">
         ${
           canEdit
-            ? `<button type="button" class="archive-journal-edit" data-journal-edit aria-label="Edit">${ico('pen', 16)}</button>`
+            ? `<button type="button" class="archive-journal-edit" data-journal-edit aria-label="${tHtml('profile.edit')}">${ico('pen', 16)}</button>`
             : ''
         }
       </div>
       <div class="archive-journal-edit-panel" data-journal-edit-panel hidden>
         <div class="journal-compose-wrap">
           <textarea data-journal-edit-text rows="3" maxlength="4000">${esc(text)}</textarea>
-          <button type="button" class="journal-compose-mic" data-journal-edit-mic aria-label="Voice typing">${ico('mic', 20)}</button>
+          <button type="button" class="journal-compose-mic" data-journal-edit-mic aria-label="${tHtml('profile.voice_typing')}">${ico('mic', 20)}</button>
         </div>
         <label class="archive-journal-consent">
           <input type="checkbox" data-journal-edit-ai checked>
-          Allow soft analysis for personal insights (optional)
+          ${tHtml('profile.allow_soft_analysis_for_personal_insights')}
         </label>
         <div class="archive-journal-edit-actions">
-          <button type="button" class="btn btn--primary" data-journal-edit-save>Save changes</button>
-          <button type="button" class="btn" data-journal-edit-cancel>Cancel</button>
+          <button type="button" class="btn btn--primary" data-journal-edit-save>${tHtml('profile.save_changes')}</button>
+          <button type="button" class="btn" data-journal-edit-cancel>${tHtml('common.cancel')}</button>
         </div>
       </div>
     </div>`;
@@ -430,25 +430,25 @@
   function showHostLoading(host, variant = 'detail', count = 2) {
     if (!host) return;
     if (typeof renderSkeleton === 'function') renderSkeleton(host, { variant, count });
-    else host.innerHTML = '<div class="comments-empty">Loading…</div>';
+    else host.innerHTML = '<div class="comments-empty">' + tHtml('profile.loading') + '</div>';
   }
 
   function showHostError(host, onRetry, err) {
     if (!host) return;
     if (typeof renderErrorState === 'function') {
       renderErrorState(host, {
-        message: typeof friendlyError === 'function' ? friendlyError(err) : 'Please try again.',
+        message: typeof friendlyError === 'function' ? friendlyError(err) : t('profile.please_try_again'),
         onRetry,
       });
     } else {
-      host.innerHTML = '<div class="comments-empty">Could not load</div>';
+      host.innerHTML = '<div class="comments-empty">' + tHtml('profile.could_not_load') + '</div>';
     }
   }
 
   async function renderJournalTab(body, setTab, getSearch) {
     body.innerHTML = `<p class="archive-hub-copy">${ahT(
       'archive_journal_copy',
-      'Private journal — never on your public profile. Cap 1000 entries. Edits allowed within 24 hours. Mehfil room chat is live-only and is not stored here.'
+      t('profile.private_journal_never_on_your_public')
     )}</p>
       ${renderJournalComposeHtml()}
       <div data-ah-journal></div>`;
@@ -481,7 +481,7 @@
         } else {
           throw new Error('NO_SAVE');
         }
-        if (typeof showToast === 'function') showToast('Saved to journal');
+        if (typeof showToast === 'function') showToast(t('profile.saved_to_journal'));
         if (ta) ta.value = '';
         ta?.dispatchEvent(new Event('input', { bubbles: true }));
         if (aiBox) aiBox.checked = true;
@@ -489,10 +489,10 @@
       } catch (e) {
         const msg =
           e?.message === 'EMPTY'
-            ? 'Write something first'
+            ? t('profile.write_something_first')
             : e?.message === 'CAP'
-              ? 'Journal is full for now'
-              : 'Could not save';
+              ? t('profile.journal_is_full_for_now')
+              : t('profile.could_not_save');
         if (typeof showToast === 'function') showToast(msg);
       }
     });
@@ -518,8 +518,8 @@
       host.innerHTML = entries.length
         ? entries.map((e) => journalRowHtml(e)).join('')
         : `<div class="archive-empty">
-            <p class="archive-empty-title">${ahT('archive_empty_journal_title', 'No entries yet')}</p>
-            <p class="archive-empty-msg">${ahT('archive_empty_journal_msg', 'Write your first entry above — only you can read it.')}</p>
+            <p class="archive-empty-title">${ahT('archive_empty_journal_title', t('profile.archive_empty_journal_title'))}</p>
+            <p class="archive-empty-msg">${ahT('archive_empty_journal_msg', t('profile.archive_empty_journal_msg'))}</p>
           </div>`;
 
       host.querySelectorAll('.archive-journal-row').forEach((row) => {
@@ -579,17 +579,17 @@
             } else {
               throw new Error('NO_SAVE');
             }
-            if (typeof showToast === 'function') showToast('Updated');
+            if (typeof showToast === 'function') showToast(t('common.ptr_done'));
             setTab('journal');
           } catch (e) {
             if (typeof showToast === 'function') {
-              showToast(e?.message === 'EMPTY' ? 'Write something first' : 'Could not save');
+              showToast(e?.message === 'EMPTY' ? t('profile.write_something_first') : t('profile.could_not_save'));
             }
           }
         });
       });
     } catch (e) {
-      host.innerHTML = '<div class="comments-empty">Could not load journal</div>';
+      host.innerHTML = '<div class="comments-empty">' + tHtml('profile.could_not_load_journal') + '</div>';
     }
   }
 
@@ -598,14 +598,14 @@
     const thumb = duniyaThumb(p);
     const title = String(p.caption || '').slice(0, 80);
     const lehar = isLeharPost(p);
-    return `<button type="button" class="archive-media-cell${thumb ? '' : ' archive-media-cell--text'}" data-id="${esc(p.id)}" data-col="duniya" aria-label="Open post">
+    return `<button type="button" class="archive-media-cell${thumb ? '' : ' archive-media-cell--text'}" data-id="${esc(p.id)}" data-col="duniya" aria-label="${tHtml('profile.open_post')}">
       ${
         thumb
           ? `<img src="${esc(thumb)}" alt="" loading="lazy">`
-          : esc(title || 'Post')
+          : esc(title || t('profile.post'))
       }
-      ${lehar ? '<span class="archive-media-badge">Lehar</span>' : ''}
-      ${archived ? '<span class="archive-media-badge is-hidden">Hidden</span>' : ''}
+      ${lehar ? '<span class="archive-media-badge">' + tHtml('common.shortcut_duniya_lehar') + '</span>' : ''}
+      ${archived ? '<span class="archive-media-badge is-hidden">' + tHtml('profile.archive_filter_hidden') + '</span>' : ''}
     </button>`;
   }
 
@@ -618,11 +618,11 @@
         <span class="archive-format-chip">${esc(String(fmt))}</span>
         <strong>Peepal</strong>
         <p>${esc(title)}</p>
-        <small>${archived ? ahT('archive_hidden_profile', 'Hidden from profile') : ahT('archive_live_profile', 'Live on profile')}</small>
+        <small>${archived ? ahT('archive_hidden_profile', t('profile.archive_hidden_profile')) : ahT('archive_live_profile', t('profile.archive_live_profile'))}</small>
       </button>
       <div class="archive-post-actions">
-        <button type="button" class="archive-post-icon-btn" data-toggle-profile-vis="${archived ? '0' : '1'}" aria-label="${archived ? 'Show on profile' : 'Hide from profile'}">${ico(archived ? 'eye' : 'eye-off', 18)}</button>
-        <button type="button" class="archive-post-icon-btn" data-archive-edit aria-label="Edit">${ico('pen', 16)}</button>
+        <button type="button" class="archive-post-icon-btn" data-toggle-profile-vis="${archived ? '0' : '1'}" aria-label="${archived ? tHtml('profile.show_on_profile') : tHtml('profile.hide_from_profile')}">${ico(archived ? 'eye' : 'eye-off', 18)}</button>
+        <button type="button" class="archive-post-icon-btn" data-archive-edit aria-label="${tHtml('profile.edit')}">${ico('pen', 16)}</button>
       </div>
     </div>`;
   }
@@ -646,11 +646,11 @@
         try {
           await setPostArchived('peepal', rowEl.dataset.id, archived);
           if (typeof showToast === 'function') {
-            showToast(archived ? ahT('archive_hidden_toast', 'Hidden from profile') : ahT('archive_shown_toast', 'Shown on profile'));
+            showToast(archived ? ahT('archive_hidden_toast', t('profile.archive_hidden_profile')) : ahT('archive_shown_toast', t('profile.shown_on_profile')));
           }
           if (typeof onDone === 'function') onDone();
         } catch (err) {
-          if (typeof showToast === 'function') showToast(ahT('archive_update_fail', 'Could not update'));
+          if (typeof showToast === 'function') showToast(ahT('archive_update_fail', t('profile.rel_update_fail')));
         }
       });
       rowEl.querySelector('[data-archive-edit]')?.addEventListener('click', async (e) => {
@@ -664,7 +664,7 @@
           const post = typeof mapPeepalDoc === 'function' ? mapPeepalDoc(raw) : raw;
           if (typeof openPeepalEditSheet === 'function') openPeepalEditSheet(post);
         } catch (err) {
-          if (typeof showToast === 'function') showToast(ahT('archive_edit_fail', 'Could not open editor'));
+          if (typeof showToast === 'function') showToast(ahT('archive_edit_fail', t('profile.could_not_open_editor')));
         }
       });
     });
@@ -679,15 +679,15 @@
       overlay.setAttribute('data-nav-managed', '1');
       overlay.innerHTML = `
         <div class="archive-hub-header">
-          ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-archive-hub-back' }) : '<button type="button" data-archive-hub-back class="cp-back-btn" aria-label="Back">←</button>'}
+          ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-archive-hub-back' }) : '<button type="button" data-archive-hub-back class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
           <div class="archive-hub-header-copy">
             <span class="archive-hub-title">${ahT('archive_title', 'Archive')}</span>
-            <div class="archive-hub-subtitle">${ahT('archive_subtitle', 'Private to you')}</div>
+            <div class="archive-hub-subtitle">${ahT('archive_subtitle', t('profile.archive_subtitle'))}</div>
           </div>
-          <button type="button" class="btn archive-hub-privacy-btn" data-ah-export title="Export my data">Export</button>
+          <button type="button" class="btn archive-hub-privacy-btn" data-ah-export title="${tHtml('profile.export_my_data')}">${tHtml('profile.export')}</button>
         </div>
         <div class="archive-hub-search-wrap">
-          <input type="search" class="archive-hub-search" data-ah-search placeholder="${ahT('archive_search_ph', 'Search this tab…')}" autocomplete="off" enterkeyhint="search">
+          <input type="search" class="archive-hub-search" data-ah-search placeholder="${ahT('archive_search_ph', t('profile.archive_search_ph'))}" autocomplete="off" enterkeyhint="search">
         </div>
         <div class="archive-hub-segments" role="tablist">
           ${TAB_IDS.map(
@@ -714,7 +714,7 @@
       };
       document.addEventListener('keydown', onKey);
 
-      if (typeof openLayer === 'function') openLayer(overlay, close, { remove: false, label: 'Archive' });
+      if (typeof openLayer === 'function') openLayer(overlay, close, { remove: false, label: t('profile.archive_title') });
       else if (typeof pushNavLayer === 'function') {
         overlay.dataset.navManaged = '1';
         pushNavLayer(overlay, close);
@@ -722,7 +722,7 @@
       overlay.querySelector('[data-archive-hub-back]')?.addEventListener('click', close);
       overlay.querySelector('[data-ah-export]')?.addEventListener('click', () => {
         if (typeof openAccountDataExport === 'function') openAccountDataExport();
-        else if (typeof showToast === 'function') showToast('Export unavailable');
+        else if (typeof showToast === 'function') showToast(t('profile.export_unavailable'));
       });
 
       const getSearch = () => String(searchQuery || searchInput?.value || '').trim().toLowerCase();
@@ -752,7 +752,7 @@
         if (tab === 'interactions') {
           body.innerHTML = `<p class="archive-hub-copy">${ahT(
             'archive_activity_copy',
-            'Saved, likes, and your comments — private activity indexes. Tap a row to open the original when it still exists.'
+            t('profile.saved_likes_and_your_comments_private')
           )}</p>
             <div class="archive-hub-tabs archive-hub-tabs--sub">
               <button type="button" data-ah-ix="saved" class="active">${ahT('archive_ix_saved', 'Saved')}</button>
@@ -773,7 +773,7 @@
             }
             body.querySelectorAll('[data-ah-ix]').forEach((b) => b.classList.toggle('active', b.dataset.ahIx === kind));
             if (!db || !currentUser) {
-              ixBody.innerHTML = `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_sign_in_ix', 'Sign in to see interactions')}</p></div>`;
+              ixBody.innerHTML = `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_sign_in_ix', t('profile.sign_in_to_see_interactions'))}</p></div>`;
               return;
             }
             if (!append) showHostLoading(ixBody, 'list', 4);
@@ -794,14 +794,14 @@
               );
               const emptyMsg =
                 kind === 'saved'
-                  ? `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_saved_title', 'No saved posts')}</p><p class="archive-empty-msg">${ahT('archive_empty_saved_msg', 'Tap the bookmark on Duniya or Peepal to save posts here.')}</p></div>`
+                  ? `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_saved_title', t('profile.no_saved_posts'))}</p><p class="archive-empty-msg">${ahT('archive_empty_saved_msg', t('profile.tap_the_bookmark_on_duniya_or'))}</p></div>`
                   : kind === 'likes'
-                    ? `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_likes_title', 'No likes yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_likes', 'Posts you like will show up here.')}</p></div>`
-                    : `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_comments_title', 'No comments yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_comments', 'Your comments will gather here.')}</p></div>`;
+                    ? `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_likes_title', t('profile.no_likes_yet'))}</p><p class="archive-empty-msg">${ahT('archive_empty_likes', t('profile.posts_you_like_will_show_up'))}</p></div>`
+                    : `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_comments_title', t('profile.no_comments_yet'))}</p><p class="archive-empty-msg">${ahT('archive_empty_comments', t('profile.your_comments_will_gather_here'))}</p></div>`;
               ixBody.innerHTML = rows.length
                 ? rows.map((r) => activityRowHtml(r, kind)).join('') +
                   (ixCursor
-                    ? `<button type="button" class="btn btn--block" data-ah-ix-more style="margin-top:10px">${ahT('archive_load_more', 'Load more')}</button>`
+                    ? `<button type="button" class="btn btn--block" data-ah-ix-more style="margin-top:10px">${ahT('archive_load_more', t('profile.load_more'))}</button>`
                     : '')
                 : emptyMsg;
               wireInteractionRows(ixBody);
@@ -821,11 +821,11 @@
         if (tab === 'stories') {
           body.innerHTML = `<p class="archive-hub-copy">${ahT(
             'archive_stories_copy',
-            'Live stories expire after 24h. “Archived” here means saved for you (Highlights or story archive) — Highlights stay on your profile until you remove them. Story media retention follows story archive rules, not the Deleted tab.'
+            t('profile.live_stories_expire_after_24h_archived')
           )}</p>
             <div class="archive-hub-actions">
-              <button type="button" class="btn" data-ah-new-highlight>${ahT('archive_new_highlight', 'New Highlight')}</button>
-              <button type="button" class="btn btn--primary" data-ah-story-archive>${ahT('archive_open_story_archive', 'Open story archive')}</button>
+              <button type="button" class="btn" data-ah-new-highlight>${ahT('archive_new_highlight', t('profile.new_highlight'))}</button>
+              <button type="button" class="btn btn--primary" data-ah-story-archive>${ahT('archive_open_story_archive', t('profile.open_story_archive'))}</button>
             </div>
             <div data-ah-highlights></div>
             <div data-ah-story-list></div>`;
@@ -838,18 +838,18 @@
             const title =
               typeof promptNameSheet === 'function'
                 ? await promptNameSheet({
-                    title: ahT('archive_new_highlight', 'New Highlight'),
-                    placeholder: 'e.g. Travel, Wins, Favorites',
-                    confirmLabel: 'Create',
+                    title: ahT('archive_new_highlight', t('profile.new_highlight')),
+                    placeholder: t('profile.e_g_travel_wins_favorites'),
+                    confirmLabel: t('profile.create'),
                   })
                 : null;
             if (!title || typeof storyCall !== 'function') return;
             try {
               await storyCall('create_highlight', { title });
-              if (typeof showToast === 'function') showToast(ahT('archive_highlight_created', 'Highlight created'));
+              if (typeof showToast === 'function') showToast(ahT('archive_highlight_created', t('profile.highlight_created')));
               setTab('stories');
             } catch (e) {
-              if (typeof showToast === 'function') showToast(ahT('archive_highlight_fail', 'Could not create highlight'));
+              if (typeof showToast === 'function') showToast(ahT('archive_highlight_fail', t('profile.could_not_create_highlight')));
             }
           });
           try {
@@ -867,7 +867,7 @@
                       </button>`
                   )
                   .join('')}</div>`
-              : `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_no_highlights', 'No Highlights yet')}</p></div>`;
+              : `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_no_highlights', t('profile.no_highlights_yet'))}</p></div>`;
             hlHost.querySelectorAll('[data-manage-hl]').forEach((btn) => {
               btn.addEventListener('click', () => {
                 if (typeof openManageHighlightSheet === 'function') {
@@ -898,13 +898,13 @@
                       .map((s) => {
                         const mark = s.archived || s.saveOnly || !s.active ? ahT('archive_hidden_profile', 'Archived') : ahT('archive_live_profile', 'Live');
                         const thumb = s.thumb || s.media || '';
-                        return `<button type="button" class="archive-story-thumb" type="button" aria-label="Story">
+                        return `<button type="button" class="archive-story-thumb" type="button" aria-label="${tHtml('profile.story')}">
                           ${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : ''}
                           <span class="archive-media-badge">${esc(s.destination || 'story')} · ${esc(mark)}</span>
                         </button>`;
                       })
                       .join('')}</div>`
-                  : `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_no_stories', 'No stories in archive yet')}</p></div>`
+                  : `<div class="archive-empty"><p class="archive-empty-msg">${ahT('archive_no_stories', t('profile.no_stories_in_archive_yet'))}</p></div>`
               }`;
           } catch (e) {
             /* optional */
@@ -918,7 +918,7 @@
           if (typeof renderRecoveryBinInto === 'function') {
             renderRecoveryBinInto(delHost, { onRefresh: () => setTab('deleted') });
           } else if (typeof openRecoveryBin === 'function') {
-            delHost.innerHTML = `<p class="archive-hub-copy">${ahT('archive_deleted_fallback', 'Open recovery bin')}</p><button type="button" class="btn btn--primary" data-open-bin>${ahT('archive_tab_deleted', 'Deleted')}</button>`;
+            delHost.innerHTML = `<p class="archive-hub-copy">${ahT('archive_deleted_fallback', t('profile.open_recovery_bin'))}</p><button type="button" class="btn btn--primary" data-open-bin>${ahT('archive_tab_deleted', 'Deleted')}</button>`;
             delHost.querySelector('[data-open-bin]')?.addEventListener('click', () => openRecoveryBin());
           }
           return;
@@ -931,9 +931,9 @@
           )}</p>
             <div class="archive-hub-filters" data-ah-duniya-filter>
               <button type="button" data-filter="all" class="active">${ahT('archive_filter_all', 'All')}</button>
-              <button type="button" data-filter="live">${ahT('archive_filter_live', 'On profile')}</button>
+              <button type="button" data-filter="live">${ahT('archive_filter_live', t('profile.archive_filter_live'))}</button>
               <button type="button" data-filter="hidden">${ahT('archive_filter_hidden', 'Hidden')}</button>
-              <button type="button" data-filter="lehar">Lehar</button>
+              <button type="button" data-filter="lehar">${tHtml('common.shortcut_duniya_lehar')}</button>
             </div>
             <div data-ah-posts></div>`;
           const postsHost = body.querySelector('[data-ah-posts]');
@@ -956,7 +956,7 @@
                 (textOnly.length
                   ? `<div class="archive-post-list" style="margin-top:12px">${textOnly.map((p) => postRow(p, 'duniya')).join('')}</div>`
                   : '') ||
-                `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_posts_title', 'Nothing archived yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_posts_msg', 'Posts you share — or hide from your profile — appear here.')}</p></div>`;
+                `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_posts_title', t('profile.nothing_archived_yet'))}</p><p class="archive-empty-msg">${ahT('archive_empty_posts_msg', t('profile.posts_you_share_or_hide_from'))}</p></div>`;
               wireDuniyaGrid(postsHost, renderDuniya);
             } catch (e) {
               showHostError(postsHost, renderDuniya, e);
@@ -986,7 +986,7 @@
             posts = posts.filter((p) => matchesSearch(q, `${p.question} ${p.tag}`));
             postsHost.innerHTML = posts.length
               ? posts.map((p) => peepalListRow(p)).join('')
-              : `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_discuss_title', 'No questions yet')}</p><p class="archive-empty-msg">${ahT('archive_empty_discuss_msg', 'Your Peepal posts will appear here.')}</p></div>`;
+              : `<div class="archive-empty"><p class="archive-empty-title">${ahT('archive_empty_discuss_title', t('profile.archive_empty_discuss_title'))}</p><p class="archive-empty-msg">${ahT('archive_empty_discuss_msg', t('profile.archive_empty_discuss_msg'))}</p></div>`;
             wirePeepalList(postsHost, () => setTab('peepal'));
           } catch (e) {
             showHostError(postsHost, () => setTab('peepal'), e);
@@ -1010,7 +1010,7 @@
     } catch (err) {
       console.error('[archive-hub] openArchiveHub failed', err);
       if (typeof showToast === 'function') {
-        showToast(ahT('archive_open_fail', 'Could not open Archive — try again'));
+        showToast(ahT('archive_open_fail', t('profile.archive_open_fail')));
       }
     }
   }

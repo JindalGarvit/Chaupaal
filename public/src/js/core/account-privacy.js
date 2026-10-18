@@ -20,41 +20,41 @@
 
   async function openAccountDataExport() {
     if (!currentUser) {
-      if (typeof requireSignIn === 'function') requireSignIn('Sign in to export');
+      if (typeof requireSignIn === 'function') requireSignIn(t('settings.sign_in_to_export'));
       return;
     }
-    if (typeof showToast === 'function') showToast('Preparing your export…');
+    if (typeof showToast === 'function') showToast(t('settings.preparing_your_export'));
     try {
       const envelope = await apiFetch('/api/media-config', {
         method: 'POST',
         needAuth: true,
         body: { action: 'export_account_data' },
       });
-      if (!envelope?.ok) throw new Error(envelope?.error?.message || 'Export failed');
+      if (!envelope?.ok) throw Object.assign(new Error(envelope?.error?.message || 'Export failed'), { code: envelope?.error?.code });
       const payload = envelope.data?.export || envelope.export;
       if (!payload) throw new Error('Empty export');
       const uname = (typeof userProfile !== 'undefined' && userProfile?.username) || 'me';
-      downloadJson(`chaupaal-export-${uname}-${new Date().toISOString().slice(0, 10)}.json`, payload);
-      if (typeof showToast === 'function') showToast('Export downloaded');
+      downloadJson(`chaupaal-export-${uname}-${new Date().toISOString().slice(0, 10)}.json`, payload); // i18n-ignore (file name)
+      if (typeof showToast === 'function') showToast(t('settings.export_downloaded'));
     } catch (e) {
       if (typeof showToast === 'function') {
-        showToast(typeof friendlyError === 'function' ? friendlyError(e) : e?.message || 'Could not export');
+        showToast(errorText(e, t('settings.could_not_export')));
       }
     }
   }
 
   async function openAccountDeletionRequest() {
     if (!currentUser) {
-      if (typeof requireSignIn === 'function') requireSignIn('Sign in');
+      if (typeof requireSignIn === 'function') requireSignIn(t('common.sign_in'));
       return;
     }
     const ok = confirm(
-      'Request account deletion?\n\nYou will be signed out. Access is revoked now. Full data purge (posts, media, login) completes within about 30 days. This cannot be undone from the app after you confirm.'
+      t('settings.request_account_deletion_you_will_be')
     );
     if (!ok) return;
-    const typed = prompt('Type DELETE to confirm account deletion:', '');
+    const typed = prompt(t('settings.type_delete_to_confirm_account_deletion'), '');
     if (String(typed || '').trim().toUpperCase() !== 'DELETE') {
-      if (typeof showToast === 'function') showToast('Deletion cancelled');
+      if (typeof showToast === 'function') showToast(t('settings.deletion_cancelled'));
       return;
     }
     try {
@@ -63,10 +63,10 @@
         needAuth: true,
         body: { action: 'request_account_deletion', confirm: 'delete' },
       });
-      if (!envelope?.ok) throw new Error(envelope?.error?.message || 'Request failed');
+      if (!envelope?.ok) throw Object.assign(new Error(envelope?.error?.message || 'Request failed'), { code: envelope?.error?.code });
       const msg =
         envelope.data?.message ||
-        'Deletion requested. Signing you out.';
+        t('settings.deletion_requested_signing_you_out');
       if (typeof showToast === 'function') showToast(msg);
       try {
         await apiFetch('/api/revoke-sessions', { method: 'POST', needAuth: true, body: {} });
@@ -81,7 +81,7 @@
       location.reload();
     } catch (e) {
       if (typeof showToast === 'function') {
-        showToast(typeof friendlyError === 'function' ? friendlyError(e) : e?.message || 'Could not request deletion');
+        showToast(errorText(e, t('settings.could_not_request_deletion')));
       }
     }
   }

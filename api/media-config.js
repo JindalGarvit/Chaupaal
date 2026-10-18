@@ -806,7 +806,7 @@ async function handlePost(req, res) {
           chatId,
           recipientUid,
           actor,
-          preview: String(body.preview || 'New message').slice(0, 280),
+          preview: String(body.preview || '').slice(0, 280),
         });
         return sendSuccess(res, result || { skipped: 'none' });
       }
@@ -840,7 +840,7 @@ async function handlePost(req, res) {
               type: 'mehfil_ring',
               refId: chatId,
               actor,
-              preview: 'Incoming Mehfil',
+              previewKey: 'notifications.push.mehfil_ring',
               deepLink: { chatId, mehfil: 1 },
             })
           )

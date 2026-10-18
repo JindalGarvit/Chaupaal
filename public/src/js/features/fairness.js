@@ -108,12 +108,12 @@ function addSearchFeedback(resultsEl, query, resultCount){
   const feedbackEl = document.createElement('div');
   feedbackEl.style.cssText = 'background:var(--cream);border-radius:16px;padding:12px 16px;margin-top:14px;text-align:center;';
   feedbackEl.innerHTML = `
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">How were these results?</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${tHtml('settings.how_were_these_results')}</div>
     <div style="display:flex;justify-content:center;gap:12px;">
-      ${[['🎯','Spot on',5],['✨','Pretty good',4],['🤔','Okay',3],['😕','Not great',2]].map(([emoji,label,score])=>`
+      ${/* i18n-values: common.opt.feedback */ [['🎯','Spot on',5],['✨','Pretty good',4],['🤔','Okay',3],['😕','Not great',2]].map(([emoji,label,score])=>`
         <button data-score="${score}" data-label="${label}" style="display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:10px;transition:background .15s;">
           <span style="font-size:22px;">${emoji}</span>
-          <span style="font-size:9px;font-weight:700;color:var(--muted);">${label}</span>
+          <span style="font-size:9px;font-weight:700;color:var(--muted);">${optionLabelHtml('common.opt.feedback', label)}</span>
         </button>
       `).join('')}
     </div>
@@ -123,7 +123,7 @@ function addSearchFeedback(resultsEl, query, resultCount){
       const score=parseInt(btn.dataset.score);
       const label=btn.dataset.label;
       recordSearchFeedback(query, resultCount, score, label);
-      feedbackEl.innerHTML=`<div style="font-size:13px;color:var(--muted);padding:4px;">Thanks for the feedback! 🙏 We'll keep improving.</div>`;
+      feedbackEl.innerHTML=`<div style="font-size:13px;color:var(--muted);padding:4px;">${tHtml('settings.thanks_for_the_feedback_we_ll')}</div>`;
     });
   });
   resultsEl.appendChild(feedbackEl);
@@ -259,17 +259,17 @@ function maybeShowPeepalCheckIn(){
     nudge.innerHTML=`
       <div style="font-size:28px;">${(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',28):'🌳'}</div>
       <div style="flex:1;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">How's Peepal working for you?</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">Quick 1-tap — helps us improve your matches</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;">${tHtml('settings.how_s_peepal_working_for_you')}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">${tHtml('settings.quick_1_tap_helps_us_improve')}</div>
       </div>
       <div style="display:flex;gap:8px;">
-        ${[['🔥','Great'],['👍','Good'],['😕','Meh']].map(([e,l])=>`<button data-r="${l}" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:10px;padding:8px;font-size:18px;cursor:pointer;">${e}</button>`).join('')}
+        ${/* i18n-values: common.opt.feedback */ [['🔥','Great'],['👍','Good'],['😕','Meh']].map(([e,l])=>`<button data-r="${l}" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:10px;padding:8px;font-size:18px;cursor:pointer;">${e}</button>`).join('')}
       </div>
     `;
     nudge.querySelectorAll('[data-r]').forEach(btn=>btn.addEventListener('click',()=>{
       recordSearchFeedback('peepal_monthly_checkin',0,{'Great':5,'Good':4,'Meh':2}[btn.dataset.r]||3,btn.dataset.r);
       nudge.remove();
-      showToast('Thanks! Your feedback shapes Peepal 🙏');
+      showToast(t('settings.thanks_your_feedback_shapes_peepal'));
     }));
     feed.insertBefore(nudge, feed.firstChild);
   }, 3000);
@@ -343,13 +343,13 @@ const _chatBtnObserver = new MutationObserver(mutations=>{
         if(viewBtn){
           const heartBtn=document.createElement('button');
           heartBtn.innerHTML='❤️';
-          heartBtn.title='Strong interest — show me more like this';
+          heartBtn.title=t('settings.strong_interest_show_me_more_like');
           heartBtn.style.cssText='background:none;border:none;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;';
           heartBtn.addEventListener('click',e=>{
             e.stopPropagation();
             recordDiscoveryInterest(uid,true);
             heartBtn.innerHTML='❤️';heartBtn.style.animation='heartPop 0.3s ease';
-            showToast('Noted! We\'ll show you more like this ❤️');
+            showToast(t('settings.noted_we_ll_show_you_more'));
           });
           viewBtn.parentElement?.insertBefore(heartBtn, viewBtn);
         }

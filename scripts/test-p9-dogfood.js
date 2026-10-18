@@ -15,7 +15,7 @@ function assert(cond, msg) {
 }
 
 function read(rel) {
-  return fs.readFileSync(path.join(root, rel), 'utf8');
+  return require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, rel), 'utf8'));
 }
 
 // --- Hobby cap ---

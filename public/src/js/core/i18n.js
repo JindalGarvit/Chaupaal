@@ -17,6 +17,10 @@
  * Validate packs: node scripts/i18n-check.js
  */
 
+/** The UI language code. Declared here (i18n loads before every other app script). */
+// eslint-disable-next-line no-var -- a window property, so the server renderer / tests can set it.
+var currentLang = 'en';
+
 /** The 16 languages Chaupaal ships. Single source for the picker, <html lang/dir> and TTS tags. */
 const LANG_CATALOG = [
   { code: 'en', native: 'English', name: 'English', tts: 'en-US', html: 'en', region: 'US' },
@@ -45,7 +49,7 @@ const LANG_CATALOG = [
 const I18N_RETIRED_LANGS = ['gu', 'kn', 'ml', 'pa', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"5de901dc","bn":"21d813dd","de":"ba92ce46","es":"d88ed56e","fr":"93da223f","hi":"ca4988d5","id":"e6559372","ja":"e01eb255","ko":"bbbfb401","mr":"57e6ee72","pt":"c0e07011","ta":"7ecc974b","te":"b194f151","ur":"21959d72","zh":"5337db9b"};
+const I18N_PACK_VERSIONS = {"ar":"1c624b66","bn":"9872c9d0","de":"f3d7eb45","es":"50a30a11","fr":"67682a2b","hi":"7b1523da","id":"67b77b06","ja":"4379aa78","ko":"e493b09d","mr":"476b3784","pt":"ef50e133","ta":"c6f61d60","te":"ef2554d7","ur":"e33ea22c","zh":"32548e3c"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({
@@ -270,7 +274,12 @@ function i18nFormat(msg, params, locale, mode) {
   s = s.replace(/\{\{@([a-z0-9]+)\}\}/g, (m, id) => (I18N_GLOSSARY[id] != null ? I18N_GLOSSARY[id] : m));
   s = s.replace(/\{\{(\w+)\}\}/g, (m, k) => {
     if (!(k in p)) return m;
-    return mode === 'html' ? i18nEscape(p[k]) : String(p[k]);
+    const v = p[k];
+    // { html } = markup the caller already escaped (e.g. a display name with a verified badge).
+    if (v && typeof v === 'object' && 'html' in v) {
+      return mode === 'html' ? String(v.html) : String(v.text != null ? v.text : String(v.html).replace(/<[^>]*>/g, ''));
+    }
+    return mode === 'html' ? i18nEscape(v) : String(v);
   });
   return s;
 }
@@ -394,6 +403,34 @@ function tHtml(key, vars, fallback) {
   return i18nRender(key, vars || {}, fallback || '', 'html');
 }
 
+/** Stable code for a stored option value ('Media & Entertainment' → 'media_entertainment'). */
+function optionCode(value) {
+  return String(value == null ? '' : value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 48);
+}
+
+/**
+ * Display label for a stored option value. Stored values stay the canonical English option (a frozen
+ * code, never the UI language); the label is profile.opt.<group>.<code> (or <group>.<code> when the
+ * group is a full prefix like common.opt.feedback). Free text the user typed shows as typed.
+ */
+function optionLabel(group, value) {
+  const v = String(value == null ? '' : value).trim();
+  if (!v) return '';
+  const prefix = String(group || '').includes('.') ? group : 'profile.opt.' + group;
+  const key = prefix + '.' + optionCode(v);
+  const hit = i18nLookup(key, i18nPseudo ? 'en' : normalizeLang(currentLang));
+  return hit ? pseudoize(i18nFormat(hit.v, {}, getLangEntry(hit.code).html, 'text'), 'text') : v;
+}
+
+function optionLabelHtml(group, value) {
+  return i18nEscape(optionLabel(group, value));
+}
+
 /** Plural helper: tn('baithak.unread', 3) → `{count}` and `{{n}}` both bound to 3. */
 function tn(key, count, vars) {
   const v = Object.assign({}, vars || {}, { count });
@@ -511,6 +548,24 @@ function i18nEmit(name, detail) {
   } catch (e) {}
 }
 
+/** Firebase Auth template / SMS / reCAPTCHA language for a UI language (Firebase wants zh-CN, pt-BR). */
+const FIREBASE_AUTH_LANG = { zh: 'zh-CN', pt: 'pt-BR' };
+function firebaseAuthLanguage(code) {
+  const c = normalizeLang(code || currentLang);
+  return FIREBASE_AUTH_LANG[c] || c;
+}
+
+/** Keep auth.languageCode on the UI language (verify email, password reset, phone SMS, reCAPTCHA). */
+function syncFirebaseAuthLanguage(code) {
+  try {
+    const a = typeof auth !== 'undefined' && auth ? auth : null;
+    if (a) a.languageCode = firebaseAuthLanguage(code);
+    return a ? a.languageCode : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
  * Persist + apply the UI language. Unsupported → English; a retired choice also queues the
  * one-time "isn't available yet" notice. Returns a promise that settles once the pack is applied.
@@ -529,21 +584,55 @@ function setAppLanguage(lang, { persistRemote = false, source = 'user' } = {}) {
     localStorage.setItem('chaupaal_lang_source', source);
   } catch (e) {}
   applyDocumentLang(next);
+  syncFirebaseAuthLanguage(next);
   ensurePackSync(next);
   populateLangSelect();
-  if (persistRemote) i18nProfileWrite({ lang: next });
+  const remote = persistRemote ? i18nProfileWrite({ lang: next }) : null;
   if (typeof applyChromeI18n === 'function') applyChromeI18n();
   if (typeof populateVoiceDropdown === 'function') {
     try {
       populateVoiceDropdown();
     } catch (e) {}
   }
-  return loadLangPack(next).then(() => {
+  // The profile write must land before a language reload (offline: don't wait forever).
+  let remoteTimer = null;
+  const remoteSettled = remote
+    ? Promise.race([remote, new Promise((r) => (remoteTimer = setTimeout(r, 2500)))]).then(() => clearTimeout(remoteTimer))
+    : null;
+  return Promise.all([loadLangPack(next), remoteSettled]).then(() => {
     if (normalizeLang(currentLang) !== next) return next;
     if (typeof applyChromeI18n === 'function') applyChromeI18n();
     i18nEmit('chaupaal:lang-changed', { lang: next });
     return next;
   });
+}
+
+/**
+ * After the user picks a new UI language: reload once so copy built at load time (prompt banks,
+ * option lists, cached sheets) re-renders in it; the "Language: X" toast shows after the reload.
+ */
+const I18N_RELOAD_SS = 'chaupaal_lang_reload';
+function reloadForLanguage(code) {
+  try {
+    sessionStorage.setItem(I18N_RELOAD_SS, normalizeLang(code));
+  } catch (e) {}
+  try {
+    if (typeof location !== 'undefined' && typeof location.reload === 'function') {
+      location.reload();
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+function takeLanguageReloadNotice() {
+  try {
+    const code = sessionStorage.getItem(I18N_RELOAD_SS);
+    if (code) sessionStorage.removeItem(I18N_RELOAD_SS);
+    return code || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 /** Saved choice wins; first run picks the best supported device language. */
@@ -649,6 +738,25 @@ function applyChromeI18n(){
       if(v) el.setAttribute(attr,v);
     });
   };
+  // One sentence with live elements inside: data-i18n-slots="key" + children data-i18n-slot="name" ↔ {{name}}.
+  document.querySelectorAll('[data-i18n-slots]').forEach(el=>{
+    const key=el.getAttribute('data-i18n-slots');
+    if(!el._i18nSlots){
+      el._i18nSlots=[...el.querySelectorAll('[data-i18n-slot]')];
+    }
+    const slots=el._i18nSlots;
+    const vars={};
+    slots.forEach((c,i)=>{ vars[c.getAttribute('data-i18n-slot')]='\u0001'+i+'\u0001'; });
+    const msg=t(key,vars);
+    if(!msg||msg===key) return;
+    const frag=document.createDocumentFragment();
+    msg.split(/\u0001(\d+)\u0001/).forEach((part,i)=>{
+      if(i%2) { if(slots[+part]) frag.appendChild(slots[+part]); }
+      else if(part) frag.appendChild(document.createTextNode(part));
+    });
+    el.textContent='';
+    el.appendChild(frag);
+  });
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const key=el.getAttribute('data-i18n');
     if(!key) return;
@@ -660,6 +768,7 @@ function applyChromeI18n(){
   applyAttr('[data-i18n-placeholder]','data-i18n-placeholder','placeholder');
   applyAttr('[data-i18n-aria]','data-i18n-aria','aria-label');
   applyAttr('[data-i18n-title]','data-i18n-title','title');
+  applyAttr('[data-i18n-alt]','data-i18n-alt','alt');
 }
 
 if (typeof window !== 'undefined') {
@@ -685,6 +794,13 @@ if (typeof window !== 'undefined') {
     tHtml,
     tn,
     isRtl,
+    optionLabel,
+    optionLabelHtml,
+    firebaseAuthLanguage,
+    syncFirebaseAuthLanguage,
+    reloadForLanguage,
+    takeLanguageReloadNotice,
+    optionCode,
     isPseudoLocale,
     getPseudoLocale,
     setPseudoLocale,

@@ -105,7 +105,8 @@ async function startParentalConsent(adminApp, childUid, contact) {
       type: 'parental_consent',
       refId: childUid,
       actor,
-      preview: `Consent code ${otp} for a teen account`,
+      previewKey: 'notifications.push.parental_consent',
+      previewParams: { otp },
       deepLink: { uid: childUid },
     });
   } catch (e) {

@@ -647,7 +647,7 @@ module.exports = async function handler(req, res) {
             type: state.friend ? 'friend_accept' : 'follow',
             refId: user.uid,
             actor,
-            preview: state.friend ? 'you are now Friends' : 'started following you',
+            previewKey: state.friend ? 'notifications.push.friends_now' : 'notifications.bundle_follow',
             deepLink: { uid: user.uid },
           });
         } catch (e) {
@@ -672,7 +672,7 @@ module.exports = async function handler(req, res) {
             type: 'friend_request',
             refId: user.uid,
             actor,
-            preview: 'sent you a friend request',
+            previewKey: 'notifications.bundle_friend_request',
             deepLink: { uid: user.uid },
           });
         } catch (e) {
@@ -705,7 +705,7 @@ module.exports = async function handler(req, res) {
             type: 'friend_accept',
             refId: user.uid,
             actor,
-            preview: 'accepted your friend request',
+            previewKey: 'notifications.bundle_friend_accept',
             deepLink: { uid: user.uid },
           });
           // Soft-clear the request bundle on accepter's inbox

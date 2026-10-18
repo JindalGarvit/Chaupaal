@@ -7,6 +7,7 @@
   'use strict';
 
   const SYSTEM_ID = 'chaupaal_ai';
+  const CAI_HANDLE = '@chaupaal';
 
   function tt(key, fallback, vars) {
     try {
@@ -109,7 +110,7 @@
     document.getElementById('chaupaalIdCardSheet')?.remove();
     const p = typeof userProfile !== 'undefined' ? userProfile || {} : {};
     const dp = typeof digitalProfile !== 'undefined' ? digitalProfile || {} : {};
-    const name = dp.displayName || p.name || 'You';
+    const name = dp.displayName || p.name || t('common.you');
     const uname = p.username || 'username';
     const identity = [dp.currentCity || p.city, dp.occupation || dp.headline].filter(Boolean).join(' · ');
     const sheet = document.createElement('div');
@@ -118,7 +119,7 @@
     sheet.setAttribute('data-nav-managed', '1');
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div style="flex:1"><strong>${tt('chaupaal_card_title', 'Chaupaal card')}</strong></div>
       </div>
       <div class="chaupaal-id-card-preview">
@@ -217,7 +218,7 @@
 
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div style="flex:1"><strong>${tt('cai_profile_title', 'Chaupaal')}</strong></div>
         <button type="button" class="btn" data-cai-chat style="font-size:12px;">${tt('cai_open_chat', 'Chat')}</button>
       </div>
@@ -225,7 +226,7 @@
         <div class="cai-hero">
           <div class="cai-avatar" aria-hidden="true">🏠</div>
           <div class="cai-name">Chaupaal</div>
-          <div class="cai-handle">@chaupaal · ${tt('cai_companion_badge', 'companion')}</div>
+          <div class="cai-handle">${CAI_HANDLE} · ${tt('cai_companion_badge', 'companion')}</div>
           <p class="cai-bio">${esc(insights.bio)}</p>
         </div>
         <section class="cai-card">
@@ -240,7 +241,7 @@
             ${insights.friends > 0 ? `<div><span>${insights.friends}</span>${tt('cai_stat_friends', 'friends')}</div>` : ''}
             ${insights.chatTurns > 0 ? `<div><span>${insights.chatTurns}</span>${tt('cai_stat_chats', 'chats')}</div>` : ''}
             ${insights.posts > 0 ? `<div><span>${insights.posts}</span>${tt('cai_stat_posts', 'posts')}</div>` : ''}
-            ${!insights.streak && !insights.friends && !insights.chatTurns && !insights.posts ? `<p class="cai-stats-empty">${tt('cai_stats_empty', 'Stats appear as you use the app.')}</p>` : ''}
+            ${!insights.streak && !insights.friends && !insights.chatTurns && !insights.posts ? `<p class="cai-stats-empty">${tt('profile.cai_stats_empty', 'Stats appear as you use the app.')}</p>` : ''}
           </div>
           <p class="cai-privacy-note">${tt('cai_privacy_note', 'Respects your tips & share prefs — never invents numbers.')}</p>
         </section>

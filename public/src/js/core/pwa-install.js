@@ -172,37 +172,37 @@
     const state = installState();
     row.hidden = false;
     if (state === 'standalone') {
-      label.textContent = 'Installed';
-      if (desc) desc.textContent = 'Chaupaal opens full screen from your home screen.';
+      label.textContent = t('settings.installed');
+      if (desc) desc.textContent = t('settings.chaupaal_opens_full_screen_from_your');
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Done';
+        btn.textContent = t('common.done');
       }
       return;
     }
     if (state === 'ready') {
-      label.textContent = 'Install Chaupaal';
-      if (desc) desc.textContent = 'Faster open, full screen — optional.';
+      label.textContent = t('common.install_chaupaal');
+      if (desc) desc.textContent = t('settings.faster_open_full_screen_optional');
       if (btn) {
         btn.disabled = false;
-        btn.textContent = 'Install';
+        btn.textContent = t('common.install');
       }
       return;
     }
     if (state === 'ios') {
-      label.textContent = 'Add to Home Screen';
-      if (desc) desc.textContent = 'Safari: Share → Add to Home Screen.';
+      label.textContent = t('settings.add_to_home_screen');
+      if (desc) desc.textContent = t('settings.safari_share_add_to_home_screen');
       if (btn) {
         btn.disabled = false;
-        btn.textContent = 'How to';
+        btn.textContent = t('settings.how_to');
       }
       return;
     }
-    label.textContent = 'Install Chaupaal';
-    if (desc) desc.textContent = 'Available in Chrome or Edge when the browser offers it.';
+    label.textContent = t('common.install_chaupaal');
+    if (desc) desc.textContent = t('settings.available_in_chrome_or_edge_when');
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Later';
+      btn.textContent = t('settings.later');
     }
   }
 
@@ -220,18 +220,18 @@
     el.id = 'pwaInstallSheet';
     el.className = 'pwa-install-sheet';
     el.setAttribute('role', 'dialog');
-    el.setAttribute('aria-label', 'Add Chaupaal to Home Screen');
+    el.setAttribute('aria-label', t('settings.add_chaupaal_to_home_screen'));
     el.innerHTML =
       '<div class="pwa-install-card">' +
-      '<strong>Add Chaupaal to Home Screen</strong>' +
-      '<p>On iPhone or iPad Safari:</p>' +
+      '<strong>' + tHtml('settings.add_chaupaal_to_home_screen') + '</strong>' +
+      '<p>' + tHtml('settings.on_iphone_or_ipad_safari') + '</p>' +
       '<ol>' +
-      '<li>Tap the Share button</li>' +
-      '<li>Scroll and tap <em>Add to Home Screen</em></li>' +
-      '<li>Tap Add</li>' +
+      '<li>' + tHtml('settings.tap_the_share_button') + '</li>' +
+      '<li>' + tHtml('settings.scroll_and_tap') + ' <em>' + tHtml('settings.add_to_home_screen') + '</em></li>' +
+      '<li>' + tHtml('settings.tap_add') + '</li>' +
       '</ol>' +
-      '<p class="pwa-install-note">Safari does not allow apps to install with one tap — this is Apple’s rule, not a Chaupaal limit.</p>' +
-      '<button type="button" class="btn btn--primary btn--block" data-pwa-ok>Got it</button>' +
+      '<p class="pwa-install-note">' + tHtml('settings.safari_does_not_allow_apps_to') + '</p>' +
+      '<button type="button" class="btn btn--primary btn--block" data-pwa-ok>' + tHtml('settings.got_it') + '</button>' +
       '</div>';
     el.querySelector('[data-pwa-ok]')?.addEventListener('click', () => {
       removeSheet();
@@ -271,15 +271,15 @@
     el.id = 'pwaInstallSheet';
     el.className = 'pwa-install-sheet';
     el.setAttribute('role', 'dialog');
-    el.setAttribute('aria-label', 'Install Chaupaal');
+    el.setAttribute('aria-label', t('common.install_chaupaal'));
 
     if (state === 'ios') {
       el.innerHTML =
         '<div class="pwa-install-card">' +
-        '<strong>Keep Chaupaal handy</strong>' +
-        '<p>Add Chaupaal to your Home Screen for a faster, full-screen open.</p>' +
-        '<button type="button" class="btn btn--primary btn--block" data-pwa-how>How to add</button>' +
-        '<button type="button" class="btn btn--block" data-pwa-later>Not now</button>' +
+        '<strong>' + tHtml('settings.keep_chaupaal_handy') + '</strong>' +
+        '<p>' + tHtml('settings.add_chaupaal_to_your_home_screen') + '</p>' +
+        '<button type="button" class="btn btn--primary btn--block" data-pwa-how>' + tHtml('settings.how_to_add') + '</button>' +
+        '<button type="button" class="btn btn--block" data-pwa-later>' + tHtml('settings.display_geo_prompt_deny') + '</button>' +
         '</div>';
       el.querySelector('[data-pwa-how]')?.addEventListener('click', () => {
         removeSheet();
@@ -288,10 +288,10 @@
     } else {
       el.innerHTML =
         '<div class="pwa-install-card">' +
-        '<strong>Install Chaupaal</strong>' +
-        '<p>Faster open, full screen — optional. You can keep browsing either way.</p>' +
-        '<button type="button" class="btn btn--primary btn--block" data-pwa-install>Install</button>' +
-        '<button type="button" class="btn btn--block" data-pwa-later>Not now</button>' +
+        '<strong>' + tHtml('common.install_chaupaal') + '</strong>' +
+        '<p>' + tHtml('settings.faster_open_full_screen_optional_you') + '</p>' +
+        '<button type="button" class="btn btn--primary btn--block" data-pwa-install>' + tHtml('common.install') + '</button>' +
+        '<button type="button" class="btn btn--block" data-pwa-later>' + tHtml('settings.display_geo_prompt_deny') + '</button>' +
         '</div>';
       el.querySelector('[data-pwa-install]')?.addEventListener('click', () => {
         removeSheet();
@@ -323,7 +323,7 @@
     if (state === 'standalone') return { ok: false, reason: 'standalone' };
     if (!deferredPrompt) {
       if (typeof showToast === 'function') {
-        showToast('Install isn’t available in this browser yet');
+        showToast(t('settings.install_isn_t_available_in_this'));
       }
       return { ok: false, reason: 'no_prompt' };
     }
@@ -381,7 +381,7 @@
       return;
     }
     if (typeof showToast === 'function') {
-      showToast('Install appears in Chrome or Edge when available');
+      showToast(t('settings.install_appears_in_chrome_or_edge'));
     }
   }
 

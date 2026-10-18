@@ -345,7 +345,7 @@
     const slot = readDeviceAccounts().find((a) => a.uid === uid);
     if (!slot) throw new Error('Account not on this device');
     if (auth?.currentUser?.uid === uid) {
-      if (typeof showToast === 'function') showToast('Already signed in as this account');
+      if (typeof showToast === 'function') showToast(t('auth.already_signed_in_as_this_account'));
       return { ok: true, same: true };
     }
 
@@ -370,7 +370,7 @@
             showToast(
               typeof t === 'function'
                 ? t('auth_switched_account', { username: slot.username || slot.name || 'account' })
-                : 'Switched account'
+                : t('auth.switched_account_2')
             );
           }
           return { ok: true, instant: true };
@@ -394,7 +394,11 @@
     const idInp = document.getElementById('loginIdentifier');
     if (idInp && id) idInp.value = id;
     if (typeof showToast === 'function') {
-      showToast('Sign in to continue as @' + (slot.username || slot.name || 'user'));
+      showToast(
+        slot.username || slot.name
+          ? t('auth.sign_in_to_continue_as', { name: slot.username || slot.name })
+          : t('auth.sign_in_to_continue')
+      );
     }
     return { ok: true, needsCredential: true };
   }
@@ -473,7 +477,7 @@
       localStorage.setItem(BIOMETRIC_STUB_KEY, on ? 'on' : 'off');
     } catch (e) {}
     if (typeof showToast === 'function') {
-      showToast(on ? 'Device unlock enabled' : 'Device unlock preference cleared');
+      showToast(on ? t('auth.device_unlock_enabled') : t('auth.device_unlock_preference_cleared'));
     }
     return biometricStatus();
   }
@@ -512,15 +516,15 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-as-close' }):'<button type="button" data-as-close class="cp-back-btn" aria-label="Back">←</button>'}
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Accounts</div>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-as-close' }):'<button type="button" data-as-close class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${tHtml('auth.accounts')}</div>
       </div>
       <div class="group-info-scroll auth-account-list" style="padding:16px;" data-as-list></div>
       <div style="padding:12px 16px 24px;display:flex;flex-direction:column;gap:8px;">
-        <button type="button" class="btn btn--primary btn--block" data-as-add-login>Add account — Log in</button>
-        <button type="button" class="btn btn--block" data-as-add-signup style="background:var(--cream);border:1.5px solid var(--line);">Add account — Sign up</button>
+        <button type="button" class="btn btn--primary btn--block" data-as-add-login>${tHtml('auth.add_account_log_in')}</button>
+        <button type="button" class="btn btn--block" data-as-add-signup style="background:var(--cream);border:1.5px solid var(--line);">${tHtml('auth.add_account_sign_up')}</button>
         <div style="font-size:11px;color:var(--muted);text-align:center;line-height:1.4;">
-          Personal and Professional are separate accounts. Switch anytime — no hard limit.
+          ${tHtml('auth.personal_and_professional_are_separate_acc')}
         </div>
       </div>`;
     const device = document.querySelector('.device') || document.body;
@@ -546,15 +550,15 @@
       const el = sheet.querySelector('[data-as-list]');
       if (!list.length) {
         el.innerHTML =
-          '<div style="color:var(--muted);font-size:13px;line-height:1.45;">No saved accounts on this device yet. Stay signed in once, then add more.</div>';
+          '<div style="color:var(--muted);font-size:13px;line-height:1.45;">' + tHtml('auth.no_saved_accounts_on_this_device') + '</div>';
         return;
       }
       el.innerHTML = list
         .map((a) => {
           const isActive = a.uid === active;
           const type =
-            a.profileType === 'professional' ? 'Professional' : 'Personal';
-          const handle = a.username ? '@' + a.username : a.email || a.phone || 'Account';
+            a.profileType === 'professional' ? t('common.professional') : t('common.personal');
+          const handle = a.username ? '@' + a.username : a.email || a.phone || t('common.account');
           return `<div class="auth-account-row${isActive ? ' is-active' : ''}" data-as-uid="${esc(a.uid)}">
             <button type="button" class="auth-account-main" data-as-switch="${esc(a.uid)}">
               <div class="auth-account-av">${
@@ -566,14 +570,14 @@
               }</div>
               <div class="auth-account-meta">
                 <div class="auth-account-name">${esc(a.name || handle)}${
-                  isActive ? ' <span class="auth-account-badge">Active</span>' : ''
+                  isActive ? ' <span class="auth-account-badge">' + tHtml('auth.active') + '</span>' : ''
                 }</div>
                 <div class="auth-account-sub">${esc(handle)} · ${type}</div>
               </div>
             </button>
             <button type="button" class="auth-account-remove" data-as-remove="${esc(
               a.uid
-            )}" aria-label="Remove from device">✕</button>
+            )}" aria-label="${tHtml('auth.remove_from_device')}">✕</button>
           </div>`;
         })
         .join('');
@@ -585,7 +589,7 @@
             await switchToAccount(btn.dataset.asSwitch);
             close();
           } catch (e) {
-            if (typeof showToast === 'function') showToast(e.message || 'Could not switch');
+            if (typeof showToast === 'function') showToast(errorText(e, t('auth.could_not_switch')));
             btn.disabled = false;
           }
         });
@@ -596,9 +600,9 @@
           const ok =
             typeof confirmSheet === 'function'
               ? await confirmSheet({
-                  title: 'Remove account?',
-                  message: 'Signs out this account on this device only. You can add it again later.',
-                  confirmLabel: 'Remove',
+                  title: t('auth.remove_account'),
+                  message: t('auth.signs_out_this_account_on_this'),
+                  confirmLabel: t('auth.remove'),
                   danger: true,
                 })
               : true;

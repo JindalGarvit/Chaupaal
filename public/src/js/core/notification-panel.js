@@ -17,7 +17,7 @@
     peepal: 'Peepal',
     akhbaar: 'Akhbaar',
     dangal: 'Dangal',
-    general: 'General',
+    general: t('notifications.general'),
   };
 
   /** type substring → tab section */
@@ -312,17 +312,21 @@
   function formatBundledText(n) {
     if (n.text) return n.text;
     const actors = Array.isArray(n.actors) ? n.actors : [];
-    const actor = actors[0]?.name || 'Someone';
+    const actor = actors[0]?.name || t('common.someone');
     const count = Math.max(1, Number(n.actorCount) || actors.length || 1);
     const others = Math.max(0, count - 1);
     const type = String(n.type || '').toLowerCase();
     const preview = String(n.preview || '').trim();
     const family = n.grouped ? n.groupFamily : crossTargetFamily(type);
+    // Server bundles carry a catalog key (language-neutral) instead of English preview text.
+    if (n.previewKey && !n.grouped && !others) {
+      return htt(n.previewKey, '', Object.assign({ body: '', preview: '' }, n.previewParams || {}, { actor }));
+    }
 
     if (n.grouped && family === 'like') {
       return others
         ? htt(
-            'notif_group_like_posts',
+            'notifications.notif_group_like_posts',
             '<strong>{{actor}}</strong> and {{n}} others liked your posts',
             { actor: actor, n: String(others) }
           )
@@ -331,7 +335,7 @@
     if (n.grouped && family === 'comment') {
       return others
         ? htt(
-            'notif_group_comment_posts',
+            'notifications.notif_group_comment_posts',
             '<strong>{{actor}}</strong> and {{n}} others commented on your posts',
             { actor: actor, n: String(others) }
           )
@@ -343,7 +347,7 @@
     if (n.grouped && family === 'follow') {
       return others
         ? htt(
-            'notif_group_follow_many',
+            'notifications.notif_group_follow_many',
             '<strong>{{actor}}</strong> and {{n}} others started following you',
             { actor: actor, n: String(others) }
           )
@@ -411,6 +415,8 @@
       actors: Array.isArray(raw.actors) ? raw.actors : [],
       actorCount: Number(raw.actorCount) || 0,
       preview: raw.preview || '',
+      previewKey: raw.previewKey || null,
+      previewParams: raw.previewParams && typeof raw.previewParams === 'object' ? raw.previewParams : null,
       icon: iconForType(raw.type),
       text: null,
       time: null,
@@ -522,7 +528,7 @@
         type.includes('akhbaar_friend')
       ) {
         const uid = n.friendUid || link.uid || n.refId || '';
-        const name = n.friendName || link.name || n.title || 'Friend';
+        const name = n.friendName || link.name || n.title || t('common.friend');
         const prefill = n.prefill || n.meta?.prefill || link.prefill || '';
         if (typeof openBaithakWithPrefill === 'function' && uid) {
           openBaithakWithPrefill({
@@ -647,7 +653,7 @@
     const underlay = document.createElement('div');
     underlay.className = 'notif-swipe-underlay';
     underlay.innerHTML =
-      '<span class="notif-swipe-less">Show less</span><span class="notif-swipe-more">Show more</span>';
+      '<span class="notif-swipe-less">' + tHtml('notifications.show_less') + '</span><span class="notif-swipe-more">' + tHtml('notifications.show_more') + '</span>';
     row.style.position = 'relative';
     if (!row.querySelector('.notif-swipe-underlay')) {
       row.insertBefore(underlay, row.firstChild);
@@ -705,7 +711,7 @@
           PushPrefs?.showLess?.();
         } catch (e) {}
         if (typeof showToast === 'function') {
-          showToast(tt('notif_show_less', 'Got it — fewer like this'));
+          showToast(tt('notifications.notif_show_less', 'Got it — fewer like this'));
         }
         // Far swipe still clears
         if (dx < -Math.min(120, width * 0.5) && typeof onClear === 'function') {
@@ -719,7 +725,7 @@
           PushPrefs?.showMore?.();
         } catch (e) {}
         if (typeof showToast === 'function') {
-          showToast(tt('notif_show_more', 'We’ll share a bit more'));
+          showToast(tt('notifications.notif_show_more', 'We’ll share a bit more'));
         }
         springBack();
       } else {
@@ -792,7 +798,7 @@
         needAuth: true,
         body: { action: 'respond_friend', targetUid, accept: !!accept },
       });
-      if (!env?.ok) throw new Error(env?.error?.message || 'Failed');
+      if (!env?.ok) throw Object.assign(new Error(env?.error?.message || 'Failed'), { code: env?.error?.code });
       await dismissNotificationsByRef({ type: 'friend_request', refId: targetUid });
       if (typeof mergePendingFriendRequests === 'function') mergePendingFriendRequests();
       else if (typeof mountBaithakFriendRequests === 'function') mountBaithakFriendRequests();
@@ -805,7 +811,7 @@
       }
       repaint?.();
     } catch (e) {
-      if (typeof showToast === 'function') showToast(e?.message || 'Could not respond');
+      if (typeof showToast === 'function') showToast(errorText(e, t('notifications.could_not_respond')));
       if (btns) btns.querySelectorAll('button').forEach((b) => (b.disabled = false));
     }
   }
@@ -865,7 +871,7 @@
                 (a) =>
                   `<button type="button" class="notif-actor" data-actor-uid="${escapeHtml(a.uid)}">
                     <span class="notif-actor-av">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(a,{decorative:true}):escapeHtml(a.avatar||'👤')}</span>
-                    <span>${escapeHtml(a.name || 'Someone')}</span>
+                    <span>${escapeHtml(a.name || t('common.someone'))}</span>
                   </button>`
               )
               .join('')}
@@ -1140,7 +1146,7 @@
         <button type="button" class="notif-mark-all" data-mark-all>${tt('notif_mark_all', 'Mark all read')}</button>
       </div>
       <div class="notif-panel-list" data-notif-panel-list>
-        <div class="notif-panel-loading">${tt('notif_loading', 'Loading notifications…')}</div>
+        <div class="notif-panel-loading">${tt('notifications.notif_loading', 'Loading notifications…')}</div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
     if (!isAllInbox && typeof TabElements !== 'undefined' && TabElements.mountMarks) {

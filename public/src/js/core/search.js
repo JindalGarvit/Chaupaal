@@ -18,15 +18,15 @@
   const VERTICAL_ORDER = ['all', 'log', 'personal', 'professional', 'duniya', 'peepal', 'groups', 'games'];
 
   const CATEGORY_META = {
-    all: { label: 'All', empty: 'No matches' },
-    log: { label: 'Log', empty: 'No people matched' },
-    personal: { label: 'Personal', empty: 'No Personal profiles matched' },
-    professional: { label: 'Professional', empty: 'No Professional profiles matched' },
-    users: { label: 'Log', empty: 'No people matched' },
-    duniya: { label: 'Duniya', empty: 'No Duniya posts matched' },
-    peepal: { label: 'Peepal', empty: 'No Peepal posts matched' },
-    groups: { label: 'Baithak', empty: 'No public groups matched' },
-    games: { label: 'Dangal', empty: 'No games matched' },
+    all: { label: t('common.all'), empty: t('common.no_matches') },
+    log: { label: t('common.search_vertical_log'), empty: t('common.no_people_matched') },
+    personal: { label: t('common.personal'), empty: t('common.no_personal_profiles_matched') },
+    professional: { label: t('common.professional'), empty: t('common.no_professional_profiles_matched') },
+    users: { label: t('common.search_vertical_log'), empty: t('common.no_people_matched') },
+    duniya: { label: 'Duniya', empty: t('common.no_duniya_posts_matched') },
+    peepal: { label: 'Peepal', empty: t('common.no_peepal_posts_matched') },
+    groups: { label: 'Baithak', empty: t('common.no_public_groups_matched') },
+    games: { label: 'Dangal', empty: t('common.no_games_matched') },
   };
 
   function loadSearchHistory() {
@@ -289,7 +289,7 @@
           category: 'duniya',
           id: doc.id,
           postId: doc.id,
-          title: String(raw.caption || '').slice(0, 120) || 'Duniya post',
+          title: String(raw.caption || '').slice(0, 120) || t('common.duniya_post'),
           subtitle: raw.user?.name || raw.authorName || '',
           photoURL: raw.media || raw.imageURL || raw.user?.photoURL || null,
           uid: raw.uid || raw.user?.uid || '',
@@ -338,7 +338,7 @@
           category: 'peepal',
           id: doc.id,
           postId: doc.id,
-          title: String(raw.question || '').slice(0, 120) || 'Peepal post',
+          title: String(raw.question || '').slice(0, 120) || t('common.peepal_post'),
           subtitle: raw.user?.name || raw.authorName || raw.format || '',
           photoURL: raw.user?.photoURL || null,
           uid: raw.uid || '',
@@ -383,8 +383,8 @@
         id,
         chatId: id,
         name,
-        title: name || 'Group',
-        subtitle: `${members} member${members === 1 ? '' : 's'}${isPublic ? ' · Public' : discoverable ? ' · Discoverable' : ' · Private'}`,
+        title: name || t('common.group'),
+        subtitle: tn('common.members_count', members) + (isPublic ? t('common.public') : discoverable ? t('common.discoverable') : t('common.private')),
         photoURL: g.photoURL || (/^https:/.test(g.avatar || '') ? g.avatar : null),
         avatar: g.avatar || '👥',
         memberCount: members,
@@ -467,7 +467,7 @@
         .filter((h) => !reg.length || byId[h.id] || gated(h.id))
         .map((h) =>
           gated(h.id) && !byId[h.id]
-            ? { type: 'game', category: 'games', id: h.id, ageGate: true, title: h.name, subtitle: '18+ · confirm your age to play', score: h.score }
+            ? { type: 'game', category: 'games', id: h.id, ageGate: true, title: h.name, subtitle: t('common.18_confirm_your_age_to_play'), score: h.score }
             : {
                 type: 'game',
                 category: 'games',
@@ -479,7 +479,7 @@
         );
       if (!hits.length) {
         const r = DA.resolveGame(query);
-        if (r && r.retired) hits.push({ type: 'game', category: 'games', id: r.retired, retired: true, title: r.name, subtitle: 'No longer in Dangal — see what replaced it', score: 50 });
+        if (r && r.retired) hits.push({ type: 'game', category: 'games', id: r.retired, retired: true, title: r.name, subtitle: t('common.no_longer_in_dangal_see_what'), score: 50 });
       }
       if (hits.length) return hits.slice(0, limit);
     }
@@ -494,8 +494,8 @@
             score: 70,
           }))
         : [
-            { type: 'game', category: 'games', id: 'quiz', title: 'Quiz Muqabala', subtitle: 'Daily Quiz, Duel & Party trivia', score: 70 },
-            { type: 'game', category: 'games', id: 'chess', title: 'Chess', subtitle: 'Board', score: 60 },
+            { type: 'game', category: 'games', id: 'quiz', title: t('common.quiz_muqabala'), subtitle: t('common.daily_quiz_duel_party_trivia'), score: 70 },
+            { type: 'game', category: 'games', id: 'chess', title: t('common.chess'), subtitle: t('common.board'), score: 60 },
           ];
     return catalog
       .filter((g) => textHaystack(g.title, g.subtitle).includes(q))
@@ -549,7 +549,7 @@
         } catch (e) {
           console.warn('[search]', type, e);
           byCategory[type] = [];
-          errors[type] = e?.message || 'Search failed';
+          errors[type] = errorText(e, t('common.search_failed'));
           if (typeof reportClientError === 'function') {
             reportClientError({
               feature: 'global_search',
@@ -573,7 +573,7 @@
       const username = r.username;
       if (username && typeof navigateToDeepLink === 'function') navigateToDeepLink(`/profile/${username}`);
       else if (r.uid && typeof openPublicProfile === 'function') openPublicProfile({ uid: r.uid, name: r.name, username });
-      else if (typeof showToast === 'function') showToast(`@${username || 'user'}`);
+      else if (typeof showToast === 'function') showToast(`@${username || t('common.user_2')}`);
       return;
     }
     if (r.type === 'game' || r.category === 'games') {
@@ -600,7 +600,7 @@
       const chat = r.chat || { id: r.chatId, firestoreId: r.chatId, type: 'group', name: r.name, participants: r.chat?.participants };
       if (r.isMember && typeof openChatScreen === 'function') openChatScreen(chat);
       else if (typeof openGroupInfo === 'function') openGroupInfo(chat);
-      else if (typeof showToast === 'function') showToast(r.name || 'Group');
+      else if (typeof showToast === 'function') showToast(r.name || t('common.group'));
     }
   }
 
@@ -653,9 +653,9 @@
           </div>
         </button>
         <div class="us-post-engage" data-nav-ignore="1">
-          <button type="button" class="us-engage-btn" data-us-like aria-label="Like">${typeof iconHtml === 'function' ? iconHtml('heart', { size: 16 }) : '♥'} <span data-like-count>${likes}</span></button>
-          <button type="button" class="us-engage-btn" data-us-comment aria-label="Comment">${typeof iconHtml === 'function' ? iconHtml('message-circle', { size: 16 }) : '💬'} <span>${comments}</span></button>
-          <button type="button" class="us-engage-btn" data-us-open aria-label="Open post">Open</button>
+          <button type="button" class="us-engage-btn" data-us-like aria-label="${tHtml('common.comment_like')}">${typeof iconHtml === 'function' ? iconHtml('heart', { size: 16 }) : '♥'} <span data-like-count>${likes}</span></button>
+          <button type="button" class="us-engage-btn" data-us-comment aria-label="${tHtml('common.comment')}">${typeof iconHtml === 'function' ? iconHtml('message-circle', { size: 16 }) : '💬'} <span>${comments}</span></button>
+          <button type="button" class="us-engage-btn" data-us-open aria-label="${tHtml('common.open_post')}">${tHtml('common.open')}</button>
         </div>
       </article>`;
   }
@@ -692,15 +692,15 @@
     overlay.dataset.navManaged = '1';
     const isGlobal = types.length > 1 || (types.length === 1 && types[0] !== 'users');
     const title = isGlobal
-      ? (typeof t === 'function' ? t('search_chaupaal', 'Search Chaupaal') : 'Search Chaupaal')
-      : (typeof t === 'function' ? t('search_people', 'Search people') : 'Search people');
+      ? (typeof t === 'function' ? t('search_chaupaal', 'Search Chaupaal') : t('common.search_chaupaal'))
+      : (typeof t === 'function' ? t('common.search_people', 'Search people') : t('common.shortcut_peepal_search'));
     const placeholder = isGlobal
-      ? (typeof t === 'function' ? t('search_ph_global', 'People, posts, groups…') : 'People, posts, groups…')
-      : (typeof t === 'function' ? t('search_ph_people', 'Search @username or name…') : 'Search @username or name…');
+      ? (typeof t === 'function' ? t('common.search_ph_global', 'People, posts, groups…') : t('common.people_posts_groups'))
+      : (typeof t === 'function' ? t('common.search_ph_people', 'Search @username or name…') : t('common.search_username_or_name'));
 
     overlay.innerHTML = `
       <div class="archive-header">
-        <button type="button" id="usBack" aria-label="Back" class="cp-back-btn">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>
+        <button type="button" id="usBack" aria-label="${tHtml('common.back')}" class="cp-back-btn">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>
         <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${escapeSearchHtml(title)}</div>
       </div>
       <div style="padding:12px 16px 0;">
@@ -709,7 +709,7 @@
             data-living-ph="chaupaal_search"
             style="width:100%;padding:12px 44px 12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;"
             value="${String(initialQuery || '').replace(/"/g, '&quot;')}">
-          <button type="button" class="search-field-clear" id="usClearBtn" aria-label="Clear search" hidden>✕</button>
+          <button type="button" class="search-field-clear" id="usClearBtn" aria-label="${tHtml('common.search_clear')}" hidden>✕</button>
           <span class="search-field-icon" aria-hidden="true">${typeof iconHtml === 'function' ? iconHtml('search', { size: 16 }) : '🔍'}</span>
         </div>
       </div>
@@ -769,13 +769,13 @@
           renderEmptyState(resultsEl, {
             icon: '🔍',
             title: title,
-            message: typeof t === 'function' ? t('search_start_hint', 'Find Log, Personal & Professional profiles, Duniya, Peepal, Baithak & Dangal.') : 'Find Log, Personal & Professional profiles, Duniya, Peepal, Baithak & Dangal.',
+            message: typeof t === 'function' ? t('common.search_start_hint', 'Find Log, Personal & Professional profiles, Duniya, Peepal, Baithak & Dangal.') : t('common.find_log_personal_professional_profiles_du'),
           });
         } else resultsEl.innerHTML = '';
         return;
       }
       resultsEl.innerHTML = `
-        <div class="search-history-head"><span>Recent searches</span><button type="button" data-clear-search-history>Clear</button></div>
+        <div class="search-history-head"><span>${tHtml('common.recent_searches')}</span><button type="button" data-clear-search-history>${tHtml('common.clear')}</button></div>
         <div class="search-history-list">
           ${history.map((q) => `<button type="button" class="search-history-chip" data-history-query="${escapeSearchHtml(q)}">↗ ${escapeSearchHtml(q)}</button>`).join('')}
         </div>`;
@@ -840,15 +840,15 @@
       const typeKey = activeVertical === 'log' ? 'users' : activeVertical === 'all' ? 'all' : activeVertical;
       const failed = !!(lastErrors && (lastErrors[typeKey] || lastErrors.users));
       if (!all.length) {
-        const meta = CATEGORY_META[activeVertical] || { empty: 'No matches' };
+        const meta = CATEGORY_META[activeVertical] || { empty: t('common.no_matches') };
         if (typeof renderEmptyState === 'function') {
           renderEmptyState(resultsEl, {
             icon: failed ? '⚠️' : '🌳',
-            title: failed ? 'Search unavailable' : meta.empty || 'No matches',
-            message: failed ? 'Try again in a moment.' : 'Try another spelling or a shorter prefix.',
+            title: failed ? t('common.search_unavailable') : meta.empty || t('common.no_matches'),
+            message: failed ? t('common.try_again_in_a_moment') : t('common.try_another_spelling_or_a_shorter'),
           });
         } else {
-          resultsEl.innerHTML = `<div style="padding:24px;color:var(--muted);text-align:center;">${meta.empty || 'No matches'}</div>`;
+          resultsEl.innerHTML = `<div style="padding:24px;color:var(--muted);text-align:center;">${meta.empty || tHtml('common.no_matches')}</div>`;
         }
         return;
       }
@@ -860,7 +860,7 @@
         <section class="us-category" data-us-cat="${activeVertical}">
           <div class="us-category-head">${escapeSearchHtml(meta.label)}</div>
           ${slice.map(renderResultRow).join('')}
-          ${moreLeft ? `<button type="button" class="us-see-more" data-see-more="${activeVertical}">Show all (${Math.min(all.length, SEE_MORE_LIMIT)})</button>` : ''}
+          ${moreLeft ? `<button type="button" class="us-see-more" data-see-more="${activeVertical}">${tHtml('common.show_all_count', { count: Math.min(all.length, SEE_MORE_LIMIT) })}</button>` : ''}
         </section>`;
 
       resultsEl.querySelector('[data-see-more]')?.addEventListener('click', () => {

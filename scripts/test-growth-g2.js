@@ -28,17 +28,17 @@ assert(/referral_claim/.test(media), 'media-config referral_claim');
 assert(/referral_activate/.test(media), 'media-config referral_activate');
 assert(/server-lib\/referrals/.test(media), 'folds into media-config');
 
-const client = fs.readFileSync(path.join(__dirname, '../public/src/js/core/referrals.js'), 'utf8');
+const client = require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(__dirname, '../public/src/js/core/referrals.js'), 'utf8'));
 assert(/withReferralParam/.test(client), 'client withReferralParam');
 assert(/chaupaal_pending_deep/.test(client), 'pending deep stash');
 assert(/virtual chips/.test(client), 'teen-safe copy');
 assert(/REF_TTL_MS/.test(client), 'ref TTL');
 
-const deep = fs.readFileSync(path.join(__dirname, '../public/src/js/core/deeplinks.js'), 'utf8');
+const deep = require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(__dirname, '../public/src/js/core/deeplinks.js'), 'utf8'));
 assert(/withReferralParam/.test(deep), 'shareUrl tags ref');
 assert(/name: 'invite'/.test(deep), 'invite route');
 
-const auth = fs.readFileSync(path.join(__dirname, '../public/src/js/auth/auth-events.js'), 'utf8');
+const auth = require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(__dirname, '../public/src/js/auth/auth-events.js'), 'utf8'));
 assert(/stashPendingDeepLink/.test(auth), 'auth sheet stashes deep');
 assert(/afterAuthReferralAndResume/.test(auth), 'post-auth claim+resume');
 

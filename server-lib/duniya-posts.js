@@ -119,7 +119,7 @@ async function resolveMentionUids(db, caption, mentionedUids) {
   return [...out].slice(0, 20);
 }
 
-async function notifyMany(admin, actor, recipients, { type, refId, preview, extra }) {
+async function notifyMany(admin, actor, recipients, { type, refId, preview, previewKey, previewParams, extra }) {
   const unique = [...new Set((recipients || []).filter((uid) => uid && uid !== actor.uid))];
   for (const uid of unique) {
     try {
@@ -128,6 +128,8 @@ async function notifyMany(admin, actor, recipients, { type, refId, preview, extr
         refId,
         actor,
         preview,
+        previewKey,
+        previewParams,
         deepLink: { section: 'duniya', path: `/post/${refId}`, postId: refId, ...(extra || {}) },
       });
     } catch (e) {}
@@ -279,17 +281,18 @@ async function createPost(db, admin, uid, body) {
   await notifyMany(admin, actor, mentionedUids, {
     type: 'mention',
     refId: postId,
-    preview: caption.slice(0, 120) || 'mentioned you',
+    preview: caption.slice(0, 120),
+    previewKey: 'notifications.push.duniya_mention',
   });
   await notifyMany(admin, actor, tagUids, {
     type: 'tag',
     refId: postId,
-    preview: 'tagged you in a photo',
+    previewKey: 'notifications.push.duniya_tag',
   });
   await notifyMany(admin, actor, collabPendingUids, {
     type: 'collab_invite',
     refId: postId,
-    preview: 'invited you to collaborate',
+    previewKey: 'notifications.push.collab_invite',
     extra: { collab: 'invite' },
   });
 
@@ -368,7 +371,7 @@ async function collabAction(db, admin, uid, body) {
     await notifyMany(admin, actor, [target], {
       type: 'collab_invite',
       refId: snap.id,
-      preview: 'invited you to collaborate',
+      previewKey: 'notifications.push.collab_invite',
       extra: { collab: 'invite' },
     });
     return serializePost(await snap.ref.get(), uid);
@@ -406,7 +409,7 @@ async function collabAction(db, admin, uid, body) {
     await notifyMany(admin, actor, [ownerUid], {
       type: 'collab_accept',
       refId: snap.id,
-      preview: 'accepted your collab invite',
+      previewKey: 'notifications.push.collab_accept',
     });
     return serializePost(await snap.ref.get(), uid);
   }

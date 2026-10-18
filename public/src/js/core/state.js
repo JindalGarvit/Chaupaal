@@ -1,5 +1,5 @@
 // ===================== STATE =====================
-let quietMode=false,currentLang='en';
+let quietMode=false; // currentLang lives in i18n.js (loaded first)
 try{ quietMode = localStorage.getItem('chaupaal_quiet')==='1'; }catch(e){}
 try{ document.documentElement.classList.toggle('quiet-mode', !!quietMode); }catch(e){}
 let score=0,maxUnlocked=0,categoryScores={};
@@ -447,7 +447,7 @@ document.getElementById('toggleQuiet').addEventListener('change',e=>{
 document.getElementById('toggleHideModeHints')?.addEventListener('change',(e)=>{
   try{ localStorage.setItem('chaupaal_hide_mode_hints', e.target.checked?'1':'0'); }catch(err){}
   if(typeof showToast==='function'){
-    showToast(e.target.checked?'Mode hints hidden':'Mode hints on');
+    showToast(e.target.checked?t('settings.mode_hints_hidden'):t('settings.mode_hints_on'));
   }
   // Re-paint active surfaces
   try{
@@ -496,10 +496,10 @@ async function promptThemeGeoConsent(){
     wrap.className='modal-backdrop';
     wrap.innerHTML=`
       <div class="modal" style="max-width:340px;">
-        <div class="modal-header"><div class="modal-title">${typeof t==='function'?t('display_geo_prompt_title'):'Match Chaupaal to your sky?'}</div></div>
+        <div class="modal-header"><div class="modal-title">${typeof t==='function'?t('display_geo_prompt_title'):tHtml('settings.match_chaupaal_to_your_sky')}</div></div>
         <p style="font-size:14px;color:var(--muted);line-height:1.5;margin:0 0 16px;">${typeof t==='function'?t('display_geo_prompt_body'):''}</p>
-        <button type="button" class="btn btn--primary btn--block" data-allow style="margin-bottom:8px;">${typeof t==='function'?t('display_geo_prompt_allow'):'Continue'}</button>
-        <button type="button" class="btn btn--block" data-deny>${typeof t==='function'?t('display_geo_prompt_deny'):'Not now'}</button>
+        <button type="button" class="btn btn--primary btn--block" data-allow style="margin-bottom:8px;">${typeof t==='function'?t('display_geo_prompt_allow'):tHtml('settings.display_geo_prompt_allow')}</button>
+        <button type="button" class="btn btn--block" data-deny>${typeof t==='function'?t('display_geo_prompt_deny'):tHtml('settings.display_geo_prompt_deny')}</button>
       </div>`;
     document.body.appendChild(wrap);
     const done=(v)=>{ wrap.remove(); resolve(v); };
@@ -526,7 +526,7 @@ document.getElementById('themeGeoEnableBtn')?.addEventListener('click', async ()
       if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setGeoConsent) ChaupaalTheme.setGeoConsent('granted');
       updateThemeGeoStatusUI();
       if(typeof refreshWeatherTheme==='function') refreshWeatherTheme();
-      if(typeof showToast==='function') showToast(typeof t==='function'?t('display_geo_status_granted'):'Location on');
+      if(typeof showToast==='function') showToast(typeof t==='function'?t('display_geo_status_granted'):t('settings.location_on'));
     },
     ()=>{
       if(typeof ChaupaalTheme!=='undefined'&&ChaupaalTheme.setGeoConsent) ChaupaalTheme.setGeoConsent('denied');

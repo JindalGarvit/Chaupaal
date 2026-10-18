@@ -486,7 +486,7 @@ async function afterStoryCreate(db, admin, uid, storyId, story) {
         type: 'story_restory',
         refId: storyId,
         actor,
-        preview: 'restoried your story',
+        previewKey: 'notifications.push.story_restory',
         deepLink: deep,
       });
     }
@@ -498,7 +498,7 @@ async function afterStoryCreate(db, admin, uid, storyId, story) {
         type: 'story_mention',
         refId: storyId,
         actor,
-        preview: 'mentioned you in a story',
+        previewKey: 'notifications.push.story_mention',
         deepLink: deep,
       });
     }
@@ -825,7 +825,7 @@ async function interact(db, admin, uid, body) {
           type: 'story_like',
           refId: storyId,
           actor,
-          preview: 'liked your story',
+          previewKey: 'notifications.push.story_like',
           deepLink: { section: destination === 'duniya' ? 'duniya' : 'baithak', storyId, destination },
         });
       } else if (type === 'comment') {
@@ -833,7 +833,8 @@ async function interact(db, admin, uid, body) {
           type: 'story_comment',
           refId: storyId,
           actor,
-          preview: String(body.text || '').slice(0, 120) || 'commented on your story',
+          preview: String(body.text || '').slice(0, 120),
+          previewKey: 'notifications.push.story_comment',
           deepLink: { section: destination === 'duniya' ? 'duniya' : 'baithak', storyId, destination },
         });
       }

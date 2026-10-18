@@ -88,7 +88,7 @@
     sessionUnsub = sessionRef(currentUser.uid, sid).onSnapshot((snap) => {
       const data = snap.data();
       if (data && (data.revoked || data.ended)) {
-        forceLocalLogout('Signed out from another device');
+        forceLocalLogout(t('settings.signed_out_from_another_device'));
       }
     });
   }
@@ -106,7 +106,7 @@
     if (typeof stopChatPresence === 'function') stopChatPresence();
     currentUser = null;
     userProfile = null;
-    if (typeof showToast === 'function') showToast(msg || 'Signed out');
+    if (typeof showToast === 'function') showToast(msg || t('settings.signed_out'));
   }
 
   async function listSessions() {
@@ -123,7 +123,7 @@
       const data = d.data() || {};
       return {
         id: d.id,
-        label: data.label || 'Unknown device',
+        label: data.label || t('settings.unknown_device'),
         lastActiveAt: data.lastActiveAt?.toMillis?.() || data.lastActiveAt || null,
         revoked: !!data.revoked,
         ended: !!data.ended,
@@ -137,14 +137,14 @@
     const currentId = getOrCreateSessionId();
     if (sessionId === currentId) {
       await sessionRef(currentUser.uid, sessionId).set({ ended: true, revoked: true }, { merge: true });
-      await forceLocalLogout('Logged out');
+      await forceLocalLogout(t('settings.logged_out'));
       return;
     }
     await sessionRef(currentUser.uid, sessionId).set(
       { revoked: true, revokedAt: firebase.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
-    if (typeof showToast === 'function') showToast('Device signed out');
+    if (typeof showToast === 'function') showToast(t('settings.device_signed_out'));
   }
 
   async function logoutAllSessions() {
@@ -173,25 +173,25 @@
       console.warn('[sessions] admin revoke unavailable', e);
     }
 
-    await forceLocalLogout('Logged out of all devices');
+    await forceLocalLogout(t('settings.logged_out_of_all_devices'));
   }
 
   async function openSessionsSheet() {
     if (!currentUser) {
-      if (typeof showToast === 'function') showToast('Sign in to manage devices');
+      if (typeof showToast === 'function') showToast(t('settings.sign_in_to_manage_devices'));
       return;
     }
     const overlay = document.createElement('div');
     overlay.className = 'archive-overlay';
     overlay.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'sessionsBack' }):'<button id="sessionsBack" class="cp-back-btn" aria-label="Back">←</button>'}
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Devices & sessions</div>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'sessionsBack' }):'<button id="sessionsBack" class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${tHtml('common.devices_sessions')}</div>
       </div>
-      <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Sign out a single device, or everywhere at once.</div>
+      <div style="padding:12px 16px;font-size:12px;color:var(--muted);">${tHtml('settings.sign_out_a_single_device_or')}</div>
       <div id="sessionsList" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>
       <div style="padding:12px 16px 24px;">
-        <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="logoutAllDevices" style="width:100%;">Log out of all devices</button>
+        <button type="button" class="btn btn--primary btn--block ui-state-btn ui-state-btn-primary" id="logoutAllDevices" style="width:100%;">${tHtml('settings.log_out_of_all_devices')}</button>
       </div>`;
     document.querySelector('.device')?.appendChild(overlay);
     overlay.querySelector('#sessionsBack')?.addEventListener('click', () => overlay.remove());
@@ -199,9 +199,9 @@
       const ok =
         typeof confirmSheet === 'function'
           ? await confirmSheet({
-              title: 'Log out everywhere?',
-              message: 'Sign out of Chaupaal on every device?',
-              confirmLabel: 'Log out all',
+              title: t('settings.log_out_everywhere'),
+              message: t('settings.sign_out_of_chaupaal_on_every'),
+              confirmLabel: t('settings.log_out_all'),
               danger: true,
             })
           : false;
@@ -216,20 +216,20 @@
       const sessions = await listSessions();
       if (!sessions.length) {
         if (typeof renderEmptyState === 'function') {
-          renderEmptyState(list, { icon: '💻', title: 'No sessions yet', message: 'This device will appear after the next refresh.' });
+          renderEmptyState(list, { icon: '💻', title: t('settings.no_sessions_yet'), message: t('settings.this_device_will_appear_after_the') });
         }
         return;
       }
       list.innerHTML = sessions
         .map((s) => {
-          const when =
+          const active =
             typeof formatRelativeTime === 'function' && s.lastActiveAt
-              ? formatRelativeTime(s.lastActiveAt)
-              : 'recently';
+              ? tHtml('settings.session_active_when', { when: formatRelativeTime(s.lastActiveAt) })
+              : tHtml('settings.session_active_recently');
           return `<div class="recovery-row">
-            <div class="recovery-preview">${s.label}${s.current ? ' · <strong>This device</strong>' : ''}${s.revoked ? ' · revoked' : ''}</div>
-            <div class="recovery-meta">Active ${when}</div>
-            ${s.revoked ? '' : `<button type="button" class="btn btn--secondary ui-state-btn" data-sid="${s.id}">${s.current ? 'Log out here' : 'Log out device'}</button>`}
+            <div class="recovery-preview">${s.label}${s.current ? ' · <strong>' + tHtml('settings.this_device') + '</strong>' : ''}${s.revoked ? ' · ' + tHtml('settings.session_revoked') : ''}</div>
+            <div class="recovery-meta">${active}</div>
+            ${s.revoked ? '' : `<button type="button" class="btn btn--secondary ui-state-btn" data-sid="${s.id}">${s.current ? tHtml('settings.log_out_here') : tHtml('settings.log_out_device')}</button>`}
           </div>`;
         })
         .join('');
@@ -243,8 +243,8 @@
     } catch (e) {
       if (typeof renderErrorState === 'function') {
         renderErrorState(list, {
-          title: 'Couldn’t load sessions',
-          message: typeof friendlyError === 'function' ? friendlyError(e) : 'Try again',
+          title: t('settings.couldn_t_load_sessions'),
+          message: typeof friendlyError === 'function' ? friendlyError(e) : t('settings.try_again'),
           onRetry: () => {
             overlay.remove();
             openSessionsSheet();

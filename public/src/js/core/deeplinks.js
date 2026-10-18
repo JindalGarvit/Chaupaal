@@ -213,7 +213,7 @@
             { isFriend }
           )
         : {
-            displayName: u.name || dp.displayName || (uname ? `@${uname}` : 'Someone'),
+            displayName: u.name || dp.displayName || (uname ? `@${uname}` : t('common.someone')),
             username: uname,
             photoURL: u.photoURL || null,
             bio: dp.bio || '',
@@ -236,8 +236,8 @@
         : [];
     const nameHtml =
       typeof formatDisplayNameHtml === 'function'
-        ? formatDisplayNameHtml(view.displayName || (uname ? `@${uname}` : 'Someone'), view.profileType)
-        : esc(view.displayName || (uname ? `@${uname}` : 'Someone'));
+        ? formatDisplayNameHtml(view.displayName || (uname ? `@${uname}` : t('common.someone')), view.profileType)
+        : esc(view.displayName || (uname ? `@${uname}` : t('common.someone')));
     const bioRaw = String(view.bio || '').trim();
     const bioSnippet = bioRaw.length > 140 ? bioRaw.slice(0, 137) + '…' : bioRaw;
     const bioHtml =
@@ -252,13 +252,13 @@
         ? [dp.currentCity || dp.city || u.city, dp.occupation || dp.headline].filter(Boolean).join(' · ')
         : '');
     const lockedNote = view.locked
-      ? `<p class="public-profile-locked-note">${esc(view.visibilityLabel || 'Private profile')} — limited details. Connect to unlock more.</p>`
+      ? `<p class="public-profile-locked-note">${tHtml('common.locked_profile_note', { visibility: view.visibilityLabel || t('common.private_profile') })}</p>`
       : '';
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-public-profile-close' }) : '<button type="button" data-public-profile-close aria-label="Back" class="cp-back-btn">←</button>'}
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Profile</div>
-        ${uname ? '<button type="button" data-public-profile-share aria-label="Share profile" style="background:none;border:none;font-size:18px;cursor:pointer;">↗</button>' : ''}
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-public-profile-close' }) : '<button type="button" data-public-profile-close aria-label="' + tHtml('common.back') + '" class="cp-back-btn">←</button>'}
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${tHtml('common.profile')}</div>
+        ${uname ? '<button type="button" data-public-profile-share aria-label="' + tHtml('common.share_profile') + '" style="background:none;border:none;font-size:18px;cursor:pointer;">↗</button>' : ''}
       </div>
       <div class="public-profile-scroll">
         <div class="public-profile-hero">
@@ -271,12 +271,12 @@
           ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
           ${lockedNote}
           <div data-public-profile-counts data-rel-counts-uid="${esc(profileUid)}" class="relationship-counts-loading public-profile-chrome-slot">
-            <span class="public-profile-chrome-label">Connections</span>
+            <span class="public-profile-chrome-label">${tHtml('common.connections')}</span>
           </div>
           <div class="public-profile-actions" data-rel-actions>
-            <button class="btn btn--primary" data-rel-primary type="button">${String(dp.profileType || u.profileType || '').toLowerCase() === 'professional' ? 'Follow' : 'Add Friend'}</button>
-            <button class="btn" data-rel-message type="button">Message</button>
-            <button class="btn" data-rel-more type="button" aria-label="More">⋯</button>
+            <button class="btn btn--primary" data-rel-primary type="button">${String(dp.profileType || u.profileType || '').toLowerCase() === 'professional' ? tHtml('common.follow') : tHtml('common.add_friend')}</button>
+            <button class="btn" data-rel-message type="button">${tHtml('common.message')}</button>
+            <button class="btn" data-rel-more type="button" aria-label="${tHtml('common.more')}">⋯</button>
           </div>
         </div>
         <div class="public-profile-shell-host" data-public-profile-shell></div>
@@ -353,27 +353,27 @@
               scoreLine: `@${uname}`,
               caption: display,
               meta: view.locked ? 'on Chaupaal' : view.bio ? String(view.bio).slice(0, 60) : 'on Chaupaal',
-              text: `Check out @${uname} on Chaupaal`,
+              text: t('common.check_out_uname_on_chaupaal', { uname }),
               url,
             })
           : {
               scoreLine: `@${uname}`,
               caption: display,
               meta: 'on Chaupaal',
-              text: `Check out @${uname} on Chaupaal`,
+              text: t('common.check_out_uname_on_chaupaal', { uname }),
               url,
             };
       if (typeof openUnifiedShareSheet === 'function') {
         openUnifiedShareSheet({
           gameId: 'profile',
-          title: 'Share profile',
+          title: t('common.share_profile'),
           subtitle: `@${uname}`,
           stats,
         });
       } else if (navigator.share) {
-        navigator.share({ title: `@${uname} on Chaupaal`, url });
+        navigator.share({ title: t('common.uname_on_chaupaal', { uname }), url });
       } else {
-        navigator.clipboard?.writeText(url).then(() => showToast('Link copied'));
+        navigator.clipboard?.writeText(url).then(() => showToast(t('common.link_copied')));
       }
     });
     sheet.querySelectorAll('[data-voice]').forEach((btn) => {
@@ -436,7 +436,7 @@
           const highlights = data.highlights || [];
           if (!row) return;
           if (!highlights.length) {
-            row.innerHTML = '<span class="public-profile-highlights-empty">No highlights yet</span>';
+            row.innerHTML = '<span class="public-profile-highlights-empty">' + tHtml('common.no_highlights_yet') + '</span>';
             return;
           }
           row.innerHTML = highlights
@@ -457,16 +457,16 @@
                 });
                 const stories = open.stories || [];
                 if (stories[0] && typeof openStoryViewer === 'function') openStoryViewer(stories[0], stories);
-                else if (typeof showToast === 'function') showToast('Empty highlight');
+                else if (typeof showToast === 'function') showToast(t('common.empty_highlight'));
               } catch (e) {
-                if (typeof showToast === 'function') showToast('Could not open highlight');
+                if (typeof showToast === 'function') showToast(t('common.could_not_open_highlight'));
               }
             });
           });
         })
         .catch(() => {
           const row = sheet.querySelector('[data-highlights-row]');
-          if (row) row.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
+          if (row) row.innerHTML = '<span class="public-profile-highlights-empty">' + tHtml('common.highlights_unavailable') + '</span>';
         });
     }
     if (profileUid && !view.locked && db) {
@@ -482,7 +482,7 @@
             .filter((p) => !p.deleted && p.archived !== true);
           if (!duniyaEl) return;
           if (!posts.length) {
-            duniyaEl.innerHTML = '<div class="public-profile-posts-empty">No public Duniya posts</div>';
+            duniyaEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('common.no_public_duniya_posts') + '</div>';
             return;
           }
           duniyaEl.innerHTML = posts
@@ -494,7 +494,7 @@
             .join('');
         })
         .catch(() => {
-          if (duniyaEl) duniyaEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+          if (duniyaEl) duniyaEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('common.posts_unavailable') + '</div>';
         });
       db.collection('peepal')
         .where('uid', '==', profileUid)
@@ -506,7 +506,7 @@
             .filter((p) => !p.deleted && p.archived !== true);
           if (!peepalEl) return;
           if (!posts.length) {
-            peepalEl.innerHTML = '<div class="public-profile-posts-empty">No public Peepal posts</div>';
+            peepalEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('common.no_public_peepal_posts') + '</div>';
             return;
           }
           peepalEl.innerHTML = posts
@@ -515,7 +515,7 @@
             .join('');
         })
         .catch(() => {
-          if (peepalEl) peepalEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+          if (peepalEl) peepalEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('common.posts_unavailable') + '</div>';
         });
     }
     const visitContext = context === 'peepal' || context === 'duniya' ? context : 'profile';
@@ -523,7 +523,7 @@
       ...u,
       uid: profileUid,
       profileType: u.profileType || u.profile?.profileType || 'personal',
-      name: u.name || (uname ? `@${uname}` : 'Someone'),
+      name: u.name || (uname ? `@${uname}` : t('common.someone')),
     };
     if (profileUid && typeof wireProfileRelationshipActions === 'function') {
       wireProfileRelationshipActions(sheet.querySelector('[data-rel-actions]'), relProfile, {
@@ -553,13 +553,13 @@
           const counts = sheet.querySelector('[data-public-profile-counts]');
           if (counts && typeof renderErrorState === 'function') {
             renderErrorState(counts, {
-              message: typeof friendlyError === 'function' ? friendlyError(err) : 'Could not load counts',
+              message: typeof friendlyError === 'function' ? friendlyError(err) : t('common.could_not_load_counts'),
               onRetry: () => loadRelationshipProfile(profileUid).then((data) => {
                 if (typeof paintRelationshipCounts === 'function') paintRelationshipCounts(counts, data.counts, profileUid);
               }),
             });
           } else if (counts) {
-            counts.innerHTML = '<span class="public-profile-chrome-label">Connections</span>';
+            counts.innerHTML = '<span class="public-profile-chrome-label">' + tHtml('common.connections') + '</span>';
           }
         });
     }
@@ -582,7 +582,7 @@
     try {
       const snap = await db.collection('usernames').doc(uname).get();
       if (!snap.exists) {
-        if (typeof showToast === 'function') showToast(`@${uname} not found`);
+        if (typeof showToast === 'function') showToast(t('common.uname_not_found', { uname }));
         return;
       }
       const uid = snap.data().uid;
@@ -593,7 +593,7 @@
       await openPublicProfile({ ...u, uid }, { uid, username: uname, context: 'deeplink' });
     } catch (e) {
       if (typeof showToast === 'function') {
-        showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Could not open profile');
+        showToast(typeof friendlyError === 'function' ? friendlyError(e) : t('common.could_not_open_profile'));
       }
     }
   }
@@ -605,7 +605,7 @@
       typeof peepalQuestions !== 'undefined' ? peepalQuestions.find((q) => q.id === id || q.firestoreId === id) : null;
     if (localP) {
       if (localP.deleted && localP.uid !== currentUser?.uid) {
-        if (typeof showToast === 'function') showToast('This post was removed');
+        if (typeof showToast === 'function') showToast(t('common.this_post_was_removed'));
         return;
       }
       switchTab('peepal');
@@ -618,7 +618,7 @@
       typeof duniyaPosts !== 'undefined' ? duniyaPosts.find((p) => p.id === id || p.firestoreId === id) : null;
     if (localD) {
       if (localD.isSample || localD.isDemo) {
-        if (typeof showToast === 'function') showToast('Demo sample — not a live post');
+        if (typeof showToast === 'function') showToast(t('common.demo_sample_not_a_live_post'));
         switchTab('duniya');
         setTimeout(() => {
           if (typeof initDuniya === 'function') initDuniya();
@@ -628,7 +628,7 @@
       }
       if ((localD.deleted || localD.archived) && localD.uid !== currentUser?.uid) {
         if (typeof showToast === 'function') {
-          showToast(localD.archived ? 'This post is no longer public' : 'This post was removed');
+          showToast(localD.archived ? t('common.this_post_is_no_longer_public') : t('common.this_post_was_removed'));
         }
         return;
       }
@@ -641,7 +641,7 @@
     }
     // Sample ids (d1–d5) are never live Firestore docs
     if (/^d[1-5]$/.test(String(id))) {
-      if (typeof showToast === 'function') showToast('Demo sample — not a live post');
+      if (typeof showToast === 'function') showToast(t('common.demo_sample_not_a_live_post'));
       return;
     }
     if (db) {
@@ -650,7 +650,7 @@
         if (snap.exists) {
           const data = snap.data() || {};
           if (data.deleted && data.uid !== currentUser?.uid) {
-            if (typeof showToast === 'function') showToast('This post was removed');
+            if (typeof showToast === 'function') showToast(t('common.this_post_was_removed'));
             return;
           }
           switchTab('peepal');
@@ -663,7 +663,7 @@
           const data = snap.data() || {};
           if ((data.deleted || data.archived) && data.uid !== currentUser?.uid) {
             if (typeof showToast === 'function') {
-              showToast(data.archived ? 'This post is no longer public' : 'This post was removed');
+              showToast(data.archived ? t('common.this_post_is_no_longer_public') : t('common.this_post_was_removed'));
             }
             return;
           }
@@ -678,12 +678,12 @@
         }
       } catch (e) {
         if (typeof showToast === 'function') {
-          showToast('Could not open this post — you may not have access');
+          showToast(t('common.could_not_open_this_post_you'));
         }
         return;
       }
     }
-    if (typeof showToast === 'function') showToast('Post not found or no longer available');
+    if (typeof showToast === 'function') showToast(t('common.post_not_found_or_no_longer'));
   }
 
   async function openChatById(id, opts) {
@@ -731,7 +731,7 @@
           const parts = Array.isArray(raw.participants) ? raw.participants : [];
           if (me && parts.length && !parts.includes(me)) {
             if (typeof showToast === 'function') {
-              showToast('You’re not a member of this chat');
+              showToast(t('common.you_re_not_a_member_of'));
             }
             return;
           }
@@ -748,7 +748,7 @@
         }
       } catch (e) {
         if (typeof showToast === 'function') {
-          showToast('Could not open this chat — you may not have access');
+          showToast(t('common.could_not_open_this_chat_you'));
         }
         return;
       }
@@ -758,7 +758,7 @@
       if (typeof initBaithak === 'function') initBaithak();
       if (!local) {
         if (typeof showToast === 'function') {
-          showToast(currentUser ? 'Chat not found or you’re not a member' : 'Sign in to open this chat');
+          showToast(currentUser ? t('common.chat_not_found_or_you_re') : t('common.sign_in_to_open_this_chat'));
         }
         return;
       }
@@ -794,13 +794,13 @@
       try {
         sessionStorage.setItem(PENDING_GROUP_INVITE_KEY, String(token));
       } catch (e) {}
-      if (typeof showToast === 'function') showToast('Sign in to join this group');
+      if (typeof showToast === 'function') showToast(t('common.sign_in_to_join_this_group'));
       if (typeof openAuthSheet === 'function') openAuthSheet('login');
       else if (typeof showAuth === 'function') showAuth();
       return;
     }
     if (typeof joinGroupByInviteToken !== 'function') {
-      if (typeof showToast === 'function') showToast('Group invites unavailable right now');
+      if (typeof showToast === 'function') showToast(t('common.group_invites_unavailable_right_now'));
       return;
     }
     setTimeout(async () => {
@@ -810,20 +810,20 @@
         sessionStorage.removeItem(PENDING_GROUP_INVITE_KEY);
       } catch (e) {}
       if (result?.pending && typeof showToast === 'function') {
-        showToast('Join request sent — waiting for admin approval');
+        showToast(t('common.join_request_sent_waiting_for_admin'));
       } else if (result?.ok && result.chat && typeof openChatScreen === 'function') {
         openChatScreen(result.chat);
-        if (typeof showToast === 'function') showToast(result.already ? 'Already in this group' : 'Joined group');
+        if (typeof showToast === 'function') showToast(result.already ? t('common.already_in_this_group') : t('common.joined_group'));
       } else if (typeof showToast === 'function') {
         const reason = result?.reason || '';
         if (reason === 'disabled' || reason === 'expired') {
-          showToast('This invite link was revoked or expired');
+          showToast(t('common.this_invite_link_was_revoked_or'));
         } else if (reason === 'not_found') {
-          showToast('Invite link not found — ask for a new one');
+          showToast(t('common.invite_link_not_found_ask_for'));
         } else if (reason === 'auth') {
-          showToast('Sign in to join this group');
+          showToast(t('common.sign_in_to_join_this_group'));
         } else {
-          showToast('Could not join — invite may be invalid');
+          showToast(t('common.could_not_join_invite_may_be'));
         }
       }
     }, 200);
@@ -843,7 +843,7 @@
   async function openProfileByUid(uid) {
     if (!uid) return;
     if (!db) {
-      if (typeof showToast === 'function') showToast('Profile unavailable');
+      if (typeof showToast === 'function') showToast(t('common.profile_unavailable'));
       return;
     }
     try {
@@ -852,12 +852,12 @@
           ? await UsersPublic.getPublicProfile(uid)
           : null) || {};
       if (!u || (!u.uid && !Object.keys(u).length)) {
-        if (typeof showToast === 'function') showToast('Profile not found');
+        if (typeof showToast === 'function') showToast(t('common.profile_not_found'));
         return;
       }
       await openPublicProfile({ ...u, uid }, { uid, username: u.username, context: 'deeplink' });
     } catch (e) {
-      if (typeof showToast === 'function') showToast('Could not open profile');
+      if (typeof showToast === 'function') showToast(t('common.could_not_open_profile'));
     }
   }
 
@@ -870,7 +870,7 @@
           defaultValue: true,
         });
         if (!on) {
-          if (typeof showToast === 'function') showToast('Links are temporarily unavailable');
+          if (typeof showToast === 'function') showToast(t('common.links_are_temporarily_unavailable'));
           return false;
         }
       }
@@ -901,7 +901,7 @@
       if (window.PartyKit && typeof PartyKit.joinFromLink === 'function') {
         setTimeout(() => PartyKit.joinFromLink(game, code), 250);
       } else if (typeof showToast === 'function') {
-        showToast('Party games are loading — try the link again');
+        showToast(t('common.party_games_are_loading_try_the'));
       }
     } else if (route.name === 'challenge') {
       // Hand off to viral challenge handler (path + query)
@@ -916,22 +916,22 @@
       }
       // Guest-first: land on home; attribution waits for signup
       if (typeof showToast === 'function' && !currentUser) {
-        showToast('Welcome — explore freely, sign up to keep your spot');
+        showToast(t('common.welcome_explore_freely_sign_up_to'));
       }
     } else if (route.name === 'story') {
       switchTab('duniya');
       const sid = String(route.id || '');
       if (/^d[1-5]$/.test(sid)) {
-        if (typeof showToast === 'function') showToast('Demo sample — not a live post');
+        if (typeof showToast === 'function') showToast(t('common.demo_sample_not_a_live_post'));
         return true;
       }
       if (typeof DuniyaStory !== 'undefined' && DuniyaStory.openById) {
         const ok = await DuniyaStory.openById(route.id);
         if (ok === false && typeof showToast === 'function') {
-          showToast('Story not found or expired');
+          showToast(t('common.story_not_found_or_expired'));
         }
       } else if (typeof showToast === 'function') {
-        showToast('Stories unavailable');
+        showToast(t('common.stories_unavailable'));
       }
     }
     return true;

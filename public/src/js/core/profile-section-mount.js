@@ -40,10 +40,10 @@
     }
     const games = n(meta.gamesPlayed) ?? n(p.gamesPlayed) ?? n(meta.dangalGamesPlayed) ?? n(p.dangalGamesPlayed);
     const cells = [];
-    if (streak != null) cells.push({ label: 'streak', value: streak });
-    if (friends != null) cells.push({ label: 'friends', value: friends });
-    if (posts != null) cells.push({ label: 'posts', value: posts });
-    if (games != null && games > 0) cells.push({ label: 'games', value: games });
+    if (streak != null) cells.push({ label: t('profile.cai_stat_streak'), value: streak });
+    if (friends != null) cells.push({ label: t('profile.cai_stat_friends'), value: friends });
+    if (posts != null) cells.push({ label: t('profile.cai_stat_posts'), value: posts });
+    if (games != null && games > 0) cells.push({ label: t('profile.games'), value: games });
     return cells;
   }
 
@@ -74,7 +74,7 @@
             }
           }
         } catch (e) {}
-        if (typeof showToast === 'function') showToast('Could not open post');
+        if (typeof showToast === 'function') showToast(t('profile.could_not_open_post'));
       });
     });
   }
@@ -93,7 +93,7 @@
         typeof linkifyText === 'function' && bio ? linkifyText(bio) : (bio || '').replace(/</g, '&lt;');
       bodyEl.innerHTML = about
         ? `<div class="profile-flexible-block">${about}</div>`
-        : `<div class="public-profile-posts-empty">${isOwner ? 'Add a short bio in Edit · Personal' : 'No bio yet'}</div>`;
+        : `<div class="public-profile-posts-empty">${isOwner ? tHtml('profile.add_a_short_bio_in_edit') : tHtml('profile.no_bio_yet')}</div>`;
       return;
     }
 
@@ -111,21 +111,21 @@
           .map((c) => `<div><span>${c.value}</span>${c.label}</div>`)
           .join('')}</div>`;
       } else {
-        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Stats appear when you have real activity.' : 'No public stats yet'}</div>`;
+        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? tHtml('profile.stats_appear_when_you_have_real') : tHtml('profile.no_public_stats_yet')}</div>`;
       }
       return;
     }
 
     if (sectionId === 'links') {
       const links = [];
-      if (dp.website) links.push({ label: 'Website', url: dp.website });
-      if (dp.instagram) links.push({ label: 'Instagram', url: 'https://instagram.com/' + String(dp.instagram).replace(/^@/, '') });
+      if (dp.website) links.push({ label: t('profile.website'), url: dp.website });
+      if (dp.instagram) links.push({ label: t('profile.instagram'), url: 'https://instagram.com/' + String(dp.instagram).replace(/^@/, '') });
       const custom = Array.isArray(dp.profileLinks) ? dp.profileLinks : [];
       custom.forEach((l) => {
-        if (l?.url) links.push({ label: l.label || 'Link', url: l.url });
+        if (l?.url) links.push({ label: l.label || t('profile.link'), url: l.url });
       });
       if (!links.length) {
-        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Add website or socials in Edit · Social' : 'No links'}</div>`;
+        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? tHtml('profile.add_website_or_socials_in_edit') : tHtml('profile.no_links')}</div>`;
         return;
       }
       bodyEl.innerHTML = `<div class="profile-links-list">${links
@@ -138,7 +138,7 @@
     if (sectionId === 'pinned') {
       const pinned = Array.isArray(dp.pinnedPosts) ? dp.pinnedPosts : [];
       if (!pinned.length) {
-        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? 'Nothing pinned yet — pin posts from your Archive when you’re ready.' : 'Nothing pinned'}</div>`;
+        bodyEl.innerHTML = `<div class="public-profile-posts-empty">${isOwner ? tHtml('profile.nothing_pinned_yet_pin_posts_from') : tHtml('profile.nothing_pinned')}</div>`;
         return;
       }
       bodyEl.innerHTML = `<div class="public-profile-posts">${pinned
@@ -154,7 +154,7 @@
     }
 
     if (sectionId === 'highlights') {
-      bodyEl.innerHTML = '<span class="public-profile-chrome-label">Story Highlights</span>';
+      bodyEl.innerHTML = '<span class="public-profile-chrome-label">' + tHtml('profile.story_highlights') + '</span>';
       const skHost = document.createElement('div');
       bodyEl.appendChild(skHost);
       if (typeof renderSkeleton === 'function') renderSkeleton(skHost, { variant: 'card', count: 3 });
@@ -162,7 +162,7 @@
         const data = typeof storyCall === 'function' ? await storyCall('list_highlights', { targetUid: profileUid }) : { highlights: [] };
         const highlights = data.highlights || [];
         if (!highlights.length) {
-          bodyEl.innerHTML = '<span class="public-profile-highlights-empty">No highlights yet</span>';
+          bodyEl.innerHTML = '<span class="public-profile-highlights-empty">' + tHtml('common.no_highlights_yet') + '</span>';
           return;
         }
         bodyEl.innerHTML = `<div class="public-profile-highlights-row">${highlights
@@ -183,21 +183,21 @@
               });
               const stories = open.stories || [];
               if (stories[0] && typeof openStoryViewer === 'function') openStoryViewer(stories[0], stories);
-              else if (typeof showToast === 'function') showToast('Empty highlight');
+              else if (typeof showToast === 'function') showToast(t('common.empty_highlight'));
             } catch (e) {
-              if (typeof showToast === 'function') showToast('Could not open highlight');
+              if (typeof showToast === 'function') showToast(t('common.could_not_open_highlight'));
             }
           });
         });
       } catch (e) {
         if (typeof renderErrorState === 'function') {
           renderErrorState(bodyEl, {
-            title: 'Highlights unavailable',
-            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            title: t('common.highlights_unavailable'),
+            message: typeof friendlyError === 'function' ? friendlyError(e) : t('profile.please_try_again'),
             onRetry: () => fillBuiltinBody(bodyEl, sectionId, profileUid, opts),
           });
         } else {
-          bodyEl.innerHTML = '<span class="public-profile-highlights-empty">Highlights unavailable</span>';
+          bodyEl.innerHTML = '<span class="public-profile-highlights-empty">' + tHtml('common.highlights_unavailable') + '</span>';
         }
       }
       return;
@@ -214,7 +214,7 @@
       const list = Array.isArray(media) ? media : [];
       if (!list.length) {
         bodyEl.innerHTML =
-          '<div class="public-profile-media-strip--empty public-profile-chrome-slot"><span>None yet</span></div>';
+          '<div class="public-profile-media-strip--empty public-profile-chrome-slot"><span>' + tHtml('profile.none_yet') + '</span></div>';
         return;
       }
       bodyEl.innerHTML = `<div class="public-profile-media-strip">${list
@@ -222,7 +222,7 @@
         .map((m) => {
           const src = m.url || m.src || m.thumb || '';
           if (m.type === 'voice')
-            return `<button type="button" class="ppm-voice ppm-media-cell" data-voice="${src}"><span class="ppm-play">▶</span><span>Voice</span></button>`;
+            return `<button type="button" class="ppm-voice ppm-media-cell" data-voice="${src}"><span class="ppm-play">▶</span><span>${tHtml('profile.voice')}</span></button>`;
           if (m.type === 'video')
             return `<button type="button" class="ppm-video ppm-media-cell" data-ppm-video="${src}"><video src="${src}" muted playsinline></video><span class="ppm-play">▶</span></button>`;
           return `<img src="${src}" alt="">`;
@@ -234,9 +234,9 @@
     if (sectionId === 'duniya' || sectionId === 'peepal') {
       const col = sectionId;
       if (typeof renderSkeleton === 'function') renderSkeleton(bodyEl, { variant: 'feed', count: 2 });
-      else bodyEl.innerHTML = 'Loading…';
+      else bodyEl.innerHTML = tHtml('profile.loading');
       if (!db) {
-        bodyEl.innerHTML = '<div class="public-profile-posts-empty">Unavailable</div>';
+        bodyEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('profile.unavailable') + '</div>';
         return;
       }
       try {
@@ -246,7 +246,7 @@
           posts = posts.filter((p) => p.archived !== true);
         }
         if (!posts.length) {
-          bodyEl.innerHTML = `<div class="public-profile-posts-empty">No ${sectionId === 'duniya' ? 'Duniya' : 'Peepal'} posts</div>`;
+          bodyEl.innerHTML = `<div class="public-profile-posts-empty">${tHtml(sectionId === 'duniya' ? 'profile.no_duniya_posts' : 'profile.no_peepal_posts')}</div>`;
           return;
         }
         if (sectionId === 'duniya') {
@@ -254,7 +254,7 @@
             .slice(0, 12)
             .map((p) => {
               const media = p.thumb || p.media || '';
-              const archived = p.archived === true && isOwner ? '<span class="arch-pill">Archived</span>' : '';
+              const archived = p.archived === true && isOwner ? '<span class="arch-pill">' + tHtml('profile.archived') + '</span>' : '';
               return `<button type="button" class="public-profile-post-cell" data-open-post="duniya" data-post-id="${String(p.id).replace(/"/g, '&quot;')}">${media ? `<img src="${media}" alt="">` : `<span>${(p.caption || '').slice(0, 40)}</span>`}${archived}</button>`;
             })
             .join('')}</div>`;
@@ -267,7 +267,7 @@
                   ? linkifyText(String(p.question || '').slice(0, 120))
                   : String(p.question || '').slice(0, 120);
               const archived =
-                p.archived === true && isOwner ? '<span class="arch-pill">Archived</span>' : '';
+                p.archived === true && isOwner ? '<span class="arch-pill">' + tHtml('profile.archived') + '</span>' : '';
               return `<button type="button" class="public-profile-peepal-card" data-open-post="peepal" data-post-id="${String(p.id).replace(/"/g, '&quot;')}"><strong>${p.tag || 'Peepal'}</strong>${archived}<p>${q}</p></button>`;
             })
             .join('')}</div>`;
@@ -276,12 +276,12 @@
       } catch (e) {
         if (typeof renderErrorState === 'function') {
           renderErrorState(bodyEl, {
-            title: 'Posts unavailable',
-            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            title: t('common.posts_unavailable'),
+            message: typeof friendlyError === 'function' ? friendlyError(e) : t('profile.please_try_again'),
             onRetry: () => fillBuiltinBody(bodyEl, sectionId, profileUid, opts),
           });
         } else {
-          bodyEl.innerHTML = '<div class="public-profile-posts-empty">Posts unavailable</div>';
+          bodyEl.innerHTML = '<div class="public-profile-posts-empty">' + tHtml('common.posts_unavailable') + '</div>';
         }
       }
     }

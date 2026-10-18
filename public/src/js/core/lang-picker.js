@@ -102,6 +102,7 @@
             if (code === cur) return;
             if (typeof setAppLanguage === 'function') {
               Promise.resolve(setAppLanguage(code, { persistRemote: true, source: 'user' })).then(() => {
+                if (typeof reloadForLanguage === 'function' && reloadForLanguage(code)) return;
                 refreshSettings();
                 if (typeof o.onChange === 'function') o.onChange(code);
                 if (typeof showToast === 'function') showToast(txv('settings.lang_changed', 'Language: {{lang}}', { lang: entry(code).native }));
@@ -284,9 +285,15 @@
     maybeShowRetiredNotice,
   };
 
+  function maybeShowReloadToast() {
+    const code = typeof takeLanguageReloadNotice === 'function' ? takeLanguageReloadNotice() : null;
+    if (code && typeof showToast === 'function') showToast(txv('settings.lang_changed', 'Language: {{lang}}', { lang: entry(code).native }));
+  }
+
   const boot = () => {
     wireSettings();
     setTimeout(maybeShowRetiredNotice, 1200);
+    setTimeout(maybeShowReloadToast, 900);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

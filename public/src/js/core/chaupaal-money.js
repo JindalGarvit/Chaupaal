@@ -139,7 +139,7 @@
         <strong>${tt('money_add', 'Add money')}</strong>
       </div>
       <div class="cm-sheet-body">
-        <p class="cm-sub">${tt('money_topup_sub', '1 Chaupaal Money = 1 unit of your local currency.')}</p>
+        <p class="cm-sub">${tt('settings.money_topup_sub', '1 Chaupaal Money = 1 unit of your local currency.')}</p>
         <div class="cm-chip-row">
           ${[100, 500, 1000]
             .map(
@@ -149,7 +149,7 @@
             .join('')}
         </div>
         <label class="cm-field">
-          <span>${tt('money_custom', 'Custom amount')}</span>
+          <span>${tt('settings.money_custom', 'Custom amount')}</span>
           <input type="number" min="1" max="100000" id="cmCustomAmt" placeholder="500" value="${presetAmount || ''}">
         </label>
         <button type="button" class="btn btn--primary btn--block" data-cm-pay>${tt('money_add', 'Add money')}</button>
@@ -182,13 +182,13 @@
     sheet.querySelector('[data-cm-pay]')?.addEventListener('click', async () => {
       const amt = Math.round(Number(sheet.querySelector('#cmCustomAmt')?.value || selected) || 0);
       if (amt <= 0) {
-        if (typeof showToast === 'function') showToast(tt('money_invalid', 'Enter a valid amount'));
+        if (typeof showToast === 'function') showToast(tt('settings.money_invalid', 'Enter a valid amount'));
         return;
       }
       const status = sheet.querySelector('[data-cm-status]');
       const payBtn = sheet.querySelector('[data-cm-pay]');
       if (payBtn) payBtn.disabled = true;
-      if (status) status.textContent = tt('money_opening', 'Opening checkout…');
+      if (status) status.textContent = tt('settings.money_opening', 'Opening checkout…');
       try {
         const intent = await api('chaupaal_money_topup_create', { amount: amt });
         const finish = async (paymentRef, preview) => {
@@ -200,13 +200,13 @@
           accountCache = Object.assign({}, accountCache, credited);
           if (typeof haptic === 'function') haptic('success');
           if (typeof showToast === 'function') {
-            showToast(tt('money_added', 'Chaupaal Money added'));
+            showToast(tt('settings.money_added', 'Chaupaal Money added'));
           }
           close();
         };
         if (intent.preview || !intent.key || typeof Razorpay === 'undefined') {
           if (typeof showToast === 'function') {
-            showToast(tt('money_preview', 'Payments coming soon — no charge'));
+            showToast(tt('settings.money_preview', 'Payments coming soon — no charge'));
           }
           if (intent.preview) {
             await finish(intent.orderId, true);
@@ -219,13 +219,13 @@
           amount: amt * 100,
           currency: intent.currency || 'INR',
           name: 'Chaupaal',
-          description: 'Chaupaal Money top-up',
+          description: t('settings.chaupaal_money_top_up'),
           order_id: intent.orderId,
           handler: async (resp) => {
             try {
               await finish(resp.razorpay_payment_id || intent.orderId, false);
             } catch (e) {
-              if (status) status.textContent = e?.message || 'Could not confirm payment';
+              if (status) status.textContent = errorText(e, t('settings.could_not_confirm_payment'));
             }
           },
           prefill: {
@@ -236,14 +236,14 @@
           modal: {
             ondismiss: () => {
               if (payBtn) payBtn.disabled = false;
-              if (status) status.textContent = tt('money_cancelled', 'Checkout closed — nothing charged.');
+              if (status) status.textContent = tt('settings.money_cancelled', 'Checkout closed — nothing charged.');
             },
           },
         });
         rzp.open();
       } catch (e) {
         if (payBtn) payBtn.disabled = false;
-        if (status) status.textContent = e?.message || 'Top-up failed';
+        if (status) status.textContent = errorText(e, t('settings.top_up_failed'));
       }
     });
   }
@@ -267,14 +267,14 @@
       <div class="cm-sheet-body">
         <p class="cm-balance-line">${tt('money_balance', 'Balance')}: <strong>${formatAmount(bal, { cmLabel: true })}</strong></p>
         ${isPro ? `<p class="cm-sub">${tt('membership_professional_sarpanch_only', 'Professional profiles: Sarpanch only.')}</p>` : ''}
-        <table class="cm-tier-table" aria-label="Membership comparison">
+        <table class="cm-tier-table" aria-label="${tHtml('settings.membership_comparison')}">
           <thead><tr><th></th><th>${tt('tier_free', 'Free')}</th>${!isPro ? `<th>${tt('tier_pradhan', 'Pradhan')}</th>` : ''}<th>${tt('tier_sarpanch', 'Sarpanch')}</th></tr></thead>
           <tbody>
             <tr><td>${tt('membership_ads', 'Ads')}</td><td>${tt('membership_ads_some', 'Some')}</td>${!isPro ? `<td>${tt('membership_ads_limited', 'Limited')}</td>` : ''}<td>${tt('membership_ads_none', 'None')}</td></tr>
             <tr><td>Peepal / week</td><td>5</td>${!isPro ? '<td>15</td>' : ''}<td>∞</td></tr>
-            <tr><td>AI Discovery / week</td><td>10</td>${!isPro ? '<td>30</td>' : ''}<td>∞</td></tr>
-            <tr><td>AI keyboard / day</td><td>5</td>${!isPro ? '<td>15</td>' : ''}<td>∞</td></tr>
-            <tr><td>Streak freeze / mo</td><td>0</td>${!isPro ? '<td>1</td>' : ''}<td>∞</td></tr>
+            <tr><td>${tHtml('settings.ai_discovery_week')}</td><td>10</td>${!isPro ? '<td>30</td>' : ''}<td>∞</td></tr>
+            <tr><td>${tHtml('settings.ai_keyboard_day')}</td><td>5</td>${!isPro ? '<td>15</td>' : ''}<td>∞</td></tr>
+            <tr><td>${tHtml('settings.streak_freeze_mo')}</td><td>0</td>${!isPro ? '<td>1</td>' : ''}<td>∞</td></tr>
           </tbody>
         </table>
         <div class="cm-tier-cards">
@@ -292,7 +292,7 @@
             <div class="cm-tier-name">${tt('tier_sarpanch', 'Sarpanch')}</div>
             <div class="cm-tier-price">${formatAmount(pricing.sarpanch, { cmLabel: true })} / mo</div>
             ${tier === 'sarpanch' && sub.activeUntil ? `<div class="cm-tier-renew">${typeof formatDate === 'function' ? formatDate(sub.activeUntil, 'medium') : new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
-            ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="sarpanch">${tier === 'pradhan' && !isPro ? tt('membership_upgrade', 'Upgrade to Sarpanch') : tt('membership_subscribe', 'Subscribe')}</button>`}
+            ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="sarpanch">${tier === 'pradhan' && !isPro ? tt('settings.membership_upgrade', 'Upgrade to Sarpanch') : tt('membership_subscribe', 'Subscribe')}</button>`}
           </div>
         </div>
         ${legalNoteHtml()}
@@ -316,7 +316,7 @@
     const price =
       t === 'pradhan' ? subCache?.pricing?.pradhan : t === 'sarpanch' ? subCache?.pricing?.sarpanch : null;
     if (price == null) {
-      if (typeof showToast === 'function') showToast(tt('membership_unavailable', 'This tier is not available.'));
+      if (typeof showToast === 'function') showToast(tt('settings.membership_unavailable', 'This tier is not available.'));
       return null;
     }
     if (!canSpend(price)) {
@@ -330,7 +330,7 @@
       tierCache = result.tier || t;
       if (typeof haptic === 'function') haptic('success');
       if (typeof showToast === 'function') {
-        showToast(tt('membership_active', 'Membership active for 30 days'));
+        showToast(tt('settings.membership_active', 'Membership active for 30 days'));
       }
       if (opts?.closeParent) opts.closeParent();
       return result;
@@ -340,7 +340,7 @@
         openTopUp(price);
         return null;
       }
-      if (typeof showToast === 'function') showToast(e?.message || 'Could not subscribe');
+      if (typeof showToast === 'function') showToast(errorText(e, t('settings.could_not_subscribe')));
       return null;
     }
   }
@@ -365,11 +365,11 @@
         <div class="cm-balance-hero">
           <div class="cm-balance-label">${tt('money_balance', 'Balance')}</div>
           <div class="cm-balance-value">${formatAmount(bal, { cmLabel: true })}</div>
-          <div class="cm-balance-fiat">1 Chaupaal Money = ${typeof formatCurrency === 'function' ? formatCurrency(1, cur) : sym + '1'} in your region (${cur})</div>
+          <div class="cm-balance-fiat">${tHtml('settings.money_rate_in_region', { rate: typeof formatCurrency === 'function' ? formatCurrency(1, cur) : sym + '1', currency: cur })}</div>
         </div>
         ${teen ? `<p class="cm-teen-note">${tt('teen_purchase_block', 'Ask a parent or turn off Teen Mode to purchase.')}</p>` : `<button type="button" class="btn btn--primary btn--block" data-acct-topup>${tt('money_add', 'Add money')}</button>`}
         <button type="button" class="btn btn--block" data-acct-membership>${tt('membership_title', 'Membership (Pradhan / Sarpanch)')}</button>
-        <h3 class="cm-tx-title">${tt('money_history', 'Recent activity')}</h3>
+        <h3 class="cm-tx-title">${tt('settings.money_history', 'Recent activity')}</h3>
         <ul class="cm-tx-list">
           ${
             txs.length
@@ -381,7 +381,7 @@
                     return `<li><span>${tx.reason || tx.type || ''}</span><span>${sign}${amt} CM</span><time>${when}</time></li>`;
                   })
                   .join('')
-              : `<li class="cm-tx-empty">${tt('money_no_tx', 'No activity yet')}</li>`
+              : `<li class="cm-tx-empty">${tt('settings.money_no_tx', 'No activity yet')}</li>`
           }
         </ul>
         ${legalNoteHtml()}

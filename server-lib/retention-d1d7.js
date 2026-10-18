@@ -15,6 +15,7 @@
 const { localDateKey } = require('./chaupaal-cadence');
 const { sendToUser } = require('./fcm');
 const { hrefFromDeepLink } = require('./notifications');
+const { serverT, serverLang } = require('./i18n-server');
 
 const RECENT_ACTIVE_MS = 6 * 60 * 60 * 1000;
 const FIRST7_CAP = 4;
@@ -24,91 +25,68 @@ const INACTIVE_COOLDOWN_DAYS = 14;
 const TEMPLATES = {
   d1_continue: {
     day: 1,
-    kind: 'generic',
-    title: 'Welcome back',
-    body: 'Pick up where you left off on Chaupaal — a calm quiz or a quick look around.',
-    section: 'akhbaar',
+    kind: 'generic',    section: 'akhbaar',
   },
   d2_dangal: {
     day: 2,
-    kind: 'surface',
-    title: 'Try a practice game',
-    body: 'Pick up a Dangal practice game whenever you’re ready — no pressure.',
-    section: 'dangal',
+    kind: 'surface',    section: 'dangal',
     requires: 'never_dangal',
   },
   d2_invite: {
     day: 2,
-    kind: 'generic',
-    title: 'Invite a friend',
-    body: 'Chaupaal is better with someone you know — share an invite when it feels right.',
-    section: 'baithak',
+    kind: 'generic',    section: 'baithak',
     path: '/invite',
     requires: 'never_invited',
   },
   d3_invite: {
     day: 3,
-    kind: 'generic',
-    title: 'Friends on Chaupaal',
-    body: 'Invite a friend to Chaupaal — no fake counts, just a share link when you want.',
-    section: 'baithak',
+    kind: 'generic',    section: 'baithak',
     path: '/invite',
     requires: 'never_invited',
   },
   d3_peepal: {
     day: 3,
-    kind: 'generic',
-    title: 'Explore Peepal',
-    body: 'Take a look at Peepal Khoj — questions and people when you’re curious.',
-    section: 'peepal',
+    kind: 'generic',    section: 'peepal',
   },
   d4_waiting: {
     day: 4,
-    kind: 'event',
-    title: 'Something’s waiting',
-    body: 'You have an unread update on Chaupaal — open when you’re free.',
-    section: null, // filled from event
+    kind: 'event',    section: null, // filled from event
     requires: 'has_waiting',
   },
   d5_waiting: {
     day: 5,
-    kind: 'event',
-    title: 'Still waiting for you',
-    body: 'You still have an unread update — no rush, just a gentle reminder.',
-    section: null,
+    kind: 'event',    section: null,
     requires: 'has_waiting',
   },
   d6_quiz: {
     day: 6,
-    kind: 'generic',
-    title: 'Today’s quiz',
-    body: 'Today’s Akhbaar quiz is ready when you are.',
-    section: 'akhbaar',
+    kind: 'generic',    section: 'akhbaar',
   },
   d7_invite: {
     day: 7,
-    kind: 'generic',
-    title: 'One more invite?',
-    body: 'If you haven’t yet, invite a friend to Chaupaal — optional, anytime.',
-    section: 'baithak',
+    kind: 'generic',    section: 'baithak',
     path: '/invite',
     requires: 'never_invited',
   },
   d7_dangal: {
     day: 7,
-    kind: 'generic',
-    title: 'A quick game',
-    body: 'A Dangal practice round is a gentle way to drop back in.',
-    section: 'dangal',
+    kind: 'generic',    section: 'dangal',
   },
   inactive_gentle: {
     day: null,
-    kind: 'generic',
-    title: 'Chaupaal is here',
-    body: 'Whenever you want a quiet quiz or to catch up — Chaupaal is ready.',
-    section: 'akhbaar',
+    kind: 'generic',    section: 'akhbaar',
   },
 };
+
+// Copy comes from the shared catalog: titleKey / bodyKey, rendered per recipient language.
+// .title / .body stay as English getters for previews, dry runs and tests.
+Object.keys(TEMPLATES).forEach((id) => {
+  const tpl = TEMPLATES[id];
+  tpl.titleKey = `notifications.retention.${id}_title`;
+  tpl.bodyKey = `notifications.retention.${id}_body`;
+  Object.defineProperty(tpl, 'title', { enumerable: true, get: () => serverT('en', tpl.titleKey) });
+  Object.defineProperty(tpl, 'body', { enumerable: true, get: () => serverT('en', tpl.bodyKey) });
+});
 
 function toMs(ts) {
   if (!ts) return null;
@@ -317,7 +295,7 @@ async function incrementAggregates(db, admin, templateId) {
   await ref.set(patch, { merge: true });
 }
 
-async function writeRetentionInbox(db, admin, uid, { templateId, dayKey, body, section, path }) {
+async function writeRetentionInbox(db, admin, uid, { templateId, dayKey, body, bodyKey, section, path }) {
   const FieldValue = admin.firestore.FieldValue;
   const id = `retention_${dayKey}_${templateId}`.slice(0, 180);
   await db
@@ -333,6 +311,7 @@ async function writeRetentionInbox(db, admin, uid, { templateId, dayKey, body, s
         actors: [{ uid: 'system', name: 'Chaupaal', avatarUrl: '' }],
         actorCount: 1,
         preview: String(body || '').slice(0, 280),
+        previewKey: bodyKey || null,
         deepLink: { path, section },
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -457,8 +436,9 @@ async function processUserRetention(db, admin, uid, state = {}, opts = {}) {
 
   const deepLink = { path, section };
   const link = hrefFromDeepLink(deepLink, { type: 'retention', refId: templateId });
-  const title = selection.template.title;
-  const body = selection.template.body;
+  const lang = serverLang(profile.lang);
+  const title = serverT(lang, selection.template.titleKey);
+  const body = serverT(lang, selection.template.bodyKey);
 
   let inboxId = null;
   try {
@@ -466,6 +446,7 @@ async function processUserRetention(db, admin, uid, state = {}, opts = {}) {
       templateId,
       dayKey: todayKey,
       body,
+      bodyKey: selection.template.bodyKey,
       section,
       path: link,
     });

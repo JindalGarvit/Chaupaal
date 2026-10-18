@@ -121,7 +121,7 @@
       <div class="chaupaal-inline-inner">
         <span class="chaupaal-inline-avatar" aria-hidden="true">🏠</span>
         <div class="chaupaal-inline-text">${esc(ev.payload?.text || '')}</div>
-        <button type="button" class="chaupaal-event-dismiss" aria-label="Dismiss">✕</button>
+        <button type="button" class="chaupaal-event-dismiss" aria-label="${tHtml('notifications.dismiss')}">✕</button>
       </div>`;
     host().appendChild(el);
     trackOverlay(el, () => dismissEvent(ev.id, el));
@@ -172,14 +172,14 @@
     el.innerHTML = `
       <div class="chaupaal-graphic-inner" role="dialog" aria-label="${esc(p.title || 'Chaupaal')}">
         <div class="chaupaal-graphic-kicker">Chaupaal</div>
-        <div class="chaupaal-graphic-title">${esc(p.title || 'For you')}</div>
+        <div class="chaupaal-graphic-title">${esc(p.title || t('notifications.for_you'))}</div>
         <div class="chaupaal-graphic-text">${esc(p.text || p.subtitle || '')}</div>
         ${itemsHtml}
         <div class="chaupaal-graphic-actions">
-          <button type="button" class="chaupaal-graphic-cta">${esc(p.cta || (isJournal ? 'Open journal' : 'Got it'))}</button>
+          <button type="button" class="chaupaal-graphic-cta">${esc(p.cta || (isJournal ? t('notifications.open_journal') : t('notifications.got_it')))}</button>
           <div class="chaupaal-graphic-row">
-            ${isJournal ? '<button type="button" class="chaupaal-graphic-snooze">Remind me later</button>' : ''}
-            <button type="button" class="chaupaal-graphic-skip">${isJournal ? 'Not today' : 'Not now'}</button>
+            ${isJournal ? '<button type="button" class="chaupaal-graphic-snooze">' + tHtml('notifications.remind_me_later') + '</button>' : ''}
+            <button type="button" class="chaupaal-graphic-skip">${isJournal ? tHtml('notifications.not_today') : tHtml('notifications.not_now')}</button>
           </div>
         </div>
       </div>`;
@@ -204,7 +204,7 @@
       await snoozeEvent(ev.id, until);
       el.remove();
       if (typeof removeNavLayer === 'function') removeNavLayer(el);
-      if (typeof showToast === 'function') showToast("Okay — I'll nudge you later tonight");
+      if (typeof showToast === 'function') showToast(t('notifications.okay_i_ll_nudge_you_later'));
     });
     el.querySelector('.chaupaal-graphic-cta')?.addEventListener('click', async () => {
       await engageEvent(ev.id);
@@ -212,7 +212,7 @@
       if (typeof removeNavLayer === 'function') removeNavLayer(el);
       if (isJournal || p.action === 'open_journal') {
         if (typeof showDayCheck === 'function') showDayCheck({ force: true });
-        else if (typeof showToast === 'function') showToast('Open your journal from Baithak anytime');
+        else if (typeof showToast === 'function') showToast(t('notifications.open_your_journal_from_baithak_anytime'));
       } else if (p.action === 'open_chaupaal_chat') {
         try {
           if (typeof openChaupaalChat === 'function') openChaupaalChat();
@@ -220,10 +220,10 @@
             document.querySelector('.tab-btn[data-tab="baithak"]')?.click();
           }
         } catch (e) {}
-        if (typeof showToast === 'function') showToast('Open your Chaupaal chat to reply — optional');
+        if (typeof showToast === 'function') showToast(t('notifications.open_your_chaupaal_chat_to_reply'));
       } else if (p.action === 'companion_feedback' || ev.type === 'companion_feedback') {
         if (typeof openCompanionFeedbackSheet === 'function') openCompanionFeedbackSheet(ev);
-        else if (typeof showToast === 'function') showToast('Thanks — share feedback anytime in Chaupaal chat');
+        else if (typeof showToast === 'function') showToast(t('notifications.thanks_share_feedback_anytime_in_chaupaal'));
       } else if (p.action === 'wish_friend' || p.action === 'open_friend_dm') {
         const friendUid = p.friendUid;
         const friendName = p.friendName || 'friend';
@@ -236,7 +236,7 @@
                 name: friendName,
                 uid: friendUid,
               })
-            : `Happy birthday, ${friendName}! 🎂`);
+            : t('notifications.happy_birthday_friendname', { friendName }));
         try {
           if (typeof openBaithakWithPrefill === 'function') {
             await openBaithakWithPrefill({
@@ -264,7 +264,7 @@
             }
           }
         } catch (e) {
-          if (typeof showToast === 'function') showToast('Open Baithak to message them');
+          if (typeof showToast === 'function') showToast(t('notifications.open_baithak_to_message_them'));
         }
       } else if (p.action === 'open_akhbaar') {
         document.querySelector('.tab-btn[data-tab="akhbaar"]')?.click();
@@ -273,7 +273,7 @@
       } else if (p.action === 'open_baithak') {
         document.querySelector('.tab-btn[data-tab="baithak"]')?.click();
       } else if (typeof showToast === 'function') {
-        showToast('Noted — enjoy exploring');
+        showToast(t('notifications.noted_enjoy_exploring'));
       }
     });
   }
@@ -354,20 +354,20 @@
    * (one-shot sheet + companion asks). Separate from chat-tagged chaupaalFeedback.
    * Client create-only; no Archive / public profile; no edit/delete after send.
    */
-  const FEEDBACK_PROMPTS = [
-    'What’s one thing that would make Chaupaal feel more like home?',
-    'Anything missing when you open the app?',
-    'What felt confusing or rough this week?',
-    'A small delight you’d love more of?',
-    'If you could fix one thing today, what would it be?',
-    'What should we build next — honest take?',
+  const FEEDBACK_PROMPTS = /* i18n-copy */ [
+    t('notifications.what_s_one_thing_that_would'),
+    t('notifications.anything_missing_when_you_open_the'),
+    t('notifications.what_felt_confusing_or_rough_this'),
+    t('notifications.a_small_delight_you_d_love'),
+    t('notifications.if_you_could_fix_one_thing'),
+    t('notifications.what_should_we_build_next_honest'),
   ];
 
   const FEEDBACK_CATEGORIES = [
-    { id: 'bug', label: 'Bug' },
-    { id: 'idea', label: 'Idea' },
-    { id: 'missing', label: 'Missing' },
-    { id: 'other', label: 'Other' },
+    { id: 'bug', label: t('notifications.bug') },
+    { id: 'idea', label: t('notifications.idea') },
+    { id: 'missing', label: t('notifications.missing') },
+    { id: 'other', label: t('notifications.other') },
   ];
 
   function pickFeedbackPrompt() {
@@ -397,7 +397,7 @@
     const tt = (k, fb) => (typeof t === 'function' ? t(k) || fb : fb);
 
     if (typeof openHalfSheet !== 'function') {
-      if (typeof showToast === 'function') showToast('Feedback unavailable');
+      if (typeof showToast === 'function') showToast(t('notifications.feedback_unavailable'));
       return null;
     }
 
@@ -495,7 +495,7 @@
         body: payload,
       });
       if (!envelope?.ok) {
-        const err = new Error(envelope?.error?.message || 'Feedback failed');
+        const err = Object.assign(new Error(envelope?.error?.message || 'Feedback failed'), { code: envelope?.error?.code });
         err.code = envelope?.error?.code;
         throw err;
       }

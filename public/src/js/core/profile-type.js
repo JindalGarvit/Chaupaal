@@ -90,15 +90,15 @@
   /** Read-only account type + CTA to add a separate account (no Personal↔Pro flip). */
   function renderProfileTypeToggleHtml() {
     const type = getProfileType();
-    const label = type === 'professional' ? 'Professional' : 'Personal';
+    const label = type === 'professional' ? t('common.professional') : t('common.personal');
     return `
       <div class="profile-type-block" id="profileTypeBlock" style="margin:0 0 16px;padding:14px;border:1.5px solid var(--line);border-radius:14px;background:var(--cream);">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:4px;">Account type</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;margin-bottom:4px;">${tHtml('common.account_type')}</div>
         <div style="font-size:12px;color:var(--ink);font-weight:600;margin-bottom:6px;">${label}</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4;">
-          Personal and Professional are separate accounts — not a toggle. Add another account from the switcher to use both.
+          ${tHtml('profile.personal_and_professional_are_separate_acc')}
         </div>
-        <button type="button" class="btn btn--block" data-open-account-switcher style="background:var(--white);border:1.5px solid var(--line);">Switch / add account</button>
+        <button type="button" class="btn btn--block" data-open-account-switcher style="background:var(--white);border:1.5px solid var(--line);">${tHtml('profile.switch_add_account')}</button>
       </div>`;
   }
 
@@ -122,7 +122,7 @@
       document.querySelector('.device');
     if (!host) {
       if (typeof showToast === 'function') {
-        showToast('One quick thing — add your gender so Personal matching works well.');
+        showToast(t('profile.one_quick_thing_add_your_gender'));
       }
       return;
     }
@@ -132,15 +132,15 @@
     banner.className = 'profile-gender-prompt';
     banner.innerHTML = `
       <div class="profile-gender-prompt-copy">
-        <strong>Welcome to Personal</strong>
-        <span>Gender helps people find the right connections. Add it when you’re ready — no rush.</span>
+        <strong>${tHtml('profile.welcome_to_personal')}</strong>
+        <span>${tHtml('profile.gender_helps_people_find_the_right')}</span>
       </div>
       <div class="profile-gender-prompt-chips">
-        ${['Male', 'Female', 'Non-binary', 'Prefer not to say']
-          .map((g) => `<button type="button" data-gender="${g}">${g}</button>`)
+        ${/* i18n-values: gender */ ['Male', 'Female', 'Non-binary', 'Prefer not to say']
+          .map((g) => `<button type="button" data-gender="${g}">${optionLabelHtml('gender', g)}</button>`)
           .join('')}
       </div>
-      <button type="button" class="profile-gender-prompt-later" data-later>Later</button>`;
+      <button type="button" class="profile-gender-prompt-later" data-later>${tHtml('profile.later')}</button>`;
     host.insertBefore(banner, host.firstChild);
 
     banner.querySelectorAll('[data-gender]').forEach((btn) => {
@@ -165,7 +165,7 @@
         }
         if (typeof onProfileFieldSaved === 'function') onProfileFieldSaved('gender', '', gender);
         banner.remove();
-        if (typeof showToast === 'function') showToast('Got it — thanks');
+        if (typeof showToast === 'function') showToast(t('profile.got_it_thanks'));
       });
     });
     banner.querySelector('[data-later]')?.addEventListener('click', () => banner.remove());

@@ -46,7 +46,7 @@
     return true;
   }
 
-  function showUndoToast({ message = 'Deleted', onUndo }) {
+  function showUndoToast({ message = t('settings.deleted'), onUndo }) {
     // Prefer a sticky undo bar over a fleeting toast — users need time to tap Undo.
     let bar = document.getElementById('softDeleteUndoBar');
     if (bar) bar.remove();
@@ -55,7 +55,7 @@
     bar.className = 'soft-delete-undo-bar';
     bar.innerHTML = `
       <span>${message}</span>
-      <button type="button" class="soft-delete-undo-btn" data-ui="undo">Undo</button>`;
+      <button type="button" class="soft-delete-undo-btn" data-ui="undo">${tHtml('settings.undo')}</button>`;
     const root = document.querySelector('.device') || document.body;
     root.appendChild(bar);
 
@@ -93,7 +93,7 @@
     collection,
     list,
     render,
-    label = 'Post deleted',
+    label = t('settings.post_deleted'),
   }) {
     if (!Array.isArray(list)) return;
     const idx = list.findIndex((x) => x.id === id || x.firestoreId === id);
@@ -127,7 +127,7 @@
             await restoreDoc(collection, fsId);
           } catch (e) {}
         }
-        if (typeof showToast === 'function') showToast('Restored ✓');
+        if (typeof showToast === 'function') showToast(t('settings.restored'));
       },
     });
   }
@@ -159,7 +159,7 @@
       collection,
       firestoreId: firestoreId || null,
       id: item.id,
-      preview: item.caption || item.question || item.text || 'Deleted item',
+      preview: item.caption || item.question || item.text || t('settings.deleted_item'),
       deletedAtMs: Date.now(),
       snapshot: {
         id: item.id,
@@ -187,7 +187,7 @@
       try {
         await restoreDoc(entry.collection, entry.firestoreId);
       } catch (e) {
-        if (typeof showToast === 'function') showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Could not restore');
+        if (typeof showToast === 'function') showToast(typeof friendlyError === 'function' ? friendlyError(e) : t('settings.could_not_restore'));
         return;
       }
     }
@@ -200,14 +200,14 @@
       peepalQuestions.unshift(snap);
       if (typeof renderPeepalFeed === 'function') renderPeepalFeed();
     }
-    if (typeof showToast === 'function') showToast('Restored from recovery bin ✓');
+    if (typeof showToast === 'function') showToast(t('settings.restored_from_recovery_bin'));
   }
 
   function recoveryBinRowsHtml(items) {
     if (!items.length) {
       return `<div class="archive-empty">
-        <p class="archive-empty-title">Nothing here</p>
-        <p class="archive-empty-msg">Posts you soft-delete appear here on this device for ${RECOVERY_DAYS} days (max 50). Not synced across phones.</p>
+        <p class="archive-empty-title">${tHtml('settings.nothing_here')}</p>
+        <p class="archive-empty-msg">${tHtml('settings.recovery_bin_hint', { count: RECOVERY_DAYS, max: 50 })}</p>
       </div>`;
     }
     return `<div class="archive-deleted-list">${items
@@ -222,8 +222,8 @@
           typeof formatRelativeTime === 'function' ? formatRelativeTime(it.deletedAtMs) : 'recently'
         }</div>
         <div class="recovery-actions">
-          <button type="button" class="btn btn--primary recovery-restore" data-i="${i}">Restore</button>
-          <button type="button" class="btn recovery-purge" data-i="${i}">Delete forever</button>
+          <button type="button" class="btn btn--primary recovery-restore" data-i="${i}">${tHtml('settings.restore')}</button>
+          <button type="button" class="btn recovery-purge" data-i="${i}">${tHtml('settings.delete_forever')}</button>
         </div>
       </div>`
       )
@@ -246,11 +246,11 @@
         if (!entry) return;
         const ok =
           typeof confirm === 'function'
-            ? confirm('Delete forever on this device? You won’t be able to restore it from Deleted. Cloud soft-delete stays (hidden from feeds).')
+            ? confirm(t('settings.delete_forever_on_this_device_you'))
             : true;
         if (!ok) return;
         forgetDeleted(entry.kind, entry.id);
-        if (typeof showToast === 'function') showToast('Removed from Deleted');
+        if (typeof showToast === 'function') showToast(t('settings.removed_from_deleted'));
         if (typeof onRefresh === 'function') onRefresh();
       });
     });
@@ -273,9 +273,9 @@
     overlay.setAttribute('data-nav-managed', '1');
     overlay.innerHTML = `
       <div class="archive-hub-header">
-        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-recovery-back' }) : '<button type="button" data-recovery-back class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-recovery-back' }) : '<button type="button" data-recovery-back class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div class="archive-hub-header-copy">
-          <span class="archive-hub-title">${typeof t === 'function' && t('archive_tab_deleted') !== 'archive_tab_deleted' ? t('archive_tab_deleted') : 'Deleted'}</span>
+          <span class="archive-hub-title">${typeof t === 'function' && t('archive_tab_deleted') !== 'archive_tab_deleted' ? t('archive_tab_deleted') : tHtml('settings.deleted')}</span>
         </div>
       </div>
       <div class="archive-hub-body" data-recovery-body></div>`;

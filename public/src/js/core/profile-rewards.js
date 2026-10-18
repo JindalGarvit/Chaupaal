@@ -4,11 +4,11 @@
  */
 (function () {
   const MILESTONES = [
-    { pct: 15, id: 'm15', title: 'First sparks ✨', blurb: 'You started. Matchmaking already has a little more to work with.' },
-    { pct: 47, id: 'm47', title: 'Getting interesting 🌿', blurb: 'Almost halfway — discovery stops guessing as hard.' },
-    { pct: 72, id: 'm72', title: 'Looking sharp 🔥', blurb: 'Solid profile energy. Nearby & Peepal get smarter from here.' },
-    { pct: 91, id: 'm91', title: 'Nearly complete 💫', blurb: 'Over 91% — progress bar softens; you\'re basically there.' },
-    { pct: 97, id: 'm97', title: 'Chaupaal Regular ✅', blurb: '97%+ — we\'ll tuck the progress chrome away. You show up complete.' },
+    { pct: 15, id: 'm15', title: t('profile.first_sparks'), blurb: t('profile.you_started_matchmaking_already_has_a') },
+    { pct: 47, id: 'm47', title: t('profile.getting_interesting'), blurb: t('profile.almost_halfway_discovery_stops_guessing_as') },
+    { pct: 72, id: 'm72', title: t('profile.looking_sharp'), blurb: t('profile.solid_profile_energy_nearby_peepal_get') },
+    { pct: 91, id: 'm91', title: t('profile.nearly_complete'), blurb: t('profile.over_91_progress_bar_softens_you') },
+    { pct: 97, id: 'm97', title: t('profile.chaupaal_regular'), blurb: t('profile.97_we_ll_tuck_the_progress') },
   ];
 
   function playfulPct(real) {
@@ -74,7 +74,7 @@
     el.className = 'profile-reward-toast' + (milestoneTitle ? ' milestone' : '');
     el.innerHTML = `
       ${milestoneTitle ? `<div class="pr-badge">${milestoneTitle}</div>` : ''}
-      <div class="pr-title">${title || 'Nice!'}</div>
+      <div class="pr-title">${title || tHtml('profile.nice')}</div>
       <div class="pr-line">${line || ''}</div>
       ${trivia ? `<div class="pr-trivia">${trivia}</div>` : ''}
       ${unlockHint ? `<div class="pr-unlock">${unlockHint}</div>` : ''}
@@ -136,7 +136,7 @@
     const fact =
       typeof getProfileFact === 'function'
         ? await getProfileFact(fieldName, value)
-        : { line: 'Saved.', unlockHint: null };
+        : { line: t('profile.saved'), unlockHint: null };
     document.querySelectorAll(`[data-key="${fieldName}"]`).forEach((el) => {
       el.classList.add('dp-field-saved-pop');
       setTimeout(() => el.classList.remove('dp-field-saved-pop'), 700);
@@ -155,20 +155,20 @@
   }
 
   async function celebrateProfileSection(sectionId) {
-    const names = { identity: 'Identity', social: 'Social', relationship: 'Relationship', career: 'Career', trust: 'Trust' };
+    const names = { identity: t('common.identity'), social: t('profile.social'), relationship: t('profile.relationship_section'), career: t('profile.career'), trust: t('profile.trust') };
     const fact =
       typeof getSectionCompleteFact === 'function'
         ? await getSectionCompleteFact(sectionId)
         : typeof getProfileFact === 'function'
           ? await getProfileFact(sectionId, sectionId)
-          : { line: 'Section complete.' };
+          : { line: t('profile.section_complete') };
     const quiet = isQuietMotion();
     if (!quiet && typeof SoundLib !== 'undefined' && SoundLib.sectionComplete) SoundLib.sectionComplete();
     smallBurst();
     if (typeof haptic === 'function') haptic('success');
     const emoji = { identity: '✨', social: '🌿', relationship: '💫', career: '🎯', trust: '🔒' }[sectionId] || '✨';
     showRewardToast({
-      title: `${emoji} ${names[sectionId] || sectionId} complete`,
+      title: `${emoji} ${t('profile.section_name_complete', { section: names[sectionId] || sectionId })}`,
       line: fact.line,
       trivia: fact.trivia || null,
       durationMs: 3200,
@@ -211,13 +211,13 @@
       if (freshCos.length) {
         DigitalLayout.persistProfileTheme({ unlocked: [...new Set([...(theme.unlocked || []), ...cosIds])] });
         const names = {
-          mango: 'Mango palette',
-          neem: 'Neem palette',
-          indigo: 'Indigo palette',
-          neon: 'Neon Frame',
-          arcade: 'Arcade frame',
-          pulse: 'Pulse ring',
-          spark: 'Spark ring',
+          mango: t('profile.mango_palette'),
+          neem: t('profile.neem_palette'),
+          indigo: t('profile.indigo_palette'),
+          neon: t('profile.neon_frame'),
+          arcade: t('profile.arcade_frame'),
+          pulse: t('profile.pulse_ring'),
+          spark: t('profile.spark_ring'),
         };
         cosmeticHint = `Unlocked: ${names[freshCos[freshCos.length - 1]] || freshCos[freshCos.length - 1]}`;
       }
@@ -239,10 +239,10 @@
       if (big) bigBurst();
       if (typeof haptic === 'function') haptic('success');
       showRewardToast({
-        title: `Unlocked: ${top.title}`,
+        title: t('profile.unlocked_title', { title: top.title }),
         line: top.blurb,
         milestoneTitle: `${playfulPct(top.pct)}% vibes`,
-        unlockHint: cosmeticHint || (top.pct >= 97 ? 'You show up complete — chrome tucks away.' : 'Every field helps people find you.'),
+        unlockHint: cosmeticHint || (top.pct >= 97 ? t('profile.you_show_up_complete_chrome_tucks') : t('profile.every_field_helps_people_find_you')),
         durationMs: 3800,
       });
       return;
@@ -251,8 +251,8 @@
       if (!isQuietMotion()) smallBurst();
       showRewardToast({
         title: cosmeticHint,
-        line: 'Equip it from Digital → Base palette.',
-        unlockHint: 'Pride cosmetics for your Base.',
+        line: t('profile.equip_it_from_digital_base_palette'),
+        unlockHint: t('profile.pride_cosmetics_for_your_base'),
         durationMs: 3200,
       });
     }

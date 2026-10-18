@@ -86,21 +86,21 @@
     sheet.innerHTML = `
       <div class="leave-chaupaal-card">
         <div class="leave-chaupaal-mark" aria-hidden="true">${unsafe ? '!' : '↗'}</div>
-        <h2>${unsafe ? 'This link looks unsafe' : "You're leaving Chaupaal"}</h2>
+        <h2>${unsafe ? tHtml('common.this_link_looks_unsafe') : tHtml('common.you_re_leaving_chaupaal')}</h2>
         <p class="leave-chaupaal-url">${escapeHtml(url)}</p>
         <p class="leave-chaupaal-copy">${
           unsafe
             ? safety.threat
-              ? `Flagged as ${escapeHtml(safety.threat)}. Opening is not recommended.`
-              : 'This URL was flagged by our safety check. Only continue if you trust the source.'
+              ? tHtml('common.flagged_as_threat_opening_is_not', { threat: escapeHtml(safety.threat) })
+              : tHtml('common.this_url_was_flagged_by_our')
             : safety?.checked === false
-              ? 'Links open in your browser. Chaupaal couldn’t fully verify this URL.'
-              : 'You’re about to open this link outside Chaupaal.'
+              ? tHtml('common.links_open_in_your_browser_chaupaal')
+              : tHtml('common.you_re_about_to_open_this')
         }</p>
         <div class="leave-chaupaal-actions">
-          <button type="button" class="btn" data-leave-cancel>Stay</button>
+          <button type="button" class="btn" data-leave-cancel>${tHtml('common.stay')}</button>
           <button type="button" class="btn ${unsafe ? '' : 'btn--primary'}" data-leave-open>${
-            unsafe ? 'Open anyway' : 'Open link'
+            unsafe ? tHtml('common.open_anyway') : tHtml('common.open_link')
           }</button>
         </div>
       </div>`;

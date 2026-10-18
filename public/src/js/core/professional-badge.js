@@ -27,7 +27,7 @@
   function professionalBadgeHtml(opts) {
     const on = opts === true || isProfessionalType(opts);
     if (!on) return '';
-    return `<span class="pro-badge" title="Professional" role="img" aria-label="Professional account">${BADGE_SVG}</span>`;
+    return `<span class="pro-badge" title="${tHtml('common.professional')}" role="img" aria-label="${tHtml('profile.professional_account')}">${BADGE_SVG}</span>`;
   }
 
   function isMinorType(typeOrUser) {
@@ -43,7 +43,7 @@
   function minorBadgeHtml(opts) {
     const on = opts === true || isMinorType(opts);
     if (!on) return '';
-    return `<span class="pro-badge k-badge" title="Under 18" role="img" aria-label="Under 18 account"><svg class="pro-badge-svg" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><text x="10" y="13.5" text-anchor="middle" font-size="9" font-weight="700" font-family="Space Grotesk,sans-serif" fill="currentColor">K</text></svg></span>`;
+    return `<span class="pro-badge k-badge" title="${tHtml('profile.under_18')}" role="img" aria-label="${tHtml('profile.under_18_account')}"><svg class="pro-badge-svg" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><text x="10" y="13.5" text-anchor="middle" font-size="9" font-weight="700" font-family="Space Grotesk,sans-serif" fill="currentColor">K</text></svg></span>`;
   }
 
   function resolvePersonDisplayName(profile) {
@@ -67,7 +67,7 @@
     if (/^(someone|friend|chaupaal member|member|chat)$/i.test(cleaned)) {
       if (p.username) return `@${String(p.username).replace(/^@/, '')}`;
     }
-    return cleaned || 'Someone';
+    return cleaned || t('common.someone');
   }
 
   function formatDisplayNameHtml(name, profileTypeOrUser) {
@@ -79,7 +79,7 @@
               .replace(/&/g, '&amp;')
               .replace(/</g, '&lt;')
               .replace(/"/g, '&quot;');
-    const label = esc(name || 'Member');
+    const label = esc(name || t('common.member'));
     return `<span class="display-name-with-badge">${label}${professionalBadgeHtml(profileTypeOrUser)}${minorBadgeHtml(profileTypeOrUser)}</span>`;
   }
 

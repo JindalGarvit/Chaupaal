@@ -14,34 +14,34 @@
 
   /** Curated dating-app style library (~28). Users pick 2–3. */
   const PROFILE_PROMPT_BANK = [
-    { id: 'pp01', category: 'values', text: 'A cause I care about…' },
-    { id: 'pp02', category: 'lifestyle', text: 'My ideal weekend looks like…' },
-    { id: 'pp03', category: 'fun', text: "I'm weirdly competitive about…" },
-    { id: 'pp04', category: 'connection', text: 'The way to my heart is…' },
-    { id: 'pp05', category: 'goals', text: 'A life goal of mine is…' },
-    { id: 'pp06', category: 'connection', text: 'Together, we could…' },
-    { id: 'pp07', category: 'values', text: "I'll know I've found my people when…" },
-    { id: 'pp08', category: 'lifestyle', text: 'My simple pleasures…' },
-    { id: 'pp09', category: 'dating', text: 'The best way to ask me out is…' },
-    { id: 'pp10', category: 'dating', text: "I'm looking for…" },
-    { id: 'pp11', category: 'fun', text: 'Two truths and a lie about me…' },
-    { id: 'pp12', category: 'local', text: 'My city is underrated because…' },
-    { id: 'pp13', category: 'values', text: 'I get irrationally happy when…' },
-    { id: 'pp14', category: 'lifestyle', text: 'My most-used app that isn’t social media…' },
-    { id: 'pp15', category: 'connection', text: 'A green flag I notice quickly…' },
-    { id: 'pp16', category: 'fun', text: 'My controversial food opinion…' },
-    { id: 'pp17', category: 'goals', text: 'Something I want to get better at this year…' },
-    { id: 'pp18', category: 'lifestyle', text: 'How I recharge after a long week…' },
-    { id: 'pp19', category: 'values', text: 'A book / show / song that changed my mood for days…' },
-    { id: 'pp20', category: 'connection', text: 'Friendship first means…' },
-    { id: 'pp21', category: 'fun', text: 'My go-to karaoke / shower song…' },
-    { id: 'pp22', category: 'local', text: 'Best chai / coffee spot near me…' },
-    { id: 'pp23', category: 'dating', text: 'On a first hang, I’d rather…' },
-    { id: 'pp24', category: 'values', text: 'I respect people who…' },
-    { id: 'pp25', category: 'lifestyle', text: 'My Sunday morning usually looks like…' },
-    { id: 'pp26', category: 'fun', text: 'A skill I pretend I have…' },
-    { id: 'pp27', category: 'connection', text: 'Text me if you also…' },
-    { id: 'pp28', category: 'goals', text: 'In five years I hope…' },
+    { id: 'pp01', category: 'values', key: 'profile.a_cause_i_care_about', text: t('profile.a_cause_i_care_about') },
+    { id: 'pp02', category: 'lifestyle', key: 'profile.my_ideal_weekend_looks_like', text: t('profile.my_ideal_weekend_looks_like') },
+    { id: 'pp03', category: 'fun', key: 'profile.i_m_weirdly_competitive_about', text: t('profile.i_m_weirdly_competitive_about') },
+    { id: 'pp04', category: 'connection', key: 'profile.the_way_to_my_heart_is', text: t('profile.the_way_to_my_heart_is') },
+    { id: 'pp05', category: 'goals', key: 'profile.a_life_goal_of_mine_is', text: t('profile.a_life_goal_of_mine_is') },
+    { id: 'pp06', category: 'connection', key: 'profile.together_we_could', text: t('profile.together_we_could') },
+    { id: 'pp07', category: 'values', key: 'profile.i_ll_know_i_ve_found', text: t('profile.i_ll_know_i_ve_found') },
+    { id: 'pp08', category: 'lifestyle', key: 'profile.my_simple_pleasures', text: t('profile.my_simple_pleasures') },
+    { id: 'pp09', category: 'dating', key: 'profile.the_best_way_to_ask_me', text: t('profile.the_best_way_to_ask_me') },
+    { id: 'pp10', category: 'dating', key: 'profile.i_m_looking_for', text: t('profile.i_m_looking_for') },
+    { id: 'pp11', category: 'fun', key: 'profile.two_truths_and_a_lie_about', text: t('profile.two_truths_and_a_lie_about') },
+    { id: 'pp12', category: 'local', key: 'profile.my_city_is_underrated_because', text: t('profile.my_city_is_underrated_because') },
+    { id: 'pp13', category: 'values', key: 'profile.i_get_irrationally_happy_when', text: t('profile.i_get_irrationally_happy_when') },
+    { id: 'pp14', category: 'lifestyle', key: 'profile.my_most_used_app_that_isn', text: t('profile.my_most_used_app_that_isn') },
+    { id: 'pp15', category: 'connection', key: 'profile.a_green_flag_i_notice_quickly', text: t('profile.a_green_flag_i_notice_quickly') },
+    { id: 'pp16', category: 'fun', key: 'profile.my_controversial_food_opinion', text: t('profile.my_controversial_food_opinion') },
+    { id: 'pp17', category: 'goals', key: 'profile.something_i_want_to_get_better', text: t('profile.something_i_want_to_get_better') },
+    { id: 'pp18', category: 'lifestyle', key: 'profile.how_i_recharge_after_a_long', text: t('profile.how_i_recharge_after_a_long') },
+    { id: 'pp19', category: 'values', key: 'profile.a_book_show_song_that_changed', text: t('profile.a_book_show_song_that_changed') },
+    { id: 'pp20', category: 'connection', key: 'profile.friendship_first_means', text: t('profile.friendship_first_means') },
+    { id: 'pp21', category: 'fun', key: 'profile.my_go_to_karaoke_shower_song', text: t('profile.my_go_to_karaoke_shower_song') },
+    { id: 'pp22', category: 'local', key: 'profile.best_chai_coffee_spot_near_me', text: t('profile.best_chai_coffee_spot_near_me') },
+    { id: 'pp23', category: 'dating', key: 'profile.on_a_first_hang_i_d', text: t('profile.on_a_first_hang_i_d') },
+    { id: 'pp24', category: 'values', key: 'profile.i_respect_people_who', text: t('profile.i_respect_people_who') },
+    { id: 'pp25', category: 'lifestyle', key: 'profile.my_sunday_morning_usually_looks_like', text: t('profile.my_sunday_morning_usually_looks_like') },
+    { id: 'pp26', category: 'fun', key: 'profile.a_skill_i_pretend_i_have', text: t('profile.a_skill_i_pretend_i_have') },
+    { id: 'pp27', category: 'connection', key: 'profile.text_me_if_you_also', text: t('profile.text_me_if_you_also') },
+    { id: 'pp28', category: 'goals', key: 'profile.in_five_years_i_hope', text: t('profile.in_five_years_i_hope') },
   ];
 
   function getBankPrompt(id) {
@@ -54,7 +54,7 @@
     if (bank) return bank;
     const customQ = String(a.customQuestion || '').trim();
     if (customQ || String(a.promptId || '').startsWith('custom_')) {
-      return { id: a.promptId, category: 'custom', text: customQ || 'Custom prompt', custom: true };
+      return { id: a.promptId, category: 'custom', text: customQ || t('profile.custom_prompt'), custom: true };
     }
     return null;
   }
@@ -129,7 +129,7 @@
     next.push(entry);
     persistPrompts(next);
     if (typeof onProfileFieldSaved === 'function') onProfileFieldSaved('prompts', '', text);
-    if (typeof showToast === 'function') showToast('Prompt saved');
+    if (typeof showToast === 'function') showToast(t('profile.prompt_saved'));
     return { ok: true };
   }
 
@@ -161,16 +161,18 @@
   function buildSemanticProfileText(dp) {
     const d = dp || (typeof digitalProfile !== 'undefined' ? digitalProfile : {}) || {};
     const parts = [];
-    if (d.bio) parts.push('Bio: ' + String(d.bio).trim());
+    // Embedding input stays English whatever the UI language, so matching is comparable across users.
+    const en = (typeof window !== 'undefined' && window.CHAUPAAL_I18N_EN) || {};
+    if (d.bio) parts.push('Bio: ' + String(d.bio).trim()); // i18n-ignore
     const prompts = normalizePrompts(d.prompts);
     prompts.forEach((a) => {
       const p = resolvePrompt(a);
-      parts.push(`Prompt (${p?.text || a.promptId}): ${a.answer}`);
+      parts.push(`Prompt (${(p?.key && en[p.key]) || p?.text || a.promptId}): ${a.answer}`); // i18n-ignore
     });
     const interests = Array.isArray(d.interests) ? d.interests : [];
-    if (interests.length) parts.push('Interests: ' + interests.join(', '));
+    if (interests.length) parts.push('Interests: ' + interests.join(', ')); // i18n-ignore
     const hobbies = Array.isArray(d.hobbies) ? d.hobbies : [];
-    if (hobbies.length) parts.push('Hobbies: ' + hobbies.join(', '));
+    if (hobbies.length) parts.push('Hobbies: ' + hobbies.join(', ')); // i18n-ignore
     return parts.join('\n').slice(0, 8000);
   }
 
@@ -192,8 +194,8 @@
     const unused = unusedBankPrompts(answers);
     return `
       <div class="profile-prompts-block" id="profilePromptsBlock">
-        <div class="profile-prompts-title">Prompts</div>
-        <div class="profile-prompts-hint">Digital profile · pick ${MAX_PROMPTS} free-text answers for matching. Separate from chat icebreakers.</div>
+        <div class="profile-prompts-title">${tHtml('profile.prompts')}</div>
+        <div class="profile-prompts-hint">${tHtml('profile.prompts_hint', { count: MAX_PROMPTS })}</div>
         <div class="profile-prompts-list">
           ${
             answers.length
@@ -201,27 +203,27 @@
                   .map((a) => {
                     const p = resolvePrompt(a);
                     return `<div class="profile-prompt-card" data-prompt-id="${esc(a.promptId)}">
-                      <strong>${esc(p?.text || 'Prompt')}</strong>
+                      <strong>${esc(p?.text || t('profile.prompt'))}</strong>
                       <p>${esc(a.answer)}</p>
-                      <button type="button" data-remove-prompt="${esc(a.promptId)}">Remove</button>
+                      <button type="button" data-remove-prompt="${esc(a.promptId)}">${tHtml('profile.exclusion_remove')}</button>
                     </div>`;
                   })
                   .join('')
-              : '<div class="profile-prompts-empty">No prompts yet — answer 2–3 to unlock richer matches.</div>'
+              : '<div class="profile-prompts-empty">' + tHtml('profile.no_prompts_yet_answer_2_3') + '</div>'
           }
         </div>
         ${
           remaining > 0
             ? `<div class="profile-prompts-add">
-          <label>Choose a prompt</label>
+          <label>${tHtml('profile.choose_a_prompt')}</label>
           <select id="profilePromptSelect">
-            <option value="">Select…</option>
+            <option value="">${tHtml('profile.select')}</option>
             ${unused.map((p) => `<option value="${esc(p.id)}">${esc(p.text)}</option>`).join('')}
-            <option value="__custom__">Write your own prompt…</option>
+            <option value="__custom__">${tHtml('profile.write_your_own_prompt')}</option>
           </select>
-          <input type="text" id="profilePromptCustomQ" maxlength="120" placeholder="Your custom prompt…" style="display:none;">
-          <textarea id="profilePromptAnswer" maxlength="500" placeholder="Answer in your own words…" rows="3"></textarea>
-          <button type="button" id="profilePromptSave" class="btn btn--primary btn--block">Save prompt (${remaining} left)</button>
+          <input type="text" id="profilePromptCustomQ" maxlength="120" placeholder="${tHtml('profile.your_custom_prompt')}" style="display:none;">
+          <textarea id="profilePromptAnswer" maxlength="500" placeholder="${tHtml('profile.answer_in_your_own_words')}" rows="3"></textarea>
+          <button type="button" id="profilePromptSave" class="btn btn--primary btn--block">${tHtml('profile.save_prompt_left', { count: remaining })}</button>
         </div>`
             : ''
         }
@@ -259,12 +261,12 @@
       } else if (select?.value) {
         result = savePromptAnswer(select.value, answer);
       } else {
-        if (typeof showToast === 'function') showToast('Pick a prompt first');
+        if (typeof showToast === 'function') showToast(t('profile.pick_a_prompt_first'));
         return;
       }
       if (!result.ok) {
         if (typeof showToast === 'function') {
-          showToast(result.error === 'max' ? 'You already have 3 prompts' : 'Add a free-text answer');
+          showToast(result.error === 'max' ? t('profile.you_already_have_3_prompts') : t('profile.add_a_free_text_answer'));
         }
         return;
       }

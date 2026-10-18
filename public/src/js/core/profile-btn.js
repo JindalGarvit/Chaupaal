@@ -83,21 +83,21 @@ async function addFriend() {
   try {
     const snap = await db.collection('usernames').doc(username).get();
     if (!snap.exists) {
-      showToast('User not found 🤔');
+      showToast(t('profile.user_not_found'));
       return;
     }
     const friendUid = snap.data().uid;
     if (friendUid === currentUser.uid) {
-      showToast("That's you! 😄");
+      showToast(t('profile.that_s_you'));
       return;
     }
     if (typeof requestFriend !== 'function') throw new Error('Relationship service unavailable');
     await requestFriend(friendUid);
     document.getElementById('addFriendInput').value = '';
-    showToast('Friend request sent');
+    showToast(t('profile.rel_request_sent'));
     loadFriends();
   } catch (e) {
-    showToast('Error adding friend');
+    showToast(t('profile.error_adding_friend'));
   }
 }
 
@@ -115,12 +115,12 @@ async function loadFriends() {
       if (typeof renderEmptyState === 'function') {
         renderEmptyState(el, {
           icon: '👋',
-          title: 'No friends yet',
-          message: 'Add someone by username above to duel and chat.',
+          title: t('profile.no_friends_yet'),
+          message: t('profile.add_someone_by_username_above_to'),
         });
       } else {
         el.innerHTML =
-          '<div style="color:var(--muted);font-size:13px;padding:8px 0;">No friends yet — add one above! 👋</div>';
+          '<div style="color:var(--muted);font-size:13px;padding:8px 0;">' + tHtml('profile.no_friends') + '</div>';
       }
       return;
     }
@@ -161,7 +161,7 @@ async function loadFriends() {
       el.querySelector('[data-ui="load-more"]')?.remove();
       if (offset < friends.length && typeof ensureLoadMoreButton === 'function') {
         ensureLoadMoreButton(el, {
-          label: `Load more friends (${friends.length - offset} left)`,
+          label: tn('profile.load_more_friends_left', friends.length - offset),
           onLoadMore: appendPage,
         });
       }
@@ -170,12 +170,12 @@ async function loadFriends() {
   } catch (e) {
     if (typeof renderErrorState === 'function') {
       renderErrorState(el, {
-        title: 'Couldn’t load friends',
-        message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+        title: t('profile.couldn_t_load_friends'),
+        message: typeof friendlyError === 'function' ? friendlyError(e) : t('profile.please_try_again'),
         onRetry: () => loadFriends(),
       });
     } else {
-      el.innerHTML = '<div style="color:var(--muted);font-size:13px;">Could not load friends</div>';
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px;">' + tHtml('profile.friends_error') + '</div>';
     }
   }
 }

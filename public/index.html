@@ -71,20 +71,20 @@
             </div>
             <span class="auth-hero-wordmark">Chaupaal</span>
           </div>
-          <div class="auth-hero-headline">Gather under<br><em>the same light</em></div>
-          <div class="auth-hero-sub">News, discussions, games, and friends — one Profile that feels finished.</div>
+          <div class="auth-hero-headline"><span data-i18n="common.gather_under">Gather under</span><br><em data-i18n="common.the_same_light">the same light</em></div>
+          <div class="auth-hero-sub" data-i18n="common.news_discussions_games_and_friends_one">News, discussions, games, and friends — one Profile that feels finished.</div>
           <div class="auth-feature-pills">
-            <span class="auth-pill"><span data-icon="newspaper" data-icon-size="14"></span> Daily news quiz</span>
-            <span class="auth-pill"><span data-icon="tree" data-icon-size="14"></span> Real discussions</span>
-            <span class="auth-pill"><span data-icon="swords" data-icon-size="14"></span> Games &amp; duels</span>
-            <span class="auth-pill"><span data-icon="handshake" data-icon-size="14"></span> Make friends</span>
+            <span class="auth-pill"><span data-icon="newspaper" data-icon-size="14"></span> <span data-i18n="common.daily_news_quiz">Daily news quiz</span></span>
+            <span class="auth-pill"><span data-icon="tree" data-icon-size="14"></span> <span data-i18n="common.real_discussions">Real discussions</span></span>
+            <span class="auth-pill"><span data-icon="swords" data-icon-size="14"></span> <span data-i18n="common.games_duels">Games &amp; duels</span></span>
+            <span class="auth-pill"><span data-icon="handshake" data-icon-size="14"></span> <span data-i18n="common.make_friends">Make friends</span></span>
           </div>
         </div>
         <div class="auth-hero-actions">
-          <button class="auth-hero-cta" id="heroSignupBtn">Create free account</button>
-          <button class="auth-hero-login" id="heroLoginBtn">Already have an account? <strong>Log in</strong></button>
-          <button class="auth-guest-btn" id="authSkip">Explore as guest →</button>
-          <div class="auth-legal">By signing up you agree to our <button type="button" class="auth-legal-link" data-legal="terms">Terms</button> and <button type="button" class="auth-legal-link" data-legal="privacy">Privacy Policy</button>. Real identity required.</div>
+          <button class="auth-hero-cta" id="heroSignupBtn" data-i18n="common.create_free_account">Create free account</button>
+          <button class="auth-hero-login" id="heroLoginBtn"><span data-i18n="common.already_have_an_account">Already have an account?</span> <strong data-i18n="common.log_in">Log in</strong></button>
+          <button class="auth-guest-btn" id="authSkip" data-i18n="common.explore_as_guest">Explore as guest →</button>
+          <div class="auth-legal" data-i18n-slots="common.signup_legal">By signing up you agree to our <button type="button" class="auth-legal-link" data-legal="terms" data-i18n-slot="terms" data-i18n="common.terms">Terms</button> and <button type="button" class="auth-legal-link" data-legal="privacy" data-i18n-slot="privacy" data-i18n="common.privacy_policy">Privacy Policy</button>. Real identity required.</div>
         </div>
       </div>
 
@@ -95,26 +95,26 @@
       <div class="auth-form-screen hidden" id="authParentalConsentScreen">
         <div class="auth-form-header">
           <div style="width:36px;"></div>
-          <div class="auth-form-title">Parent / guardian consent</div>
+          <div class="auth-form-title" data-i18n="common.parent_guardian_consent">Parent / guardian consent</div>
           <div style="width:36px;"></div>
         </div>
         <div class="auth-form-body">
-          <p style="font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:16px;">Because you're under 18, a parent or guardian with an adult Chaupaal account needs to approve. The code is sent to their Chaupaal notifications — not SMS.</p>
+          <p style="font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:16px;" data-i18n="common.because_you_re_under_18_a">Because you're under 18, a parent or guardian with an adult Chaupaal account needs to approve. The code is sent to their Chaupaal notifications — not SMS.</p>
           <div class="auth-input-group">
-            <label class="auth-input-label">Parent's email or phone</label>
-            <input class="auth-input" type="text" id="parentConsentContact" placeholder="email@ or +91…" autocomplete="off">
+            <label class="auth-input-label" data-i18n="common.parent_s_email_or_phone">Parent's email or phone</label>
+            <input class="auth-input" type="text" id="parentConsentContact" placeholder="email@ or +91…" autocomplete="off" data-i18n-placeholder="common.email_or_91">
           </div>
           <div id="parentConsentError" class="auth-error" style="margin-bottom:12px;"></div>
-          <button class="btn btn--primary btn--block" id="parentConsentSend">Send verification code</button>
+          <button class="btn btn--primary btn--block" id="parentConsentSend" data-i18n="common.send_verification_code">Send verification code</button>
           <p id="parentConsentHint" class="auth-input-hint" style="margin-top:10px;"></p>
           <div id="parentConsentOtpWrap" class="hidden" style="margin-top:16px;">
             <div class="auth-input-group">
-              <label class="auth-input-label">OTP from parent</label>
-              <input class="auth-input auth-otp-input" type="text" id="parentConsentOtp" placeholder="6-digit code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*">
+              <label class="auth-input-label" data-i18n="common.otp_from_parent">OTP from parent</label>
+              <input class="auth-input auth-otp-input" type="text" id="parentConsentOtp" placeholder="6-digit code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*" data-i18n-placeholder="common.6_digit_code">
             </div>
-            <button class="btn btn--primary btn--block" id="parentConsentVerify">Confirm consent</button>
+            <button class="btn btn--primary btn--block" id="parentConsentVerify" data-i18n="common.confirm_consent">Confirm consent</button>
           </div>
-          <p style="font-size:12px;color:var(--muted);margin-top:16px;line-height:1.4;">If your parent doesn't have an account yet, ask them to create an adult Chaupaal account first — then retry.</p>
+          <p style="font-size:12px;color:var(--muted);margin-top:16px;line-height:1.4;" data-i18n="common.if_your_parent_doesn_t_have">If your parent doesn't have an account yet, ask them to create an adult Chaupaal account first — then retry.</p>
         </div>
       </div>
 
@@ -122,43 +122,43 @@
       <div class="auth-form-screen hidden" id="authLoginScreen">
         <div class="auth-form-header">
           <button class="auth-back-btn" id="loginBackBtn" data-icon="arrow-left"></button>
-          <div class="auth-form-title">Welcome back</div>
+          <div class="auth-form-title" data-i18n="common.welcome_back">Welcome back</div>
           <div style="width:36px;"></div>
         </div>
         <div class="auth-form-body">
           <div class="auth-input-group">
-            <label class="auth-input-label">Username, email, or phone</label>
-            <input class="auth-input" type="text" id="loginIdentifier" placeholder="Username, email, or phone" autocomplete="username" autocapitalize="none" spellcheck="false">
+            <label class="auth-input-label" data-i18n="common.username_email_or_phone">Username, email, or phone</label>
+            <input class="auth-input" type="text" id="loginIdentifier" placeholder="Username, email, or phone" autocomplete="username" autocapitalize="none" spellcheck="false" data-i18n-placeholder="common.username_email_or_phone">
           </div>
           <div class="auth-input-group">
-            <label class="auth-input-label">Password</label>
+            <label class="auth-input-label" data-i18n="common.password">Password</label>
             <div style="position:relative;">
-              <input class="auth-input" type="password" id="loginPassword" placeholder="Your password" style="padding-inline-end:44px;" autocomplete="current-password">
-              <button id="toggleLoginPwd" type="button" aria-label="Show password" style="position:absolute;inset-inline-end:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;" data-icon="eye" data-icon-size="18"></button>
+              <input class="auth-input" type="password" id="loginPassword" placeholder="Your password" style="padding-inline-end:44px;" autocomplete="current-password" data-i18n-placeholder="common.your_password">
+              <button id="toggleLoginPwd" type="button" aria-label="Show password" style="position:absolute;inset-inline-end:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;" data-icon="eye" data-icon-size="18" data-i18n-aria="common.show_password"></button>
             </div>
           </div>
-          <button class="auth-forgot" id="forgotPasswordBtn">Forgot password?</button>
+          <button class="auth-forgot" id="forgotPasswordBtn" data-i18n="common.forgot_password">Forgot password?</button>
           <div class="auth-error" id="loginError"></div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="loginBtn">Log in →</button>
-          <div class="auth-divider"><span>or</span></div>
-          <button type="button" class="btn btn--block auth-btn" id="loginGoogleBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;">Continue with Google</button>
-          <button type="button" class="btn btn--block auth-btn" id="loginPhoneBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;">Continue with phone</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="loginBtn" data-i18n="common.log_in_2">Log in →</button>
+          <div class="auth-divider"><span data-i18n="common.or">or</span></div>
+          <button type="button" class="btn btn--block auth-btn" id="loginGoogleBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;" data-i18n="common.continue_with_google">Continue with Google</button>
+          <button type="button" class="btn btn--block auth-btn" id="loginPhoneBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;" data-i18n="common.continue_with_phone">Continue with phone</button>
           <div id="authPhonePanel" class="hidden auth-phone-panel" style="margin-bottom:12px;">
             <div class="auth-input-group">
-              <label class="auth-input-label">Phone (India +91)</label>
-              <input class="auth-input" type="tel" id="loginPhone" placeholder="10-digit mobile" autocomplete="tel" inputmode="tel">
+              <label class="auth-input-label" data-i18n="common.phone_india_91">Phone (India +91)</label>
+              <input class="auth-input" type="tel" id="loginPhone" placeholder="10-digit mobile" autocomplete="tel" inputmode="tel" data-i18n-placeholder="common.10_digit_mobile">
             </div>
             <div id="recaptcha-container" class="auth-recaptcha-host"></div>
-            <button type="button" class="btn btn--primary btn--block" id="loginPhoneSendOtp" data-default-label="Send OTP">Send OTP</button>
+            <button type="button" class="btn btn--primary btn--block" id="loginPhoneSendOtp" data-default-label="Send OTP" data-i18n="common.send_otp">Send OTP</button>
             <div id="loginOtpStatus" class="auth-input-hint" style="min-height:16px;"></div>
             <div class="auth-input-group" style="margin-top:10px;">
               <label class="auth-input-label">OTP</label>
-              <input class="auth-input auth-otp-input" type="text" id="loginPhoneOtp" placeholder="6-digit code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*">
+              <input class="auth-input auth-otp-input" type="text" id="loginPhoneOtp" placeholder="6-digit code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*" data-i18n-placeholder="common.6_digit_code">
             </div>
-            <button type="button" class="btn btn--primary btn--block" id="loginPhoneVerifyOtp">Verify &amp; log in</button>
-            <button type="button" class="auth-guest-btn hidden" id="loginPhoneResendOtp" data-default-label="Resend OTP" style="margin-top:4px;">Resend OTP</button>
+            <button type="button" class="btn btn--primary btn--block" id="loginPhoneVerifyOtp" data-i18n="common.verify_log_in">Verify &amp; log in</button>
+            <button type="button" class="auth-guest-btn hidden" id="loginPhoneResendOtp" data-default-label="Resend OTP" style="margin-top:4px;" data-i18n="common.resend_otp">Resend OTP</button>
           </div>
-          <button class="auth-switch-btn" id="loginToSignup">Don't have an account? <strong>Sign up</strong></button>
+          <button class="auth-switch-btn" id="loginToSignup"><span data-i18n="common.don_t_have_an_account">Don't have an account?</span> <strong data-i18n="common.sign_up">Sign up</strong></button>
         </div>
       </div>
 
@@ -166,30 +166,30 @@
       <div class="auth-form-screen hidden" id="authPasswordNudgeScreen">
         <div class="auth-form-header">
           <div style="width:36px;"></div>
-          <div class="auth-form-title">Faster next time</div>
+          <div class="auth-form-title" data-i18n="common.faster_next_time">Faster next time</div>
           <div style="width:36px;"></div>
         </div>
         <div class="auth-form-body">
-          <p style="font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:16px;">Set a password so you can log in with your phone number (or email) without waiting for an OTP.</p>
+          <p style="font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:16px;" data-i18n="common.set_a_password_so_you_can">Set a password so you can log in with your phone number (or email) without waiting for an OTP.</p>
           <div class="auth-input-group" id="nudgeEmailGroup">
-            <label class="auth-input-label">Email <span class="auth-required">*</span></label>
-            <input class="auth-input" type="email" id="nudgeEmail" placeholder="your@email.com" autocomplete="email">
+            <label class="auth-input-label"><span data-i18n="common.email">Email</span> <span class="auth-required">*</span></label>
+            <input class="auth-input" type="email" id="nudgeEmail" placeholder="your@email.com" autocomplete="email" data-i18n-placeholder="common.your_email_com">
           </div>
           <div class="auth-input-group">
-            <label class="auth-input-label">Password <span class="auth-required">*</span></label>
-            <input class="auth-input" type="password" id="nudgePassword" placeholder="Min 8 characters" autocomplete="new-password">
+            <label class="auth-input-label"><span data-i18n="common.password">Password</span> <span class="auth-required">*</span></label>
+            <input class="auth-input" type="password" id="nudgePassword" placeholder="Min 8 characters" autocomplete="new-password" data-i18n-placeholder="common.min_8_characters">
           </div>
           <div class="auth-error" id="nudgeError"></div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="nudgePasswordSave">Save &amp; continue</button>
-          <button type="button" class="auth-guest-btn" id="nudgePasswordLater" style="margin-top:8px;">Maybe later</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="nudgePasswordSave" data-i18n="common.save_continue">Save &amp; continue</button>
+          <button type="button" class="auth-guest-btn" id="nudgePasswordLater" style="margin-top:8px;" data-i18n="common.maybe_later">Maybe later</button>
         </div>
       </div>
 
       <!-- ===== REGISTER: one Profile canvas (identity + credentials) ===== -->
       <div class="auth-form-screen hidden" id="authRegStep1">
         <div class="auth-form-header">
-          <button class="auth-back-btn" id="reg1BackBtn" data-icon="arrow-left" aria-label="Back"></button>
-          <div class="auth-form-title" id="authCanvasTitle">Create your Profile</div>
+          <button class="auth-back-btn" id="reg1BackBtn" data-icon="arrow-left" aria-label="Back" data-i18n-aria="common.back"></button>
+          <div class="auth-form-title" id="authCanvasTitle" data-i18n="common.create_your_profile">Create your Profile</div>
           <div style="width:36px;" aria-hidden="true"></div>
         </div>
         <div class="auth-form-body auth-reg-scroll" id="authRegScroll">
@@ -198,163 +198,163 @@
             <div class="dp-hero dp-hero--premium auth-signup-hero">
               <div class="dp-hero-top">
                 <div class="dp-hero-avatar-wrap">
-                  <button type="button" class="dp-hero-avatar squircle-avatar" id="authCanvasAvatar" aria-label="Add profile photo">
+                  <button type="button" class="dp-hero-avatar squircle-avatar" id="authCanvasAvatar" aria-label="Add profile photo" data-i18n-aria="common.add_profile_photo">
                     <span id="authCanvasAvatarFallback" aria-hidden="true">🪑</span>
                   </button>
-                  <label class="dp-hero-edit" title="Add a photo" for="photoInput">
+                  <label class="dp-hero-edit" title="Add a photo" for="photoInput" data-i18n-title="common.add_a_photo">
                     ✎<input type="file" id="photoInput" accept="image/*" style="display:none">
                   </label>
                 </div>
               </div>
               <div class="dp-hero-copy">
-                <div class="dp-hero-name" id="authCanvasLiveName">Your name</div>
-                <div class="dp-hero-handle" id="authCanvasLiveHandle">@username</div>
-                <div class="dp-hero-meta" id="authCanvasLiveMeta">Add your city</div>
-                <p class="auth-welcome-kicker hidden" id="authWelcomeKicker">Welcome back</p>
-                <p class="auth-photo-nudge" id="authPhotoNudge">A photo helps people recognise you — optional, skip anytime.</p>
+                <div class="dp-hero-name" id="authCanvasLiveName" data-i18n="common.your_name">Your name</div>
+                <div class="dp-hero-handle" id="authCanvasLiveHandle" data-i18n="common.username">@username</div>
+                <div class="dp-hero-meta" id="authCanvasLiveMeta" data-i18n="common.add_your_city">Add your city</div>
+                <p class="auth-welcome-kicker hidden" id="authWelcomeKicker" data-i18n="common.welcome_back">Welcome back</p>
+                <p class="auth-photo-nudge" id="authPhotoNudge" data-i18n="common.a_photo_helps_people_recognise_you">A photo helps people recognise you — optional, skip anytime.</p>
                 <div class="dp-hero-complete" id="authSignupComplete">
                   <div class="dp-hero-complete-row">
-                    <span>Profile start</span>
+                    <span data-i18n="common.profile_start">Profile start</span>
                     <span data-ui="auth-signup-pct" id="authSignupPct">0%</span>
                   </div>
                   <div class="dp-hero-complete-track">
                     <div id="authSignupBar" data-ui="auth-signup-bar"></div>
                   </div>
-                  <div class="dp-hero-complete-hint" id="authSignupHint">Name, username &amp; birthday unlock your Profile</div>
+                  <div class="dp-hero-complete-hint" id="authSignupHint" data-i18n="common.name_username_birthday_unlock_your_profile">Name, username &amp; birthday unlock your Profile</div>
                 </div>
               </div>
             </div>
 
             <div id="authCanvasCreateFields">
             <section class="auth-canvas-section" aria-labelledby="authSecIdentity">
-              <h3 class="auth-canvas-section-title" id="authSecIdentity">Identity</h3>
+              <h3 class="auth-canvas-section-title" id="authSecIdentity" data-i18n="common.identity">Identity</h3>
               <div class="auth-input-group">
-                <label class="auth-input-label">Account type</label>
-                <div class="auth-type-toggle" id="regProfileTypeRow" role="group" aria-label="Account type">
-                  <button type="button" class="auth-type-pill active" data-profile-type="personal" id="regTypePersonal">Personal</button>
-                  <button type="button" class="auth-type-pill" data-profile-type="professional" id="regTypeProfessional">Professional</button>
+                <label class="auth-input-label" data-i18n="common.account_type">Account type</label>
+                <div class="auth-type-toggle" id="regProfileTypeRow" role="group" aria-label="Account type" data-i18n-aria="common.account_type">
+                  <button type="button" class="auth-type-pill active" data-profile-type="personal" id="regTypePersonal" data-i18n="common.personal">Personal</button>
+                  <button type="button" class="auth-type-pill" data-profile-type="professional" id="regTypeProfessional" data-i18n="common.professional">Professional</button>
                 </div>
-                <div class="auth-input-hint">Personal by default. Want Professional too? Add another account from the switcher later — not another profile under this login.</div>
+                <div class="auth-input-hint" data-i18n="common.personal_by_default_want_professional_too">Personal by default. Want Professional too? Add another account from the switcher later — not another profile under this login.</div>
               </div>
               <div class="auth-input-group">
-                <label class="auth-input-label" for="regName">Full name <span class="auth-required">*</span></label>
-                <input class="auth-input" type="text" id="regName" placeholder="Your real full name" autocomplete="name">
+                <label class="auth-input-label" for="regName"><span data-i18n="common.full_name">Full name</span> <span class="auth-required">*</span></label>
+                <input class="auth-input" type="text" id="regName" placeholder="Your real full name" autocomplete="name" data-i18n-placeholder="common.your_real_full_name">
               </div>
               <div class="auth-input-group">
-                <label class="auth-input-label" for="regUsername">Username <span class="auth-required">*</span></label>
+                <label class="auth-input-label" for="regUsername"><span data-i18n="common.username_2">Username</span> <span class="auth-required">*</span></label>
                 <div class="auth-input-prefix-wrap">
                   <span class="auth-input-prefix" aria-hidden="true">@</span>
                   <input class="auth-input auth-input--prefixed" type="text" id="regUsername" placeholder="your_handle" autocapitalize="none" autocomplete="username" spellcheck="false">
                 </div>
-                <div class="auth-input-hint" id="usernameHint">Letters, numbers, dots, underscores, hyphens · up to 30 · checked live</div>
+                <div class="auth-input-hint" id="usernameHint" data-i18n="common.letters_numbers_dots_underscores_hyphens_u">Letters, numbers, dots, underscores, hyphens · up to 30 · checked live</div>
                 <div class="auth-username-suggestions" id="usernameSuggestions" hidden></div>
               </div>
               <div class="auth-input-group">
-                <label class="auth-input-label" for="regDob">Date of birth <span class="auth-required">*</span></label>
+                <label class="auth-input-label" for="regDob"><span data-i18n="common.date_of_birth">Date of birth</span> <span class="auth-required">*</span></label>
                 <input class="auth-input" type="date" id="regDob">
-                <div class="auth-input-hint">Must be 13+</div>
+                <div class="auth-input-hint" data-i18n="common.must_be_13">Must be 13+</div>
               </div>
               <div class="auth-input-group" id="regGenderGroup">
-                <label class="auth-input-label">Gender <span class="auth-required" id="regGenderRequired">*</span></label>
+                <label class="auth-input-label"><span data-i18n="common.gender">Gender</span> <span class="auth-required" id="regGenderRequired">*</span></label>
                 <div style="display:flex;flex-wrap:wrap;gap:8px;" id="regGenderChips">
-                  <button type="button" class="auth-gender-chip" data-val="Male">Male</button>
-                  <button type="button" class="auth-gender-chip" data-val="Female">Female</button>
-                  <button type="button" class="auth-gender-chip" data-val="Non-binary">Non-binary</button>
-                  <button type="button" class="auth-gender-chip" data-val="Prefer not to say">Prefer not to say</button>
-                  <button type="button" class="auth-gender-chip" data-val="self_describe">Prefer to self-describe</button>
+                  <button type="button" class="auth-gender-chip" data-val="Male" data-i18n="common.male">Male</button>
+                  <button type="button" class="auth-gender-chip" data-val="Female" data-i18n="common.female">Female</button>
+                  <button type="button" class="auth-gender-chip" data-val="Non-binary" data-i18n="common.non_binary">Non-binary</button>
+                  <button type="button" class="auth-gender-chip" data-val="Prefer not to say" data-i18n="common.prefer_not_to_say">Prefer not to say</button>
+                  <button type="button" class="auth-gender-chip" data-val="self_describe" data-i18n="common.prefer_to_self_describe">Prefer to self-describe</button>
                 </div>
-                <input type="text" class="auth-input hidden" id="regGenderCustom" maxlength="40" placeholder="How do you describe your gender?" style="margin-top:8px;" autocomplete="sex">
-                <div class="auth-input-hint" id="regGenderHint">Required for Personal accounts</div>
+                <input type="text" class="auth-input hidden" id="regGenderCustom" maxlength="40" placeholder="How do you describe your gender?" style="margin-top:8px;" autocomplete="sex" data-i18n-placeholder="common.how_do_you_describe_your_gender">
+                <div class="auth-input-hint" id="regGenderHint" data-i18n="common.required_for_personal_accounts">Required for Personal accounts</div>
               </div>
               <!-- Professional optional fields (Growth G4 / 5C) — shown only when type = professional -->
               <div class="auth-pro-fields hidden" id="regProFields">
-                <p class="auth-pro-payoff">Helps professionals find you — both optional, skip anytime.</p>
+                <p class="auth-pro-payoff" data-i18n="common.helps_professionals_find_you_both_optional">Helps professionals find you — both optional, skip anytime.</p>
                 <div class="auth-input-group">
-                  <label class="auth-input-label">Industry</label>
-                  <div class="auth-picklist" id="regIndustryPicklist" role="group" aria-label="Industry"></div>
-                  <input type="text" class="auth-input hidden" id="regIndustryOther" maxlength="80" placeholder="Your industry" style="margin-top:8px;" autocomplete="organization-title">
+                  <label class="auth-input-label" data-i18n="common.industry">Industry</label>
+                  <div class="auth-picklist" id="regIndustryPicklist" role="group" aria-label="Industry" data-i18n-aria="common.industry"></div>
+                  <input type="text" class="auth-input hidden" id="regIndustryOther" maxlength="80" placeholder="Your industry" style="margin-top:8px;" autocomplete="organization-title" data-i18n-placeholder="common.your_industry">
                 </div>
                 <div class="auth-input-group">
-                  <label class="auth-input-label">Purpose on Chaupaal</label>
-                  <div class="auth-picklist" id="regPurposePicklist" role="group" aria-label="Purpose"></div>
-                  <input type="text" class="auth-input hidden" id="regPurposeOther" maxlength="80" placeholder="What are you here for?" style="margin-top:8px;">
+                  <label class="auth-input-label" data-i18n="common.purpose_on_chaupaal">Purpose on Chaupaal</label>
+                  <div class="auth-picklist" id="regPurposePicklist" role="group" aria-label="Purpose" data-i18n-aria="common.purpose"></div>
+                  <input type="text" class="auth-input hidden" id="regPurposeOther" maxlength="80" placeholder="What are you here for?" style="margin-top:8px;" data-i18n-placeholder="common.what_are_you_here_for">
                 </div>
               </div>
             </section>
 
             <section class="auth-canvas-section" aria-labelledby="authSecExtras">
               <details class="auth-optional-details" id="authOptionalDetails">
-                <summary class="auth-optional-summary" id="authSecExtras">Add more (optional)</summary>
-                <p class="auth-canvas-section-sub">City and language — add now or from Profile after you join.</p>
+                <summary class="auth-optional-summary" id="authSecExtras" data-i18n="common.add_more_optional">Add more (optional)</summary>
+                <p class="auth-canvas-section-sub" data-i18n="common.city_and_language_add_now_or">City and language — add now or from Profile after you join.</p>
                 <div class="auth-input-group">
-                  <label class="auth-input-label" for="regCity">Current city</label>
-                  <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru" autocomplete="address-level2">
-                  <div class="auth-input-hint auth-nudge">City → easier to find people nearby.</div>
+                  <label class="auth-input-label" for="regCity" data-i18n="common.current_city">Current city</label>
+                  <input class="auth-input" type="text" id="regCity" placeholder="e.g. Mumbai, Delhi, Bengaluru" autocomplete="address-level2" data-i18n-placeholder="common.e_g_mumbai_delhi_bengaluru">
+                  <div class="auth-input-hint auth-nudge" data-i18n="common.city_easier_to_find_people_nearby">City → easier to find people nearby.</div>
                 </div>
                 <div class="auth-input-group">
-                  <label class="auth-input-label" for="regLanguage">Preferred language</label>
+                  <label class="auth-input-label" for="regLanguage" data-i18n="common.preferred_language">Preferred language</label>
                   <select class="auth-input" id="regLanguage">
-                    <option value="en">English</option>
+                    <option value="en" data-i18n="common.english">English</option>
                   </select>
                 </div>
-                <button type="button" class="auth-guest-btn auth-skip-optionals" id="authSkipOptionals">Skip extras — go to account access →</button>
+                <button type="button" class="auth-guest-btn auth-skip-optionals" id="authSkipOptionals" data-i18n="common.skip_extras_go_to_account_access">Skip extras — go to account access →</button>
               </details>
             </section>
             </div><!-- /#authCanvasCreateFields -->
 
-            <button type="button" class="auth-switch-btn" id="authAlreadyHaveAccount">I already have an account</button>
-            <button type="button" class="auth-guest-btn hidden" id="authCanvasNotYou">Not you? Switch / add account</button>
-            <button type="button" class="auth-guest-btn" id="authCanvasGuest">Explore as guest →</button>
+            <button type="button" class="auth-switch-btn" id="authAlreadyHaveAccount" data-i18n="common.i_already_have_an_account">I already have an account</button>
+            <button type="button" class="auth-guest-btn hidden" id="authCanvasNotYou" data-i18n="common.not_you_switch_add_account">Not you? Switch / add account</button>
+            <button type="button" class="auth-guest-btn" id="authCanvasGuest" data-i18n="common.explore_as_guest">Explore as guest →</button>
 
-            <section class="auth-canvas-section hidden" id="authCanvasLoginHost" aria-label="Log in"></section>
+            <section class="auth-canvas-section hidden" id="authCanvasLoginHost" aria-label="Log in" data-i18n-aria="common.log_in"></section>
 
             <section class="auth-canvas-section auth-creds-section" aria-labelledby="authSecCreds" id="authCredsSection">
-              <h3 class="auth-canvas-section-title" id="authSecCreds">Account access</h3>
-              <p class="auth-canvas-section-sub">Email + password, Google, or phone OTP — any one is enough.</p>
+              <h3 class="auth-canvas-section-title" id="authSecCreds" data-i18n="common.account_access">Account access</h3>
+              <p class="auth-canvas-section-sub" data-i18n="common.email_password_google_or_phone_otp">Email + password, Google, or phone OTP — any one is enough.</p>
               <div class="auth-input-group">
-                <label class="auth-input-label" for="regEmail">Email</label>
-                <input class="auth-input" type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
+                <label class="auth-input-label" for="regEmail" data-i18n="common.email">Email</label>
+                <input class="auth-input" type="email" id="regEmail" placeholder="your@email.com" autocomplete="email" data-i18n-placeholder="common.your_email_com">
               </div>
               <div class="auth-input-group">
-                <label class="auth-input-label" for="regPassword">Password</label>
+                <label class="auth-input-label" for="regPassword" data-i18n="common.password">Password</label>
                 <div class="auth-input-prefix-wrap">
-                  <input class="auth-input" type="password" id="regPassword" placeholder="Min 8 characters" style="padding-inline-end:44px;" autocomplete="new-password">
-                  <button type="button" id="toggleRegPwd" aria-label="Show password" class="auth-pwd-toggle" data-icon="eye" data-icon-size="18"></button>
+                  <input class="auth-input" type="password" id="regPassword" placeholder="Min 8 characters" style="padding-inline-end:44px;" autocomplete="new-password" data-i18n-placeholder="common.min_8_characters">
+                  <button type="button" id="toggleRegPwd" aria-label="Show password" class="auth-pwd-toggle" data-icon="eye" data-icon-size="18" data-i18n-aria="common.show_password"></button>
                 </div>
                 <div class="auth-pwd-strength" id="pwdStrength" style="display:none;">
                   <div class="auth-pwd-bar"><div id="pwdStrengthFill" style="height:100%;border-radius:99px;transition:all .3s;"></div></div>
                   <span id="pwdStrengthLabel" style="font-size:11px;font-weight:700;"></span>
                 </div>
               </div>
-              <div class="auth-divider"><span>or</span></div>
-              <button type="button" class="btn btn--block auth-btn auth-alt-btn" id="regGoogleBtn">Continue with Google</button>
-              <button type="button" class="btn btn--block auth-btn auth-alt-btn" id="regPhoneBtn">Continue with phone OTP</button>
+              <div class="auth-divider"><span data-i18n="common.or">or</span></div>
+              <button type="button" class="btn btn--block auth-btn auth-alt-btn" id="regGoogleBtn" data-i18n="common.continue_with_google">Continue with Google</button>
+              <button type="button" class="btn btn--block auth-btn auth-alt-btn" id="regPhoneBtn" data-i18n="common.continue_with_phone_otp">Continue with phone OTP</button>
               <div id="regPhonePanel" class="hidden auth-phone-panel">
                 <div class="auth-input-group">
-                  <label class="auth-input-label" for="regPhoneOtpInput">Phone (verify with OTP)</label>
-                  <input class="auth-input" type="tel" id="regPhoneOtpInput" placeholder="10-digit mobile" autocomplete="tel" inputmode="tel">
+                  <label class="auth-input-label" for="regPhoneOtpInput" data-i18n="common.phone_verify_with_otp">Phone (verify with OTP)</label>
+                  <input class="auth-input" type="tel" id="regPhoneOtpInput" placeholder="10-digit mobile" autocomplete="tel" inputmode="tel" data-i18n-placeholder="common.10_digit_mobile">
                 </div>
                 <div id="recaptcha-container-reg" class="auth-recaptcha-host"></div>
-                <button type="button" class="btn btn--primary btn--block" id="regPhoneSendOtp" data-default-label="Send OTP">Send OTP</button>
+                <button type="button" class="btn btn--primary btn--block" id="regPhoneSendOtp" data-default-label="Send OTP" data-i18n="common.send_otp">Send OTP</button>
                 <div id="regOtpStatus" class="auth-input-hint" style="min-height:16px;"></div>
                 <div class="auth-input-group" style="margin-top:10px;">
                   <label class="auth-input-label" for="regPhoneOtpCode">OTP</label>
-                  <input class="auth-input auth-otp-input" type="text" id="regPhoneOtpCode" placeholder="6-digit code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*">
+                  <input class="auth-input auth-otp-input" type="text" id="regPhoneOtpCode" placeholder="6-digit code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" pattern="[0-9]*" data-i18n-placeholder="common.6_digit_code">
                 </div>
-                <button type="button" class="btn btn--primary btn--block" id="regPhoneVerifyOtp">Verify phone</button>
-                <button type="button" class="auth-guest-btn hidden" id="regPhoneResendOtp" data-default-label="Resend OTP" style="margin-top:4px;">Resend OTP</button>
-                <div class="auth-input-hint" id="regPhoneVerifiedHint" style="display:none;color:var(--green,#33C481);">Phone verified ✓</div>
+                <button type="button" class="btn btn--primary btn--block" id="regPhoneVerifyOtp" data-i18n="common.verify_phone">Verify phone</button>
+                <button type="button" class="auth-guest-btn hidden" id="regPhoneResendOtp" data-default-label="Resend OTP" style="margin-top:4px;" data-i18n="common.resend_otp">Resend OTP</button>
+                <div class="auth-input-hint" id="regPhoneVerifiedHint" style="display:none;color:var(--green,#33C481);" data-i18n="common.phone_verified">Phone verified ✓</div>
               </div>
             </section>
           </div><!-- /.auth-profile-canvas -->
 
           <div class="auth-error" id="registerError" role="alert"></div>
           <div class="auth-error" id="reg1Error" role="alert" hidden></div>
-          <p class="auth-reg-legal">By creating a Profile you confirm you're 13+ and agree to our <button type="button" class="auth-legal-link" data-legal="terms">Terms</button> &amp; <button type="button" class="auth-legal-link" data-legal="privacy">Privacy Policy</button>.</p>
+          <p class="auth-reg-legal" data-i18n-slots="common.register_legal">By creating a Profile you confirm you're 13+ and agree to our <button type="button" class="auth-legal-link" data-legal="terms" data-i18n-slot="terms" data-i18n="common.terms">Terms</button> &amp; <button type="button" class="auth-legal-link" data-legal="privacy" data-i18n-slot="privacy" data-i18n="common.privacy_policy">Privacy Policy</button>.</p>
           <div class="auth-reg-scroll-spacer" aria-hidden="true"></div>
         </div>
         <div class="auth-form-footer auth-sticky-cta">
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn" type="button">Create my account</button>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="registerBtn" type="button" data-i18n="common.create_my_account">Create my account</button>
         </div>
       </div>
 
@@ -366,9 +366,9 @@
       <div class="auth-form-screen hidden" id="authSuccessScreen">
         <div class="auth-success-body">
           <div class="auth-success-emoji" id="authSuccessEmoji" data-icon="party" data-icon-size="64"></div>
-          <div class="auth-success-title" id="authSuccessTitle">Welcome to Chaupaal!</div>
-          <div class="auth-success-desc" id="authSuccessDesc">Your Profile is ready. One clear next step when you continue.</div>
-          <button class="btn btn--primary btn--block btn--lg auth-btn" id="authSuccessCta" type="button">Continue →</button>
+          <div class="auth-success-title" id="authSuccessTitle" data-i18n="common.welcome_to_chaupaal">Welcome to Chaupaal!</div>
+          <div class="auth-success-desc" id="authSuccessDesc" data-i18n="common.your_profile_is_ready_one_clear">Your Profile is ready. One clear next step when you continue.</div>
+          <button class="btn btn--primary btn--block btn--lg auth-btn" id="authSuccessCta" type="button" data-i18n="common.continue">Continue →</button>
         </div>
       </div>
 
@@ -378,8 +378,8 @@
   <!-- TOP BAR retired (Phase 3) — keep ids for JS hooks; visually hidden -->
   <div class="topbar topbar--retired" id="topbar" hidden aria-hidden="true">
     <div class="streak-pill" id="streakPill" hidden><span id="streakNum">0</span><span id="streakFreezeCount">0</span></div>
-    <button class="icon-btn" id="settingsBtn" aria-label="Settings" hidden data-icon="settings"></button>
-    <button class="profile-btn" id="profileBtn" aria-label="Profile" hidden><span id="profileBtnInner" data-icon="armchair" data-icon-size="18"></span></button>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings" hidden data-icon="settings" data-i18n-aria="common.settings"></button>
+    <button class="profile-btn" id="profileBtn" aria-label="Profile" hidden data-i18n-aria="common.profile"><span id="profileBtnInner" data-icon="armchair" data-icon-size="18"></span></button>
   </div>
 
   <!-- CONTENT AREA -->
@@ -392,16 +392,16 @@
       <!-- Category bar inside Akhbaar -->
       <div class="akhbaar-cat-bar" id="akhbaarCatBar">
         <button class="akhbaar-cat-chip active" data-cat="all"><span data-icon="home" data-icon-size="14"></span> <span data-i18n="akhbaar_all">Khabar</span></button>
-        <button class="akhbaar-cat-chip" data-cat="saathi"><span data-icon="users" data-icon-size="14"></span> Saathi</button>
+        <button class="akhbaar-cat-chip" data-cat="saathi"><span data-icon="users" data-icon-size="14"></span> <span data-i18n="common.saathi">Saathi</span></button>
         <button class="akhbaar-cat-chip" data-cat="GK"><span data-icon="brain" data-icon-size="14"></span> GK</button>
-        <button class="akhbaar-cat-chip" data-cat="Sports"><span data-icon="trophy" data-icon-size="14"></span> Sports</button>
-        <button class="akhbaar-cat-chip" data-cat="Tech"><span data-icon="laptop" data-icon-size="14"></span> Tech</button>
-        <button class="akhbaar-cat-chip" data-cat="Business"><span data-icon="trending-up" data-icon-size="14"></span> Business</button>
-        <button class="akhbaar-cat-chip" data-cat="India"><span data-icon="landmark" data-icon-size="14"></span> India</button>
-        <button class="akhbaar-cat-chip" data-cat="World"><span data-icon="globe" data-icon-size="14"></span> World</button>
-        <button class="akhbaar-cat-chip akhbaar-cat-chip--add" id="akhbaarAddCat" data-cat="add" aria-label="Add category">
+        <button class="akhbaar-cat-chip" data-cat="Sports"><span data-icon="trophy" data-icon-size="14"></span> <span data-i18n="common.sports">Sports</span></button>
+        <button class="akhbaar-cat-chip" data-cat="Tech"><span data-icon="laptop" data-icon-size="14"></span> <span data-i18n="common.tech">Tech</span></button>
+        <button class="akhbaar-cat-chip" data-cat="Business"><span data-icon="trending-up" data-icon-size="14"></span> <span data-i18n="common.business">Business</span></button>
+        <button class="akhbaar-cat-chip" data-cat="India"><span data-icon="landmark" data-icon-size="14"></span> <span data-i18n="common.india">India</span></button>
+        <button class="akhbaar-cat-chip" data-cat="World"><span data-icon="globe" data-icon-size="14"></span> <span data-i18n="common.world">World</span></button>
+        <button class="akhbaar-cat-chip akhbaar-cat-chip--add" id="akhbaarAddCat" data-cat="add" aria-label="Add category" data-i18n-aria="common.shortcut_akhbaar_add_cat">
           <span data-icon="plus" data-icon-size="14" aria-hidden="true"></span>
-          <span>Add category</span>
+          <span data-i18n="common.shortcut_akhbaar_add_cat">Add category</span>
         </button>
       </div>
       <div class="reel-stage" id="reelStage"></div>
@@ -414,27 +414,27 @@
         <div class="duniya-pager" id="duniyaPager">
           <div class="duniya-stories-row" id="duniyaStoriesRow"></div>
           <div class="duniya-feed" id="duniyaFeed"></div>
-          <div class="lehar-feed hidden" id="leharFeed" aria-label="Lehar video feed"></div>
-          <div class="prasidha-feed hidden" id="prasidhaFeed" aria-label="Prasidha trending feed"></div>
+          <div class="lehar-feed hidden" id="leharFeed" aria-label="Lehar video feed" data-i18n-aria="common.lehar_video_feed"></div>
+          <div class="prasidha-feed hidden" id="prasidhaFeed" aria-label="Prasidha trending feed" data-i18n-aria="common.prasidha_trending_feed"></div>
         </div>
       </div>
-      <button type="button" class="duniya-create-fab" id="duniyaPostBtn" aria-label="Create post">＋</button>
+      <button type="button" class="duniya-create-fab" id="duniyaPostBtn" aria-label="Create post" data-i18n-aria="common.shortcut_duniya_post">＋</button>
       <div class="duniya-post-sheet hidden" id="duniyaPostSheet"></div>
       <div class="duniya-post-detail hidden" id="duniyaPostDetail"></div>
     </div>
 
     <div class="tab-panel" id="panel-baithak">
     <!-- Splits tray (Baithak only — Stories live in Duniya) -->
-    <div class="baithak-instants" id="baithakInstants" aria-label="Splits"></div>
+    <div class="baithak-instants" id="baithakInstants" aria-label="Splits" data-i18n-aria="common.splits"></div>
 
     <!-- Search + overflow (below Splits, above list) -->
     <div class="baithak-search-bar-row">
       <div class="baithak-search-wrap search-field">
         <input class="baithak-search search-field-input" id="baithakSearch" placeholder="Search chats…" type="text" data-i18n-placeholder="baithak_search" data-living-ph="baithak_search">
         <button type="button" class="baithak-search-clear-btn search-field-clear" id="baithakSearchClearBtn" aria-label="Clear search" data-i18n-aria="search_clear" hidden>✕</button>
-        <button type="button" class="baithak-search-icon-btn search-field-icon" id="baithakSearchIconBtn" aria-label="Search everywhere" data-icon="search" data-icon-size="16">🔍</button>
+        <button type="button" class="baithak-search-icon-btn search-field-icon" id="baithakSearchIconBtn" aria-label="Search everywhere" data-icon="search" data-icon-size="16" data-i18n-aria="common.search_everywhere">🔍</button>
       </div>
-      <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" data-icon="more-vertical" data-icon-size="22" aria-label="More options" aria-haspopup="menu" title="More">⋮</button>
+      <button type="button" class="baithak-overflow-btn" id="baithakOverflowBtn" data-icon="more-vertical" data-icon-size="22" aria-label="More options" aria-haspopup="menu" title="More" data-i18n-aria="common.more_options" data-i18n-title="common.more">⋮</button>
     </div>
 
     <!-- Friend requests (inbox strip) -->
@@ -473,7 +473,7 @@
           <span class="vriksha-global-search-label" data-i18n="vriksha_search_ph">Search all of Chaupaal</span>
         </button>
         <p class="vriksha-global-search-hint" data-i18n="vriksha_search_hint">Find posts, discussions, groups, games, or anyone by name or @handle. Looking to meet someone new? Use Khoj.</p>
-        <div class="vriksha-picks hidden" id="vrikshaPicks" aria-label="People you might befriend">
+        <div class="vriksha-picks hidden" id="vrikshaPicks" aria-label="People you might befriend" data-i18n-aria="common.people_you_might_befriend">
           <div class="vriksha-picks-head">
             <span class="vriksha-picks-title" data-i18n="vriksha_picks_title">People you might befriend</span>
             <button type="button" class="vriksha-picks-more" id="vrikshaPicksMore" data-i18n="vriksha_picks_more">More on Khoj</button>
@@ -484,20 +484,20 @@
       <!-- Intent card (Vriksha) — discussions only; people Find lives on Khoj (K0/K3) -->
       <div class="peepal-card peepal-intent-card" id="peepalIntentCard" data-nav-ignore="1">
         <div class="peepal-intent-card-head">
-          <div class="peepal-intent-card-title" data-i18n="peepal_discuss_label">Start a discussion</div>
-          <div class="peepal-intent-mini-icons peepal-intent-chips" id="peepalSearchNudges" data-swipe-ignore role="toolbar" aria-label="Discussion topics">
-            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Sports" data-hint="What do you think about cricket this week?" data-tint="#2E7D32" title="Sports" aria-label="Sports"><span data-icon="gamepad" data-icon-size="14"></span></button>
-            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Tech" data-hint="What's the most useful tech tip you've learned lately?" data-tint="#1565C0" title="Tech" aria-label="Tech"><span data-icon="rocket" data-icon-size="14"></span></button>
-            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Food" data-hint="Best food discovery in your city recently?" data-tint="#EF6C00" title="Food" aria-label="Food"><span data-icon="home" data-icon-size="14"></span></button>
-            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Travel" data-hint="Where should someone go for a short weekend trip?" data-tint="#00897B" title="Travel" aria-label="Travel"><span data-icon="plane" data-icon-size="14"></span></button>
-            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Music" data-hint="What song is stuck in your head this week?" data-tint="#AD1457" title="Music" aria-label="Music"><span data-icon="music" data-icon-size="14"></span></button>
-            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Work" data-hint="What's one work habit that actually helped you?" data-tint="#5E35B1" title="Work" aria-label="Work"><span data-icon="briefcase" data-icon-size="14"></span></button>
+          <div class="peepal-intent-card-title" data-i18n="common.peepal_discuss_label">Start a discussion</div>
+          <div class="peepal-intent-mini-icons peepal-intent-chips" id="peepalSearchNudges" data-swipe-ignore role="toolbar" aria-label="Discussion topics" data-i18n-aria="common.discussion_topics">
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Sports" data-hint="What do you think about cricket this week?" data-tint="#2E7D32" title="Sports" aria-label="Sports" data-i18n-title="common.sports" data-i18n-aria="common.sports"><span data-icon="gamepad" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Tech" data-hint="What's the most useful tech tip you've learned lately?" data-tint="#1565C0" title="Tech" aria-label="Tech" data-i18n-title="common.tech" data-i18n-aria="common.tech"><span data-icon="rocket" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Food" data-hint="Best food discovery in your city recently?" data-tint="#EF6C00" title="Food" aria-label="Food" data-i18n-title="common.food" data-i18n-aria="common.food"><span data-icon="home" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Travel" data-hint="Where should someone go for a short weekend trip?" data-tint="#00897B" title="Travel" aria-label="Travel" data-i18n-title="common.travel" data-i18n-aria="common.travel"><span data-icon="plane" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Music" data-hint="What song is stuck in your head this week?" data-tint="#AD1457" title="Music" aria-label="Music" data-i18n-title="common.music" data-i18n-aria="common.music"><span data-icon="music" data-icon-size="14"></span></button>
+            <button type="button" class="peepal-nudge-chip peepal-nudge-chip--mini" data-discuss-topic="Work" data-hint="What's one work habit that actually helped you?" data-tint="#5E35B1" title="Work" aria-label="Work" data-i18n-title="common.work" data-i18n-aria="common.work"><span data-icon="briefcase" data-icon-size="14"></span></button>
           </div>
         </div>
-        <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" rows="2" placeholder="What's on your mind to discuss?" data-i18n-placeholder="peepal_discuss_ph" data-living-ph="peepal_discuss"></textarea>
-        <div class="peepal-intent-actions" role="group" aria-label="Peepal actions">
-          <button type="button" class="peepal-ai-search-btn peepal-intent-act peepal-intent-act--primary peepal-intent-act--discuss" id="peepalIntentDiscuss" title="Start discussion"><span data-icon="message-circle" data-icon-size="16" style="margin-inline-end:4px;"></span> <span data-i18n="peepal_discuss">Discuss</span></button>
-          <button type="button" class="peepal-intent-act" id="peepalAiSearchGo" title="Find people on Khoj"><span data-icon="search" data-icon-size="15"></span><span data-i18n="peepal_find_btn">Find on Khoj</span></button>
+        <textarea class="peepal-ai-search-input" id="peepalAiSearchInput" rows="2" placeholder="What's on your mind to discuss?" data-i18n-placeholder="common.peepal_discuss_ph" data-living-ph="peepal_discuss"></textarea>
+        <div class="peepal-intent-actions" role="group" aria-label="Peepal actions" data-i18n-aria="common.peepal_actions">
+          <button type="button" class="peepal-ai-search-btn peepal-intent-act peepal-intent-act--primary peepal-intent-act--discuss" id="peepalIntentDiscuss" title="Start discussion" data-i18n-title="common.shortcut_peepal_ask"><span data-icon="message-circle" data-icon-size="16" style="margin-inline-end:4px;"></span> <span data-i18n="common.peepal_discuss_btn">Discuss</span></button>
+          <button type="button" class="peepal-intent-act" id="peepalAiSearchGo" title="Find people on Khoj" data-i18n-title="common.find_people_on_khoj"><span data-icon="search" data-icon-size="15"></span><span data-i18n="peepal_find_btn">Find on Khoj</span></button>
         </div>
         <div id="peepalCompatPeeks" class="peepal-compat-peeks hidden" aria-hidden="true"></div>
         <div id="peepalAiSearchResults" class="peepal-intent-results hidden" aria-hidden="true"></div>
@@ -510,7 +510,7 @@
     </div>
     <div class="peepal-ask-sheet hidden" id="peepalAskSheet"></div>
     <div class="peepal-detail hidden" id="peepalDetail"></div>
-    <div class="social-comments-sheet hidden" id="peepalCommentsSheet" data-surface="peepal" role="dialog" aria-label="Comments"></div>
+    <div class="social-comments-sheet hidden" id="peepalCommentsSheet" data-surface="peepal" role="dialog" aria-label="Comments" data-i18n-aria="common.comment_sheet_title"></div>
   </div>
 
   </div><!-- end content-area -->
@@ -547,7 +547,7 @@
   </div>
 
   <!-- BOTTOM TABS / SIDEBAR -->
-  <div class="bottom-tabs" role="tablist" aria-label="Main">
+  <div class="bottom-tabs" role="tablist" aria-label="Main" data-i18n-aria="common.main">
     <!-- Sidebar logo (desktop only) -->
     <div class="sidebar-logo">
       <div class="sidebar-logo-brand">
@@ -587,7 +587,7 @@
       <div class="profile-btn" style="width:32px;height:32px;font-size:14px;flex-shrink:0;">
         <span id="sidebarProfileIcon" data-icon="armchair" data-icon-size="16"></span>
       </div>
-      <div class="sidebar-profile-name" id="sidebarProfileName">Sign in</div>
+      <div class="sidebar-profile-name" id="sidebarProfileName" data-i18n="common.sign_in">Sign in</div>
       <span style="color:var(--muted);font-size:12px;" data-icon="settings" data-icon-size="14"></span>
     </div>
   </div>
@@ -600,13 +600,13 @@
     <div class="modal settings-modal">
       <div class="modal-header">
         <div class="modal-title" data-i18n="settings_title">Settings</div>
-        <button class="icon-btn" id="closeSettings" aria-label="Close" data-icon="x"></button>
+        <button class="icon-btn" id="closeSettings" aria-label="Close" data-icon="x" data-i18n-aria="common.close"></button>
       </div>
 
       <details class="settings-cat" open>
         <summary class="settings-cat-summary" data-i18n="settings_display">Display</summary>
         <div class="settings-cat-body">
-          <div class="display-mode-group" id="displayModeGroup" role="radiogroup" aria-label="Display mode">
+          <div class="display-mode-group" id="displayModeGroup" role="radiogroup" aria-label="Display mode" data-i18n-aria="common.display_mode">
             <label class="display-mode-option">
               <input type="radio" name="displayMode" value="auto" id="displayModeAuto" checked>
               <span>
@@ -652,13 +652,13 @@
             </div>
             <label class="switch"><input type="checkbox" id="toggleHideModeHints"><span class="slider"></span></label>
           </div>
-          <div class="settings-link-row" id="pwaInstallSettingsRow" role="group" aria-label="Install Chaupaal">
+          <div class="settings-link-row" id="pwaInstallSettingsRow" role="group" aria-label="Install Chaupaal" data-i18n-aria="common.install_chaupaal">
             <span class="settings-link-icon" aria-hidden="true"><span data-icon="home" data-icon-size="18"></span></span>
             <span class="settings-link-text">
-              <strong id="pwaInstallSettingsLabel">Install Chaupaal</strong>
-              <small id="pwaInstallSettingsDesc">Faster open, full screen — optional</small>
+              <strong id="pwaInstallSettingsLabel" data-i18n="common.install_chaupaal">Install Chaupaal</strong>
+              <small id="pwaInstallSettingsDesc" data-i18n="common.faster_open_full_screen_optional">Faster open, full screen — optional</small>
             </span>
-            <button type="button" class="btn btn--ghost btn--sm" id="pwaInstallSettingsBtn" style="flex-shrink:0;">Install</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="pwaInstallSettingsBtn" style="flex-shrink:0;" data-i18n="common.install">Install</button>
           </div>
         </div>
       </details>
@@ -671,7 +671,7 @@
             <span class="settings-link-icon" aria-hidden="true">🌐</span>
             <span class="settings-link-text">
               <strong data-i18n="settings.app_language">App language</strong>
-              <small id="langPickerValue">English</small>
+              <small id="langPickerValue" data-i18n="common.english">English</small>
             </span>
             <span class="settings-link-chevron" aria-hidden="true">›</span>
           </button>
@@ -679,7 +679,7 @@
             <span class="settings-link-icon" aria-hidden="true">📖</span>
             <span class="settings-link-text">
               <strong data-i18n="settings.content_langs">Languages I read</strong>
-              <small id="contentLangsValue">English</small>
+              <small id="contentLangsValue" data-i18n="common.english">English</small>
             </span>
             <span class="settings-link-chevron" aria-hidden="true">›</span>
           </button>
@@ -713,7 +713,7 @@
         <div class="settings-cat-body">
           <p class="toggle-desc" style="margin:0 0 8px;" data-i18n="settings_voice_desc">Voice used for Listen to post</p>
           <select class="modal-select" id="voiceSelect"></select>
-          <button type="button" class="btn btn--ghost btn--sm" id="voicePreviewBtn" style="margin-top:8px;">Preview</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="voicePreviewBtn" style="margin-top:8px;" data-i18n="common.preview">Preview</button>
         </div>
       </details>
 
@@ -753,8 +753,8 @@
             </div>
             <div class="toggle-row">
               <div>
-                <div class="toggle-label" data-i18n="notif_tips_label">Tips &amp; reminders</div>
-                <div class="toggle-desc" data-i18n="notif_tips_desc">Honest day-1–7 reminders and soft tab tips. Never fake social proof.</div>
+                <div class="toggle-label" data-i18n="notifications.tips_label">Tips &amp; reminders</div>
+                <div class="toggle-desc" data-i18n="notifications.tips_desc">Honest day-1–7 reminders and soft tab tips. Never fake social proof.</div>
               </div>
               <label class="switch"><input type="checkbox" id="notifTips" checked><span class="slider"></span></label>
             </div>
@@ -763,7 +763,7 @@
       </details>
 
       <details class="settings-cat">
-        <summary class="settings-cat-summary">Privacy &amp; account</summary>
+        <summary class="settings-cat-summary" data-i18n="common.privacy_account">Privacy &amp; account</summary>
         <div class="settings-cat-body">
           <div class="toggle-row">
             <div>
@@ -774,16 +774,16 @@
           </div>
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Personalization &amp; activity</div>
-              <div class="toggle-desc">On by default. Helps improve feed, games, and discovery. Turn off to stop collecting behavioral activity (not just stop using it). Search text and messages are never stored in this log. <button type="button" class="settings-inline-link" id="openCollectsFromToggleBtn">What we collect</button></div>
+              <div class="toggle-label" data-i18n="common.personalization_activity">Personalization &amp; activity</div>
+              <div class="toggle-desc"><span data-i18n="common.on_by_default_helps_improve_feed">On by default. Helps improve feed, games, and discovery. Turn off to stop collecting behavioral activity (not just stop using it). Search text and messages are never stored in this log.</span> <button type="button" class="settings-inline-link" id="openCollectsFromToggleBtn" data-i18n="common.what_we_collect">What we collect</button></div>
             </div>
             <label class="switch"><input type="checkbox" id="toggleActivitySignals" checked><span class="slider"></span></label>
           </div>
-          <button type="button" class="settings-link-row" id="openCollectsDisclosureBtn" aria-label="What Chaupaal collects">
+          <button type="button" class="settings-link-row" id="openCollectsDisclosureBtn" aria-label="What Chaupaal collects" data-i18n-aria="common.what_chaupaal_collects">
             <span class="settings-link-icon" aria-hidden="true"><span data-icon="shield" data-icon-size="18"></span></span>
             <span class="settings-link-text">
-              <strong>What Chaupaal collects</strong>
-              <small>Profile, activity signals, hashed search — and your choices</small>
+              <strong data-i18n="common.what_chaupaal_collects">What Chaupaal collects</strong>
+              <small data-i18n="common.profile_activity_signals_hashed_search_and">Profile, activity signals, hashed search — and your choices</small>
             </span>
             <span class="settings-link-chevron" aria-hidden="true">›</span>
           </button>
@@ -794,7 +794,7 @@
             </div>
             <label class="switch"><input type="checkbox" id="toggleAkhbaarAppearInFriends" checked><span class="slider"></span></label>
           </div>
-          <button type="button" class="settings-link-row" id="openExclusionListBtn" aria-label="Exclusion list">
+          <button type="button" class="settings-link-row" id="openExclusionListBtn" aria-label="Exclusion list" data-i18n-aria="common.exclusion_list">
             <span class="settings-link-icon" aria-hidden="true"><span data-icon="user-minus" data-icon-size="18"></span></span>
             <span class="settings-link-text">
               <strong data-i18n="exclusion_list_label">Exclusion list</strong>
@@ -813,44 +813,44 @@
           </div>
           <div class="toggle-row" style="flex-wrap:wrap;gap:10px;margin-top:8px;">
             <div style="flex:1;min-width:0;">
-              <div class="toggle-label">Open to meeting new people</div>
-              <div class="toggle-desc">Show in Peepal discovery &amp; AI search</div>
+              <div class="toggle-label" data-i18n="common.open_to_meeting_new_people">Open to meeting new people</div>
+              <div class="toggle-desc" data-i18n="common.show_in_peepal_discovery_ai_search">Show in Peepal discovery &amp; AI search</div>
             </div>
             <select id="toggleOpenToMeet" style="padding:8px 12px;border:2px solid var(--line);border-radius:10px;font-size:13px;font-weight:700;background:var(--white);color:var(--ink);cursor:pointer;">
-              <option value="off">Off</option>
-              <option value="on" selected>On</option>
+              <option value="off" data-i18n="settings.off">Off</option>
+              <option value="on" selected data-i18n="settings.on">On</option>
             </select>
           </div>
           <div id="strangerLimitRow" style="padding:10px 0;border-bottom:1px solid var(--line);">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
               <div>
-                <div class="toggle-label">Max strangers per day</div>
-                <div class="toggle-desc">Limit new people messaging you daily</div>
+                <div class="toggle-label" data-i18n="common.max_strangers_per_day">Max strangers per day</div>
+                <div class="toggle-desc" data-i18n="common.limit_new_people_messaging_you_daily">Limit new people messaging you daily</div>
               </div>
               <span style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;color:var(--red);" id="strangerLimitDisplay">10</span>
             </div>
             <input type="range" id="strangerLimitSlider" min="0" max="10" value="10" style="width:100%;accent-color:var(--red);">
           </div>
-          <div class="settings-section" style="margin-top:12px;">Account type</div>
+          <div class="settings-section" style="margin-top:12px;" data-i18n="common.account_type">Account type</div>
           <div id="settingsProfileTypeHost" style="margin-bottom:12px;"></div>
-          <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;"><span data-icon="monitor" data-icon-size="16"></span> Devices &amp; sessions</button>
-          <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsArchiveBtn" style="width:100%;margin-bottom:4px;"><span data-icon="archive" data-icon-size="16"></span> Open Archive</button>
-          <button type="button" class="btn btn--block modal-btn" id="settingsExportDataBtn" style="width:100%;margin-bottom:4px;">Download my data</button>
-          <button type="button" class="btn btn--block modal-btn" id="settingsDeleteAccountBtn" style="width:100%;margin-bottom:4px;color:var(--red);">Delete account…</button>
-          <p class="toggle-desc" style="margin:4px 0 0;">Export is a JSON file of your profile, journal, posts, and activity. Deletion signs you out and schedules purge (~30 days).</p>
+          <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsSessionsBtn" style="width:100%;margin-bottom:8px;"><span data-icon="monitor" data-icon-size="16"></span> <span data-i18n="common.devices_sessions">Devices &amp; sessions</span></button>
+          <button type="button" class="btn btn--primary btn--block modal-btn" id="settingsArchiveBtn" style="width:100%;margin-bottom:4px;"><span data-icon="archive" data-icon-size="16"></span> <span data-i18n="common.open_archive">Open Archive</span></button>
+          <button type="button" class="btn btn--block modal-btn" id="settingsExportDataBtn" style="width:100%;margin-bottom:4px;" data-i18n="common.download_my_data">Download my data</button>
+          <button type="button" class="btn btn--block modal-btn" id="settingsDeleteAccountBtn" style="width:100%;margin-bottom:4px;color:var(--red);" data-i18n="common.delete_account">Delete account…</button>
+          <p class="toggle-desc" style="margin:4px 0 0;" data-i18n="common.export_is_a_json_file_of">Export is a JSON file of your profile, journal, posts, and activity. Deletion signs you out and schedules purge (~30 days).</p>
         </div>
       </details>
 
       <details class="settings-cat" id="settingsSafetySection">
-        <summary class="settings-cat-summary">Safety · Blocked &amp; reported</summary>
+        <summary class="settings-cat-summary" data-i18n="common.safety_blocked_reported">Safety · Blocked &amp; reported</summary>
         <div class="settings-cat-body">
-          <p class="toggle-desc" style="margin:0 0 10px;">Private to you — people you blocked or reported. Unblock / remove report asks for a short reason.</p>
+          <p class="toggle-desc" style="margin:0 0 10px;" data-i18n="common.private_to_you_people_you_blocked">Private to you — people you blocked or reported. Unblock / remove report asks for a short reason.</p>
           <details class="settings-safety-group" id="settingsBlockedDetails" open>
-            <summary class="settings-safety-summary">Blocked <span class="settings-safety-count" id="settingsBlockedCount">0</span></summary>
+            <summary class="settings-safety-summary"><span data-i18n="common.blocked">Blocked</span> <span class="settings-safety-count" id="settingsBlockedCount">0</span></summary>
             <div id="settingsBlockedList" class="settings-safety-list"></div>
           </details>
           <details class="settings-safety-group" id="settingsReportedDetails">
-            <summary class="settings-safety-summary">Reported <span class="settings-safety-count" id="settingsReportedCount">0</span></summary>
+            <summary class="settings-safety-summary"><span data-i18n="common.reported">Reported</span> <span class="settings-safety-count" id="settingsReportedCount">0</span></summary>
             <div id="settingsReportedList" class="settings-safety-list"></div>
           </details>
         </div>
@@ -864,8 +864,8 @@
   <div class="modal-backdrop hidden" id="profileModal">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title">Profile</div>
-        <button class="icon-btn" id="closeProfile" aria-label="Close" data-icon="x"></button>
+        <div class="modal-title" data-i18n="common.profile">Profile</div>
+        <button class="icon-btn" id="closeProfile" aria-label="Close" data-icon="x" data-i18n-aria="common.close"></button>
       </div>
       <div id="profileContent"></div>
     </div>
@@ -875,9 +875,9 @@
   <div class="modal-backdrop hidden" id="notifModal">
     <div class="modal" style="max-height:80vh;">
       <div class="modal-header">
-        <div class="modal-title"><span data-icon="bell" data-icon-size="18"></span> Notifications</div>
-        <button type="button" class="notif-mark-all" id="notifMarkAll">Mark all read</button>
-        <button class="icon-btn" id="closeNotif" aria-label="Close" data-icon="x"></button>
+        <div class="modal-title"><span data-icon="bell" data-icon-size="18"></span> <span data-i18n="common.notifications">Notifications</span></div>
+        <button type="button" class="notif-mark-all" id="notifMarkAll" data-i18n="common.mark_all_read">Mark all read</button>
+        <button class="icon-btn" id="closeNotif" aria-label="Close" data-icon="x" data-i18n-aria="common.close"></button>
       </div>
       <div id="notifList"></div>
     </div>
@@ -895,102 +895,110 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
-  <script src="/src/js/config/firebase.js?v=ba98f667"></script>
+  <script src="/src/js/config/firebase.js?v=e6a59b69"></script>
   <script src="/src/js/config/app-check.js?v=c74ed63b"></script>
   <script src="/src/js/core/environment.js?v=0cfc62f2"></script>
+  <!-- i18n first: every script may call t() while it loads -->
+  <script src="/src/i18n/en.js?v=ba2a04d8"></script>
+  <script src="/src/i18n/legacy-keys.js?v=56133b74"></script>
+  <script src="/src/js/core/i18n.js?v=5dbd60d8"></script>
+  <script src="/src/js/core/region.js?v=aa214603"></script>
+  <script src="/src/js/core/i18n-format.js?v=e2ae5927"></script>
+  <script src="/src/js/core/i18n-layout.js?v=12234a9c"></script>
+  <script src="/src/js/core/lang-picker.js?v=f62547a6"></script>
   <script src="/src/js/core/storage.js?v=0fb0e244"></script>
   <script src="/src/js/core/icons.js?v=070b3725"></script>
   <script src="/src/js/core/tab-elements.js?v=f8553578"></script>
   <script src="/src/js/core/tab-habits.js?v=0de1173f"></script>
   <script src="/src/js/config/policy-limits.js?v=ff5a8f29"></script>
   <script src="/src/js/core/subscription-gate.js?v=1cfb3e61"></script>
-  <script src="/src/js/core/chaupaal-money.js?v=47cfd340"></script>
+  <script src="/src/js/core/chaupaal-money.js?v=fc91966b"></script>
   <script src="/src/js/core/users-public.js?v=18027709"></script>
-  <script src="/src/js/core/referrals.js?v=7f87aaa8"></script>
+  <script src="/src/js/core/referrals.js?v=83137771"></script>
   <script src="/src/js/core/chaupaal-avatar.js?v=7fb4ec82"></script>
   <script src="/src/js/core/policy-usage.js?v=7dfb04fc"></script>
   <script src="/src/js/core/ai-discovery-meter.js?v=17bfa8ae"></script>
   <script src="/src/js/core/api-client.js?v=f8c6b38e"></script>
   <script src="/src/js/core/analytics.js?v=f5e1c409"></script>
   <script src="/src/js/core/signal-spine.js?v=facce1f1"></script>
-  <script src="/src/js/core/runtime-guard.js?v=ead1d56d"></script>
+  <script src="/src/js/core/runtime-guard.js?v=4dfaf80e"></script>
   <script src="/src/js/data/samples.js?v=0abc920f"></script>
   <script src="/src/js/data/akhbaar-bank.js?v=e8c7e2d1"></script>
-  <script src="/src/js/core/state.js?v=71f5300b"></script>
-  <script src="/src/js/core/ui-states.js?v=1c0f2a2d"></script>
-  <script src="/src/js/core/firestore-page.js?v=3d7e5828"></script>
-  <script src="/src/js/core/drafts.js?v=e672a449"></script>
-  <script src="/src/js/core/soft-delete.js?v=af9bbc9a"></script>
-  <script src="/src/js/core/account-privacy.js?v=470c982c"></script>
+  <script src="/src/js/core/state.js?v=13b9a164"></script>
+  <script src="/src/js/core/ui-states.js?v=e29739fd"></script>
+  <script src="/src/js/core/firestore-page.js?v=eadcbc42"></script>
+  <script src="/src/js/core/drafts.js?v=7e13515d"></script>
+  <script src="/src/js/core/soft-delete.js?v=47bf1b9a"></script>
+  <script src="/src/js/core/account-privacy.js?v=ad96dafc"></script>
   <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
   <script src="/src/js/core/comment-ranking.js?v=635f86ba"></script>
   <script src="/src/js/core/comment-msg-cache.js?v=fd3cbb34"></script>
   <script src="/src/js/core/comments.js?v=0586fe6b"></script>
   <script src="/src/js/core/social-persistence.js?v=fe6b8611"></script>
-  <script src="/src/js/core/open-user-profile.js?v=659fab22"></script>
-  <script src="/src/js/core/relationships.js?v=6219dab2"></script>
+  <script src="/src/js/core/open-user-profile.js?v=dbeddfc7"></script>
+  <script src="/src/js/core/relationships.js?v=291f165d"></script>
   <script src="/src/js/core/chat-presence.js?v=7176596d"></script>
   <script src="/src/js/core/image-pipeline.js?v=11f45e2b"></script>
-  <script src="/src/js/core/profile-taxonomy.js?v=895cf6ff"></script>
-  <script src="/src/js/core/profile-completion.js?v=e59c011c"></script>
-  <script src="/src/js/core/profile-facts.js?v=1c4f09d0"></script>
-  <script src="/src/js/core/profile-rewards.js?v=8b86da5f"></script>
-  <script src="/src/js/core/profile-digital-layout.js?v=614b1166"></script>
-  <script src="/src/js/core/profile-sections.js?v=f1c1b208"></script>
-  <script src="/src/js/core/icebreakers.js?v=e5a2c7c6"></script>
-  <script src="/src/js/core/profile-prompts.js?v=57b49dba"></script>
+  <script src="/src/js/core/profile-taxonomy.js?v=44c450a9"></script>
+  <script src="/src/js/core/profile-completion.js?v=95a2029c"></script>
+  <script src="/src/js/core/profile-facts.js?v=c3792d54"></script>
+  <script src="/src/js/core/profile-rewards.js?v=e9405dd3"></script>
+  <script src="/src/js/core/profile-digital-layout.js?v=dac039f1"></script>
+  <script src="/src/js/core/profile-sections.js?v=4911ebf3"></script>
+  <script src="/src/js/core/icebreakers.js?v=c487b364"></script>
+  <script src="/src/js/core/profile-prompts.js?v=bdfe5e15"></script>
   <script src="/src/js/core/chaupaal-activity.js?v=f96f41fc"></script>
   <script src="/src/js/core/baithak-wish.js?v=71c5d1d3"></script>
-  <script src="/src/js/core/chaupaal-events.js?v=f95be6a5"></script>
+  <script src="/src/js/core/chaupaal-events.js?v=a447de88"></script>
   <script src="/src/js/core/chaupaal-founder.js?v=e67baef2"></script>
-  <script src="/src/js/core/profile-type.js?v=22610faa"></script>
+  <script src="/src/js/core/profile-type.js?v=a6eca552"></script>
   <script src="/src/js/core/profile-type-enrich.js?v=c6cc06cf"></script>
   <script src="/src/js/core/swipe-pager.js?v=17d37354"></script>
   <script src="/src/js/core/section-swipe.js?v=ff382588"></script>
-  <script src="/src/js/core/section-modes.js?v=503be35b"></script>
-  <script src="/src/js/core/first-run.js?v=caf6ac10"></script>
-  <script src="/src/js/core/contacts-find.js?v=ce5b9fce"></script>
-  <script src="/src/js/core/teen-mode.js?v=fba4d750"></script>
-  <script src="/src/js/core/professional-badge.js?v=390dbc9d"></script>
-  <script src="/src/js/core/linkify.js?v=6dde463f"></script>
-  <script src="/src/js/core/profile-highlights.js?v=4eb71329"></script>
-  <script src="/src/js/core/profile-shell.js?v=1d5342b7"></script>
-  <script src="/src/js/core/profile-section-mount.js?v=de3d0388"></script>
-  <script src="/src/js/core/push-prefs.js?v=9771b318"></script>
-  <script src="/src/js/core/notification-panel.js?v=91d2a229"></script>
+  <script src="/src/js/core/section-modes.js?v=d05f2ea9"></script>
+  <script src="/src/js/core/first-run.js?v=d88daf8d"></script>
+  <script src="/src/js/core/contacts-find.js?v=35f30346"></script>
+  <script src="/src/js/core/teen-mode.js?v=0a05ff28"></script>
+  <script src="/src/js/core/professional-badge.js?v=10f20988"></script>
+  <script src="/src/js/core/linkify.js?v=f4204c42"></script>
+  <script src="/src/js/core/profile-highlights.js?v=d79c23be"></script>
+  <script src="/src/js/core/profile-shell.js?v=95c78629"></script>
+  <script src="/src/js/core/profile-section-mount.js?v=b206ab93"></script>
+  <script src="/src/js/core/push-prefs.js?v=810f4d37"></script>
+  <script src="/src/js/core/notification-panel.js?v=6375b3a2"></script>
   <script src="/src/js/core/fcm-client.js?v=dc39a6ec"></script>
   <script src="/src/js/core/micro.js?v=014dea03"></script>
-  <script src="/src/js/core/tab-gestures.js?v=a9495f3a"></script>
-  <script src="/src/js/core/tab-nudges.js?v=698b3b73"></script>
-  <script src="/src/js/core/sessions.js?v=23774dbd"></script>
-  <script src="/src/js/core/safety.js?v=0fd5366d"></script>
-  <script src="/src/js/core/notif-prefs.js?v=5a75fab2"></script>
+  <script src="/src/js/core/tab-gestures.js?v=0449d40d"></script>
+  <script src="/src/js/core/tab-nudges.js?v=91d8db0d"></script>
+  <script src="/src/js/core/sessions.js?v=261e92a6"></script>
+  <script src="/src/js/core/safety.js?v=c187e9d2"></script>
+  <script src="/src/js/core/notif-prefs.js?v=83c75b14"></script>
   <script src="/src/js/core/feature-flags.js?v=8727f107"></script>
   <script src="/src/js/core/theme-engine.js?v=1a9d9d08"></script>
   <script src="/src/js/core/ambient-sound.js?v=d6b818ff"></script>
   <script src="/src/js/core/overlay-scope.js?v=d87191d4"></script>
-  <script src="/src/js/core/a11y.js?v=c13f075d"></script>
+  <script src="/src/js/core/a11y.js?v=7598098b"></script>
   <script src="/src/js/core/nav-stack.js?v=e290f245"></script>
   <script src="/src/js/core/half-sheet.js?v=f0391e52"></script>
-  <script src="/src/js/core/journal-checkin.js?v=f55ae51e"></script>
+  <script src="/src/js/core/journal-checkin.js?v=e1b7bd13"></script>
   <script src="/src/js/core/media-player.js?v=e0c45cdc"></script>
   <script src="/src/js/features/location-share.js?v=07b67a9e"></script>
-  <script src="/src/js/core/touch.js?v=1044ebec"></script>
+  <script src="/src/js/core/touch.js?v=576e9c82"></script>
   <script src="/src/js/ai/ai-config.js?v=b15d85db"></script>
   <script src="/src/js/ai/markdown.js?v=32d3b778"></script>
   <script src="/src/js/ai/call-ai.js?v=492d379f"></script>
   <script src="/src/js/ai/anthropic.js?v=ee230737"></script>
-  <script src="/src/js/core/search-field.js?v=e7a7bb84"></script>
-  <script src="/src/js/core/search.js?v=83569650"></script>
-  <script src="/src/js/core/deeplinks.js?v=2e3d5e42"></script>
+  <script src="/src/js/core/search-field.js?v=6e8ce6ce"></script>
+  <script src="/src/js/core/search.js?v=a1671d1a"></script>
+  <script src="/src/js/core/deeplinks.js?v=b1b252e4"></script>
   <script src="/src/js/core/rate-limit-client.js?v=2696fc7d"></script>
   <script src="/src/js/core/theme.js?v=612dd3bb"></script>
   <script src="/src/js/core/discovery-core.js?v=835c9b00"></script>
-  <script src="/src/js/core/profile-btn.js?v=dd9c3b92"></script>
+  <script src="/src/js/core/profile-btn.js?v=a206069a"></script>
   <script src="/src/js/core/username.js?v=47b3509e"></script>
-  <script src="/src/js/auth/auth-ui.js?v=f798ebfd"></script>
-  <script src="/src/js/auth/phone-otp.js?v=3315dcd2"></script>
-  <script src="/src/js/auth/auth-profiles.js?v=8052275c"></script>
+  <script src="/src/js/auth/auth-ui.js?v=43ac8d4d"></script>
+  <script src="/src/js/auth/phone-otp.js?v=4e876241"></script>
+  <script src="/src/js/auth/auth-profiles.js?v=63ee5d12"></script>
   <script src="/src/js/features/akhbaar.js?v=3fd5b6a5"></script>
   <script src="/src/js/features/dangal.js?v=da04d163"></script>
   <script src="/src/js/features/dangal-ratings.js?v=6c128672"></script>
@@ -1009,32 +1017,31 @@
   <script src="/src/js/features/baithak-chat.js?v=70dbb7f6"></script>
   <script src="/src/js/features/mehfil-effects.js?v=ebcbad3d"></script>
   <script src="/src/js/features/mehfil.js?v=9735e913"></script>
-  <script src="/src/js/features/chaupaal-hub.js?v=42b27281"></script>
-  <script src="/src/js/features/chaupaal-ai-profile.js?v=2f0be885"></script>
+  <script src="/src/js/features/chaupaal-hub.js?v=1dab5340"></script>
+  <script src="/src/js/features/chaupaal-ai-profile.js?v=e8e34625"></script>
   <script src="/src/js/features/music-card.js?v=bd7663dd"></script>
   <script src="/src/js/features/music-taste.js?v=6b45b133"></script>
   <script src="/src/js/features/music-hub.js?v=86b5c5f2"></script>
   <script src="/src/js/features/group-info.js?v=b0971056"></script>
   <script src="/src/js/core/stories.js?v=5c08de73"></script>
-  <script src="/src/js/core/archive-hub.js?v=43ebffc6"></script>
-  <script src="/src/js/core/journal-anim.js?v=f2658ae2"></script>
+  <script src="/src/js/core/archive-hub.js?v=c2cdaea0"></script>
+  <script src="/src/js/core/journal-anim.js?v=db4a1d4d"></script>
   <script src="/src/js/features/baithak.js?v=69434dc0"></script>
-  <script src="/src/js/features/profile-preview.js?v=fe94674a"></script>
-  <script src="/src/js/features/profile.js?v=7e49ab7f"></script>
-  <script src="/src/i18n/en.js?v=02266b83"></script>
-  <script src="/src/i18n/legacy-keys.js?v=56133b74"></script>
-  <script src="/src/js/core/i18n.js?v=725df254"></script>
-  <script src="/src/js/core/region.js?v=aa214603"></script>
-  <script src="/src/js/core/i18n-format.js?v=e2ae5927"></script>
-  <script src="/src/js/core/i18n-layout.js?v=12234a9c"></script>
-  <script src="/src/js/core/lang-picker.js?v=8fbbcfee"></script>
+  <script src="/src/js/features/profile-preview.js?v=6a7a8020"></script>
+  <script src="/src/js/features/profile.js?v=3239d333"></script>
+
+
+
+
+
+
   <script src="/src/js/features/categories.js?v=2d60c95f"></script>
   <script src="/src/js/features/category-prefs.js?v=48846ae2"></script>
-  <script src="/src/js/features/peepal.js?v=086f28c6"></script>
-  <script src="/src/js/features/onboarding.js?v=d8718377"></script>
-  <script src="/src/js/core/service-worker.js?v=9ffe9136"></script>
-  <script src="/src/js/core/pwa-install.js?v=7428f505"></script>
-  <script src="/src/js/features/streak.js?v=d67cf154"></script>
+  <script src="/src/js/features/peepal.js?v=57363c7f"></script>
+  <script src="/src/js/features/onboarding.js?v=aa0b1c5b"></script>
+  <script src="/src/js/core/service-worker.js?v=28d63543"></script>
+  <script src="/src/js/core/pwa-install.js?v=9de66926"></script>
+  <script src="/src/js/features/streak.js?v=3b88f820"></script>
   <script src="/src/js/games/game-runtime.js?v=ebe2c3f7"></script>
   <script src="/src/js/games/game-ui.js?v=394b585a"></script>
   <script src="/src/js/dangal/dangal-utils.js?v=2eaf8221"></script>
@@ -1148,13 +1155,13 @@
   <script src="/src/js/features/duniya.js?v=65bb5f63"></script>
   <script src="/src/js/core/archive-bootstrap.js?v=e50b274d"></script>
   <script src="/src/js/features/media-picker.js?v=1e00102e"></script>
-  <script src="/src/js/features/premium.js?v=52d882ac"></script>
+  <script src="/src/js/features/premium.js?v=92e2d244"></script>
   <script src="/src/js/core/peepal-audience.js?v=febd11a1"></script>
   <script src="/src/js/features/discovery.js?v=651fe048"></script>
   <script src="/src/js/features/khoj.js?v=d265834a"></script>
-  <script src="/src/js/core/polish.js?v=7e64eadd"></script>
-  <script src="/src/js/features/fairness.js?v=1c0002db"></script>
-  <script src="/src/js/features/media-profile.js?v=d8fe1026"></script>
-  <script src="/src/js/auth/auth-events.js?v=2ef88c4b"></script>
+  <script src="/src/js/core/polish.js?v=9553c677"></script>
+  <script src="/src/js/features/fairness.js?v=9d119747"></script>
+  <script src="/src/js/features/media-profile.js?v=59dcb421"></script>
+  <script src="/src/js/auth/auth-events.js?v=384be083"></script>
 </body>
 </html>

@@ -39,7 +39,7 @@
         if (!title.id) title.id = `dlg_title_${Date.now().toString(36)}`;
         el.setAttribute('aria-labelledby', title.id);
       } else {
-        el.setAttribute('aria-label', 'Dialog');
+        el.setAttribute('aria-label', t('common.dialog'));
       }
     }
 

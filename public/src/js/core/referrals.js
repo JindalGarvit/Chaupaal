@@ -158,7 +158,7 @@
       }
       if (data.attributed && data.rewards?.invitee && !data.rewards.invitee.duplicate) {
         if (typeof showToast === 'function') {
-          showToast('Welcome gift: virtual chips · not real money');
+          showToast(t('common.welcome_gift_virtual_chips_not_real'));
         }
       } else if (data.attributed && data.copy && typeof showToast === 'function') {
         showToast(data.copy);
@@ -214,7 +214,7 @@
       return true;
     } catch (e) {
       if (typeof showToast === 'function') {
-        showToast('Could not open that link — try again from share');
+        showToast(t('common.could_not_open_that_link_try'));
       }
       return false;
     }
@@ -291,7 +291,7 @@
           } catch (e) {}
           const btn = document.querySelector(`#akhbaarShareActions [data-akh-share="${kind}"]`);
           if (btn && !btn.disabled) btn.click();
-          else if (typeof showToast === 'function') showToast('You’re signed in — share from results when ready');
+          else if (typeof showToast === 'function') showToast(t('common.you_re_signed_in_share_from'));
         }, 400);
         return true;
       }
@@ -333,24 +333,23 @@
 
   function openInviteToChaupaalShare() {
     if (typeof currentUser === 'undefined' || !currentUser) {
-      if (typeof showToast === 'function') showToast('Sign in to invite friends');
+      if (typeof showToast === 'function') showToast(t('common.sign_in_to_invite_friends'));
       if (typeof openAuthSheet === 'function') openAuthSheet('login');
       return;
     }
     const url = inviteHomeUrl();
-    const text =
-      'Join me on Chaupaal — chat, play, and catch up. Virtual chips · not real money.\n' + url;
+    const text = t('common.invite_share_text', { url });
     if (typeof openUnifiedShareSheet === 'function') {
       openUnifiedShareSheet({
         gameId: 'invite',
-        title: 'Invite to Chaupaal',
-        subtitle: 'Your invite link',
+        title: t('common.invite_to_chaupaal'),
+        subtitle: t('common.your_invite_link'),
         story: false,
         stats: {
           text,
           url,
-          scoreLine: 'Invite',
-          meta: 'Virtual chips · not real money',
+          scoreLine: t('common.invite'),
+          meta: t('common.virtual_chips_not_real_money'),
         },
       });
       return;
@@ -359,7 +358,7 @@
       navigator.share({ title: 'Chaupaal', text, url }).catch(() => {});
     } else if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(text).then(() => {
-        if (typeof showToast === 'function') showToast('Invite link copied');
+        if (typeof showToast === 'function') showToast(t('common.invite_link_copied'));
       });
     }
   }

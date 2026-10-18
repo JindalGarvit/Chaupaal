@@ -141,7 +141,7 @@ function extractLiterals(src) {
       }
       text += src[j++];
     }
-    out.push({ index: start, text, tpl: true });
+    out.push({ index: start, end: j + 1, text, tpl: true });
     return j + 1;
   }
   function skipExpression(j) {
@@ -157,7 +157,7 @@ function extractLiterals(src) {
         continue;
       } else if (c === '"' || c === "'") {
         const r = readString(c, j);
-        out.push({ index: j, text: r.text });
+        out.push({ index: j, end: r.end, text: r.text });
         j = r.end;
         continue;
       } else if (c === '/' && src[j + 1] === '/') {
@@ -199,7 +199,7 @@ function extractLiterals(src) {
     }
     if (c === '"' || c === "'") {
       const r = readString(c, i);
-      out.push({ index: i, text: r.text });
+      out.push({ index: i, end: r.end, text: r.text });
       i = r.end;
       lastSig = 'x';
       continue;
@@ -222,10 +222,49 @@ const SINK_BEFORE = [
 ];
 /** Literal is a t()/tt()/tr() key or fallback — already translatable. */
 const T_ARG_BEFORE = /\b(t|tt|tr|tx|txv|tn|tHtml|htt|i18nT|ptrLabel|tlabel|label)\s*\(\s*(?:['"`][^'"`]*['"`]\s*,\s*)?$/;
+/** Developer-facing / non-display positions: logs, errors, analytics, comparisons, selectors. */
+const NOT_UI_BEFORE = /(console\.\w+\(\s*|(?:new\s+)?Error\(\s*|reportClientError\([^)]*|trackEvent\(\s*|trackSignal\(\s*|logEvent\(\s*|warn\(\s*|===?\s*|!==?\s*|case\s+|\.(?:includes|startsWith|endsWith|test|match|indexOf|split|replace|querySelector(?:All)?|closest|matches|getItem|setItem|removeItem|getElementById|addEventListener|removeEventListener|dispatchEvent|getAttribute|setAttribute|toggle|add|remove|contains)\(\s*(?:['"`][^'"`]*['"`]\s*,\s*)?|RegExp\(\s*|require\(\s*|import\(\s*|fetch\(\s*|apiFetch\(\s*|collection\(\s*|doc\(\s*|\bin\s+|typeof\s+\w+\s*[!=]==?\s*)$/;
+
+/** Sentence-like text a person reads (2+ words, letters, not code / css / urls / keys). */
+function isProse(raw) {
+  const s = String(raw || '').trim();
+  if (s.length < 6 || !/\s/.test(s) || !/[a-z]{2,}/.test(s)) return false;
+  if (!/^[\p{L}\p{Emoji}"“‘'(¿¡]/u.test(s)) return false;
+  if ((s.match(/[A-Za-z]{2,}/g) || []).length < 2) return false;
+  if (/[{};]|=>|\$\(|\bfunction\b|\breturn\b|&&|\|\||^use strict$|\bvar\(--|\brgba?\(|\b\d+px\b/.test(s)) return false;
+  if (/^[\w-]+(\s+[\w-]+)*$/.test(s) && /-/.test(s) && !/\s[a-z]+\s/.test(s)) return false; // class lists
+  if (/^(\.|#|\[|@|\/|https?:)/.test(s) || /:\s*[\w#-]+;?\s*$/.test(s)) return false;
+  if (/^(Bearer|Basic|GET|POST|PUT|DELETE|application\/|text\/|image\/)/.test(s)) return false;
+  return isCopy(s);
+}
+
 const HTML_TEXT = />([^<>]+)</g;
 const HTML_ATTR = /\b(placeholder|aria-label|title|alt)\s*=\s*\\?["']([^"'\\]+)\\?["']/g;
 
+let astClassify = null;
+try {
+  astClassify = require('./lib/i18n-ast').classify;
+} catch (e) {
+  astClassify = null; // acorn not installed — fall back to the tokenizer below
+}
+
 function scanJs(rel, src) {
+  if (astClassify) {
+    try {
+      return astClassify(src, isCopy).findings.map((f) => ({
+        file: rel,
+        line: lineOf(src, f.start),
+        kind: f.kind,
+        text: String(f.text).replace(/\s+/g, ' ').trim().slice(0, 80),
+      }));
+    } catch (e) {
+      /* unparsable file — tokenizer fallback */
+    }
+  }
+  return scanJsTokens(rel, src);
+}
+
+function scanJsTokens(rel, src) {
   const hits = [];
   const add = (index, kind, text) => {
     const t = String(text).replace(/\s+/g, ' ').trim();
@@ -242,7 +281,13 @@ function scanJs(rel, src) {
       }
     }
     const body = lit.text;
-    if (body.indexOf('<') < 0 || !/<\/?[a-z][\w-]*[\s>/]/i.test(body)) return;
+    if (body.indexOf('<') < 0 || !/<\/?[a-z][\w-]*[\s>/]/i.test(body)) {
+      // Prose: a sentence-like literal anywhere else (returns, defaults, labels in objects …).
+      if (isProse(body) && !NOT_UI_BEFORE.test(before) && !/^\s*:/.test(src.slice(lit.end || lit.index, (lit.end || lit.index) + 3))) {
+        add(lit.index, 'prose', body);
+      }
+      return;
+    }
     let h;
     HTML_TEXT.lastIndex = 0;
     while ((h = HTML_TEXT.exec(body))) add(lit.index, 'html-text', h[1]);
@@ -260,10 +305,20 @@ function scanIndex(rel, src) {
   let m;
   while ((m = re.exec(body))) {
     const [, tag, attrs, text] = m;
-    if (/^(script|style|title|option)$/i.test(tag)) continue;
-    if (/data-i18n=/.test(attrs)) continue;
+    if (/^(script|style|title)$/i.test(tag)) continue;
+    if (/data-i18n(-slots)?=/.test(attrs)) continue;
     const t = text.replace(/\s+/g, ' ').trim();
     if (isCopy(t)) hits.push({ file: rel, line: lineOf(src, m.index), kind: 'html-text', text: t.slice(0, 80) });
+  }
+  // Text after a closing tag ("…</button>. Real identity required.") — only allowed inside a data-i18n-slots sentence.
+  const after = /<\/[a-z][\w-]*\s*>([^<>]+)</gi;
+  while ((m = after.exec(body))) {
+    const t = m[1].replace(/\s+/g, ' ').trim().replace(/^[.,;:!?·—–-]+\s*/, '');
+    if (!t || !isCopy(t)) continue;
+    const lineStart = body.lastIndexOf('\n', m.index) + 1;
+    const lineEnd = body.indexOf('\n', m.index);
+    if (/data-i18n-slots=/.test(body.slice(lineStart, lineEnd < 0 ? undefined : lineEnd))) continue;
+    hits.push({ file: rel, line: lineOf(src, m.index), kind: 'html-text', text: t.slice(0, 80) });
   }
   const at = /<[a-z][\w-]*([^<>]*)>/gi;
   while ((m = at.exec(body))) {

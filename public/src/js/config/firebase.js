@@ -18,6 +18,8 @@ try{
   try{
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   }catch(e){ console.warn('[auth] setPersistence', e?.message||e); }
+  // Verification / reset emails, SMS and reCAPTCHA follow the UI language (i18n.js loads first).
+  if(typeof syncFirebaseAuthLanguage==='function') syncFirebaseAuthLanguage();
   rtdb=firebase.database();
   storage=firebase.storage();
   // Analytics initialized lazily in core/analytics.js (Phase 5)

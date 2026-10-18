@@ -750,7 +750,8 @@ async function notifyMove(adminApp, pub, n) {
       type: 'dangal_chess_move',
       refId: pub.matchId,
       actor: { uid: n.from, name: n.name },
-      preview: `Your move in Daily chess (${n.name} played ${n.san})`,
+      previewKey: 'notifications.push.chess_move',
+      previewParams: { san: n.san },
       deepLink: { section: 'dangal', path: `/?section=dangal&chess=${encodeURIComponent(pub.matchId)}` },
     });
   } catch (e) {

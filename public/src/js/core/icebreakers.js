@@ -9,54 +9,54 @@
   /** @type {{id:string,category:string,text:string,heavy?:boolean}[]} */
   const ICEBREAKER_PROMPTS = [
     // Philosophical / deep (1–4)
-    { id: 'ib01', category: 'deep', text: "What's something you believe that most people around you don't?" },
-    { id: 'ib02', category: 'deep', text: 'If you could give your younger self one sentence, what would it be?' },
-    { id: 'ib03', category: 'deep', text: 'What question do you wish people asked you more often?' },
-    { id: 'ib04', category: 'deep', text: "What's a value you'll never negotiate on?" },
+    { id: 'ib01', category: 'deep', text: t('profile.what_s_something_you_believe_that') },
+    { id: 'ib02', category: 'deep', text: t('profile.if_you_could_give_your_younger') },
+    { id: 'ib03', category: 'deep', text: t('profile.what_question_do_you_wish_people') },
+    { id: 'ib04', category: 'deep', text: t('profile.what_s_a_value_you_ll') },
     // Fun / light (5–9)
-    { id: 'ib05', category: 'fun', text: "Tea or coffee — and defend your choice like it's a court case." },
-    { id: 'ib06', category: 'fun', text: "What's your most irrational but firm opinion?" },
-    { id: 'ib07', category: 'fun', text: 'Which comfort food could you happily eat for a week straight?' },
-    { id: 'ib08', category: 'fun', text: "What's a song that always fixes your mood (even a little)?" },
-    { id: 'ib09', category: 'fun', text: 'Pineapple on pizza: yes, no, or "it depends on the company"?' },
+    { id: 'ib05', category: 'fun', text: t('profile.tea_or_coffee_and_defend_your') },
+    { id: 'ib06', category: 'fun', text: t('profile.what_s_your_most_irrational_but') },
+    { id: 'ib07', category: 'fun', text: t('profile.which_comfort_food_could_you_happily') },
+    { id: 'ib08', category: 'fun', text: t('profile.what_s_a_song_that_always') },
+    { id: 'ib09', category: 'fun', text: t('profile.pineapple_on_pizza_yes_no_or') },
     // Personal / reflective (10–13) — ib12 is heavy, held from early suggestions
-    { id: 'ib10', category: 'reflective', text: "What's a small thing that made you happy this week?" },
-    { id: 'ib11', category: 'reflective', text: "What's a habit you're quietly proud of?" },
+    { id: 'ib10', category: 'reflective', text: t('profile.what_s_a_small_thing_that') },
+    { id: 'ib11', category: 'reflective', text: t('profile.what_s_a_habit_you_re') },
     {
       id: 'ib12',
       category: 'reflective',
-      text: "Who's someone who changed how you see the world — and how?",
+      text: t('profile.who_s_someone_who_changed_how'),
       heavy: true,
     },
-    { id: 'ib13', category: 'reflective', text: "What's a place that feels like home even if you don't live there?" },
+    { id: 'ib13', category: 'reflective', text: t('profile.what_s_a_place_that_feels') },
     // Chaupaal / India / community (14–18) — weighted first in suggestions
-    { id: 'ib14', category: 'local', text: "What's your go-to order at a chai stall — and why is it correct?" },
+    { id: 'ib14', category: 'local', text: t('profile.what_s_your_go_to_order') },
     {
       id: 'ib15',
       category: 'local',
-      text: 'If friends landed in your city for one evening only, where are you taking them?',
+      text: t('profile.if_friends_landed_in_your_city'),
     },
     {
       id: 'ib16',
       category: 'local',
-      text: "Which Indian festival hits different for you, and what's the one ritual you love most?",
+      text: t('profile.which_indian_festival_hits_different_for'),
     },
     {
       id: 'ib17',
       category: 'local',
-      text: "What's a local slang word or phrase from your city that outsiders should learn?",
+      text: t('profile.what_s_a_local_slang_word'),
     },
-    { id: 'ib18', category: 'local', text: 'Train journey or road trip — and what makes your pick better?' },
+    { id: 'ib18', category: 'local', text: t('profile.train_journey_or_road_trip_and') },
     // Extras (19–20)
-    { id: 'ib19', category: 'extra', text: "What's something you're learning right now just for fun?" },
-    { id: 'ib20', category: 'extra', text: "What's a compliment you still remember years later?" },
+    { id: 'ib19', category: 'extra', text: t('profile.what_s_something_you_re_learning') },
+    { id: 'ib20', category: 'extra', text: t('profile.what_s_a_compliment_you_still') },
   ];
 
-  const CELEBRATION_LINES = [
-    "Nice answer — that's exactly the kind of thing that starts a real conversation.",
-    'Answered — someone matching with you just got a much better opening line.',
-    'Love that. Peepal matches will have something real to talk about.',
-    'Saved. Way better than starting with just "hi".',
+  const CELEBRATION_LINES = /* i18n-copy */ [
+    t('profile.nice_answer_that_s_exactly_the'),
+    t('profile.answered_someone_matching_with_you_just'),
+    t('profile.love_that_peepal_matches_will_have'),
+    t('profile.saved_way_better_than_starting_with'),
   ];
 
   function getPromptById(id) {
@@ -75,7 +75,7 @@
       return {
         id: a.promptId,
         category: 'custom',
-        text: customQ || 'Custom question',
+        text: customQ || t('profile.custom_question'),
         custom: true,
       };
     }
@@ -216,9 +216,9 @@
     const line = CELEBRATION_LINES[Math.floor(Math.random() * CELEBRATION_LINES.length)];
     if (typeof showRewardToast === 'function') {
       showRewardToast({
-        title: 'Icebreaker ✓',
+        title: t('profile.icebreaker'),
         line,
-        unlockHint: 'Matches on Peepal get a warmer way to say hi.',
+        unlockHint: t('profile.matches_on_peepal_get_a_warmer'),
         durationMs: 2800,
       });
     } else if (typeof showToast === 'function') {
@@ -290,12 +290,12 @@
       const myPick = mine.find((a) => a.prompt.category === cat) || mine[0];
       const themeLabel =
         cat === 'local'
-          ? 'You both answered an India / local prompt'
+          ? t('profile.you_both_answered_an_india_local')
           : cat === 'fun'
-            ? 'You both answered something fun'
+            ? t('profile.you_both_answered_something_fun')
             : cat === 'deep'
-              ? 'You both went a bit deep'
-              : 'You both answered a similar kind of prompt';
+              ? t('profile.you_both_went_a_bit_deep')
+              : t('profile.you_both_answered_a_similar_kind');
       return {
         mode: 'shared',
         themeLabel,
@@ -345,37 +345,37 @@
         .replace(/</g, '&lt;')
         .replace(/"/g, '&quot;');
     const reportBtn = opts.showReport
-      ? `<button type="button" class="icebreaker-banner-report" id="icebreakerBannerReport">Report this question</button>`
+      ? `<button type="button" class="icebreaker-banner-report" id="icebreakerBannerReport">${tHtml('profile.report_this_question')}</button>`
       : '';
     if (starter.mode === 'shared') {
       return `
         <div class="icebreaker-chat-banner" id="icebreakerChatBanner">
-          <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="Dismiss">✕</button>
+          <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="${tHtml('profile.dismiss')}">✕</button>
           <div class="icebreaker-banner-kicker">${esc(starter.themeLabel)}</div>
-          <div class="icebreaker-banner-ask">Ask them about…</div>
+          <div class="icebreaker-banner-ask">${tHtml('profile.ask_them_about')}</div>
           <div class="icebreaker-banner-q">${esc(starter.their.prompt.text)}</div>
-          <div class="icebreaker-banner-a">"${esc(starter.their.answer)}"</div>
-          <div class="icebreaker-banner-you">You wrote: "${esc(starter.mine.answer)}"</div>
+          <div class="icebreaker-banner-a">${tHtml('profile.quoted_answer', { answer: starter.their.answer })}</div>
+          <div class="icebreaker-banner-you">${tHtml('profile.you_wrote_answer', { answer: starter.mine.answer })}</div>
           ${reportBtn}
         </div>`;
     }
     if (starter.mode === 'both') {
       return `
         <div class="icebreaker-chat-banner" id="icebreakerChatBanner">
-          <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="Dismiss">✕</button>
-          <div class="icebreaker-banner-kicker">Conversation starters</div>
-          <div class="icebreaker-banner-ask">Ask them about…</div>
+          <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="${tHtml('profile.dismiss')}">✕</button>
+          <div class="icebreaker-banner-kicker">${tHtml('profile.conversation_starters')}</div>
+          <div class="icebreaker-banner-ask">${tHtml('profile.ask_them_about')}</div>
           <div class="icebreaker-banner-q">${esc(starter.their.prompt.text)}</div>
           <div class="icebreaker-banner-a">"${esc(starter.their.answer)}"</div>
-          <div class="icebreaker-banner-you"><strong style="font-weight:700;color:var(--ink);">Your answer</strong> · ${esc(starter.mine.prompt.text)}<br>"${esc(starter.mine.answer)}"</div>
+          <div class="icebreaker-banner-you"><strong style="font-weight:700;color:var(--ink);">${tHtml('profile.your_answer')}</strong> · ${esc(starter.mine.prompt.text)}<br>"${esc(starter.mine.answer)}"</div>
           ${reportBtn}
         </div>`;
     }
     if (starter.mode === 'theirs') {
       return `
         <div class="icebreaker-chat-banner" id="icebreakerChatBanner">
-          <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="Dismiss">✕</button>
-          <div class="icebreaker-banner-ask">Ask them about…</div>
+          <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="${tHtml('profile.dismiss')}">✕</button>
+          <div class="icebreaker-banner-ask">${tHtml('profile.ask_them_about')}</div>
           <div class="icebreaker-banner-q">${esc(starter.their.prompt.text)}</div>
           <div class="icebreaker-banner-a">"${esc(starter.their.answer)}"</div>
           ${reportBtn}
@@ -383,8 +383,8 @@
     }
     return `
       <div class="icebreaker-chat-banner" id="icebreakerChatBanner">
-        <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="Dismiss">✕</button>
-        <div class="icebreaker-banner-kicker">Your icebreaker (they can ask you)</div>
+        <button type="button" class="icebreaker-banner-dismiss" id="icebreakerBannerDismiss" aria-label="${tHtml('profile.dismiss')}">✕</button>
+        <div class="icebreaker-banner-kicker">${tHtml('profile.your_icebreaker_they_can_ask_you')}</div>
         <div class="icebreaker-banner-q">${esc(starter.mine.prompt.text)}</div>
         <div class="icebreaker-banner-a">"${esc(starter.mine.answer)}"</div>
       </div>`;
@@ -440,30 +440,30 @@
 
     return `
       <div class="icebreaker-profile-block" id="icebreakerProfileBlock">
-        <h4>Icebreakers</h4>
-        <div class="icebreaker-hint">Optional chat openers · up to ${MAX_ANSWERS}. Peepal matches see these so “hi” isn’t the only start. Separate from profile Prompts (used for matching).</div>
+        <h4>${tHtml('profile.icebreakers')}</h4>
+        <div class="icebreaker-hint">${tHtml('profile.icebreakers_hint', { count: MAX_ANSWERS })}</div>
         ${
           suggest
             ? `<div class="icebreaker-suggest" data-prompt-id="${suggest.id}">
             <div class="icebreaker-suggest-q">${suggest.text}</div>
-            <textarea class="icebreaker-answer-input" id="icebreakerAnswerInput" maxlength="280" placeholder="Short answer…"></textarea>
+            <textarea class="icebreaker-answer-input" id="icebreakerAnswerInput" maxlength="280" placeholder="${tHtml('profile.short_answer')}"></textarea>
             <div class="icebreaker-actions">
-              <button type="button" class="icebreaker-btn icebreaker-btn-primary" id="icebreakerSaveBtn">Save answer</button>
-              <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerShuffleBtn">Another prompt</button>
-              <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerBrowseBtn">Browse all</button>
-              <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerWriteOwnBtn">Write your own</button>
+              <button type="button" class="icebreaker-btn icebreaker-btn-primary" id="icebreakerSaveBtn">${tHtml('profile.save_answer')}</button>
+              <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerShuffleBtn">${tHtml('profile.another_prompt')}</button>
+              <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerBrowseBtn">${tHtml('profile.browse_all')}</button>
+              <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerWriteOwnBtn">${tHtml('profile.write_your_own')}</button>
             </div>
             <div id="icebreakerBrowsePanel" class="icebreaker-browse" hidden></div>
             <div id="icebreakerCustomPanel" class="icebreaker-custom-panel" hidden>
-              <input type="text" class="icebreaker-custom-q" id="icebreakerCustomQuestion" maxlength="200" placeholder="Your question…">
-              <textarea class="icebreaker-answer-input" id="icebreakerCustomAnswer" maxlength="280" placeholder="Your answer…"></textarea>
+              <input type="text" class="icebreaker-custom-q" id="icebreakerCustomQuestion" maxlength="200" placeholder="${tHtml('profile.your_question')}">
+              <textarea class="icebreaker-answer-input" id="icebreakerCustomAnswer" maxlength="280" placeholder="${tHtml('profile.your_answer_2')}"></textarea>
               <div class="icebreaker-actions">
-                <button type="button" class="icebreaker-btn icebreaker-btn-primary" id="icebreakerCustomSaveBtn">Save my question</button>
-                <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerCustomCancelBtn">Cancel</button>
+                <button type="button" class="icebreaker-btn icebreaker-btn-primary" id="icebreakerCustomSaveBtn">${tHtml('profile.save_my_question')}</button>
+                <button type="button" class="icebreaker-btn icebreaker-btn-ghost" id="icebreakerCustomCancelBtn">${tHtml('common.cancel')}</button>
               </div>
             </div>
           </div>`
-            : `<div class="icebreaker-hint">${remaining <= 0 ? "You've filled 3 — remove one to add another." : ''}</div>`
+            : `<div class="icebreaker-hint">${remaining <= 0 ? tHtml('profile.you_ve_filled_3_remove_one') : ''}</div>`
         }
         <div class="icebreaker-saved" id="icebreakerSavedList">
           ${answers
@@ -471,10 +471,10 @@
               const p = resolvePromptForAnswer(a);
               const isCustom = !!(p?.custom || a.customQuestion);
               return `<div class="icebreaker-saved-item" data-id="${a.promptId}">
-                <div class="icebreaker-saved-q">${isCustom ? 'Your question · ' : ''}${p ? p.text : a.promptId}</div>
+                <div class="icebreaker-saved-q">${isCustom ? tHtml('profile.your_question_2') : ''}${p ? p.text : a.promptId}</div>
                 <div class="icebreaker-saved-a">${a.answer}</div>
-                <button type="button" class="icebreaker-saved-rm" data-rm="${a.promptId}">Remove</button>
-                ${isCustom ? `<button type="button" class="icebreaker-saved-flag" data-flag="${a.promptId}" data-q="${String(a.customQuestion || p?.text || '').replace(/"/g, '&quot;')}">Flag</button>` : ''}
+                <button type="button" class="icebreaker-saved-rm" data-rm="${a.promptId}">${tHtml('profile.exclusion_remove')}</button>
+                ${isCustom ? `<button type="button" class="icebreaker-saved-flag" data-flag="${a.promptId}" data-q="${String(a.customQuestion || p?.text || '').replace(/"/g, '&quot;')}">${tHtml('profile.flag')}</button>` : ''}
               </div>`;
             })
             .join('')}
@@ -507,8 +507,8 @@
       const pid = suggestBox?.dataset.promptId;
       const res = saveIcebreakerAnswer(pid, input?.value);
       if (!res.ok) {
-        if (res.error === 'limit') showToast?.('Max 3 icebreakers — remove one first');
-        else if (res.error === 'empty') showToast?.('Write a short answer first');
+        if (res.error === 'limit') showToast?.(t('profile.max_3_icebreakers_remove_one_first'));
+        else if (res.error === 'empty') showToast?.(t('profile.write_a_short_answer_first'));
         return;
       }
       refresh();
@@ -530,7 +530,7 @@
       const unlockedHeavy = getMyIcebreakers().length >= 1;
       browsePanel.hidden = !browsePanel.hidden;
       if (browsePanel.hidden) return;
-      const cats = { local: 'India & local', fun: 'Fun', reflective: 'Reflective', deep: 'Deep', extra: 'Extra' };
+      const cats = { local: t('profile.india_local'), fun: t('profile.cat_fun'), reflective: t('profile.cat_reflective'), deep: t('profile.cat_deep'), extra: t('profile.cat_extra') };
       browsePanel.innerHTML = ICEBREAKER_PROMPTS.filter((p) => !taken.has(p.id) && !(p.heavy && !unlockedHeavy))
         .map(
           (p) =>
@@ -570,9 +570,9 @@
       const a = block.querySelector('#icebreakerCustomAnswer')?.value;
       const res = saveCustomIcebreaker(q, a);
       if (!res.ok) {
-        if (res.error === 'limit') showToast?.('Max 3 icebreakers — remove one first');
-        else if (res.error === 'empty_question') showToast?.('Write your question first');
-        else if (res.error === 'empty') showToast?.('Write a short answer first');
+        if (res.error === 'limit') showToast?.(t('profile.max_3_icebreakers_remove_one_first'));
+        else if (res.error === 'empty_question') showToast?.(t('profile.write_your_question_first'));
+        else if (res.error === 'empty') showToast?.(t('profile.write_a_short_answer_first'));
         return;
       }
       refresh();
@@ -598,7 +598,7 @@
             }
           );
         } else {
-          showToast?.('Report unavailable');
+          showToast?.(t('profile.report_unavailable'));
         }
       });
     });

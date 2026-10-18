@@ -156,7 +156,7 @@
       const loading = document.createElement('div');
       loading.className = 'mashhoor-loading';
       loading.style.cssText = 'padding:16px;font-size:12px;color:var(--muted);';
-      loading.textContent = tt('mashhoor_loading', 'Loading trending discussions…');
+      loading.textContent = tt('common.mashhoor_loading', 'Loading trending discussions…');
       host.appendChild(loading);
       _mashhoorCursor = 0;
     }
@@ -186,13 +186,13 @@
               'mashhoor_empty_msg',
               'No public discussions trending this week yet. We never invent popular posts.'
             ),
-          actionLabel: tt('day0_khoj', 'Explore Khoj'),
+          actionLabel: tt('common.day0_khoj', 'Explore Khoj'),
           onAction: () => {
             if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
           },
           secondaryActions: [
             {
-              label: tt('peepal_discuss', 'Start a discussion'),
+              label: tt('common.peepal_discuss', 'Start a discussion'),
               onAction: () => {
                 if (typeof setPeepalMode === 'function') setPeepalMode('vriksha');
                 if (typeof openPeepalAskSheet === 'function') openPeepalAskSheet();
@@ -218,14 +218,14 @@
       const w = p.mediaWidth || (i % 5 === 0 ? 3 : i % 3 === 0 ? 2 : 4);
       const h = p.mediaHeight || (i % 4 === 0 ? 5 : 4);
       tile.className = `mashhoor-tile ${mediaAspectClass(w, h)}`;
-      const title = p.question || p.title || 'Discussion';
+      const title = p.question || p.title || t('common.discussion');
       const count = Number(p.replyCount ?? p.comments ?? p.totalResponses) || 0;
       const hint = p.metaHint ? `<span class="mashhoor-tile-hint">${escapeLite(p.metaHint)}</span>` : '';
       tile.innerHTML = `<span class="mashhoor-tile-title">${escapeLite(String(title).slice(0, 120))}</span>
         <span class="mashhoor-tile-meta">${count} ${tt('peepal_replies', 'replies')}${hint ? ' · ' : ''}${hint}</span>`;
       tile.addEventListener('click', () => {
         if (typeof openPeepalPost === 'function') openPeepalPost(p.id);
-        else if (typeof showToast === 'function') showToast('Couldn’t open discussion');
+        else if (typeof showToast === 'function') showToast(t('common.couldn_t_open_discussion'));
       });
       grid.appendChild(tile);
     });
@@ -239,7 +239,7 @@
         moreBtn = document.createElement('button');
         moreBtn.type = 'button';
         moreBtn.className = 'mashhoor-load-more khoj-compat-more';
-        moreBtn.textContent = tt('mashhoor_more', 'Load more');
+        moreBtn.textContent = tt('common.mashhoor_more', 'Load more');
         host.appendChild(moreBtn);
         moreBtn.addEventListener('click', () => renderMashhoorGrid({ reset: false }));
       }
@@ -315,7 +315,7 @@
     const today = new Date();
     const seen = new Set();
     friendPools().forEach((p) => {
-      const name = p.name || p.username || 'Friend';
+      const name = p.name || p.username || t('common.friend');
       const uid = p.uid || '';
       const key = uid || p.username || name;
       const dob = p.dateOfBirth || p.dob || '';
@@ -400,12 +400,12 @@
         // A0/A2: signed-in never surfaces SAMPLE personal (Riya) in Surkhiya
         if (signedIn && q.personal && (q.isSample || q.isDemo)) return;
         if (signedIn && q.personal && !(q.friendUid || q.uid || q.authorUid)) return;
-        const title = q.headline || q.news || q.q || 'Headline';
+        const title = q.headline || q.news || q.q || t('common.headline');
         const brief = String(q.news || q.explain || q.synopsis || q.q || '')
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 220);
-        const cat = q.category || q.tag || 'News';
+        const cat = q.category || q.tag || t('common.news');
         const blob = `${title} ${brief} ${cat} ${q.city || ''}`.toLowerCase();
         let priority = 0;
         if (city && blob.includes(city)) priority += 3;
@@ -454,13 +454,13 @@
     const sampleKicker = item.isSample ? ' · Sample' : '';
     return `<div class="surkhiya-chip" data-surkhiya-i="${escapeLite(String(i))}"${friendAttr}>
       <button type="button" class="surkhiya-chip-toggle" aria-expanded="false">
-        <span class="surkhiya-chip-kicker">${escapeLite(item.cat || 'News')}${sampleKicker}</span>
+        <span class="surkhiya-chip-kicker">${escapeLite(item.cat || t('common.news'))}${sampleKicker}</span>
         <span class="surkhiya-chip-title">${escapeLite(item.title)}</span>
       </button>
       <div class="surkhiya-chip-brief hidden" data-surkhiya-brief>
         <p class="surkhiya-chip-brief-text">${escapeLite(item.brief || '')}</p>
         <button type="button" class="btn btn--secondary" data-surkhiya-open-khabar data-q-idx="${item.idx != null ? item.idx : ''}" style="margin-top:10px;width:100%;">
-          ${tt('surkhiya_open_khabar', 'Open in Khabar')}
+          ${tt('common.surkhiya_open_khabar', 'Open in Khabar')}
         </button>
       </div>
     </div>`;
@@ -505,14 +505,14 @@
     const hasAny = highlightsHtml || moreHtml || notableHtml;
     return `
       <div class="akhbaar-surkhiya room-kit room-kit--air room-kit--surkhiya">
-        <p class="akhbaar-surkhiya-sub">${tt('surkhiya_digest_sub', 'Read the digest — play happens in Khabar.')}</p>
+        <p class="akhbaar-surkhiya-sub">${tt('common.surkhiya_digest_sub', 'Read the digest — play happens in Khabar.')}</p>
         ${
           hasAny
             ? `${highlightsHtml}${moreHtml}${notableHtml}`
             : `<div class="cp-empty surkhiya-empty">${tt('surkhiya_empty', 'Digest warming up — open Khabar to play.')}</div>`
         }
         <div class="akhbaar-surkhiya-chips">
-          <button type="button" class="btn btn--primary" data-surkhiya-jump="all">${tt('surkhiya_jump_khabar', 'Jump to Khabar')}</button>
+          <button type="button" class="btn btn--primary" data-surkhiya-jump="all">${tt('common.surkhiya_jump_khabar', 'Jump to Khabar')}</button>
         </div>
       </div>`;
   }
@@ -577,8 +577,8 @@
             id,
             action: 'wish',
             title: ev.title,
-            who: ev.name || 'Friend',
-            meta: ev.sub || tt('saathi_wish_meta', 'Wish on Baithak'),
+            who: ev.name || t('common.friend'),
+            meta: ev.sub || tt('common.saathi_wish_meta', 'Wish on Baithak'),
             uid: ev.uid,
             name: ev.name,
             avatar: ev.avatar,
@@ -601,9 +601,9 @@
         out.push({
           id,
           action: 'play',
-          title: q.q || q.headline || 'Quiz',
-          who: q.authorName || q.user?.name || q.friendName || 'Friend',
-          meta: tt('saathi_play_meta', 'Play in Khabar'),
+          title: q.q || q.headline || t('common.quiz'),
+          who: q.authorName || q.user?.name || q.friendName || t('common.friend'),
+          meta: tt('common.saathi_play_meta', 'Play in Khabar'),
           idx: i,
           q,
           uid,
@@ -647,10 +647,10 @@
       .map((it) => {
         const cta =
           it.action === 'wish'
-            ? tt('saathi_cta_wish', 'Wish')
-            : tt('saathi_cta_play', 'Play');
+            ? tt('common.saathi_cta_wish', 'Wish')
+            : tt('common.saathi_cta_play', 'Play');
         return `<button type="button" class="saathi-card" data-saathi-id="${escapeLite(it.id || '')}" data-saathi-action="${escapeLite(it.action || 'play')}">
-            <div class="saathi-card-who">${escapeLite(it.who || 'Friend')}</div>
+            <div class="saathi-card-who">${escapeLite(it.who || t('common.friend'))}</div>
             <div class="saathi-card-q">${escapeLite(it.title)}</div>
             <div class="saathi-card-meta">${escapeLite(it.meta || '')} · ${escapeLite(cta)}</div>
           </button>`;
@@ -672,7 +672,7 @@
       else if (typeof openBaithakWithPrefill === 'function') openBaithakWithPrefill(payload);
       else if (item.uid && typeof openUserProfile === 'function') {
         openUserProfile({ uid: item.uid, name: payload.name }, { context: 'akhbaar_saathi' });
-      } else if (typeof showToast === 'function') showToast('Couldn’t open wish');
+      } else if (typeof showToast === 'function') showToast(t('common.couldn_t_open_wish'));
       return;
     }
     // play → Khabar focused on that question when possible
@@ -698,7 +698,7 @@
         const id = btn.dataset.saathiId || '';
         const item = _saathiItemsById.get(id);
         if (!item) {
-          if (typeof showToast === 'function') showToast('That update is no longer available');
+          if (typeof showToast === 'function') showToast(t('common.that_update_is_no_longer_available'));
           return;
         }
         activateSaathiItem(item);

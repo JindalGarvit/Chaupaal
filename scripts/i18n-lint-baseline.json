@@ -1,20 +1,16 @@
 {
-  "total": 2648,
+  "total": 6265,
   "bySurface": {
-    "auth": 64,
-    "common": 267,
-    "khoj": 61,
-    "profile": 310,
-    "baithak": 94,
-    "chat": 78,
-    "settings": 37,
-    "peepal": 13,
-    "onboarding": 85,
-    "notifications": 6,
-    "duniya": 189,
-    "dangal": 1142,
-    "akhbaar": 127,
-    "music": 34,
-    "index.html": 141
+    "common": 237,
+    "khoj": 238,
+    "baithak": 251,
+    "chat": 185,
+    "peepal": 32,
+    "settings": 6,
+    "duniya": 398,
+    "dangal": 4584,
+    "akhbaar": 270,
+    "mehfil": 13,
+    "music": 51
   }
 }

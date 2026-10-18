@@ -51,7 +51,7 @@
               }</span></button>`
           )
           .join('')}
-        <button type="button" class="cp-action-item cp-action-cancel" data-dismiss="1">Cancel</button>
+        <button type="button" class="cp-action-item cp-action-cancel" data-dismiss="1">${tHtml('common.cancel')}</button>
       </div>`;
     deviceRoot().appendChild(sheet);
     hapticLight();
@@ -102,13 +102,13 @@
     root.id = 'cpImageViewer';
     root.className = 'cp-image-viewer';
     root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-label', 'Image viewer');
+    root.setAttribute('aria-label', t('common.image_viewer'));
     root.innerHTML = `
-      <button type="button" class="cp-image-close game-tap-target" aria-label="Close">✕</button>
+      <button type="button" class="cp-image-close game-tap-target" aria-label="${tHtml('common.close')}">✕</button>
       <div class="cp-image-stage">
         <img class="cp-image-img" src="${src}" alt="${o.alt || ''}" draggable="false">
       </div>
-      <div class="cp-image-hint">Pinch or double-tap to zoom · swipe down to close</div>`;
+      <div class="cp-image-hint">${tHtml('common.pinch_or_double_tap_to_zoom')}</div>`;
     deviceRoot().appendChild(root);
     requestAnimationFrame(() => root.classList.add('cp-image-viewer--open'));
 
@@ -464,7 +464,7 @@
           indicator.style.height = '48px';
           indicator.textContent =
             typeof friendlyError === 'function'
-              ? friendlyError({ message: 'offline' })
+              ? friendlyError({ code: 'OFFLINE' })
               : ptrLabel('ptr_offline', "You're offline");
           setTimeout(resetIndicator, 900);
           return;
@@ -551,7 +551,7 @@
       o.photoThumb ||
       (typeof o.avatar === 'string' && /^https?:\/\//i.test(o.avatar) ? o.avatar : '') ||
       '';
-    const name = o.name || 'Photo';
+    const name = o.name || t('common.photo');
     const fallback = o.fallback || o.avatar || '👤';
     const uid = o.uid || '';
     const isGroup = !!o.isGroup;
@@ -906,7 +906,7 @@
     const uid = typeof currentUser !== 'undefined' ? currentUser?.uid : '';
     if (localOnly || !msgId || !chatId || !uid) {
       row?.remove();
-      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || 'Deleted' : 'Deleted');
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || t('common.deleted') : t('common.deleted'));
       return;
     }
     if (typeof db === 'undefined' || !db) {
@@ -922,11 +922,11 @@
         .doc(msgId)
         .update({ [`deletedFor.${uid}`]: true });
       row?.remove();
-      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || 'Deleted' : 'Deleted');
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || t('common.deleted') : t('common.deleted'));
     } catch (e) {
       row?.classList.remove('msg-row--deleting');
       if (typeof showToast === 'function') {
-        showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Couldn’t delete message');
+        showToast(typeof friendlyError === 'function' ? friendlyError(e) : t('common.couldn_t_delete_message'));
       }
     }
   }
@@ -964,14 +964,14 @@
         row.classList.add('msg-row--deleted');
         row.dataset.deletedEveryone = '1';
         bubble.classList.add('msg-bubble--deleted');
-        bubble.innerHTML = `<em>${typeof t === 'function' ? t('baithak_msg_deleted_everyone') || 'This message was deleted' : 'This message was deleted'}</em>`;
+        bubble.innerHTML = `<em>${typeof t === 'function' ? t('baithak_msg_deleted_everyone') || tHtml('common.this_message_was_deleted') : tHtml('common.this_message_was_deleted')}</em>`;
       }
       row?.classList.remove('msg-row--deleting');
-      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || 'Deleted' : 'Deleted');
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || t('common.deleted') : t('common.deleted'));
     } catch (e) {
       row?.classList.remove('msg-row--deleting');
       if (typeof showToast === 'function') {
-        showToast(typeof friendlyError === 'function' ? friendlyError(e) : 'Couldn’t delete message');
+        showToast(typeof friendlyError === 'function' ? friendlyError(e) : t('common.couldn_t_delete_message'));
       }
     }
   }
@@ -981,26 +981,26 @@
     const img = postEl.querySelector('.duniya-post-media img');
     const actions = [
       {
-        label: 'Share',
+        label: t('common.share'),
         icon: 'share',
         fn: () => {
           const shareBtn = postEl.querySelector('.share-btn');
           if (shareBtn) shareBtn.click();
-          else if (typeof showToast === 'function') showToast('Share');
+          else if (typeof showToast === 'function') showToast(t('common.share'));
         },
       },
       {
-        label: 'Copy caption',
+        label: t('common.copy_caption'),
         icon: 'copy',
         fn: () => {
           if (navigator.clipboard && caption) navigator.clipboard.writeText(caption).catch(() => {});
-          if (typeof showToast === 'function') showToast('Copied');
+          if (typeof showToast === 'function') showToast(t('common.copied'));
         },
       },
     ];
     if (img && (img.dataset.full || img.src)) {
       actions.unshift({
-        label: 'View image',
+        label: t('common.view_image'),
         icon: 'image',
         fn: () => openImageViewer(img.dataset.full || img.currentSrc || img.src),
       });
@@ -1008,7 +1008,7 @@
     const more = postEl.querySelector('.duniya-more-btn');
     if (more) {
       actions.push({
-        label: 'Report / block',
+        label: t('common.report_block'),
         icon: 'triangle-alert',
         danger: true,
         fn: () => more.click(),
@@ -1017,13 +1017,13 @@
     const del = postEl.querySelector('.duniya-delete-btn');
     if (del) {
       actions.push({
-        label: 'Delete post',
+        label: t('common.delete_post'),
         icon: 'trash',
         danger: true,
         fn: () => del.click(),
       });
     }
-    showActionSheet('Post', actions);
+    showActionSheet(t('profile.post'), actions);
   }
 
   // ─── Bindings ─────────────────────────────────────────────────────────────

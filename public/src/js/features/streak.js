@@ -25,7 +25,7 @@ async function loadStreak(){
         streakFreezes: firebase.firestore.FieldValue.increment(-1),
         lastPlayed: yesterday // backfill yesterday
       });
-      showToast('❄️ Streak Freeze used! Your streak is safe.');
+      showToast(t('settings.streak_freeze_used_your_streak_is'));
     } else if(lastPlayed!==today && lastPlayed!==yesterday){
       activeStreak=0;
       await db.collection('users').doc(currentUser.uid).update({streak:0});
@@ -53,10 +53,10 @@ function showStreakAtRiskBanner(streak){
   banner.innerHTML=`
     <div style="font-size:32px;">🔥</div>
     <div style="flex:1;">
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;">Your ${streak}-day streak ends tonight!</div>
-      <div style="font-size:12px;opacity:0.85;margin-top:2px;">Play today's Akhbaar to keep it alive</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;">${tHtml('settings.streak_ends_tonight', { count: streak })}</div>
+      <div style="font-size:12px;opacity:0.85;margin-top:2px;">${tHtml('settings.play_today_s_akhbaar_to_keep')}</div>
     </div>
-    <button style="background:rgba(255,255,255,0.25);border:none;color:#fff;border-radius:10px;padding:7px 12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;" id="playNowBanner">Play now →</button>
+    <button style="background:rgba(255,255,255,0.25);border:none;color:#fff;border-radius:10px;padding:7px 12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;" id="playNowBanner">${tHtml('settings.play_now')}</button>
   `;
   document.querySelector('.device').appendChild(banner);
   document.getElementById('playNowBanner').addEventListener('click',()=>{
@@ -76,7 +76,7 @@ function scheduleStreakNudge(streak){
   if(msUntil>0 && msUntil<86400000){
     setTimeout(()=>{
       new Notification('Chaupaal 🪑',{
-        body:`🔥 Your ${streak}-day streak ends at midnight! Play Akhbaar now.`,
+        body:t('settings.your_streak_day_streak_ends_at', { streak }),
         icon:'icon.png'
       });
     },msUntil);
@@ -113,7 +113,7 @@ async function saveStreak(opts){
       showStreakMilestone(streak);
       if([7,30,100].includes(streak) && freezes<STREAK_FREEZE_MAX){
         await db.collection('users').doc(currentUser.uid).update({streakFreezes: firebase.firestore.FieldValue.increment(1)});
-        showToast(`❄️ Streak Freeze earned! You now have ${freezes+1}.`);
+        showToast(t('settings.streak_freeze_earned', { count: freezes + 1 }));
       }
     }
     return {ok:true,alreadyCounted:false,streak};
@@ -128,11 +128,11 @@ function showStreakMilestone(streak){
   overlay.innerHTML=`
     <div style="background:linear-gradient(160deg,var(--red),#8134AF);border-radius:24px;padding:36px 28px;text-align:center;max-width:320px;margin:24px;color:#fff;">
       <div style="font-size:64px;margin-bottom:12px;">🔥</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;">${streak} days in a row</div>
-      <div style="font-size:14px;opacity:0.85;margin-top:8px;line-height:1.5;">Nice consistency — keep showing up.</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;">${tHtml('settings.days_in_a_row', { count: streak })}</div>
+      <div style="font-size:14px;opacity:0.85;margin-top:8px;line-height:1.5;">${tHtml('settings.nice_consistency_keep_showing_up')}</div>
       <div style="margin-top:20px;display:flex;gap:10px;">
-        <button id="shareMilestone" style="flex:1;padding:12px;background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">📤 Share</button>
-        <button id="closeMilestone" style="flex:1;padding:12px;background:#fff;color:var(--red);border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">Continue →</button>
+        <button id="shareMilestone" style="flex:1;padding:12px;background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">${tHtml('settings.share')}</button>
+        <button id="closeMilestone" style="flex:1;padding:12px;background:#fff;color:var(--red);border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;cursor:pointer;">${tHtml('common.continue')}</button>
       </div>
     </div>
   `;
@@ -141,27 +141,27 @@ function showStreakMilestone(streak){
   document.getElementById('shareMilestone').addEventListener('click',()=>{
     const streakStats=typeof buildShareStats==='function'
       ? buildShareStats({
-          scoreLine:`${streak}-day streak`,
+          scoreLine:t('common.n_day_streak', { count: streak }),
           score:streak,
-          meta:'Consistency on Chaupaal',
-          text:`I'm on a ${streak}-day streak on Chaupaal! Can you beat me?`,
+          meta:t('settings.consistency_on_chaupaal'),
+          text:t('settings.i_m_on_a_streak_day', { streak }),
         })
-      : {scoreLine:`${streak}-day streak`,score:streak,text:`I'm on a ${streak}-day streak on Chaupaal! Can you beat me?`};
+      : {scoreLine:t('common.n_day_streak', { count: streak }),score:streak,text:t('settings.i_m_on_a_streak_day', { streak })};
     if(typeof openUnifiedShareSheet==='function'){
-      openUnifiedShareSheet({gameId:'akhbaar',title:'Share your streak',stats:streakStats});
+      openUnifiedShareSheet({gameId:'akhbaar',title:t('settings.share_your_streak'),stats:streakStats});
     } else {
-      const text=`🔥 I'm on a ${streak}-day streak on Chaupaal! Can you beat me? chaupaal-chaupaal.web.app`;
-      if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast('Copied!');}
+      const text=t('settings.i_m_on_a_streak_day_2', { streak });
+      if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast(t('settings.copied'));}
     }
   });
 }
 
 async function buyStreakFreeze(){
-  if(!db||!currentUser){showToast('Sign in to get Streak Freezes');return;}
+  if(!db||!currentUser){showToast(t('settings.sign_in_to_get_streak_freezes'));return;}
   try{
     const snap=await db.collection('users').doc(currentUser.uid).get();
     const freezes=snap.data()?.streakFreezes||0;
-    if(freezes>=STREAK_FREEZE_MAX){showToast(`You already have ${freezes} Streak Freezes ❄️`);return;}
+    if(freezes>=STREAK_FREEZE_MAX){showToast(t('settings.you_already_have_freezes_streak_freezes', { freezes }));return;}
     // Streak freeze — Pradhan: 1/mo; Sarpanch: unlimited (future CM purchase)
     if(typeof ChaupaalMoney?.requestPaywall==='function'){
       ChaupaalMoney.requestPaywall({ reason: 'streak_freeze', open: 'membership' });
@@ -320,10 +320,10 @@ async function checkPeepalQuota(){
         unlock:rem.unlock||'',
       };
     }catch(e){
-      return {weekly:weeklyQuestionCount, ok:false, unlock:'Couldn’t verify your limit — try again shortly'};
+      return {weekly:weeklyQuestionCount, ok:false, unlock:t('settings.couldn_t_verify_your_limit_try')};
     }
   }
-  return {weekly:weeklyQuestionCount, ok:false, unlock:'Couldn’t verify your limit — try again shortly'};
+  return {weekly:weeklyQuestionCount, ok:false, unlock:t('settings.couldn_t_verify_your_limit_try')};
 }
 
 // ===================== WRAPS WITH REAL DATA =====================
@@ -358,12 +358,12 @@ function showMonthlyWrap(){
   const d=buildWrapData();
   const wrap=document.createElement('div');wrap.className='wrap-overlay';
   const pages=[
-    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${d.month} Wrap</div><div class="wrap-headline" style="color:#fff;">Your month on Chaupaal</div><div style="color:rgba(255,255,255,0.7);font-size:14px;margin-top:8px;">Tap to explore ↓</div>`},
-    {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">Questions answered</div><div class="wrap-big-num" style="color:#fff;">${d.totalQ||'—'}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">this month</div>`},
-    {bg:'linear-gradient(160deg,#2A9D8F,#1A6B64)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Accuracy</div><div class="wrap-big-num" style="color:#fff;">${d.accuracy}%</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${d.totalCorrect} correct out of ${d.totalQ}</div>`},
-    {bg:'linear-gradient(160deg,#5FBA7D,#2E8B57)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Top Category</div><div class="wrap-headline" style="color:#fff;font-size:36px;">${CATEGORY_ICONS[d.topCat]||'🎯'} ${d.topCat}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">Your strongest subject this month</div>`},
-    {bg:'linear-gradient(160deg,#FF9A3C,#FF6B35)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Longest Streak</div><div class="wrap-big-num" style="color:#fff;">🔥 ${d.streak}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">days in a row</div>`},
-    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">That's a wrap!</div><div class="wrap-headline" style="color:#fff;">Keep going 🚀</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">See you next month for more Chaupaal!</div><button class="wrap-share-btn" id="wrapShareBtn">📤 Share your Wrap</button>`},
+    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('settings.month_wrap', { month: d.month })}</div><div class="wrap-headline" style="color:#fff;">${tHtml('settings.your_month_on_chaupaal')}</div><div style="color:rgba(255,255,255,0.7);font-size:14px;margin-top:8px;">${tHtml('settings.tap_to_explore')}</div>`},
+    {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">${tHtml('settings.questions_answered')}</div><div class="wrap-big-num" style="color:#fff;">${d.totalQ||'—'}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">${tHtml('settings.this_month')}</div>`},
+    {bg:'linear-gradient(160deg,#2A9D8F,#1A6B64)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('settings.accuracy')}</div><div class="wrap-big-num" style="color:#fff;">${d.accuracy}%</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${tHtml('settings.correct_out_of', { correct: d.totalCorrect, total: d.totalQ })}</div>`},
+    {bg:'linear-gradient(160deg,#5FBA7D,#2E8B57)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('settings.top_category')}</div><div class="wrap-headline" style="color:#fff;font-size:36px;">${CATEGORY_ICONS[d.topCat]||'🎯'} ${d.topCat}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${tHtml('settings.your_strongest_subject_this_month')}</div>`},
+    {bg:'linear-gradient(160deg,#FF9A3C,#FF6B35)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('settings.longest_streak')}</div><div class="wrap-big-num" style="color:#fff;">🔥 ${d.streak}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${tHtml('common.days_in_a_row')}</div>`},
+    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('settings.that_s_a_wrap')}</div><div class="wrap-headline" style="color:#fff;">${tHtml('settings.keep_going')}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${tHtml('settings.see_you_next_month_for_more')}</div><button class="wrap-share-btn" id="wrapShareBtn">${tHtml('settings.share_your_wrap')}</button>`},
   ];
   let pageIdx=0;
   function renderPage(){
@@ -373,15 +373,15 @@ function showMonthlyWrap(){
       const wrapStats=typeof buildShareStats==='function'
         ? buildShareStats({
             scoreLine:`${d.accuracy}%`,
-            meta:`${d.totalQ} questions · ${d.streak}-day streak`,
-            text:`My ${d.month} Chaupaal Wrap: ${d.totalQ} questions, ${d.accuracy}% accuracy, ${d.streak}-day streak!`,
+            meta:t('settings.totalq_questions_streak_day_streak', { totalQ: d.totalQ, streak: d.streak }),
+            text:t('settings.my_month_chaupaal_wrap_totalq_questions', { month: d.month, totalQ: d.totalQ, accuracy: d.accuracy, streak: d.streak }),
           })
-        : {scoreLine:`${d.accuracy}%`,meta:d.month,text:`My ${d.month} Chaupaal Wrap`};
+        : {scoreLine:`${d.accuracy}%`,meta:d.month,text:t('settings.my_month_chaupaal_wrap', { month: d.month })};
       if(typeof openUnifiedShareSheet==='function'){
-        openUnifiedShareSheet({gameId:'wrap',title:`Share ${d.month} Wrap`,stats:wrapStats});
+        openUnifiedShareSheet({gameId:'wrap',title:t('settings.share_month_wrap', { month: d.month }),stats:wrapStats});
       } else {
-        const text=`My ${d.month} Chaupaal Wrap: ${d.totalQ} questions, ${d.accuracy}% accuracy, ${d.streak}-day streak! 🔥 chaupaal-chaupaal.web.app`;
-        if(navigator.share) navigator.share({text}); else{navigator.clipboard.writeText(text);showToast('Copied!');}
+        const text=t('settings.my_month_chaupaal_wrap_totalq_questions_2', { month: d.month, totalQ: d.totalQ, accuracy: d.accuracy, streak: d.streak });
+        if(navigator.share) navigator.share({text}); else{navigator.clipboard.writeText(text);showToast(t('settings.copied'));}
       }
     });
     wrap.querySelector('.wrap-page').addEventListener('click',e=>{

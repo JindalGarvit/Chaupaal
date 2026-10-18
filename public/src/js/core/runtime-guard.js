@@ -335,7 +335,7 @@
     } catch (e) {}
     refreshActiveSurface();
     if (typeof showToast === 'function') {
-      showToast('You’re back — try that again');
+      showToast(t('errors.you_re_back_try_that_again'));
     }
     try {
       if (isActiveTabBlank() && isNavDead()) location.reload();
@@ -363,7 +363,7 @@
         chip.className = 'cp-recovery-chip';
         chip.dataset.navIgnore = '1';
         chip.dataset.overlayOrphan = '1';
-        chip.innerHTML = '<span><strong>Something went wrong</strong> — tap to continue</span>';
+        chip.innerHTML = '<span><strong>' + tHtml('errors.something_went_wrong') + '</strong> ' + tHtml('errors.tap_to_continue') + '</span>';
         chip.addEventListener('click', onRecoveryChipTap);
         device.appendChild(chip);
       }
@@ -646,7 +646,7 @@
         box.setAttribute('role', 'status');
         host.prepend(box);
       }
-      box.textContent = label || 'Couldn’t load this — try again in a moment.';
+      box.textContent = label || t('errors.couldn_t_load_this_try_again');
     } catch (e) {}
   }
 
@@ -675,7 +675,7 @@
   window.addEventListener('error', (ev) => {
     handleUncaught(
       'window.onerror',
-      ev?.message || 'script error',
+      ev?.message || t('errors.script_error'),
       ev?.error?.stack || `${ev?.filename || ''}:${ev?.lineno || ''}`
     );
   });

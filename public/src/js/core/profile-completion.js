@@ -27,27 +27,27 @@
   const TEEN_WEIGHTS = NO_REL_WEIGHTS;
 
   const SECTION_META = {
-    identity: { id: 'identity', label: 'Identity', editSec: 'About' },
-    social: { id: 'social', label: 'Social', editSec: 'About' },
-    relationship: { id: 'relationship', label: 'Looking for', editSec: 'Looking for' },
-    career: { id: 'career', label: 'Career', editSec: 'Career' },
-    trust: { id: 'trust', label: 'Trust', editSec: 'About' },
+    identity: { id: 'identity', label: t('common.identity'), editSec: 'About' },
+    social: { id: 'social', label: t('profile.social'), editSec: 'About' },
+    relationship: { id: 'relationship', label: t('profile.looking_for'), editSec: 'Looking for' },
+    career: { id: 'career', label: t('profile.career'), editSec: 'Career' },
+    trust: { id: 'trust', label: t('profile.trust'), editSec: 'About' },
   };
 
   /** Compat labels for field-save toasts — aligned with real scorer. */
   const COMPLETION_FIELDS = [
-    { key: 'bio', weight: 2, label: 'Bio' },
-    { key: 'prompts', weight: 1.5, label: 'Prompts' },
-    { key: 'currentCity', weight: 2, label: 'City' },
-    { key: 'languages', weight: 1, label: 'Languages' },
-    { key: 'interests', weight: 2, label: 'Interests' },
-    { key: 'lookingFor', weight: 1, label: 'Looking for' },
-    { key: 'occupation', weight: 1.5, label: 'Occupation' },
-    { key: 'industry', weight: 1, label: 'Industry' },
-    { key: 'purpose', weight: 1, label: 'Purpose' },
-    { key: 'skills', weight: 1, label: 'Skills' },
-    { key: 'photos', weight: 2, label: 'Photo' },
-    { key: 'username', weight: 1, label: 'Username' },
+    { key: 'bio', weight: 2, label: t('profile.bio') },
+    { key: 'prompts', weight: 1.5, label: t('profile.prompts') },
+    { key: 'currentCity', weight: 2, label: t('profile.city') },
+    { key: 'languages', weight: 1, label: t('profile.languages') },
+    { key: 'interests', weight: 2, label: t('profile.interests') },
+    { key: 'lookingFor', weight: 1, label: t('profile.looking_for') },
+    { key: 'occupation', weight: 1.5, label: t('profile.occupation') },
+    { key: 'industry', weight: 1, label: t('common.industry') },
+    { key: 'purpose', weight: 1, label: t('common.purpose') },
+    { key: 'skills', weight: 1, label: t('profile.skills') },
+    { key: 'photos', weight: 2, label: t('profile.photo') },
+    { key: 'username', weight: 1, label: t('common.username_2') },
   ];
 
   function isFilled(val) {
@@ -144,10 +144,10 @@
     const hideRel = !!ctx.teen || isPro;
 
     const identity = scoreItems([
-      { label: 'Photo', weight: 2, filled: photo },
-      { label: 'Bio', weight: 2, filled: isFilled(profile.bio) },
+      { label: t('profile.photo'), weight: 2, filled: photo },
+      { label: t('profile.bio'), weight: 2, filled: isFilled(profile.bio) },
       {
-        label: isPro ? 'Headline detail' : 'Prompts',
+        label: isPro ? t('profile.headline_detail') : t('profile.prompts'),
         weight: 1.5,
         filled: isPro
           ? isFilled(profile.occupation) || isFilled(profile.bio)
@@ -156,13 +156,13 @@
     ]);
 
     const socialItems = [
-      { label: 'City', weight: 2, filled: isFilled(profile.currentCity) || isFilled(profile.city) },
-      { label: 'Languages', weight: 1, filled: isFilled(profile.languages) },
-      { label: 'Interests', weight: 2, filled: interestsOrHobbies(profile) },
+      { label: t('profile.city'), weight: 2, filled: isFilled(profile.currentCity) || isFilled(profile.city) },
+      { label: t('profile.languages'), weight: 1, filled: isFilled(profile.languages) },
+      { label: t('profile.interests'), weight: 2, filled: interestsOrHobbies(profile) },
     ];
     const posts = cheapPostsFilled(ctx);
     if (posts != null) {
-      socialItems.push({ label: 'A post', weight: 1, filled: posts });
+      socialItems.push({ label: t('profile.a_post'), weight: 1, filled: posts });
     }
     const social = scoreItems(socialItems);
 
@@ -177,19 +177,19 @@
     const relationship = hideRel
       ? { pct: 100, complete: true, missing: [], hidden: true }
       : scoreItems([
-          { label: 'Relationship status', weight: 1, filled: isFilled(profile.relationshipStatus) },
-          { label: 'Looking for', weight: 1, filled: isFilled(looking) },
+          { label: t('profile.relationship_status'), weight: 1, filled: isFilled(profile.relationshipStatus) },
+          { label: t('profile.looking_for'), weight: 1, filled: isFilled(looking) },
         ]);
 
     const careerItems = [
-      { label: 'Occupation', weight: 1.5, filled: isFilled(profile.occupation) },
+      { label: t('profile.occupation'), weight: 1.5, filled: isFilled(profile.occupation) },
     ];
     if (isPro) {
       careerItems.push(
-        { label: 'Industry', weight: 1, filled: isFilled(profile.industry) },
-        { label: 'Purpose', weight: 1, filled: isFilled(profile.purpose) },
+        { label: t('common.industry'), weight: 1, filled: isFilled(profile.industry) },
+        { label: t('common.purpose'), weight: 1, filled: isFilled(profile.purpose) },
         {
-          label: 'Skills or link',
+          label: t('profile.skills_or_link'),
           weight: 1,
           filled: isFilled(profile.skills) || hasProLink(profile),
         }
@@ -198,10 +198,10 @@
     const career = scoreItems(careerItems);
 
     const trust = scoreItems([
-      { label: 'Username', weight: 1, filled: isFilled(ctx.username) || isFilled(profile.username) },
-      { label: 'Photo', weight: 1, filled: photo },
+      { label: t('common.username_2'), weight: 1, filled: isFilled(ctx.username) || isFilled(profile.username) },
+      { label: t('profile.photo'), weight: 1, filled: photo },
       {
-        label: 'Verified email or phone',
+        label: t('profile.verified_email_or_phone'),
         weight: 1.5,
         filled: !!(ctx.emailVerified || ctx.phoneVerified),
       },
@@ -267,7 +267,7 @@
 
   function nextMissingHint(stats) {
     const miss = (stats.missing || []).slice(0, 2);
-    if (!miss.length) return 'Looking good — this Profile feels like you.';
+    if (!miss.length) return t('profile.looking_good_this_profile_feels_like');
     if (miss.length === 1) return `Next: add ${miss[0]}`;
     return `Next: ${miss[0]}, ${miss[1]}`;
   }
@@ -377,19 +377,19 @@
     sheet.setAttribute('data-nav-managed', '1');
     const next = (stats.missing || []).slice(0, 2);
     const line = photoMissing
-      ? 'A photo helps people recognise you — totally optional.'
+      ? t('profile.a_photo_helps_people_recognise_you')
       : next.length
-        ? `Finish Identity — add ${next.join(' & ').toLowerCase()}.`
-        : 'Add a bio whenever you like. No rush.';
+        ? t('profile.finish_identity_add', { items: typeof formatList === 'function' ? formatList(next) : next.join(', ') })
+        : t('profile.add_a_bio_whenever_you_like');
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ label: 'Not now', attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Not now">←</button>'}
-        <div style="flex:1"><strong>Make it feel like you</strong></div>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ label: t('profile.not_now'), attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('profile.not_now') + '">←</button>'}
+        <div style="flex:1"><strong>${tHtml('profile.make_it_feel_like_you')}</strong></div>
       </div>
       <div style="padding:18px 16px 24px;">
         <p style="font-size:14px;line-height:1.5;margin:0 0 16px;color:var(--ink);">${line}</p>
-        <button type="button" class="btn btn--primary btn--block" data-nudge-edit>Open Profile Edit</button>
-        <button type="button" class="auth-guest-btn" data-nudge-skip style="margin-top:10px;">Not now</button>
+        <button type="button" class="btn btn--primary btn--block" data-nudge-edit>${tHtml('profile.open_profile_edit')}</button>
+        <button type="button" class="auth-guest-btn" data-nudge-skip style="margin-top:10px;">${tHtml('profile.not_now')}</button>
       </div>
     `;
     const finishSkip = () => {

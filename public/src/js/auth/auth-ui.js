@@ -31,7 +31,7 @@ function updateProfileBtn(){
   // Desktop sidebar profile
   const sidebarName=document.getElementById('sidebarProfileName');
   const sidebarIcon=document.getElementById('sidebarProfileIcon');
-  if(sidebarName&&currentUser) sidebarName.textContent=userProfile?.name?.split(' ')[0]||currentUser.displayName?.split(' ')[0]||'Profile';
+  if(sidebarName&&currentUser) sidebarName.textContent=userProfile?.name?.split(' ')[0]||currentUser.displayName?.split(' ')[0]||t('common.profile');
   if(sidebarIcon&&currentUser){
     if(typeof renderUserAvatarHtml==='function'){
       const wrap=document.createElement('div');

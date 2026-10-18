@@ -23,7 +23,7 @@
     duel: 'duels',
     muqabala: 'duels',
     comment: 'comments',
-    message: 'messages',
+    message: 'messages', // i18n-ignore (category code)
     chat: 'messages',
     streak: 'akhbaar',
     akhbaar: 'akhbaar',

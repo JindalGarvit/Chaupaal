@@ -17,6 +17,10 @@
     return fallback;
   }
 
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  }
+
   function contactsSupported() {
     try {
       return !!(navigator.contacts && typeof navigator.contacts.select === 'function');
@@ -123,10 +127,10 @@
     if (typeof openUnifiedShareSheet === 'function') {
       openUnifiedShareSheet({
         gameId: 'invite',
-        title: tt('contacts_invite_title', 'Invite to Chaupaal'),
+        title: tt('settings.contacts_invite_title', 'Invite to Chaupaal'),
         subtitle: contact?.name || '',
         story: false,
-        stats: { text, url, scoreLine: contact?.name || 'Invite' },
+        stats: { text, url, scoreLine: contact?.name || t('common.invite') },
       });
       return;
     }
@@ -165,7 +169,7 @@
               typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(u,{decorative:true}):(u.photoURL?`<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;">`:'👤')
             }</div>
             <div style="flex:1;min-width:0;">
-              <div style="font-weight:700;font-size:14px;">${u.name || u.contactName || 'Friend'}</div>
+              <div style="font-weight:700;font-size:14px;">${esc(u.name || u.contactName || t('common.friend'))}</div>
               <div style="font-size:11px;color:var(--muted);">${tt('contacts_on_chaupaal', 'On Chaupaal')}${u.username ? ` · @${u.username}` : ''}</div>
             </div>
           </button>`
@@ -198,7 +202,7 @@
             uid,
             name: btn.dataset.contactName || 'Friend',
             avatar: '👤',
-            starterText: 'Hi!',
+            starterText: t('common.starter_hi'),
             origin: 'contacts',
           });
         } else if (typeof openProfile === 'function') {
@@ -282,7 +286,7 @@
             .map(
               (r) =>
                 `<button type="button" class="contacts-search-row contacts-row" data-uid="${r.uid || ''}">
-                  <div style="font-weight:700;">${r.name || r.username || 'User'}</div>
+                  <div style="font-weight:700;">${esc(r.name || r.username || t('common.user'))}</div>
                   <div style="font-size:12px;color:var(--muted);">@${r.username || 'user'}</div>
                 </button>`
             )
@@ -302,7 +306,7 @@
                   name: btn.querySelector('div')?.textContent || 'Friend',
                   username: (btn.querySelectorAll('div')[1]?.textContent || '').replace(/^@/, ''),
                   avatar: '👤',
-                  starterText: 'Hi!',
+                  starterText: t('common.starter_hi'),
                   origin: surface,
                 });
               }
@@ -350,7 +354,7 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div style="flex:1"><strong>${tt('contacts_find_title', 'Find people')}</strong></div>
       </div>
       <div style="padding:12px 16px;">${bodyHtml}</div>`;

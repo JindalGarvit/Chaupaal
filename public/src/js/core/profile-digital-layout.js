@@ -30,26 +30,26 @@
   }
 
   const BUILTIN_BLOCKS = [
-    { id: 'bio', type: 'builtin', label: 'About', accent: '#E63946' },
-    { id: 'prompts', type: 'builtin', label: 'Prompts', accent: '#7B2CBF' },
-    { id: 'about', type: 'builtin', label: 'Essentials', accent: '#1565C0' },
-    { id: 'interests', type: 'builtin', label: 'Interests', accent: '#2E7D32' },
-    { id: 'lifestyle', type: 'builtin', label: 'Lifestyle', accent: '#00838F' },
-    { id: 'media', type: 'builtin', label: 'Photos & clips', accent: '#EF6C00' },
-    { id: 'links', type: 'builtin', label: 'Links', accent: '#AD1457' },
-    { id: 'stats', type: 'builtin', label: 'Stats', accent: '#5E35B1' },
-    { id: 'pinned', type: 'builtin', label: 'Pinned', accent: '#C62828' },
+    { id: 'bio', type: 'builtin', label: t('profile.about'), accent: '#E63946' },
+    { id: 'prompts', type: 'builtin', label: t('profile.prompts'), accent: '#7B2CBF' },
+    { id: 'about', type: 'builtin', label: t('profile.essentials'), accent: '#1565C0' },
+    { id: 'interests', type: 'builtin', label: t('profile.interests'), accent: '#2E7D32' },
+    { id: 'lifestyle', type: 'builtin', label: t('profile.lifestyle'), accent: '#00838F' },
+    { id: 'media', type: 'builtin', label: t('profile.photos_clips'), accent: '#EF6C00' },
+    { id: 'links', type: 'builtin', label: t('profile.links'), accent: '#AD1457' },
+    { id: 'stats', type: 'builtin', label: t('profile.stats'), accent: '#5E35B1' },
+    { id: 'pinned', type: 'builtin', label: t('profile.pinned'), accent: '#C62828' },
     { id: 'dangal', type: 'builtin', label: 'Dangal', accent: '#E85D04' },
   ];
 
   const BLOCK_CATALOG = [
-    { type: 'quote', label: 'Quote', hint: 'Pinned thought', emoji: '💬', accent: '#7B2CBF' },
-    { type: 'links', label: 'Link list', hint: 'Website & socials', emoji: '🔗', accent: '#AD1457' },
-    { type: 'flexible', label: 'Text block', hint: 'Free write-up', emoji: '📝', accent: '#1565C0' },
-    { type: 'emoji', label: 'Mood', hint: 'Emoji vibe', emoji: '😎', accent: '#EF6C00' },
-    { type: 'media', label: 'Featured media', hint: 'Photo / clip slot', emoji: '📷', accent: '#2E7D32' },
-    { type: 'voice', label: 'Voice note', hint: 'Short audio intro', emoji: '🎙️', accent: '#00838F' },
-    { type: 'video', label: 'Video card', hint: 'One short video', emoji: '🎬', accent: '#C62828' },
+    { type: 'quote', label: t('profile.quote'), hint: t('profile.pinned_thought'), emoji: '💬', accent: '#7B2CBF' },
+    { type: 'links', label: t('profile.link_list'), hint: t('profile.website_socials'), emoji: '🔗', accent: '#AD1457' },
+    { type: 'flexible', label: t('profile.text_block'), hint: t('profile.free_write_up'), emoji: '📝', accent: '#1565C0' },
+    { type: 'emoji', label: t('profile.mood'), hint: t('profile.emoji_vibe'), emoji: '😎', accent: '#EF6C00' },
+    { type: 'media', label: t('profile.featured_media'), hint: t('profile.photo_clip_slot'), emoji: '📷', accent: '#2E7D32' },
+    { type: 'voice', label: t('profile.voice_note'), hint: t('profile.short_audio_intro'), emoji: '🎙️', accent: '#00838F' },
+    { type: 'video', label: t('profile.video_card'), hint: t('profile.one_short_video'), emoji: '🎬', accent: '#C62828' },
   ];
 
   const PALETTES = [
@@ -129,7 +129,7 @@
       blocks.push({
         id: c.id,
         type: c.type || c.layout || 'flexible',
-        label: c.name || 'Section',
+        label: c.name || t('profile.section'),
         visible: c.visible !== false,
         privacy: c.privacy === 'private' ? 'private' : c.privacy === 'friends' ? 'friends' : 'public',
         order: blocks.length + i,
@@ -570,7 +570,7 @@
     const block = {
       id,
       type: spec.type || 'flexible',
-      label: spec.label || 'New block',
+      label: spec.label || t('profile.new_block'),
       visible: true,
       privacy: 'public',
       order: layout.blocks.length,

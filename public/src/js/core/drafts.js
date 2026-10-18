@@ -123,7 +123,7 @@
           typeof showToast === 'function' &&
           (existing.caption || existing.question || existing.text)
         ) {
-          showToast('Draft restored ✎');
+          showToast(t('common.draft_restored'));
         }
       }
     })();

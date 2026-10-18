@@ -125,8 +125,8 @@
     if (typeof showToast !== 'function') return;
     showToast(
       reason === 'teen_adult_stranger'
-        ? 'Teen Mode: message friends (or other teens) only'
-        : 'This teen can only be messaged by friends'
+        ? t('settings.teen_mode_message_friends_or_other')
+        : t('settings.this_teen_can_only_be_messaged')
     );
   }
 
@@ -184,9 +184,10 @@
 
   function teenAiSystemHint() {
     if (!isTeenModeUser()) return '';
+    // LLM system prompt (model instructions, not UI copy).
     return (
-      ' The user is under 18 (Teen Mode). Keep replies warm, age-appropriate, and non-suggestive. ' +
-      'Avoid dating/romance coaching, sexual content, or adult meetups. Prefer hobbies, school, friendship, and safety.'
+      ' The user is under 18 (Teen Mode). Keep replies warm, age-appropriate, and non-suggestive. ' + // i18n-ignore
+      'Avoid dating/romance coaching, sexual content, or adult meetups. Prefer hobbies, school, friendship, and safety.' // i18n-ignore
     );
   }
 
@@ -245,7 +246,7 @@
       el.classList.remove('hidden');
       document.getElementById('authOverlay')?.classList.remove('hidden');
     } else if (typeof showToast === 'function') {
-      showToast('Ask a parent to verify your account in Settings');
+      showToast(t('settings.ask_a_parent_to_verify_your'));
     }
   }
   window.openParentalConsentSheet = openParentalConsentSheet;

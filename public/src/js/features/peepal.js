@@ -6,9 +6,9 @@ function showOnboarding(){
   const overlay=document.createElement('div');overlay.className='onboarding-overlay';overlay.id='onboardingOverlay';
   let step=0;const selectedCategories=[];let aurSunaoAnswer=null;
   const steps=[
-    {title:"What are you into? 👋",sub:"Pick 2 or more topics — we'll personalise your Akhbaar from day one.",type:'categories'},
-    {title:"Quick one 🎭",sub:"No right answer — just helps us understand you.",type:'aur_sunao',q:"Pick your ideal Sunday:",opts:["🏔️ Trek in the mountains","📚 Read a good book","🎬 Movie marathon","🍳 Try a new recipe"]},
-    {title:"Let's try one Akhbaar question! 📰",sub:"Experience how Chaupaal works before you sign up.",type:'sample_q'},
+    {title:t('onboarding.into_title'),sub:t('onboarding.into_sub'),type:'categories'},
+    {title:t('onboarding.quick_one_title'),sub:t('onboarding.quick_one_sub'),type:'aur_sunao',q:"Pick your ideal Sunday:",opts:/* i18n-values: onboarding.opt.sunday */ ["🏔️ Trek in the mountains","📚 Read a good book","🎬 Movie marathon","🍳 Try a new recipe"]}, // i18n-ignore (q + opts feed the personality model)
+    {title:t('onboarding.try_akhbaar_title'),sub:t('onboarding.try_akhbaar_sub'),type:'sample_q'},
   ];
   function renderStep(){
     const s=steps[step];
@@ -23,7 +23,7 @@ function showOnboarding(){
           </div>
         `:s.type==='aur_sunao'?`
           <div class="onboarding-chips">
-            ${s.opts.map((o,i)=>`<button class="onboarding-chip" data-i="${i}">${o}</button>`).join('')}
+            ${s.opts.map((o,i)=>`<button class="onboarding-chip" data-i="${i}">${optionLabelHtml('onboarding.opt.sunday',o)}</button>`).join('')}
           </div>
         `:s.type==='sample_q'?`
           <div style="background:var(--white);border-radius:20px;padding:20px;flex:1;">
@@ -34,8 +34,8 @@ function showOnboarding(){
             </div>
           </div>
         `:''}
-        <button class="btn btn--primary btn--block btn--lg onboarding-next-btn" id="onboardNext" style="${s.type==='sample_q'?'display:none;':''}">${step===steps.length-1?"Let's go! 🚀":"Continue →"}</button>
-        <button class="onboarding-skip" id="onboardSkip">Skip</button>
+        <button class="btn btn--primary btn--block btn--lg onboarding-next-btn" id="onboardNext" style="${s.type==='sample_q'?'display:none;':''}">${step===steps.length-1?tHtml('onboarding.lets_go'):tHtml('onboarding.continue_arrow')}</button>
+        <button class="onboarding-skip" id="onboardSkip">${tHtml('onboarding.skip')}</button>
       </div>
     `;
     // Category chips
@@ -83,7 +83,7 @@ function showOnboarding(){
         // Show continue after short delay
         setTimeout(()=>{
           nextBtn.style.display='block';
-          nextBtn.textContent="Let's go! 🚀";
+          nextBtn.textContent=t('onboarding.lets_go');
           nextBtn.scrollIntoView({behavior:'smooth',block:'nearest'});
         },600);
       }));
@@ -91,7 +91,7 @@ function showOnboarding(){
     document.getElementById('onboardNext').addEventListener('click',()=>{
       if(s.type==='categories'){
         if(selectedCategories.length<2){
-          if(typeof showToast==='function') showToast('Pick at least 2 topics to continue');
+          if(typeof showToast==='function') showToast(t('onboarding.pick_two_topics'));
           return;
         }
         selectedCategories.forEach(name=>addCategory(name,getCategoryEmoji(name)));

@@ -104,7 +104,7 @@
    * when IntersectionObserver is unavailable, preserving a no-JS/legacy fallback.
    * Existing callers may keep using ensureLoadMoreButton; it aliases this helper.
    */
-  function ensureInfiniteScroll(container, { label = 'Load more', onLoadMore, busyLabel = 'Loading…' } = {}) {
+  function ensureInfiniteScroll(container, { label = t('common.load_more'), onLoadMore, busyLabel = t('common.loading') } = {}) {
     if (!container) return null;
     let sentinel = container.querySelector('[data-ui="infinite-scroll"]');
     if (!sentinel) {
@@ -112,7 +112,7 @@
       sentinel.dataset.ui = 'infinite-scroll';
       sentinel.className = 'ui-infinite-sentinel';
       sentinel.innerHTML = `
-        <span class="ui-infinite-status" role="status" aria-live="polite">Scroll for more</span>
+        <span class="ui-infinite-status" role="status" aria-live="polite">${tHtml('common.scroll_for_more')}</span>
         <button type="button" class="ui-load-more-btn" data-ui="load-more"></button>`;
       container.appendChild(sentinel);
     }
@@ -136,7 +136,7 @@
         sentinel.dataset.busy = '0';
         btn.disabled = false;
         btn.textContent = label;
-        if (status) status.textContent = 'Scroll for more';
+        if (status) status.textContent = t('common.scroll_for_more');
         if (sentinel.isConnected) observer?.observe(sentinel);
       }
     };

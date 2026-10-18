@@ -29,7 +29,7 @@
       needAuth: true,
       body: { action, ...(body || {}) },
     });
-    if (!envelope?.ok) throw new Error(envelope?.error?.message || 'Relationship action failed');
+    if (!envelope?.ok) throw Object.assign(new Error(envelope?.error?.message || 'Relationship action failed'), { code: envelope?.error?.code });
     return envelope.data || {};
   }
 
@@ -49,7 +49,7 @@
   function displayNameFor(profile) {
     if (typeof resolvePersonDisplayName === 'function') return resolvePersonDisplayName(profile);
     const p = profile || {};
-    return p.name || p.displayName || (p.username ? `@${p.username}` : '') || 'Someone';
+    return p.name || p.displayName || (p.username ? `@${p.username}` : '') || t('common.someone');
   }
 
   function refreshFriendRequestSurfaces() {
@@ -98,21 +98,21 @@
   async function openProfileMessage(profile) {
     const uid = String(profile?.uid || '').trim();
     if (!uid) {
-      if (typeof showToast === 'function') showToast('Could not open chat');
+      if (typeof showToast === 'function') showToast(t('profile.could_not_open_chat'));
       return null;
     }
     if ((typeof isSelfUid === 'function' && isSelfUid(uid)) || uid === currentUser?.uid) {
-      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('rel_cant_message_self', 'That’s you') : 'That’s you');
+      if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('profile.rel_cant_message_self', 'That’s you') : t('profile.that_s_you_2'));
       return null;
     }
     if (!currentUser) {
       if (typeof savePendingProfileMessage === 'function') savePendingProfileMessage(profile);
       if (typeof showAuth === 'function') showAuth();
-      else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('rel_sign_in') : 'Sign in');
+      else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('rel_sign_in') : t('common.sign_in'));
       return null;
     }
     if (typeof bootstrapDmChat !== 'function' && typeof openPeerDm !== 'function') {
-      if (typeof showToast === 'function') showToast('Open Baithak to message');
+      if (typeof showToast === 'function') showToast(t('profile.open_baithak_to_message'));
       return null;
     }
     const messageBtn =
@@ -120,12 +120,12 @@
       document.querySelector('[data-rel-message]');
     if (messageBtn) {
       messageBtn.disabled = true;
-      if (typeof setButtonLoading === 'function') setButtonLoading(messageBtn, true, 'Opening…');
+      if (typeof setButtonLoading === 'function') setButtonLoading(messageBtn, true, t('common.opening'));
     }
     try {
       let peerName = displayNameFor(profile);
       if (!peerName || /^(someone|friend|chaupaal member|member|chat)$/i.test(String(peerName).trim())) {
-        peerName = profile.username ? '@' + String(profile.username).replace(/^@/, '') : peerName || 'Chat';
+        peerName = profile.username ? '@' + String(profile.username).replace(/^@/, '') : peerName || t('common.chat');
       }
       const openFn = typeof openPeerDm === 'function' ? openPeerDm : null;
       if (openFn) {
@@ -171,7 +171,7 @@
       return chat;
     } catch (e) {
       const msg =
-        typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat — try again';
+        typeof friendlyDmError === 'function' ? friendlyDmError(e) : errorText(e, t('profile.could_not_open_chat_try_again'));
       if (typeof showToast === 'function') showToast(msg);
       return null;
     } finally {
@@ -285,10 +285,10 @@
   function relationshipCountsHtml(counts) {
     const c = counts || {};
     return `
-      <div class="relationship-counts" aria-label="Profile relationships">
-        <button type="button" data-relationship-list="friends"><strong>${Number(c.friends) || 0}</strong><span>Friends</span></button>
-        <button type="button" data-relationship-list="followers"><strong>${Number(c.followers) || 0}</strong><span>Followers</span></button>
-        <button type="button" data-relationship-list="following"><strong>${Number(c.following) || 0}</strong><span>Following</span></button>
+      <div class="relationship-counts" aria-label="${tHtml('profile.profile_relationships')}">
+        <button type="button" data-relationship-list="friends"><strong>${Number(c.friends) || 0}</strong><span>${tHtml('profile.friends')}</span></button>
+        <button type="button" data-relationship-list="followers"><strong>${Number(c.followers) || 0}</strong><span>${tHtml('profile.followers')}</span></button>
+        <button type="button" data-relationship-list="following"><strong>${Number(c.following) || 0}</strong><span>${tHtml('profile.rel_following')}</span></button>
       </div>`;
   }
 
@@ -316,14 +316,14 @@
   });
 
   function friendActionLabel(state) {
-    if (state.friend) return 'Friends';
-    if (state.requestReceived) return 'Accept';
-    if (state.requestSent) return 'Requested';
-    return 'Add Friend';
+    if (state.friend) return t('profile.friends');
+    if (state.requestReceived) return t('common.accept');
+    if (state.requestSent) return t('common.requested');
+    return t('common.add_friend');
   }
 
   function followActionLabel(state) {
-    return state.following ? 'Following' : 'Follow';
+    return state.following ? t('profile.following') : t('common.follow');
   }
 
   /** Build expandable actions for a target — used by long-press and profile ▾ menu. */
@@ -339,9 +339,9 @@
     };
 
     actions.push({
-      label: 'View profile',
+      label: t('profile.cai_view_profile'),
       icon: 'user',
-      hint: 'Open their Chaupaal profile',
+      hint: t('profile.open_their_chaupaal_profile'),
       fn: () => {
         if (typeof tapAvatarFromFeed === 'function') {
           tapAvatarFromFeed(profile, { context: 'relationship_menu' });
@@ -353,9 +353,9 @@
       },
     });
     actions.push({
-      label: 'Message',
+      label: t('profile.avatar_menu_message'),
       icon: 'message-circle',
-      hint: 'Anyone can message. Teen Mode is the only exception.',
+      hint: t('profile.anyone_can_message_teen_mode_is'),
       fn: async () => {
         await openProfileMessage(profile);
       },
@@ -366,15 +366,15 @@
         label: state.splitExcluded
           ? typeof t === 'function'
             ? t('exclusion_menu_remove')
-            : 'Remove from exclusion list'
+            : t('profile.avatar_menu_remove_cf')
           : typeof t === 'function'
             ? t('exclusion_menu_exclude')
-            : 'Exclude from Splits',
+            : t('profile.avatar_menu_add_cf'),
         icon: 'user-minus',
         hint:
           typeof t === 'function'
             ? t('exclusion_menu_hint')
-            : 'They won\'t receive your Baithak Splits. Only you see this.',
+            : t('profile.exclusion_menu_hint'),
         fn: async () => {
           const next = await setSplitExclusion(profile.uid, !state.splitExcluded);
           showToast(
@@ -386,10 +386,10 @@
         },
       });
       actions.push({
-        label: 'Unfriend',
+        label: t('profile.unfriend'),
         icon: 'user-x',
         danger: true,
-        hint: 'Removes your follow. They may still follow you.',
+        hint: t('profile.removes_your_follow_they_may_still'),
         fn: async () => {
           await setFollowing(profile.uid, false, 'unfriend');
           showToast(t('rel_unfriended',{name}));
@@ -398,7 +398,7 @@
       });
     } else if (state.requestReceived) {
       actions.push({
-        label: 'Accept friend request',
+        label: t('profile.accept_friend_request'),
         icon: 'user-plus',
         fn: async () => {
           await respondFriend(profile.uid, true);
@@ -407,7 +407,7 @@
         },
       });
       actions.push({
-        label: 'Decline friend request',
+        label: t('profile.decline_friend_request'),
         icon: 'x',
         danger: true,
         fn: async () => {
@@ -417,7 +417,7 @@
       });
     } else if (state.requestSent) {
       actions.push({
-        label: 'Cancel friend request',
+        label: t('profile.cancel_friend_request'),
         icon: 'x',
         fn: async () => {
           await cancelFriendRequest(profile.uid);
@@ -427,11 +427,11 @@
       });
     } else if (!state.requestSent && mode !== 'friend') {
       actions.push({
-        label: 'Add Friend',
+        label: t('common.add_friend'),
         icon: 'user-plus',
         hint: state.followsYou
-          ? 'They already follow you — this will make you Friends right away.'
-          : 'They’ll need to accept before you’re Friends.',
+          ? t('profile.they_already_follow_you_this_will')
+          : t('profile.they_ll_need_to_accept_before'),
         fn: async () => {
           const result = await requestFriend(profile.uid);
           if (result.autoAccepted || result.accepted) {
@@ -447,9 +447,9 @@
     if (!state.following) {
       if (mode !== 'follow') {
         actions.push({
-          label: 'Follow',
+          label: t('common.follow'),
           icon: 'user-plus',
-          hint: 'One-way follow. Available here on personal profiles. Mutual follow makes you Friends.',
+          hint: t('profile.one_way_follow_available_here_on'),
           fn: async () => {
             const next = await setFollowing(profile.uid, true, 'profile_menu');
             showToast(next.friend?t('rel_now_friends_named',{name}):t('rel_following_named',{name}));
@@ -459,7 +459,7 @@
       }
     } else if (!state.friend) {
       actions.push({
-        label: 'Unfollow',
+        label: t('profile.unfollow'),
         icon: 'user-minus',
         fn: async () => {
           await setFollowing(profile.uid, false, 'profile_menu');
@@ -474,10 +474,10 @@
         state.followsYou && !(state.friend && state.friendOrigin === 'friend_request');
       if (canRemoveFollower) {
         actions.push({
-          label: 'Remove follower',
+          label: t('profile.remove_follower'),
           icon: 'user-x',
           danger: true,
-          hint: 'Stops them following you. Your follow of them (if any) stays.',
+          hint: t('profile.stops_them_following_you_your_follow'),
           fn: async () => {
             await removeFollower(profile.uid);
             showToast(t('rel_removed_follower',{name}));
@@ -497,10 +497,10 @@
       const state = relationshipState(profile.uid);
       const actions = buildRelationshipActions(profile, state, { context });
       if (typeof showActionSheet === 'function') {
-        showActionSheet(title || 'More', actions);
+        showActionSheet(title || t('common.more'), actions);
       }
     };
-    run().catch((error) => showToast(error?.message || t('rel_actions_fail')));
+    run().catch((error) => showToast(errorText(error, t('rel_actions_fail'))));
   }
 
   async function wireFriendAction(button, targetUid) {
@@ -521,15 +521,15 @@
       if (!requireRelationshipUser()) return;
       const state = relationshipState(targetUid);
       if (state.friend) {
-        openRelationshipMenu({ uid: targetUid, name: button.dataset.name || 'Friend' }, { title: 'Friends' });
+        openRelationshipMenu({ uid: targetUid, name: button.dataset.name || 'Friend' }, { title: t('profile.friends') });
         return;
       }
       if (state.requestReceived) {
-        openRelationshipMenu({ uid: targetUid, name: button.dataset.name || 'Person' }, { title: 'Friend request' });
+        openRelationshipMenu({ uid: targetUid, name: button.dataset.name || 'Person' }, { title: t('profile.friend_request') });
         return;
       }
       if (state.requestSent) {
-        openRelationshipMenu({ uid: targetUid, name: button.dataset.name || 'Person' }, { title: 'Requested' });
+        openRelationshipMenu({ uid: targetUid, name: button.dataset.name || 'Person' }, { title: t('profile.requested') });
         return;
       }
       button.disabled = true;
@@ -540,7 +540,7 @@
         else showToast(t('rel_request_sent'));
       } catch (error) {
         button.disabled = false;
-        showToast(error?.message || t('rel_request_fail'));
+        showToast(errorText(error, t('rel_request_fail')));
       }
     });
   }
@@ -607,7 +607,7 @@
       try {
         if (mode === 'friend') {
           if (prev.friend) {
-            openRelationshipMenu(profile, { title: 'Friends', context });
+            openRelationshipMenu(profile, { title: t('profile.friends'), context });
             return;
           }
           if (prev.requestReceived) {
@@ -624,7 +624,7 @@
             return;
           }
           if (prev.requestSent) {
-            openRelationshipMenu(profile, { title: 'Requested', context });
+            openRelationshipMenu(profile, { title: t('profile.requested'), context });
             return;
           }
           patchRelationshipState(profile.uid, {
@@ -644,7 +644,7 @@
           }
         } else {
           if (prev.following) {
-            openRelationshipMenu(profile, { title: 'Following', context });
+            openRelationshipMenu(profile, { title: t('profile.rel_following'), context });
             return;
           }
           patchRelationshipState(profile.uid, {
@@ -660,16 +660,16 @@
       } catch (error) {
         cache.set(profile.uid, prev);
         paint();
-        showToast(error?.message || t('rel_update_fail'), 3000, { type: 'error' });
+        showToast(errorText(error, t('rel_update_fail')), 3000, { type: 'error' });
       } finally {
         if (typeof setButtonLoading === 'function') setButtonLoading(primaryBtn, false);
       }
     });
 
     messageBtn?.addEventListener('click', () => openProfileMessage(profile));
-    moreBtn?.addEventListener('click', () => openRelationshipMenu(profile, { title: 'More', context }));
+    moreBtn?.addEventListener('click', () => openRelationshipMenu(profile, { title: t('common.more'), context }));
     if (typeof onLongPress === 'function' && primaryBtn) {
-      onLongPress(primaryBtn, () => openRelationshipMenu(profile, { title: 'More', context }));
+      onLongPress(primaryBtn, () => openRelationshipMenu(profile, { title: t('common.more'), context }));
     }
     document.addEventListener('chaupaal:relationship-changed', (event) => {
       if (!host.isConnected) return;
@@ -686,7 +686,7 @@
       element.style.webkitUserSelect = 'none';
       element.style.webkitTouchCallout = 'none';
     }
-    const open = () => openRelationshipMenu(profile, { title: 'Profile actions' });
+    const open = () => openRelationshipMenu(profile, { title: t('profile.profile_actions') });
     if (typeof onLongPress === 'function') onLongPress(element, open);
     else {
       let timer;
@@ -701,7 +701,17 @@
 
   async function openRelationshipList(kind, { targetUid } = {}) {
     if (!requireRelationshipUser()) return;
-    const titles = { friends: 'Friends', followers: 'Followers', following: 'Following' };
+    const titles = { friends: t('profile.friends'), followers: t('profile.followers'), following: t('profile.following') };
+    const emptyCopy = {
+      friends: t('profile.rel_empty_friends'),
+      followers: t('profile.rel_empty_followers'),
+      following: t('profile.rel_empty_following'),
+    };
+    const searchCopy = {
+      friends: t('profile.rel_search_friends'),
+      followers: t('profile.rel_search_followers'),
+      following: t('profile.rel_search_following'),
+    };
     const actions = {
       friends: 'list_friends',
       followers: 'list_followers',
@@ -715,24 +725,24 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-rel-list-back' }) : '<button type="button" data-rel-list-back aria-label="Back" class="cp-back-btn">←</button>'}
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-rel-list-back' }) : '<button type="button" data-rel-list-back aria-label="' + tHtml('common.back') + '" class="cp-back-btn">←</button>'}
         <div style="flex:1"><strong>${titles[kind]}</strong>
           <div class="relationship-private-note">${
             kind === 'friends'
-              ? 'Mutual follows — both of you chose to connect.'
+              ? tHtml('profile.mutual_follows_both_of_you_chose')
               : kind === 'followers'
-                ? 'People who follow this profile.'
-                : 'People this profile follows.'
+                ? tHtml('profile.people_who_follow_this_profile')
+                : tHtml('profile.people_this_profile_follows')
           }</div>
         </div>
       </div>
       <div class="relationship-list-filter-host" data-rel-list-filter-host></div>
       <div class="close-friends-manager" data-rel-list-body></div>
-      <div class="comments-empty" data-list-filter-empty hidden>No matches</div>`;
+      <div class="comments-empty" data-list-filter-empty hidden>${tHtml('profile.no_matches')}</div>`;
     const body = overlay.querySelector('[data-rel-list-body]');
     const filterHost = overlay.querySelector('[data-rel-list-filter-host]');
     if (typeof renderSkeleton === 'function') renderSkeleton(body, { variant: 'list', count: 5 });
-    else body.innerHTML = 'Loading…';
+    else body.innerHTML = tHtml('profile.loading');
     const deviceEl = document.querySelector('.device');
     let listLayer = null;
     const dismissList = () => {};
@@ -757,10 +767,10 @@
         profiles = pinYouInProfiles(profiles);
       }
       if (!profiles.length) {
-        body.innerHTML = `<div class="comments-empty">No ${titles[kind].toLowerCase()} yet.</div>`;
+        body.innerHTML = `<div class="comments-empty">${emptyCopy[kind]}</div>`;
         return;
       }
-      const youLabel = typeof selfListLabel === 'function' ? selfListLabel() : { title: 'You', name: '' };
+      const youLabel = typeof selfListLabel === 'function' ? selfListLabel() : { title: t('profile.you'), name: '' };
       body.innerHTML = profiles
         .map((profile) => {
           const isYou = !!(profile._isYou || (currentUser && profile.uid === currentUser.uid));
@@ -785,7 +795,7 @@
                 ? formatDisplayNameHtml(title, profile)
                 : safe(title)
           }</strong><span>${safe(sub)}</span></div>
-          <button type="button" data-rel-open>View</button>
+          <button type="button" data-rel-open>${tHtml('profile.view')}</button>
         </div>`;
         })
         .join('');
@@ -808,7 +818,7 @@
       if (filterHost && typeof mountListFilter === 'function') {
         mountListFilter({
           host: filterHost,
-          placeholder: `Search ${titles[kind].toLowerCase()}…`,
+          placeholder: searchCopy[kind],
           surfaceId: `rel_list_${kind}`,
           getRows: () => [...body.querySelectorAll('.close-friends-row')],
           emptyEl: overlay.querySelector('[data-list-filter-empty]'),
@@ -817,11 +827,11 @@
     } catch (error) {
       if (typeof renderErrorState === 'function') {
         renderErrorState(body, {
-          message: typeof friendlyError === 'function' ? friendlyError(error) : error?.message || 'Could not load list',
+          message: errorText(error, t('profile.could_not_load_list')),
           onRetry: () => openRelationshipList(kind, { targetUid }),
         });
       } else {
-        body.textContent = error?.message || 'Could not load list';
+        body.textContent = errorText(error, t('profile.could_not_load_list'));
       }
     }
   }
@@ -839,15 +849,15 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-exclusion-back' }) : '<button type="button" data-exclusion-back aria-label="Back" class="cp-back-btn">←</button>'}
-        <div style="flex:1"><strong>${typeof t === 'function' ? t('exclusion_list_label') : 'Exclusion list'}</strong>
-          <div class="relationship-private-note">${typeof t === 'function' ? t('exclusion_list_note') : 'People here won\'t receive your Baithak Splits. Only you can see this list.'}</div>
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-exclusion-back' }) : '<button type="button" data-exclusion-back aria-label="' + tHtml('common.back') + '" class="cp-back-btn">←</button>'}
+        <div style="flex:1"><strong>${typeof t === 'function' ? t('exclusion_list_label') : tHtml('profile.exclusion_list_label')}</strong>
+          <div class="relationship-private-note">${typeof t === 'function' ? t('exclusion_list_note') : tHtml('profile.cf_manager_sub')}</div>
         </div>
       </div>
       <div class="exclusion-list-manager close-friends-manager">
-        <label class="exclusion-list-search close-friends-search"><span>${typeof t === 'function' ? t('exclusion_search_label') : 'Search Friends'}</span><input type="search" placeholder="${typeof t === 'function' ? t('exclusion_search_ph') : 'Search by username'}" data-exclusion-search></label>
+        <label class="exclusion-list-search close-friends-search"><span>${typeof t === 'function' ? t('exclusion_search_label') : tHtml('profile.exclusion_search_label')}</span><input type="search" placeholder="${typeof t === 'function' ? t('exclusion_search_ph') : tHtml('profile.exclusion_search_ph')}" data-exclusion-search></label>
         <div data-exclusion-search-results></div>
-        <div class="exclusion-list-heading close-friends-heading">${typeof t === 'function' ? t('exclusion_list_heading') : 'Excluded'}</div>
+        <div class="exclusion-list-heading close-friends-heading">${typeof t === 'function' ? t('exclusion_list_heading') : tHtml('profile.cf_manager_heading')}</div>
         <div data-exclusion-list class="ui-skeleton-stack"></div>
       </div>`;
     const deviceEl = document.querySelector('.device');
@@ -877,8 +887,8 @@
       return `
       <div class="exclusion-list-row close-friends-row" data-uid="${profile.uid}">
         <div class="exclusion-list-avatar close-friends-avatar">${avatarCell(profile)}</div>
-        <div class="exclusion-list-person close-friends-person"><strong>${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(profile.name || profile.username || 'Member', profile) : safe(profile.name || profile.username || 'Member')}</strong><span>${safe(profile.username ? '@' + profile.username : profile.city || '')}</span></div>
-        <button type="button" data-exclusion-toggle="${isAdd ? 'add' : 'remove'}">${isAdd ? (typeof t === 'function' ? t('exclusion_add') : 'Add') : typeof t === 'function' ? t('exclusion_remove') : 'Remove'}</button>
+        <div class="exclusion-list-person close-friends-person"><strong>${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(profile.name || profile.username || t('common.member'), profile) : safe(profile.name || profile.username || t('common.member'))}</strong><span>${safe(profile.username ? '@' + profile.username : profile.city || '')}</span></div>
+        <button type="button" data-exclusion-toggle="${isAdd ? 'add' : 'remove'}">${isAdd ? t('exclusion_add') : t('exclusion_remove')}</button>
       </div>`;
     };
 
@@ -894,7 +904,7 @@
             renderSearch(overlay.querySelector('[data-exclusion-search]')?.value || '');
           } catch (error) {
             button.disabled = false;
-            showToast(error?.message || (typeof t === 'function' ? t('exclusion_fail') : 'Could not update exclusion list'));
+            showToast(errorText(error, t('exclusion_fail')));
           }
         });
       });
@@ -919,16 +929,16 @@
         });
         list.innerHTML = excluded.length
           ? excluded.map((profile) => row(profile, 'remove')).join('')
-          : `<div class="comments-empty">${typeof t === 'function' ? t('exclusion_list_empty') : 'No one excluded — all Friends receive your Splits'}</div>`;
+          : `<div class="comments-empty">${typeof t === 'function' ? t('exclusion_list_empty') : tHtml('profile.cf_manager_empty')}</div>`;
         wire(list);
       } catch (error) {
         if (typeof renderErrorState === 'function') {
           renderErrorState(list, {
-            message: typeof friendlyError === 'function' ? friendlyError(error) : error?.message || 'Could not load',
+            message: errorText(error, t('profile.could_not_load')),
             onRetry: () => renderList(),
           });
         } else {
-          list.textContent = error?.message || 'Could not load exclusion list';
+          list.textContent = errorText(error, t('profile.could_not_load_exclusion_list'));
         }
       }
     }
@@ -951,7 +961,7 @@
       );
       results.innerHTML = matches.length
         ? matches.map((profile) => row(profile, 'add')).join('')
-        : `<div class="comments-empty">${typeof t === 'function' ? t('exclusion_search_empty') : 'No matching Friend to add, or they are already excluded.'}</div>`;
+        : `<div class="comments-empty">${typeof t === 'function' ? t('exclusion_search_empty') : tHtml('profile.exclusion_search_empty')}</div>`;
       wire(results);
     }
 
@@ -996,21 +1006,21 @@
       const data = await loadRelationshipProfile();
       if (countsHost) paintRelationshipCounts(countsHost, data.counts, currentUser.uid);
     } catch (error) {
-      if (countsHost) countsHost.textContent = 'Relationship counts unavailable';
+      if (countsHost) countsHost.textContent = t('profile.relationship_counts_unavailable');
     }
     if (requestsHost) {
       try {
         const data = await callRelationship('list_friend_requests');
         const profiles = data.profiles || [];
         requestsHost.innerHTML = profiles.length
-          ? `<div class="close-friends-heading">Friend requests</div>${profiles
+          ? `<div class="close-friends-heading">${tHtml('profile.friend_requests')}</div>${profiles
               .map(
                 (profile) => `
               <div class="close-friends-row" data-request-uid="${profile.uid}">
                 <div class="close-friends-avatar">${avatarCell(profile)}</div>
                 <div class="close-friends-person"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(profile.name,profile):safe(profile.name)}</strong><span>${safe(profile.username ? '@' + profile.username : '')}</span></div>
-                <button type="button" data-request-accept>Accept</button>
-                <button type="button" data-request-decline class="relationship-decline">Decline</button>
+                <button type="button" data-request-accept>${tHtml('profile.accept')}</button>
+                <button type="button" data-request-decline class="relationship-decline">${tHtml('profile.decline')}</button>
               </div>`
               )
               .join('')}`
@@ -1022,7 +1032,7 @@
               await respondFriend(row.dataset.requestUid, true);
               refreshFriendRequestSurfaces();
             } catch (e) {
-              if (typeof showToast === 'function') showToast(e?.message || t('rel_update_fail'));
+              if (typeof showToast === 'function') showToast(errorText(e, t('rel_update_fail')));
             }
           });
         });
@@ -1033,7 +1043,7 @@
               await respondFriend(row.dataset.requestUid, false);
               refreshFriendRequestSurfaces();
             } catch (e) {
-              if (typeof showToast === 'function') showToast(e?.message || t('rel_update_fail'));
+              if (typeof showToast === 'function') showToast(errorText(e, t('rel_update_fail')));
             }
           });
         });
@@ -1061,10 +1071,10 @@
           const photo = avatarCell(profile);
           const uname = profile.username ? `@${safe(profile.username)}` : '';
           return `<div class="baithak-fr-row" data-request-uid="${safe(profile.uid)}">
-            <button type="button" class="baithak-fr-avatar" data-fr-profile="${safe(profile.uid)}" aria-label="View profile">${photo}</button>
-            <button type="button" class="baithak-fr-copy" data-fr-profile="${safe(profile.uid)}"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(displayNameFor(profile),profile):name}</strong><span>${uname || 'Friend request'}</span></button>
-            <button type="button" class="baithak-fr-accept" data-request-accept>Accept</button>
-            <button type="button" class="baithak-fr-decline" data-request-decline aria-label="Decline">${typeof iconHtml==='function'?iconHtml('x',{size:16}):'×'}</button>
+            <button type="button" class="baithak-fr-avatar" data-fr-profile="${safe(profile.uid)}" aria-label="${tHtml('profile.cai_view_profile')}">${photo}</button>
+            <button type="button" class="baithak-fr-copy" data-fr-profile="${safe(profile.uid)}"><strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(displayNameFor(profile),profile):name}</strong><span>${uname || tHtml('profile.friend_request')}</span></button>
+            <button type="button" class="baithak-fr-accept" data-request-accept>${tHtml('profile.accept')}</button>
+            <button type="button" class="baithak-fr-decline" data-request-decline aria-label="${tHtml('profile.decline')}">${typeof iconHtml==='function'?iconHtml('x',{size:16}):'×'}</button>
           </div>`;
         })
         .join('');
@@ -1094,7 +1104,7 @@
             refreshFriendRequestSurfaces();
             if (typeof showToast === 'function') showToast(t('rel_now_friends'));
           } catch (err) {
-            if (typeof showToast === 'function') showToast(err?.message || t('rel_update_fail'));
+            if (typeof showToast === 'function') showToast(errorText(err, t('rel_update_fail')));
           }
         });
       });
@@ -1111,7 +1121,7 @@
             }
             refreshFriendRequestSurfaces();
           } catch (err) {
-            if (typeof showToast === 'function') showToast(err?.message || t('rel_update_fail'));
+            if (typeof showToast === 'function') showToast(errorText(err, t('rel_update_fail')));
           }
         });
       });

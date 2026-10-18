@@ -43,16 +43,16 @@
     const isLocked = isPrivate || (isFriendsOnly && !o.isFriend);
 
     const base = {
-      displayName: p.displayName || meta.name || 'Member',
+      displayName: p.displayName || meta.name || t('common.member'),
       username: meta.username || p.username || 'username',
       photoURL: meta.photoURL || null,
       bio: isLocked ? '' : p.bio || '',
       locked: isLocked,
       visibilityLabel: isPrivate
-        ? 'Private profile'
+        ? t('common.private_profile')
         : isFriendsOnly
-          ? 'Friends only'
-          : 'Public',
+          ? t('profile.friends_only')
+          : t('profile.opt.profileVisibility.public'),
       profileType: p.profileType || meta.profileType || 'personal',
       identityLine: isLocked
         ? ''
@@ -64,31 +64,32 @@
     }
 
     const fields = [];
-    const push = (label, value) => {
+    const push = (label, value, group) => {
       if (value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)) return;
-      fields.push({ label, value: Array.isArray(value) ? value.join(', ') : String(value) });
+      const show = (v) => (group ? optionLabel(group, v) : String(v));
+      fields.push({ label, value: Array.isArray(value) ? value.map(show).join(', ') : show(value) });
     };
 
     if (p.showLocation !== false) {
-      push('City', p.currentCity || p.city);
-      push('Hometown', p.hometown);
+      push(t('profile.field_city'), p.currentCity || p.city);
+      push(t('profile.field_hometown'), p.hometown);
     }
-    push('Occupation', p.occupation);
-    push('Company', p.company);
-    if (p.showAge !== false && p.dateOfBirth) push('Date of birth', p.dateOfBirth);
-    else if (p.showAge !== false && p.age) push('Age', p.age);
-    push('Pronouns', p.pronouns);
-    if (p.languages?.length) push('Languages', p.languages);
+    push(t('profile.field_occupation'), p.occupation);
+    push(t('profile.field_company'), p.company);
+    if (p.showAge !== false && p.dateOfBirth) push(t('common.date_of_birth'), p.dateOfBirth);
+    else if (p.showAge !== false && p.age) push(t('profile.field_age'), p.age);
+    push(t('profile.field_pronouns'), p.pronouns, 'pronouns');
+    if (p.languages?.length) push(t('profile.field_languages'), p.languages, 'languages');
     if (p.showRelationship !== false) {
-      push('Relationship', p.relationshipStatus);
-      push('Looking for', p.lookingFor);
+      push(t('profile.field_relationship'), p.relationshipStatus, 'relationshipStatus');
+      push(t('profile.looking_for'), p.lookingFor, 'intent');
     }
-    if (p.showReligion !== false) push('Religion', p.religion);
-    if (p.showIncome === true) push('Income', p.annualIncome);
-    push('Hobbies', p.hobbies);
-    push('Sports', p.sports);
-    push('Instagram', p.instagram);
-    push('Website', p.website);
+    if (p.showReligion !== false) push(t('profile.field_religion'), p.religion, 'religion');
+    if (p.showIncome === true) push(t('profile.field_income'), p.annualIncome, 'annualIncome');
+    push(t('profile.field_hobbies'), p.hobbies, 'hobbies');
+    push(t('profile.field_sports'), p.sports, 'sports');
+    push(t('profile.field_instagram'), p.instagram);
+    push(t('profile.field_website'), p.website);
 
     return { ...base, fields };
   }
@@ -96,18 +97,18 @@
   function renderPreviewToggleHtml() {
     const on = profilePreviewMode;
     return `
-      <div id="profilePreviewToggle" class="profile-mode-toggle" role="tablist" aria-label="Profile mode">
-        <button type="button" data-preview="1" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'is-active' : ''}">View as others</button>
-        <button type="button" data-preview="0" role="tab" aria-selected="${!on ? 'true' : 'false'}" class="${!on ? 'is-active' : ''}">Edit profile</button>
+      <div id="profilePreviewToggle" class="profile-mode-toggle" role="tablist" aria-label="${tHtml('profile.profile_mode')}">
+        <button type="button" data-preview="1" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'is-active' : ''}">${tHtml('profile.view_as_others')}</button>
+        <button type="button" data-preview="0" role="tab" aria-selected="${!on ? 'true' : 'false'}" class="${!on ? 'is-active' : ''}">${tHtml('profile.edit_profile')}</button>
       </div>`;
   }
 
   function renderAudienceToggleHtml() {
     const aud = getProfilePreviewAudience();
     return `
-      <div class="profile-audience-toggle" role="tablist" aria-label="Preview audience">
-        <button type="button" data-preview-audience="stranger" role="tab" aria-selected="${aud === 'stranger' ? 'true' : 'false'}" class="${aud === 'stranger' ? 'is-active' : ''}">As stranger</button>
-        <button type="button" data-preview-audience="friend" role="tab" aria-selected="${aud === 'friend' ? 'true' : 'false'}" class="${aud === 'friend' ? 'is-active' : ''}">As friend</button>
+      <div class="profile-audience-toggle" role="tablist" aria-label="${tHtml('profile.preview_audience')}">
+        <button type="button" data-preview-audience="stranger" role="tab" aria-selected="${aud === 'stranger' ? 'true' : 'false'}" class="${aud === 'stranger' ? 'is-active' : ''}">${tHtml('profile.as_stranger')}</button>
+        <button type="button" data-preview-audience="friend" role="tab" aria-selected="${aud === 'friend' ? 'true' : 'false'}" class="${aud === 'friend' ? 'is-active' : ''}">${tHtml('profile.as_friend')}</button>
       </div>`;
   }
 
@@ -137,8 +138,8 @@
     const identity = view.identityLine ? `<div class="public-profile-identity">${esc(view.identityLine)}</div>` : '';
     const audienceNote =
       getProfilePreviewAudience() === 'friend'
-        ? 'Friend view — Friends-only blocks unlock here (same path as a real friend).'
-        : 'Stranger view — exactly what a non-friend sees.';
+        ? t('profile.friend_view_friends_only_blocks_unlock')
+        : t('profile.stranger_view_exactly_what_a_non');
     return `
       ${renderPreviewToggleHtml()}
       ${renderAudienceToggleHtml()}
@@ -153,13 +154,13 @@
         <div class="own-preview-chip">${esc(view.visibilityLabel)} · ${esc(audienceNote)}</div>
       </div>
       <div class="dp-rel-strip">
-        <div data-profile-relationship-counts class="relationship-counts-loading">Loading relationships…</div>
+        <div data-profile-relationship-counts class="relationship-counts-loading">${tHtml('profile.loading_relationships')}</div>
       </div>
       <div class="own-preview-edit-cta">
-        <button type="button" class="btn btn--primary btn--block" data-preview="0">Edit profile</button>
+        <button type="button" class="btn btn--primary btn--block" data-preview="0">${tHtml('profile.edit_profile')}</button>
       </div>
       <div class="own-preview-sections" data-own-preview-sections></div>
-      <p class="own-preview-footnote">Same projection as a visitor · Digital · Duniya · Peepal — switch to Edit to build your Base.</p>
+      <p class="own-preview-footnote">${tHtml('profile.same_projection_as_a_visitor_digital')}</p>
     `;
   }
 
@@ -249,7 +250,7 @@
       profile.name ||
       profile.displayName ||
       username ||
-      'Member';
+      t('common.member');
     const photo = profile.photoURL || profile.photo || null;
     const pType = profile.profileType || 'personal';
 
@@ -266,9 +267,9 @@
         <div class="profile-peek-name">${nameHtml}</div>
         <div class="profile-peek-sub">${username ? '@' + String(username).replace(/</g, '&lt;') : ''}</div>
         <div class="profile-peek-actions">
-          <button type="button" class="btn btn--primary" data-peek-full>${typeof t === 'function' ? t('peek_view_profile', 'View profile') : 'View profile'}</button>
-          ${isSelf ? '' : `<button type="button" class="btn" data-peek-message>${typeof t === 'function' ? t('peek_message', 'Message') : 'Message'}</button>`}
-          <button type="button" class="btn" data-peek-dismiss>${typeof t === 'function' ? t('cancel', 'Cancel') : 'Cancel'}</button>
+          <button type="button" class="btn btn--primary" data-peek-full>${typeof t === 'function' ? t('peek_view_profile', 'View profile') : tHtml('profile.cai_view_profile')}</button>
+          ${isSelf ? '' : `<button type="button" class="btn" data-peek-message>${typeof t === 'function' ? t('peek_message', 'Message') : tHtml('profile.avatar_menu_message')}</button>`}
+          <button type="button" class="btn" data-peek-dismiss>${typeof t === 'function' ? t('cancel', 'Cancel') : tHtml('common.cancel')}</button>
         </div>
       </div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -304,7 +305,7 @@
       if (typeof openProfileMessage === 'function') openProfileMessage({ ...profile, uid, username, name });
       else if (typeof openDmWithSharedHello === 'function' && uid) openDmWithSharedHello({ uid, name, username });
       else if (typeof startChatWithUser === 'function') startChatWithUser(profile);
-      else if (typeof showToast === 'function') showToast('Open Baithak to message');
+      else if (typeof showToast === 'function') showToast(t('profile.open_baithak_to_message'));
     });
   }
 

@@ -163,8 +163,8 @@
       if (typeof showToast === 'function') {
         showToast(
           typeof friendlyError === 'function'
-            ? friendlyError({ message: 'offline' })
-            : tt('offline_banner', "You're offline — some actions may not work")
+            ? friendlyError({ code: 'OFFLINE' })
+            : tt('common.offline_banner', "You're offline — some actions may not work")
         );
       }
       return;
@@ -246,7 +246,7 @@
         showToast(
           typeof friendlyError === 'function'
             ? friendlyError(e)
-            : tt('generic_error', 'Something went wrong. Please try again.')
+            : tt('common.generic_error', 'Something went wrong. Please try again.')
         );
       }
     } finally {
@@ -323,7 +323,7 @@
         },
         {
           id: 'khoj',
-          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'khoj', 'Khoj') : 'Khoj · Find people',
+          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'khoj', 'Khoj') : t('common.khoj_find_people'),
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('khoj');
@@ -334,7 +334,7 @@
         },
         {
           id: 'vriksha',
-          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'vriksha', 'Vriksha') : 'Vriksha · Discussions',
+          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'vriksha', 'Vriksha') : t('common.vriksha_discussions'),
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('vriksha');
@@ -342,7 +342,7 @@
         },
         {
           id: 'mashhoor',
-          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'mashhoor', 'Mashhoor') : 'Mashhoor · Popular',
+          label: typeof morphLabel === 'function' ? morphLabel('peepal', 'mashhoor', 'Mashhoor') : t('common.mashhoor_popular'),
           run: () => {
             switchTo('peepal');
             if (typeof setPeepalMode === 'function') setPeepalMode('mashhoor');
@@ -424,7 +424,7 @@
         },
         {
           id: 'lehar',
-          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'lehar', 'Lehar') : 'Lehar · Short clips',
+          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'lehar', 'Lehar') : t('common.lehar_short_clips'),
           run: () => {
             switchTo('duniya');
             if (typeof setDuniyaMode === 'function') setDuniyaMode('lehar');
@@ -432,7 +432,7 @@
         },
         {
           id: 'vishwa',
-          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'vishwa', 'Vishwa') : 'Vishwa · Photos',
+          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'vishwa', 'Vishwa') : t('common.vishwa_photos'),
           run: () => {
             switchTo('duniya');
             if (typeof setDuniyaMode === 'function') setDuniyaMode('vishwa');
@@ -440,7 +440,7 @@
         },
         {
           id: 'prasidha',
-          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'prasidha', 'Prasidha') : 'Prasidha · Trending',
+          label: typeof morphLabel === 'function' ? morphLabel('duniya', 'prasidha', 'Prasidha') : t('common.prasidha_trending'),
           run: () => {
             switchTo('duniya');
             if (typeof setDuniyaMode === 'function') setDuniyaMode('prasidha');
@@ -475,7 +475,7 @@
         },
         {
           id: 'sambhavanayein',
-          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'sambhavanayein', 'Sambhavanayein') : 'Sambhavanayein · New',
+          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'sambhavanayein', 'Sambhavanayein') : t('common.sambhavanayein_new'),
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('sambhavanayein');
@@ -483,7 +483,7 @@
         },
         {
           id: 'sabha',
-          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'sabha', 'Sabha') : 'Sabha · All chats',
+          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'sabha', 'Sabha') : t('common.sabha_all_chats'),
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('sabha');
@@ -491,7 +491,7 @@
         },
         {
           id: 'mitra',
-          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'mitra', 'Mitra') : 'Mitra · Friends & groups',
+          label: typeof morphLabel === 'function' ? morphLabel('baithak', 'mitra', 'Mitra') : t('common.mitra_friends_groups'),
           run: () => {
             switchTo('baithak');
             if (typeof setBaithakSection === 'function') setBaithakSection('mitra');
@@ -514,7 +514,7 @@
         },
         {
           id: 'khel',
-          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'khel', 'Khel') : 'Khel · Game of day',
+          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'khel', 'Khel') : t('common.khel_game_of_day'),
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('khel');
@@ -522,7 +522,7 @@
         },
         {
           id: 'manch',
-          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'manch', 'Manch') : 'Manch · Library',
+          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'manch', 'Manch') : t('common.manch_library'),
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('manch');
@@ -530,7 +530,7 @@
         },
         {
           id: 'maidan',
-          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'maidan', 'Maidan') : 'Maidan · Resume',
+          label: typeof morphLabel === 'function' ? morphLabel('dangal', 'maidan', 'Maidan') : t('common.maidan_resume'),
           run: () => {
             switchTo('dangal');
             if (typeof setDangalSection === 'function') setDangalSection('maidan');
@@ -817,7 +817,7 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div style="flex:1"><strong>${tt('safar_title', 'Safar')}</strong></div>
       </div>
       <div style="padding:12px 16px 28px;">${body}</div>`;
@@ -895,7 +895,7 @@
       if (typeof formatRelativeTime === 'function') return formatRelativeTime(ts);
     } catch (e) {}
     const d = Date.now() - Number(ts);
-    if (d < 3600000) return 'just now';
+    if (d < 3600000) return t('common.just_now_2');
     if (d < 86400000) return Math.floor(d / 3600000) + 'h ago';
     return Math.floor(d / 86400000) + 'd ago';
   }
@@ -923,7 +923,7 @@
         return `${x},${y}`;
       })
       .join(' ');
-    return `<svg class="cp-perf-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Plays by game">${bars}<polyline fill="none" stroke="#1C1B1F" stroke-opacity=".35" stroke-width="1.5" points="${sparkPts}"/></svg>`;
+    return `<svg class="cp-perf-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${tHtml('common.plays_by_game')}">${bars}<polyline fill="none" stroke="#1C1B1F" stroke-opacity=".35" stroke-width="1.5" points="${sparkPts}"/></svg>`;
   }
 
   function buildPerformanceBodyHtml() {
@@ -979,7 +979,7 @@
         const r = typeof getDangalRating === 'function' ? getDangalRating(id) : null;
         if (!r) return '';
         const meta = byId[id] || { name: id, icon: '🎮' };
-        const prov = r.provisional ? ` <small>${escHtml(tt('dangal_rating_provisional', 'Provisional'))}</small>` : '';
+        const prov = r.provisional ? ` <small>${escHtml(tt('common.dangal_rating_provisional', 'Provisional'))}</small>` : '';
         return `<div class="cp-perf-elo"><span>${escHtml(meta.icon)} ${escHtml(meta.name || id)}</span><strong>${Math.round(r.rating)}${prov}</strong></div>`;
       })
       .filter(Boolean)
@@ -996,10 +996,10 @@
         const wl =
           r.wins + r.losses + r.draws > 0
             ? `${r.wins}W · ${r.losses}L${r.draws ? ` · ${r.draws}D` : ''}`
-            : 'Score runs';
+            : t('common.score_runs');
         const bits = [`${r.played} play${r.played === 1 ? '' : 's'}`, wl];
         if (r.bestScore != null) bits.push(`best ${r.bestScore}`);
-        if (r.bestStreak > 1) bits.push(`best streak ${r.bestStreak}`);
+        if (r.bestStreak > 1) bits.push(t('common.best_streak_beststreak', { bestStreak: r.bestStreak }));
         if (r.lastAt) bits.push(formatLastPlayed(r.lastAt));
         const pct = Math.round((r.played / maxPlayed) * 100);
         return `<div class="cp-perf-game" data-perf-game="${escHtml(r.id)}">
@@ -1015,14 +1015,14 @@
 
     return `
       <div class="cp-perf-summary">
-        <div class="cp-perf-pill"><strong>${totalPlayed}</strong><span>Plays</span></div>
-        <div class="cp-perf-pill"><strong>${winPct != null ? winPct + '%' : '—'}</strong><span>Win rate</span></div>
-        <div class="cp-perf-pill"><strong>${hub?.softDayStreak || 0}</strong><span>Day streak</span></div>
+        <div class="cp-perf-pill"><strong>${totalPlayed}</strong><span>${tHtml('common.plays')}</span></div>
+        <div class="cp-perf-pill"><strong>${winPct != null ? winPct + '%' : '—'}</strong><span>${tHtml('common.win_rate')}</span></div>
+        <div class="cp-perf-pill"><strong>${hub?.softDayStreak || 0}</strong><span>${tHtml('common.day_streak_2')}</span></div>
       </div>
       <div class="cp-perf-wow">
-        <div class="cp-perf-pill"><strong>${weekPlays}</strong><span>This week</span></div>
-        <div class="cp-perf-pill"><strong>${wowBit(wowPlays)}</strong><span>vs last week (plays)</span></div>
-        <div class="cp-perf-pill"><strong>${wowBit(wowWins)}</strong><span>vs last week (wins)</span></div>
+        <div class="cp-perf-pill"><strong>${weekPlays}</strong><span>${tHtml('common.this_week')}</span></div>
+        <div class="cp-perf-pill"><strong>${wowBit(wowPlays)}</strong><span>${tHtml('common.vs_last_week_plays')}</span></div>
+        <div class="cp-perf-pill"><strong>${wowBit(wowWins)}</strong><span>${tHtml('common.vs_last_week_wins')}</span></div>
       </div>
       ${eloBits ? `<div class="cp-perf-elo-row">${eloBits}</div>` : ''}
       ${buildPerfChartSvg(rows.slice(0, 10))}
@@ -1048,7 +1048,7 @@
       let pick = pickRandomChallengeGame(gotdId);
       if (!pick) {
         if (typeof showToast === 'function') {
-          showToast(tt('dangal_challenge_empty', 'No other games in Manch right now — try Khel.'));
+          showToast(tt('common.dangal_challenge_empty', 'No other games in Manch right now — try Khel.'));
         }
         return;
       }
@@ -1062,9 +1062,9 @@
         <div class="cp-challenge-pick">
           <div class="cp-challenge-icon" aria-hidden="true">${mark}</div>
           <h3>${escHtml(game.name || game.id)}</h3>
-          <p>${tt('dangal_challenge_sub', 'Random from Manch — not today’s Game of the Day.')}</p>
-          <button type="button" class="btn btn--primary btn--block" data-challenge-start>${tt('dangal_challenge_start', 'Challenge')}</button>
-          <button type="button" class="btn btn--ghost btn--block" data-challenge-reroll style="margin-top:8px;">${tt('dangal_challenge_reroll', 'Pick another')}</button>
+          <p>${tt('common.dangal_challenge_sub', 'Random from Manch — not today’s Game of the Day.')}</p>
+          <button type="button" class="btn btn--primary btn--block" data-challenge-start>${tt('common.dangal_challenge_start', 'Challenge')}</button>
+          <button type="button" class="btn btn--ghost btn--block" data-challenge-reroll style="margin-top:8px;">${tt('common.dangal_challenge_reroll', 'Pick another')}</button>
         </div>`;
       };
 
@@ -1129,9 +1129,9 @@
           const hub = getDangalHubSummary();
           const streakBit =
             hub && hub.softDayStreak > 0
-              ? `<span class="dor-meta">${hub.softDayStreak > 1 ? `${hub.softDayStreak}-day streak` : 'Played today'} · ${hub.weekPlays} this week</span>`
+              ? `<span class="dor-meta">${hub.softDayStreak > 1 ? tHtml('common.n_day_streak', { count: hub.softDayStreak }) : tHtml('common.played_today')} · ${tHtml('common.week_count', { count: hub.weekPlays })}</span>`
               : hub
-                ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
+                ? `<span class="dor-meta">${tHtml('common.plays_this_week', { count: hub.weekPlays })}</span>`
                 : '';
           if (hub) {
             overall.innerHTML = `<div class="dor-main"><span class="dor-label">${tt('dangal_pulse_title', 'Tarakki')}</span><span class="dor-val">${hub.totalPlayed || 0}</span></div>${streakBit}`;
@@ -1175,7 +1175,7 @@
     sheet.dataset.navManaged = '1';
     sheet.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-overlay-dismiss' }):'<button type="button" data-overlay-dismiss class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div style="flex:1"><strong>${tt('dangal_pulse_title', 'Tarakki')}</strong></div>
       </div>
       <div style="padding:12px 16px 24px;">${body}</div>`;

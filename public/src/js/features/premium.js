@@ -5,6 +5,6 @@ function openPremiumSheet() {
     return;
   }
   if (typeof showToast === 'function') {
-    showToast('Membership — open Chaupaal Profile hub');
+    showToast(t('settings.membership_open_chaupaal_profile_hub'));
   }
 }
