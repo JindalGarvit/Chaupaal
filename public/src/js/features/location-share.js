@@ -9,11 +9,21 @@
 
   const NOMINATIM_DEBOUNCE_MS = 500;
   const LIVE_PING_MS = 15000;
+  /** "15 minutes" / "1 hour" in the viewer's language (L1 unit formatter). */
+  function durationLabel(n, unit) {
+    if (typeof formatUnit === 'function') return formatUnit(n, unit, { unitDisplay: 'long', maximumFractionDigits: 0 });
+    return t(unit === 'hour' ? 'location.hours_n' : 'location.minutes_n', { count: n });
+  }
+
+  function coordText(n) {
+    return typeof formatNumber === 'function' ? formatNumber(n, { minimumFractionDigits: 5, maximumFractionDigits: 5 }) : String(n);
+  }
+
   const LIVE_DURATIONS = [
-    { id: '15m', label: '15 minutes', ms: 15 * 60 * 1000 },
-    { id: '1h', label: '1 hour', ms: 60 * 60 * 1000 },
-    { id: '8h', label: '8 hours', ms: 8 * 60 * 60 * 1000 },
-    { id: 'until', label: 'Until I stop', ms: 24 * 60 * 60 * 1000 },
+    { id: '15m', label: durationLabel(15, 'minute'), ms: 15 * 60 * 1000 },
+    { id: '1h', label: durationLabel(1, 'hour'), ms: 60 * 60 * 1000 },
+    { id: '8h', label: durationLabel(8, 'hour'), ms: 8 * 60 * 60 * 1000 },
+    { id: 'until', label: t('location.until_i_stop'), ms: 24 * 60 * 60 * 1000 },
   ];
 
   let leafletLoading = null;
@@ -85,11 +95,11 @@
 
   function geoErrorMessage(err) {
     if (err?.code === 'DENIED') {
-      return 'Location permission denied. Enable it in your browser/settings, or search/drop a pin instead.';
+      return t('location.location_permission_denied_enable_it_in');
     }
-    if (err?.code === 'UNSUPPORTED') return 'This device cannot share GPS location. Try search or drop a pin.';
-    if (err?.code === 'TIMEOUT') return 'Location timed out. Try again or drop a pin on the map.';
-    return 'Could not get your location. Try search or drop a pin.';
+    if (err?.code === 'UNSUPPORTED') return t('location.this_device_cannot_share_gps_location');
+    if (err?.code === 'TIMEOUT') return t('location.location_timed_out_try_again_or');
+    return t('location.could_not_get_your_location_try');
   }
 
   /** Persist coarse match coords (opt-in via share / profile). Never required for Peepal. */
@@ -146,7 +156,7 @@
       placeName: String(loc.placeName || loc.name || '').slice(0, 120) || null,
       address: String(loc.address || '').slice(0, 240) || null,
       label:
-        String(loc.label || loc.placeName || loc.address || (mode === 'live' ? 'Live location' : 'Location')).slice(
+        String(loc.label || loc.placeName || loc.address || (mode === 'live' ? tEn('chat.auto.live_location') : tEn('chat.auto.location_plain'))).slice(
           0,
           160
         ),
@@ -162,8 +172,11 @@
     if (!L) return '';
     const variant = opts.variant === 'story' ? 'story' : 'chat';
     const isLive = L.mode === 'live';
-    const title = L.placeName || L.label || 'Location';
-    const sub = L.address || (isLive ? 'Live · updates while sharing' : `${L.lat.toFixed(4)}, ${L.lng.toFixed(4)}`);
+    const stored = L.placeName || L.label || '';
+    // App-written labels ("Dropped pin") are stored in English — show them in the reader's language.
+    const title = (stored && typeof ChatEvents !== 'undefined' && ChatEvents.autoText(stored)) || stored || t('location.location');
+    const coord = (n) => (typeof formatNumber === 'function' ? formatNumber(n, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : n.toFixed(4));
+    const sub = L.address || (isLive ? t('location.live_updates_while_sharing') : t('location.coordinates', { lat: coord(L.lat), lng: coord(L.lng) }));
     return `<div class="loc-card loc-card--${variant}${isLive ? ' loc-card--live' : ''}"
       data-loc-card
       data-loc-lat="${L.lat}"
@@ -173,11 +186,11 @@
       data-loc-expires="${esc(L.expiresAt || '')}"
       data-loc-name="${esc(title)}"
       data-loc-address="${esc(L.address || '')}"
-      role="button" tabindex="0" aria-label="Open map for ${esc(title)}">
+      role="button" tabindex="0" aria-label="${tHtml('location.open_map_for', { place: title })}">
       <div class="loc-card-map" data-loc-map aria-hidden="true"></div>
       <div class="loc-card-meta">
         ${isLive ? '<span class="loc-live-dot" aria-hidden="true"></span>' : ''}
-        <div class="loc-card-title">${isLive ? 'Live location' : esc(title)}</div>
+        <div class="loc-card-title">${isLive ? tHtml('location.live_location') : esc(title)}</div>
         <div class="loc-card-sub" data-loc-sub>${esc(sub)}</div>
       </div>
     </div>`;
@@ -217,20 +230,20 @@
     const appleUrl = `https://maps.apple.com/?daddr=${encodeURIComponent(`${L0.lat},${L0.lng}`)}`;
     sheet.innerHTML = `
       <div class="loc-full-backdrop" data-loc-close></div>
-      <div class="loc-full-panel" role="dialog" aria-label="Map">
+      <div class="loc-full-panel" role="dialog" aria-label="${tHtml('location.map')}">
         <div class="half-sheet-grabber" aria-hidden="true"></div>
         <div class="loc-full-head">
           <div>
-            <div class="loc-full-title">${esc(L0.placeName || L0.label || 'Location')}</div>
+            <div class="loc-full-title">${esc((typeof ChatEvents !== 'undefined' && ChatEvents.autoText(L0.placeName || L0.label || '')) || L0.placeName || L0.label || t('location.location'))}</div>
             <div class="loc-full-sub" data-loc-full-sub>${esc(L0.address || `${L0.lat.toFixed(5)}, ${L0.lng.toFixed(5)}`)}</div>
           </div>
         </div>
         <div class="loc-full-map" data-loc-full-map></div>
         <div class="loc-full-actions">
-          <a class="btn btn--primary" data-loc-directions href="${mapsUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_directions','Directions'):'Directions'}</a>
-          <a class="btn btn--secondary loc-apple-maps-btn hidden" data-loc-apple href="${appleUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_apple_maps','Apple Maps'):'Apple Maps'}</a>
+          <a class="btn btn--primary" data-loc-directions href="${mapsUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_directions','Directions'):tHtml('location.directions')}</a>
+          <a class="btn btn--secondary loc-apple-maps-btn hidden" data-loc-apple href="${appleUrl}" target="_blank" rel="noopener">${typeof t==='function'?t('loc_apple_maps','Apple Maps'):tHtml('location.apple_maps')}</a>
         </div>
-        ${isLive ? '<button type="button" class="btn btn--block loc-stop-btn hidden" data-loc-stop>Stop sharing</button>' : ''}
+        ${isLive ? '<button type="button" class="btn btn--block loc-stop-btn hidden" data-loc-stop>' + tHtml('location.stop_sharing') + '</button>' : ''}
       </div>`;
     host().appendChild(sheet);
     let closed = false;
@@ -274,7 +287,7 @@
           showToast(
             typeof t === 'function'
               ? t('loc_maps_chooser', 'Choose Google Maps or Apple Maps')
-              : 'Choose Google Maps or Apple Maps'
+              : t('location.choose_google_maps_or_apple_maps')
           );
         }
         return;
@@ -285,7 +298,7 @@
         showToast(
           typeof t === 'function'
             ? t('loc_maps_arm', 'Long-press again for map options')
-            : 'Long-press again for map options'
+            : t('location.long_press_again_for_map_options')
         );
       }
     };
@@ -326,7 +339,7 @@
             fillOpacity: 0.85,
             weight: 2,
           }).addTo(api.map);
-          youMarker.bindTooltip(typeof t === 'function' ? t('loc_you', 'You') : 'You');
+          youMarker.bindTooltip(t('common.you'));
           const bounds = api.L.latLngBounds([
             [L0.lat, L0.lng],
             [here.lat, here.lng],
@@ -350,7 +363,7 @@
         stopBtn.addEventListener('click', async () => {
           await stopLiveShare(L0.liveShareId);
           close();
-          if (typeof showToast === 'function') showToast('Live sharing stopped');
+          if (typeof showToast === 'function') showToast(t('location.live_sharing_stopped'));
         });
       }
       unsub = db
@@ -364,13 +377,13 @@
           const active = d.active !== false;
           const sub = sheet.querySelector('[data-loc-full-sub]');
           if (!active) {
-            if (sub) sub.textContent = 'Sharing ended · last known location';
+            if (sub) sub.textContent = t('location.sharing_ended_last_known_location');
             return;
           }
           if (Number.isFinite(lat) && Number.isFinite(lng) && markerRef.current && mapApi) {
             markerRef.current.setLatLng([lat, lng]);
             mapApi.map.panTo([lat, lng]);
-            if (sub) sub.textContent = `Live · ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            if (sub) sub.textContent = t('location.live_coordinates', { lat: coordText(lat), lng: coordText(lng) });
           }
         });
     }
@@ -422,8 +435,8 @@
               if (sub) {
                 const mins = d.durationMs ? Math.round(Number(d.durationMs) / 60000) : null;
                 sub.textContent = mins
-                  ? `Last known · shared for ${mins} min`
-                  : 'Last known location · sharing ended';
+                  ? t('location.last_known_shared_for', { duration: mins >= 60 ? durationLabel(Math.round(mins / 60), 'hour') : durationLabel(mins, 'minute') })
+                  : t('location.last_known_location_sharing_ended');
               }
               try {
                 unsub();
@@ -435,7 +448,7 @@
             if (Number.isFinite(la) && Number.isFinite(ln)) {
               card.dataset.locLat = String(la);
               card.dataset.locLng = String(ln);
-              if (sub) sub.textContent = `Live · updating`;
+              if (sub) sub.textContent = t('location.live_updating');
             }
           });
         card._locUnsub = unsub;
@@ -503,7 +516,7 @@
       mode: 'live',
       lat: pos.lat,
       lng: pos.lng,
-      label: 'Live location',
+      label: tEn('chat.auto.live_location'),
       liveShareId: shareId,
       expiresAt,
       durationMs,
@@ -539,7 +552,7 @@
     // Location never visible to non-friends
     if (peerUid && typeof canSeeLocation === 'function' && typeof relationshipState === 'function') {
       if (!canSeeLocation(relationshipState(peerUid))) {
-        if (typeof showToast === 'function') showToast('Location is only shared with friends');
+        if (typeof showToast === 'function') showToast(t('location.location_is_only_shared_with_friends'));
         return;
       }
     }
@@ -549,17 +562,17 @@
     sheet.className = 'loc-share-sheet';
     sheet.innerHTML = `
       <div class="loc-share-backdrop" data-loc-x></div>
-      <div class="loc-share-panel" role="dialog" aria-label="${esc(title || 'Share location')}">
+      <div class="loc-share-panel" role="dialog" aria-label="${esc(title || t('location.share_location'))}">
         <div class="loc-share-handle"></div>
         <div class="loc-share-head">
-          <div class="loc-share-title">${esc(title || 'Share location')}</div>
-          <button type="button" class="loc-share-close" data-loc-x aria-label="Close">✕</button>
+          <div class="loc-share-title">${esc(title || t('location.share_location'))}</div>
+          <button type="button" class="loc-share-close" data-loc-x aria-label="${tHtml('common.close')}">✕</button>
         </div>
         <div class="loc-share-modes" data-loc-modes>
-          <button type="button" class="loc-mode-btn" data-mode="current">📍 Share current location</button>
-          <button type="button" class="loc-mode-btn" data-mode="search">🔎 Search a place</button>
-          <button type="button" class="loc-mode-btn" data-mode="pin">📌 Drop a pin</button>
-          <button type="button" class="loc-mode-btn" data-mode="live">📡 Share live location</button>
+          <button type="button" class="loc-mode-btn" data-mode="current">${tHtml('location.share_current_location')}</button>
+          <button type="button" class="loc-mode-btn" data-mode="search">${tHtml('location.search_a_place')}</button>
+          <button type="button" class="loc-mode-btn" data-mode="pin">${tHtml('location.drop_a_pin')}</button>
+          <button type="button" class="loc-mode-btn" data-mode="live">${tHtml('location.share_live_location')}</button>
         </div>
         <div class="loc-share-body" data-loc-body></div>
       </div>`;
@@ -590,19 +603,19 @@
     };
 
     const showCurrent = async () => {
-      body.innerHTML = `<div class="loc-share-status">Getting your location…</div>`;
+      body.innerHTML = `<div class="loc-share-status">${tHtml('location.getting_your_location')}</div>`;
       try {
         const pos = await getCurrentPosition();
         body.innerHTML = `
           <div class="loc-share-map" data-pick-map></div>
-          <button type="button" class="btn btn--primary btn--block" data-confirm>Share this location</button>`;
+          <button type="button" class="btn btn--primary btn--block" data-confirm>${tHtml('location.share_this_location')}</button>`;
         mountMiniMap(body.querySelector('[data-pick-map]'), pos.lat, pos.lng, { interactive: false });
         body.querySelector('[data-confirm]')?.addEventListener('click', () =>
-          finish({ mode: 'current', lat: pos.lat, lng: pos.lng, label: 'Current location', placeName: 'Current location' })
+          finish({ mode: 'current', lat: pos.lat, lng: pos.lng, label: tEn('chat.auto.current_location'), placeName: tEn('chat.auto.current_location') })
         );
       } catch (err) {
         body.innerHTML = `<div class="loc-share-empty">${esc(geoErrorMessage(err))}</div>
-          <button type="button" class="btn btn--block" data-fallback-pin>Drop a pin instead</button>`;
+          <button type="button" class="btn btn--block" data-fallback-pin>${tHtml('location.drop_a_pin_instead')}</button>`;
         body.querySelector('[data-fallback-pin]')?.addEventListener('click', showPin);
       }
     };
@@ -610,11 +623,11 @@
     const showSearch = () => {
       body.innerHTML = `
         <label class="loc-search-wrap">
-          <span class="sr-only">Search places</span>
-          <input type="search" class="loc-search-input" placeholder="Cafe, park, address…" autocomplete="off">
+          <span class="sr-only">${tHtml('location.search_places')}</span>
+          <input type="search" class="loc-search-input" placeholder="${tHtml('location.cafe_park_address')}" autocomplete="off">
         </label>
-        <div class="loc-search-results" data-results><div class="loc-share-hint">Type a place name — results from OpenStreetMap</div></div>
-        <button type="button" class="btn btn--block" data-fallback-pin>Can't find it? Drop a pin</button>`;
+        <div class="loc-search-results" data-results><div class="loc-share-hint">${tHtml('location.type_a_place_name_results_from')}</div></div>
+        <button type="button" class="btn btn--block" data-fallback-pin>${tHtml('location.can_t_find_it_drop_a')}</button>`;
       const input = body.querySelector('.loc-search-input');
       const resultsEl = body.querySelector('[data-results]');
       let t = null;
@@ -623,15 +636,15 @@
         clearTimeout(t);
         const q = input.value.trim();
         if (q.length < 2) {
-          resultsEl.innerHTML = `<div class="loc-share-hint">Type at least 2 characters</div>`;
+          resultsEl.innerHTML = `<div class="loc-share-hint">${tHtml('location.type_at_least_2_characters')}</div>`;
           return;
         }
-        resultsEl.innerHTML = `<div class="loc-share-status">Searching…</div>`;
+        resultsEl.innerHTML = `<div class="loc-share-status">${tHtml('location.searching')}</div>`;
         // Debounced Nominatim (policy: never per-keystroke). Free-tier appropriate; self-host later if needed.
         t = setTimeout(async () => {
           const list = await searchNominatim(q);
           if (!list.length) {
-            resultsEl.innerHTML = `<div class="loc-share-empty">No places found. Try another name or drop a pin.</div>`;
+            resultsEl.innerHTML = `<div class="loc-share-empty">${tHtml('location.no_places_found_try_another_name')}</div>`;
             return;
           }
           resultsEl.innerHTML = list
@@ -667,9 +680,9 @@
         center = await getCurrentPosition();
       } catch (e) {}
       body.innerHTML = `
-        <div class="loc-share-hint">Pan and tap the map to drop a pin</div>
+        <div class="loc-share-hint">${tHtml('location.pan_and_tap_the_map_to')}</div>
         <div class="loc-share-map loc-share-map--tall" data-pick-map></div>
-        <button type="button" class="btn btn--primary btn--block" data-confirm disabled>Share pin</button>`;
+        <button type="button" class="btn btn--primary btn--block" data-confirm disabled>${tHtml('location.share_pin')}</button>`;
       let chosen = null;
       const confirm = body.querySelector('[data-confirm]');
       ensureLeaflet().then((L) => {
@@ -687,13 +700,13 @@
       });
       confirm?.addEventListener('click', () => {
         if (!chosen) return;
-        finish({ mode: 'pin', lat: chosen.lat, lng: chosen.lng, label: 'Dropped pin', placeName: 'Dropped pin' });
+        finish({ mode: 'pin', lat: chosen.lat, lng: chosen.lng, label: tEn('chat.auto.dropped_pin'), placeName: tEn('chat.auto.dropped_pin') });
       });
     };
 
     const showLive = () => {
       body.innerHTML = `
-        <div class="loc-share-hint">Friends see your pin update while sharing is on. Stops automatically when time is up.</div>
+        <div class="loc-share-hint">${tHtml('location.friends_see_your_pin_update_while')}</div>
         <div class="loc-duration-list">
           ${LIVE_DURATIONS.map(
             (d) => `<button type="button" class="loc-mode-btn" data-dur="${d.id}">${esc(d.label)}</button>`
@@ -705,7 +718,7 @@
           const d = LIVE_DURATIONS.find((x) => x.id === btn.dataset.dur);
           if (!d) return;
           const status = body.querySelector('[data-live-status]');
-          status.textContent = 'Starting live share…';
+          status.textContent = t('location.starting_live_share');
           try {
             const loc = await startLiveShare(d.ms);
             finish(loc);
@@ -733,7 +746,7 @@
     try {
       const pos = await getCurrentPosition();
       await saveMatchLocation(pos.lat, pos.lng, 'profile');
-      if (typeof showToast === 'function') showToast('Location saved for better nearby matches');
+      if (typeof showToast === 'function') showToast(t('location.location_saved_for_better_nearby_matches'));
       return true;
     } catch (err) {
       if (typeof showToast === 'function') showToast(geoErrorMessage(err));

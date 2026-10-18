@@ -217,6 +217,9 @@
 }
 .msg-row--deleted .msg-bubble{padding:8px 10px;}
 .msg-row--deleting{opacity:0.45;transition:opacity 0.2s;}
+/* Structured system events (member added, group renamed …) */
+.msg-row--system{justify-content:center;margin:6px 0;}
+.msg-system{max-width:85%;padding:4px 12px;border-radius:999px;background:var(--cream,rgba(0,0,0,0.04));color:var(--muted);font-size:12px;line-height:1.4;text-align:center;overflow-wrap:anywhere;}
 
 /* Avatar lightbox */
 .avatar-lightbox{

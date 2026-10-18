@@ -114,6 +114,12 @@ function serverT(lang, key, params) {
   }
 }
 
+/** App-written English label ("📷 Photo", "Sent a story") → that label in `lang`; null for user text. */
+function serverAutoLabel(lang, text) {
+  const hit = boot().i18nAutoLabelKey(text, 'chat.auto.');
+  return hit ? serverT(lang, hit.key, hit.params) : null;
+}
+
 function hasKey(key) {
   return !!boot().i18nLookup(key, 'en');
 }
@@ -130,4 +136,4 @@ async function langForUser(db, uid) {
   }
 }
 
-module.exports = { serverT, serverLang, langForUser, hasKey, PACK_LOADERS };
+module.exports = { serverT, serverLang, serverAutoLabel, langForUser, hasKey, PACK_LOADERS, runtime: boot };

@@ -35,6 +35,9 @@ function cleanPreviewParams(params) {
 async function renderPushCopy(db, recipientUid, { actorName, previewKey, previewParams, previewText }) {
   const lang = await i18nServer.langForUser(db, recipientUid);
   let body = String(previewText || '');
+  // "📷 Photo" / "Sent a story" are app-written English — send them in the recipient's language.
+  const auto = body ? i18nServer.serverAutoLabel(lang, body) : null;
+  if (auto) body = auto;
   if (!body && previewKey && i18nServer.hasKey(previewKey)) {
     body = i18nServer.serverT(lang, previewKey, Object.assign({ body: '', preview: '' }, previewParams || {}, { actor: actorName }));
   }

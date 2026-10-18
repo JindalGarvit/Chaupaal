@@ -16,6 +16,7 @@
   "dangal.title": "{{@dangal}}",
   "mehfil.title": "{{@mehfil}}",
   "music.hub_title": "Musik",
+  "music.quiet_mode_is_on": "Mode tenang aktif",
   "music.start_radio": "Mulai radio",
   "onboarding.quiet_mode_is_on": "Mode tenang aktif",
   "onboarding.voice_updated": "Suara diperbarui! 🔊",

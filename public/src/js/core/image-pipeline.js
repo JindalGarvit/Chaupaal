@@ -208,7 +208,7 @@
       URL.revokeObjectURL(url);
       return file;
     }
-    if (typeof onProgress === 'function') onProgress('Compressing video…', 5);
+    if (typeof onProgress === 'function') onProgress(t('media.compressing_video'), 5);
     const stream = video.captureStream ? video.captureStream() : video.mozCaptureStream();
     const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1500000 });
     const chunks = [];
@@ -242,13 +242,13 @@
   async function uploadToCloudinary(blobOrFile, { resourceType = 'image', folder = 'posts', filename, onProgress } = {}) {
     const cfg = await getMediaConfig();
     if (!cfg) {
-      throw new Error('Media upload is not configured. Set Cloudinary on Vercel (see .env.example).');
+      throw Object.assign(new Error('Media upload is not configured. Set Cloudinary on Vercel (see .env.example).'), { code: 'MEDIA_NOT_CONFIGURED' });
     }
-    if (!currentUser) throw new Error('Sign in to upload media');
+    if (!currentUser) throw Object.assign(new Error('Sign in to upload media'), { code: 'AUTH_REQUIRED' });
 
     const size = blobOrFile.size || 0;
     if (resourceType === 'image' && size > MAX_UPLOAD_BYTES) {
-      throw new Error('File too large after compression');
+      throw Object.assign(new Error('File too large after compression'), { code: 'FILE_TOO_LARGE' });
     }
     if (resourceType === 'video' && size > MAX_VIDEO_BYTES) {
       const err = new Error('This clip is still too large after compress. Trim it or pick a lower-quality export.');
@@ -289,11 +289,11 @@
    */
   async function uploadOptimizedImage(file, { folder = 'posts', onProgress } = {}) {
     if (!isImageFile(file)) throw new Error('Expected an image');
-    if (typeof onProgress === 'function') onProgress('Compressing…');
+    if (typeof onProgress === 'function') onProgress(t('media.compressing'));
     const isAvatar = folder === 'avatars';
     const full = await compressImageFile(file, isAvatar ? 'avatar' : 'feed');
 
-    if (typeof onProgress === 'function') onProgress('Uploading…');
+    if (typeof onProgress === 'function') onProgress(t('media.uploading'));
     const uploaded = await uploadToCloudinary(full.blob, {
       resourceType: 'image',
       folder,
@@ -332,7 +332,7 @@
       if (e.code === 'VIDEO_TOO_LONG') throw e;
     }
     if (working.size > MAX_VIDEO_BYTES) {
-      if (typeof onProgress === 'function') onProgress('File is large — compressing…', 2);
+      if (typeof onProgress === 'function') onProgress(t('media.file_is_large_compressing'), 2);
       working = await transcodeVideoFile(working, { maxBytes: MAX_VIDEO_BYTES, onProgress });
     }
     if (working.size > MAX_VIDEO_BYTES) {
@@ -340,7 +340,7 @@
       err.code = 'VIDEO_TOO_HEAVY';
       throw err;
     }
-    if (typeof onProgress === 'function') onProgress('Uploading video…', 8);
+    if (typeof onProgress === 'function') onProgress(t('media.uploading_video'), 8);
     const uploaded = await uploadToCloudinary(working, {
       resourceType: 'video',
       folder,

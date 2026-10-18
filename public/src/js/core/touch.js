@@ -964,7 +964,7 @@
         row.classList.add('msg-row--deleted');
         row.dataset.deletedEveryone = '1';
         bubble.classList.add('msg-bubble--deleted');
-        bubble.innerHTML = `<em>${typeof t === 'function' ? t('baithak_msg_deleted_everyone') || tHtml('common.this_message_was_deleted') : tHtml('common.this_message_was_deleted')}</em>`;
+        bubble.innerHTML = `<em>${tHtml('baithak.msg_deleted_everyone')}</em>`;
       }
       row?.classList.remove('msg-row--deleting');
       if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('baithak_msg_deleted') || t('common.deleted') : t('common.deleted'));

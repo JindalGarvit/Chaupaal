@@ -6,6 +6,7 @@
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, verifyBearer, initAdmin } = require('../server-lib/auth');
 const { checkActionRateLimit } = require('../server-lib/rate-limit');
+const { serverT } = require('../server-lib/i18n-server');
 const { canViewStory: canViewStoryPolicy, isCloseFriendOptOut } = require('../server-lib/social-model');
 const {
   isSplitKind,
@@ -1158,14 +1159,14 @@ async function sendStoryCard(db, admin, uid, body) {
         openedBy: uid,
         lastMessageAt: Date.now(),
         updatedAt: now,
-        preview: caption || 'Sent a story',
+        preview: caption || serverT('en', 'chat.auto.story'),
       });
     } else {
       const parts = snap.data()?.participants || [];
       if (!parts.includes(uid)) throw new Error('FORBIDDEN');
     }
     await chatRef.collection('messages').add({
-      text: caption || 'Sent a story',
+      text: caption || serverT('en', 'chat.auto.story'),
       uid,
       name: sender.name || sender.displayName || 'You',
       avatar: sender.photoThumb || sender.photoURL || '',
@@ -1178,7 +1179,7 @@ async function sendStoryCard(db, admin, uid, body) {
       {
         updatedAt: now,
         lastMessageAt: Date.now(),
-        preview: caption || 'Sent a story',
+        preview: caption || serverT('en', 'chat.auto.story'),
       },
       { merge: true }
     );

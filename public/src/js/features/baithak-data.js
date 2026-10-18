@@ -1,37 +1,42 @@
+/** Escape user content (chat / group names, previews, search snippets) before it goes into innerHTML. */
+function baithakEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 // ===================== SAMPLE BAITHAK DATA =====================
 // Guest-only Demo rows. Signed-in must never seed these into baithakChats.
 const SAMPLE_CHATS = [
   // Pinned locally too — ensureSelfChatPinned / pinSelfChat always re-assert this at render time
-  {id:'chat_self',type:'self',isSelf:true,pinned:true,undeletable:true,name:'Me (You)',avatar:'📝',preview:'Notes to self · try games & features here',time:'Pinned',unread:0,duelStreak:0},
+  {id:'chat_self',type:'self',isSelf:true,pinned:true,undeletable:true,name:'Me (You)',avatar:'📝',preview:t('baithak.notes_to_self_try_games_features'),time:t('baithak.pinned'),unread:0,duelStreak:0},
   // Demo rows (offline only) — unread 0 so they never look like real notifications
-  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:'Ready for tomorrow\'s Muqabala? 😤',time:'2m',unread:0,streak:7,duelStreak:12,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}],icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
-  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:'That Sports question was wrong though',time:'18m',unread:0,streak:3,duelStreak:5,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}],icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
-  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:'Someone: Did you read the AirTrunk news?',time:'1h',unread:0,members:12,isSample:true,isDemo:true},
-  {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:'Today\'s score 13/20 😮‍💨',time:'3h',unread:0,members:8,isSample:true,isDemo:true},
+  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:t('baithak.ready_for_tomorrow_s_muqabala'),time:'2m',unread:0,streak:7,duelStreak:12,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:t('baithak.cutting_chai_extra_adrak_non_negotiable')}],icebreakers:[{promptId:'ib14',answer:t('baithak.cutting_chai_extra_adrak_non_negotiable')}]},
+  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:t('baithak.that_sports_question_was_wrong_though'),time:'18m',unread:0,streak:3,duelStreak:5,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:t('baithak.road_trip_windows_down_random_dhabas')}],icebreakers:[{promptId:'ib18',answer:t('baithak.road_trip_windows_down_random_dhabas')}]},
+  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:t('baithak.someone_did_you_read_the_airtrunk'),time:'1h',unread:0,members:12,isSample:true,isDemo:true},
+  {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:t('baithak.today_s_score_13_20'),time:'3h',unread:0,members:8,isSample:true,isDemo:true},
 ];
 
 const SAMPLE_MESSAGES = {
   chat_self: [
-    {from:'me',text:'This is your space — notes to yourself, and a place to try chats, games, and features without another person.',time:'Pinned'},
+    {from:'me',text:t('baithak.this_is_your_space_notes_to'),time:t('baithak.pinned')},
   ],
   chat_riya: [
-    {from:'them',text:'Ready for tomorrow\'s Dangal Muqabala? 😤',time:'10:12'},
-    {from:'me',text:'Absolutely! I\'ll crush it on Sports 🏏',time:'10:14'},
-    {from:'them',text:'Haha we\'ll see... what else is going on?',time:'10:15'},
+    {from:'them',text:t('baithak.ready_for_tomorrow_s_dangal_muqabala'),time:'10:12'},
+    {from:'me',text:t('baithak.absolutely_i_ll_crush_it_on'),time:'10:14'},
+    {from:'them',text:t('baithak.haha_we_ll_see_what_else'),time:'10:15'},
   ],
   chat_arjun: [
-    {from:'them',text:'Manali is absolutely beautiful right now ❄️',time:'Yesterday'},
-    {from:'me',text:'Lucky you! When are you back?',time:'Yesterday'},
-    {from:'them',text:'That Sports question was wrong though',time:'18m'},
+    {from:'them',text:t('baithak.manali_is_absolutely_beautiful_right_now'),time:t('common.yesterday')},
+    {from:'me',text:t('baithak.lucky_you_when_are_you_back'),time:t('common.yesterday')},
+    {from:'them',text:t('baithak.that_sports_question_was_wrong_though'),time:'18m'},
   ],
   grp_tech: [
-    {from:'group',name:'Priya',text:'AirTrunk investing $30B in India! 🚀',time:'1h'},
-    {from:'group',name:'Rahul',text:'That\'s a huge step 💻',time:'58m'},
-    {from:'group',name:'Someone',text:'Did you read the AirTrunk news?',time:'45m'},
+    {from:'group',name:'Priya',text:t('baithak.airtrunk_investing_30b_in_india'),time:'1h'},
+    {from:'group',name:'Rahul',text:t('baithak.that_s_a_huge_step'),time:'58m'},
+    {from:'group',name:t('common.someone'),text:t('baithak.did_you_read_the_airtrunk_news'),time:'45m'},
   ],
   grp_news: [
-    {from:'group',name:'Sakshi',text:'Finally got 13/20 today 😮‍💨',time:'3h'},
-    {from:'group',name:'Dev',text:'I scored 15 😎',time:'3h'},
+    {from:'group',name:'Sakshi',text:t('baithak.finally_got_13_20_today'),time:'3h'},
+    {from:'group',name:'Dev',text:t('baithak.sample_i_scored_15'),time:'3h'},
   ],
 };
 
@@ -69,8 +74,8 @@ function buildSelfChatRow(){
   return {
     id, firestoreId:id, type:'self', isSelf:true, pinned:true, undeletable:true,
     name:'Me (You)', avatar:'📝',
-    preview:'Notes to self · try games & features here',
-    time:'Pinned', unread:0, duelStreak:0,
+    preview:t('baithak.notes_to_self_try_games_features'),
+    time:t('baithak.pinned'), unread:0, duelStreak:0,
     uid: (typeof currentUser!=='undefined' && currentUser) ? currentUser.uid : null,
   };
 }
@@ -177,30 +182,30 @@ function renderChatList(chats, opts){
     if(chaupaal) item.dataset.chaupaalChat = '1';
     if(isSample) item.dataset.demo = '1';
     if(isUserPinned) item.dataset.userPinned = '1';
-    const when = self || chaupaal ? 'Pinned' : (typeof formatRelativeTime==='function'
+    const when = self || chaupaal ? t('baithak.pinned') : (typeof formatRelativeTime==='function'
       ? formatRelativeTime(chat.ts || chat.updatedAt || chat.time)
       : chat.time);
     const statusIcons = [
-      isUserPinned ? '<span class="chat-status-ico" title="Pinned" aria-hidden="true">📌</span>' : '',
-      isMuted ? '<span class="chat-status-ico" title="Muted" aria-hidden="true">🔕</span>' : '',
+      isUserPinned ? '<span class="chat-status-ico" title="' + tHtml('baithak.pinned') + '" aria-hidden="true">📌</span>' : '',
+      isMuted ? '<span class="chat-status-ico" title="' + tHtml('baithak.muted') + '" aria-hidden="true">🔕</span>' : '',
     ].filter(Boolean).join('');
     const pinHandle = isUserPinned
-      ? `<button type="button" class="chat-pin-handle" aria-label="Reorder" tabindex="-1">☰</button>`
+      ? `<button type="button" class="chat-pin-handle" aria-label="${tHtml('baithak.reorder')}" tabindex="-1">☰</button>`
       : '';
-    const demoBadge = isSample ? ` <span class="cp-demo-badge" title="Sample">Demo</span>` : '';
+    const demoBadge = isSample ? ` <span class="cp-demo-badge" title="${tHtml('baithak.sample')}">${tHtml('baithak.demo')}</span>` : '';
     item.innerHTML = `
-      <div class="chat-avatar presence-host ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="Open your profile"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="Open Chaupaal profile"':''}>${self||chaupaal?(chat.avatar||'📝'):chatAvatarMarkup(chat)}
+      <div class="chat-avatar presence-host ${chat.type==='group'?'group':''}${self?' self':''}${chaupaal?' chaupaal':''}" ${self?'data-self-pin-avatar="1" title="' + tHtml('baithak.open_your_profile') + '"':''}${chaupaal?'data-chaupaal-pin-avatar="1" title="' + tHtml('baithak.open_chaupaal_profile') + '"':''}>${self||chaupaal?(chat.avatar||'📝'):chatAvatarMarkup(chat)}
         ${chat.duelStreak?`<div class="streak-badge">🔥${chat.duelStreak}</div>`:''}
         ${!self&&!chaupaal?`<span class="presence-dot presence-dot--mehfil" data-mehfil-presence-dot hidden aria-hidden="true"></span>`:''}
       </div>
       <div class="chat-info">
-        <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||'Chat',chat):(chat.name||'Chat'))}${demoBadge}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· you</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">· companion</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${chat.members} members</span>`:''}${statusIcons}</div>
-        <div class="chat-preview">${isSample?'Sample — sign in for real chats · ':''}${chat._searchSnippet||chat.preview||''}</div>
+        <div class="chat-name">${(self||chaupaal||chat.type==='group'||chat.type==='self')?(chat.name?baithakEsc(chat.name):tHtml('common.chat')):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(chat.name||t('common.chat'),chat):(chat.name?baithakEsc(chat.name):tHtml('common.chat')))}${demoBadge}${self?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">${tHtml('baithak.you')}</span>`:''}${chaupaal?` <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">${tHtml('baithak.companion')}</span>`:''}${chat.members?` <span style="font-size:11px;color:var(--muted);font-weight:400;">${tHtml('common.members_count', { count: chat.members })}</span>`:''}${statusIcons}</div>
+        <div class="chat-preview">${isSample?tHtml('baithak.sample_sign_in_for_real_chats'):''}${baithakEsc(chat._searchSnippet||(typeof ChatEvents!=='undefined'?ChatEvents.chatPreviewText(chat):chat.preview)||'')}</div>
       </div>
       <div class="chat-meta">
         <div class="chat-time">${when||''}</div>
         ${unreadN?`<div class="chat-badge">${unreadN}</div>`:''}
-        ${!self&&!chaupaal?`<div class="chat-list-mehfil-live" data-mehfil-live-row hidden>${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(12):''}<span>Live</span></div>`:''}
+        ${!self&&!chaupaal?`<div class="chat-list-mehfil-live" data-mehfil-live-row hidden>${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(12):''}<span>${tHtml('baithak.live')}</span></div>`:''}
         ${pinHandle}
       </div>
     `;
@@ -218,10 +223,10 @@ function renderChatList(chats, opts){
           if (presenceDot) presenceDot.hidden = !isLive;
           const span = liveEl.querySelector('span');
           if (span) {
-            if (isLive) span.textContent = total > 2 ? `${total} in Mehfil` : 'Live';
+            if (isLive) span.textContent = total > 2 ? t('baithak.total_in_mehfil', { total }) : t('baithak.live');
             else if (waiting)
               span.textContent =
-                typeof MEHFIL_WAITING_LABEL !== 'undefined' ? MEHFIL_WAITING_LABEL : 'Waiting in Mehfil';
+                typeof MEHFIL_WAITING_LABEL !== 'undefined' ? MEHFIL_WAITING_LABEL : t('baithak.waiting_in_mehfil');
           }
           liveEl.classList.toggle('is-waiting', waiting && !isLive);
         };
@@ -284,7 +289,7 @@ function renderChatList(chats, opts){
           if(typeof openAvatarLightbox==='function'){
             openAvatarLightbox({
               photoURL: chat.photoURL || (typeof chat.avatar==='string'&&/^https?:/i.test(chat.avatar)?chat.avatar:''),
-              name: chat.name || (isGroup ? 'Group' : 'Friend'),
+              name: chat.name || (isGroup ? t('common.group') : t('common.friend')),
               avatar: chat.avatar || (isGroup ? '👥' : '👤'),
               uid: isGroup ? '' : peerUid || '',
               isGroup,
@@ -334,9 +339,9 @@ function renderChatList(chats, opts){
     if (typeof renderEmptyState === 'function') {
       renderEmptyState(strip, {
         icon: '💬',
-        title: 'Demo chats',
-        message: 'Labeled samples only — sign in to invite friends and keep real conversations.',
-        actionLabel: 'Sign in',
+        title: t('baithak.demo_chats'),
+        message: t('baithak.labeled_samples_only_sign_in_to'),
+        actionLabel: t('common.sign_in'),
         onAction: () => {
           try {
             if (typeof stashPendingDeepLink === 'function') stashPendingDeepLink();
@@ -347,7 +352,7 @@ function renderChatList(chats, opts){
       });
     } else {
       strip.innerHTML =
-        '<button type="button" class="btn btn--primary" data-baithak-guest-auth>Sign in for real chats</button>';
+        '<button type="button" class="btn btn--primary" data-baithak-guest-auth>' + tHtml('baithak.sign_in_for_real_chats') + '</button>';
       strip.querySelector('[data-baithak-guest-auth]')?.addEventListener('click', () => {
         if (typeof openAuthSheet === 'function') openAuthSheet('login');
       });
@@ -369,20 +374,20 @@ function renderChatList(chats, opts){
       opts.sectionEmpty === 'mitra'
         ? {
             icon: '🤝',
-            title: typeof t === 'function' ? t('baithak_mitra_empty_title') || 'No Mitra chats yet' : 'No Mitra chats yet',
+            title: typeof t === 'function' ? t('baithak_mitra_empty_title') || t('baithak.mitra_empty_title') : t('baithak.mitra_empty_title'),
             message: isGuestEmpty
               ? (typeof t === 'function'
-                  ? t('baithak_section_guest_msg') || 'Sign in to see friends and groups here. Demo chats stay in Sabha.'
-                  : 'Sign in to see friends and groups here. Demo chats stay in Sabha.')
+                  ? t('baithak_section_guest_msg') || t('baithak.section_guest_msg')
+                  : t('baithak.section_guest_msg'))
               : (typeof t === 'function'
                   ? t('baithak_mitra_empty_msg') ||
-                    'Friends and groups land here.'
-                  : 'Friends and groups land here.'),
+                    t('baithak.mitra_empty_msg')
+                  : t('baithak.mitra_empty_msg')),
             actionLabel: isGuestEmpty
-              ? 'Sign in'
+              ? t('common.sign_in')
               : typeof t === 'function'
-                ? t('shortcut_baithak_search') || 'Find people'
-                : 'Find people',
+                ? t('shortcut_baithak_search') || t('common.shortcut_baithak_search')
+                : t('common.shortcut_baithak_search'),
             onAction: () => {
               if (isGuestEmpty) {
                 try {
@@ -399,30 +404,30 @@ function renderChatList(chats, opts){
             icon: '✨',
             title:
               typeof t === 'function'
-                ? t('baithak_sambhav_empty_title') || 'No Sambhavanayein yet'
-                : 'No Sambhavanayein yet',
+                ? t('baithak_sambhav_empty_title') || t('baithak.sambhav_empty_title')
+                : t('baithak.sambhav_empty_title'),
             message: isGuestEmpty
               ? (typeof t === 'function'
-                  ? t('baithak_section_guest_msg') || 'Sign in to see friends and groups here. Demo chats stay in Sabha.'
-                  : 'Sign in to see friends and groups here. Demo chats stay in Sabha.')
+                  ? t('baithak_section_guest_msg') || t('baithak.section_guest_msg')
+                  : t('baithak.section_guest_msg'))
               : hasLiveGroups || hasLiveSocial
                 ? (typeof t === 'function'
                     ? t('baithak_sambhav_groups_in_mitra') ||
-                      'Friends and groups live in Mitra — swipe there. Everything is in Sabha.'
-                    : 'Friends and groups live in Mitra — swipe there. Everything is in Sabha.')
+                      t('baithak.sambhav_groups_in_mitra')
+                    : t('baithak.sambhav_groups_in_mitra'))
                 : (typeof t === 'function'
                     ? t('baithak_sambhav_empty_msg') ||
-                      'Chats with people you haven’t friended or followed yet.'
-                    : 'Chats with people you haven’t friended or followed yet.'),
+                      t('baithak.sambhav_empty_msg')
+                    : t('baithak.sambhav_empty_msg')),
             actionLabel: isGuestEmpty
-              ? 'Sign in'
+              ? t('common.sign_in')
               : hasLiveSocial
                 ? typeof t === 'function'
-                  ? t('baithak_open_sabha') || 'Open Sabha'
-                  : 'Open Sabha'
+                  ? t('baithak_open_sabha') || t('baithak.open_sabha')
+                  : t('baithak.open_sabha')
                 : typeof t === 'function'
-                  ? t('shortcut_baithak_search') || 'Find people'
-                  : 'Find people',
+                  ? t('shortcut_baithak_search') || t('common.shortcut_baithak_search')
+                  : t('common.shortcut_baithak_search'),
             onAction: () => {
               if (isGuestEmpty) {
                 try {
@@ -447,8 +452,8 @@ function renderChatList(chats, opts){
     list.appendChild(emptyHost);
     if(baithakChatLoadError && typeof renderErrorState==='function'){
       renderErrorState(emptyHost, {
-        title:'Couldn’t load chats',
-        message:'Check your connection and try again.',
+        title:t('baithak.couldn_t_load_chats'),
+        message:t('baithak.check_your_connection_and_try_again'),
         onRetry:async()=>{
           baithakChatLoadError=false;
           if(typeof loadBaithakChatsPage==='function'){
@@ -461,11 +466,11 @@ function renderChatList(chats, opts){
       const isGuest=typeof currentUser==='undefined'||!currentUser;
       renderEmptyState(emptyHost, {
         icon:'💬',
-        title: isGuest ? 'Sign in for real chats' : 'No conversations yet',
+        title: isGuest ? t('baithak.sign_in_for_real_chats') : t('baithak.no_conversations_yet'),
         message: isGuest
-          ? 'Demo samples are labeled when you browse as a guest. Sign in to invite friends and keep chats.'
-          : 'Invite friends or find people from your contacts.',
-        actionLabel: isGuest ? 'Sign in' : 'Invite friends',
+          ? t('baithak.demo_samples_are_labeled_when_you')
+          : t('baithak.invite_friends_or_find_people_from'),
+        actionLabel: isGuest ? t('common.sign_in') : t('baithak.invite_friends'),
         onAction:()=>{
           if(isGuest){
             try{ if(typeof stashPendingDeepLink==='function') stashPendingDeepLink(); }catch(e){}
@@ -479,7 +484,7 @@ function renderChatList(chats, opts){
         },
         secondaryActions: isGuest ? [] : [
           {
-            label:'Find from contacts',
+            label:t('baithak.find_from_contacts'),
             onAction:()=>{
               if(typeof openPeopleSearchWithContacts==='function') openPeopleSearchWithContacts({surface:'baithak'});
             },
@@ -513,14 +518,14 @@ function renderChatList(chats, opts){
       item.innerHTML = `
         <div class="chat-avatar">${chat.avatar || (self ? '📝' : '🏠')}</div>
         <div class="chat-info">
-          <div class="chat-name">${chat.name || (self ? 'Me (You)' : 'Chaupaal')}${
+          <div class="chat-name">${chat.name ? baithakEsc(chat.name) : self ? tHtml('baithak.me_you') : 'Chaupaal'}${
             self
-              ? ' <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">· you</span>'
-              : ' <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">· companion</span>'
+              ? ' <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">' + tHtml('baithak.you') + '</span>'
+              : ' <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">' + tHtml('baithak.companion') + '</span>'
           }</div>
-          <div class="chat-preview">${chat.preview || ''}</div>
+          <div class="chat-preview">${baithakEsc(typeof ChatEvents !== 'undefined' ? ChatEvents.chatPreviewText(chat) : chat.preview || '')}</div>
         </div>
-        <div class="chat-meta"><div class="chat-time">Pinned</div></div>`;
+        <div class="chat-meta"><div class="chat-time">${tHtml('baithak.pinned')}</div></div>`;
       item.addEventListener('click', () => openChatScreen(chat));
       if (insertBeforeEl) list.insertBefore(item, insertBeforeEl);
       else list.appendChild(item);
@@ -528,7 +533,7 @@ function renderChatList(chats, opts){
   }
   if(baithakChatLiveMode&&baithakChatHasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(list,{
-      label:'Load more chats',
+      label:t('baithak.load_more_chats'),
       onLoadMore:async()=>{
         await loadBaithakChatsPage({reset:false});
         if(typeof setBaithakSection==='function') setBaithakSection(typeof window.baithakSection==='function'?window.baithakSection():'sabha');
@@ -1007,7 +1012,7 @@ async function migrateDuplicateDmInbox(uid){
       // Ensure canonical row present
       const canonRow=rows.find((r)=>chatInboxId(r)===canon)||{
         id:canon,firestoreId:canon,type:'dm',uid:peer,peerUid:peer,
-        name:rows[0]?.name||'Chat',participants:[viewer,peer].sort(),
+        name:rows[0]?.name||t('common.chat'),participants:[viewer,peer].sort(),
       };
       rememberInboxChat(canonRow);
     }catch(e){
@@ -1155,8 +1160,8 @@ function mapChatDoc(raw){
   const isGroup=raw.type==='group';
   const peerName=peerProfile?.name||peerProfile?.username||'';
   const title=isGroup
-    ? (raw.name||raw.title||'Group')
-    : (peerName||(!isGenericDmTitle(raw.name||raw.title)?(raw.name||raw.title):'')||'Chat');
+    ? (raw.name||raw.title||t('common.group'))
+    : (peerName||(!isGenericDmTitle(raw.name||raw.title)?(raw.name||raw.title):'')||t('common.chat'));
   const peerPhoto=peerProfile?.photoURL||peerProfile?.photoThumb||null;
   const groupPhoto=raw.photoURL||null;
   const photo=isGroup ? (groupPhoto||peerPhoto) : (peerPhoto||groupPhoto||null);
@@ -1211,6 +1216,8 @@ function mapChatDoc(raw){
     openedBy: raw.openedBy||raw.createdBy||null,
     firstMessageAt: raw.firstMessageAt?.toMillis?.()||raw.firstMessageAt||null,
     lastMessageAt: raw.lastMessageAt?.toMillis?.()||raw.lastMessageAt||null,
+    previewSys: raw.previewSys||null,
+    previewSysAt: raw.previewSysAt||null,
     matchMeta: raw.matchMeta||null,
     createdAt: raw.createdAt?.toMillis?.()||raw.createdAt||null,
   };
@@ -1277,7 +1284,7 @@ async function loadBaithakChatsPage({reset=false}={}){
 
   if(orderedError&&membershipError){
     baithakChatLoadError=true;
-    if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
+    if(typeof showToast==='function') showToast(t('baithak.couldn_t_refresh_chats'));
     const recovered=mergeBaithakInbox(prevLive, cached);
     baithakChats=pinSelfChat(keepOpen(recovered.length?recovered:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
     baithakChatLoading=false;
@@ -1353,7 +1360,7 @@ async function loadBaithakChatsPage({reset=false}={}){
   }catch(e){
     console.warn('[baithak] chat page failed', e?.message||e);
     baithakChatLoadError=true;
-    if(typeof showToast==='function') showToast('Couldn’t refresh chats.');
+    if(typeof showToast==='function') showToast(t('baithak.couldn_t_refresh_chats'));
     const recovered=mergeBaithakInbox(prevLive, cached);
     baithakChats=pinSelfChat(keepOpen(recovered.length?recovered:(openChat&&!isLiveSampleChat(openChat)?[openChat]:[])));
     return {loaded:0,error:e};

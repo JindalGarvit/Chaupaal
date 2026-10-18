@@ -7,6 +7,7 @@ const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('./http
 const { requireUser, initAdmin } = require('./auth');
 const { checkActionRateLimit } = require('./rate-limit');
 const { upsertNotification, resolveActor } = require('./notifications');
+const { serverT } = require('./i18n-server');
 const {
   cleanText,
   cleanUid,
@@ -486,11 +487,11 @@ async function sendPostCard(db, admin, uid, body) {
         openedBy: uid,
         lastMessageAt: Date.now(),
         updatedAt: now,
-        preview: caption || 'Sent a post',
+        preview: caption || serverT('en', 'chat.auto.post'),
       });
     }
     await chatRef.collection('messages').add({
-      text: caption || 'Sent a post',
+      text: caption || serverT('en', 'chat.auto.post'),
       uid,
       name: sender?.name || sender?.displayName || 'You',
       avatar: sender?.photoThumb || sender?.photoURL || '',
@@ -503,7 +504,7 @@ async function sendPostCard(db, admin, uid, body) {
       {
         updatedAt: now,
         lastMessageAt: Date.now(),
-        preview: caption || 'Sent a post',
+        preview: caption || serverT('en', 'chat.auto.post'),
       },
       { merge: true }
     );

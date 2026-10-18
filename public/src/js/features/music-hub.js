@@ -37,8 +37,8 @@
     if (!s) return null;
     return {
       id: s.id || '',
-      title: s.title || 'Track',
-      artist: s.artist || 'Unknown artist',
+      title: s.title || t('music.track'),
+      artist: s.artist || t('music.unknown_artist'),
       thumbnail: s.thumbnail || '',
       previewUrl: s.previewUrl || null,
       source: s.source || (s.previewUrl ? 'jiosaavn' : 'none'),
@@ -95,15 +95,15 @@
               <div class="music-picker-row-artist">${esc(s.artist)}</div>
             </div>
           </button>
-          <button type="button" class="music-hub-like${liked}" data-like="${i}" aria-label="Like">♥</button>
+          <button type="button" class="music-hub-like${liked}" data-like="${i}" aria-label="${tHtml('common.comment_like')}">♥</button>
           ${
             shareMode
-              ? `<button type="button" class="music-hub-share" data-share="${i}" aria-label="Share">↗</button>`
+              ? `<button type="button" class="music-hub-share" data-share="${i}" aria-label="${tHtml('common.share')}">↗</button>`
               : ''
           }
           ${
             radioMeta
-              ? `<button type="button" class="music-hub-share" data-share-radio="1" aria-label="Share radio">📻</button>`
+              ? `<button type="button" class="music-hub-share" data-share-radio="1" aria-label="${tHtml('music.share_radio')}">📻</button>`
               : ''
           }
         </div>`;
@@ -168,6 +168,17 @@
     silentRefill();
   };
 
+  /** Song-language code → its name in the UI language ("हिन्दी" / "Hindi"); 'any' → "Any language". */
+  function musicLanguageName(code) {
+    if (code === 'any') return t('music.any_language');
+    try {
+      const ui = typeof getLangEntry === 'function' && typeof currentLang !== 'undefined' ? getLangEntry(normalizeLang(currentLang)).html : 'en';
+      return new Intl.DisplayNames([ui], { type: 'language' }).of(code) || code;
+    } catch (e) {
+      return code;
+    }
+  }
+
   function renderRadioShareCard(meta, sampleTrack) {
     const mood = esc(meta?.mood || 'discovery');
     const genre = esc(meta?.genre || 'any');
@@ -179,7 +190,7 @@
       ${thumb}
       <div class="radio-share-meta">
         <div class="radio-share-label">${esc(tt('music_radio_card', 'Chaupaal Radio'))}</div>
-        <div class="radio-share-title">${mood} · ${genre}</div>
+        <div class="radio-share-title">${optionLabelHtml('music.opt.mood', meta?.mood || 'discovery')} · ${optionLabelHtml('music.opt.genre', meta?.genre || 'any')}</div>
         <div class="radio-share-sub">${esc(tt('music_radio_tap', 'Tap to tune in'))}</div>
       </div>
     </div>`;
@@ -213,39 +224,39 @@
       <div class="music-picker-handle" aria-hidden="true"></div>
       <div class="music-picker-head">
         <div class="music-picker-title">${esc(title)}</div>
-        <button type="button" class="music-picker-close" data-music-hub-close aria-label="Close">✕</button>
+        <button type="button" class="music-picker-close" data-music-hub-close aria-label="${tHtml('common.close')}">✕</button>
       </div>
       <div class="music-hub-tabs" role="tablist">
-        <button type="button" class="music-hub-tab" data-tab="radio" role="tab">Radio</button>
-        <button type="button" class="music-hub-tab" data-tab="trending" role="tab">Trending</button>
-        <button type="button" class="music-hub-tab" data-tab="foryou" role="tab">For you</button>
-        <button type="button" class="music-hub-tab" data-tab="liked" role="tab">Liked</button>
-        <button type="button" class="music-hub-tab" data-tab="playlists" role="tab">Lists</button>
-        <button type="button" class="music-hub-tab" data-tab="search" role="tab">Search</button>
+        <button type="button" class="music-hub-tab" data-tab="radio" role="tab">${tHtml('music.radio')}</button>
+        <button type="button" class="music-hub-tab" data-tab="trending" role="tab">${tHtml('music.trending')}</button>
+        <button type="button" class="music-hub-tab" data-tab="foryou" role="tab">${tHtml('music.for_you')}</button>
+        <button type="button" class="music-hub-tab" data-tab="liked" role="tab">${tHtml('music.liked_2')}</button>
+        <button type="button" class="music-hub-tab" data-tab="playlists" role="tab">${tHtml('music.lists')}</button>
+        <button type="button" class="music-hub-tab" data-tab="search" role="tab">${tHtml('music.search')}</button>
       </div>
       <div class="music-hub-settings hidden" data-hub-settings>
-        <label>Mood
+        <label>${tHtml('music.mood')}
           <select data-set="mood">
-            ${['discovery', 'chill', 'energy', 'focus', 'romance', 'nostalgia']
-              .map((m) => `<option value="${m}"${settings.mood === m ? ' selected' : ''}>${m}</option>`)
+            ${/* i18n-values: music.opt.mood */ ['discovery', 'chill', 'energy', 'focus', 'romance', 'nostalgia']
+              .map((m) => `<option value="${m}"${settings.mood === m ? ' selected' : ''}>${optionLabelHtml('music.opt.mood', m)}</option>`)
               .join('')}
           </select>
         </label>
-        <label>Genre
+        <label>${tHtml('music.genre')}
           <select data-set="genre">
-            ${['any', 'bollywood', 'punjabi', 'hiphop', 'pop', 'indie', 'classical']
-              .map((m) => `<option value="${m}"${settings.genre === m ? ' selected' : ''}>${m}</option>`)
+            ${/* i18n-values: music.opt.genre */ ['any', 'bollywood', 'punjabi', 'hiphop', 'pop', 'indie', 'classical']
+              .map((m) => `<option value="${m}"${settings.genre === m ? ' selected' : ''}>${optionLabelHtml('music.opt.genre', m)}</option>`)
               .join('')}
           </select>
         </label>
-        <label>Language
+        <label>${tHtml('common.language')}
           <select data-set="language">
-            ${['any', 'hi', 'en', 'pa', 'ta', 'te']
-              .map((m) => `<option value="${m}"${settings.language === m ? ' selected' : ''}>${m}</option>`)
+            ${/* i18n-values: music.opt.language */ ['any', 'hi', 'en', 'pa', 'ta', 'te']
+              .map((m) => `<option value="${m}"${settings.language === m ? ' selected' : ''}>${esc(musicLanguageName(m))}</option>`)
               .join('')}
           </select>
         </label>
-        <label class="music-hub-scope">Trending
+        <label class="music-hub-scope">${tHtml('music.trending')}
           <select data-set="scope">
             ${['global', 'local', 'circle']
               .map(
@@ -257,8 +268,8 @@
         </label>
       </div>
       <label class="music-picker-search-wrap music-hub-search-wrap hidden" data-hub-search>
-        <span class="sr-only">Search songs</span>
-        <input type="search" class="music-picker-input" data-hub-q placeholder="Song or artist…" autocomplete="off" enterkeyhint="search">
+        <span class="sr-only">${tHtml('music.search_songs')}</span>
+        <input type="search" class="music-picker-input" data-hub-q placeholder="${tHtml('music.song_or_artist')}" autocomplete="off" enterkeyhint="search">
       </label>
       <div class="music-picker-results" data-hub-results>${skeleton(4)}</div>
       <div class="music-hub-footer">
@@ -431,8 +442,8 @@
             .map(
               (p, i) =>
                 `<button type="button" class="music-hub-playlist" data-pl="${i}">
-                  <strong>${esc(p.name)}</strong>
-                  <span>${(p.tracks || []).length} songs</span>
+                  <strong>${esc(p.id === 'pl_favorites' ? t('music.liked_songs') : p.name)}</strong>
+                  <span>${tHtml('music.songs_count', { count: (p.tracks || []).length })}</span>
                 </button>`
             )
             .join('');

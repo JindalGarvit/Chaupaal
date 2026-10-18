@@ -16,6 +16,7 @@
   "dangal.title": "{{@dangal}}",
   "mehfil.title": "{{@mehfil}}",
   "music.hub_title": "음악",
+  "music.quiet_mode_is_on": "조용한 모드 켜짐",
   "music.start_radio": "라디오 시작",
   "onboarding.quiet_mode_is_on": "조용한 모드 켜짐",
   "onboarding.voice_updated": "음성 업데이트! 🔊",

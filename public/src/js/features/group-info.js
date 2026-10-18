@@ -118,7 +118,7 @@
       participants = [currentUser.uid];
       if (!profiles[currentUser.uid]) {
         profiles[currentUser.uid] = {
-          name: userProfile?.name || currentUser.displayName || 'You',
+          name: userProfile?.name || currentUser.displayName || t('common.you'),
           avatar: userProfile?.avatar || '👤',
           role: 'admin',
           joinedAt: Date.now(),
@@ -129,7 +129,7 @@
       const p = profiles[uid] || {};
       return {
         uid,
-        name: p.name || 'Member',
+        name: p.name || t('common.member'),
         avatar: p.avatar || p.photoURL || '👤',
         photoURL: p.photoURL || '',
         profileType: p.profileType || null,
@@ -192,6 +192,12 @@
     if (typeof renderChatList === 'function') renderChatList(baithakChats);
   }
 
+  /** Structured system message (rendered per viewer) — see core/chat-events.js. Best-effort, never throws. */
+  function groupEvent(chatId, type, data) {
+    if (typeof ChatEvents === 'undefined') return Promise.resolve(null);
+    return ChatEvents.postChatSysEvent(chatId, type, data);
+  }
+
   function inviteUrl(token) {
     if (typeof buildDeepLink === 'function') return `${location.origin}${buildDeepLink('join', token)}`;
     return `${location.origin}/join/g/${encodeURIComponent(token)}`;
@@ -210,7 +216,7 @@
     const vis = ['private', 'discoverable', 'public'].includes(visibility) ? visibility : 'private';
     const memberProfiles = {};
     memberProfiles[uid] = {
-      name: userProfile?.name || currentUser.displayName || 'You',
+      name: userProfile?.name || currentUser.displayName || tEn('common.you'),
       avatar: userProfile?.avatar || '👤',
       photoURL: currentUser.photoURL || userProfile?.photoURL || '',
       role: 'admin',
@@ -237,12 +243,13 @@
       memberCount: 1,
       ...visFields,
       permissions: { addMembers: 'all', editInfo: 'admin' },
-      preview: 'Group created',
+      preview: tEn('chat.auto.group_created'),
       lastMessageAt: Date.now(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     const ref = await db.collection('chats').add(doc);
+    groupEvent(ref.id, 'group_created', { params: { name: doc.name } });
     try {
       await db.collection('groupInvites').doc(token).set({
         chatId: ref.id,
@@ -281,7 +288,7 @@
     }
     const memberProfiles = { ...(chat.memberProfiles || {}) };
     memberProfiles[uid] = {
-      name: friend.name || 'Member',
+      name: friend.name || tEn('common.member'),
       avatar: friend.avatar || '👤',
       photoURL: friend.photoURL || '',
       role: 'member',
@@ -291,12 +298,15 @@
     const participants = [...(chat.participants || []), uid];
     await patchGroupDoc(chatId, { participants, memberProfiles, memberCount: participants.length });
     mergeChatLocal(chatId, { participants, memberProfiles, memberCount: participants.length });
+    groupEvent(chatId, 'member_added', { targetUids: [uid], names: { [uid]: memberProfiles[uid].name } });
     return true;
   }
 
   async function removeMemberFromGroup(chat, targetUid) {
     const chatId = chat.firestoreId || chat.id;
     if (!chatId || !targetUid) return false;
+    const leaving = typeof currentUser !== 'undefined' && currentUser && targetUid === currentUser.uid;
+    await groupEvent(chatId, leaving ? 'member_left' : 'member_removed', leaving ? {} : { targetUids: [targetUid], names: { [targetUid]: chat.memberProfiles?.[targetUid]?.name } });
     const participants = (chat.participants || []).filter((u) => u !== targetUid);
     const memberProfiles = { ...(chat.memberProfiles || {}) };
     delete memberProfiles[targetUid];
@@ -336,6 +346,7 @@
     }
     await patchGroupDoc(chatId, { admins, memberProfiles });
     mergeChatLocal(chatId, { admins, memberProfiles });
+    groupEvent(chatId, makeAdmin ? 'admin_added' : 'admin_removed', { targetUids: [targetUid], names: { [targetUid]: memberProfiles[targetUid]?.name } });
     return true;
   }
 
@@ -363,6 +374,8 @@
     if (invite) patch.invite = invite;
     await patchGroupDoc(chatId, patch);
     mergeChatLocal(chatId, patch);
+    if (patch.name && patch.name !== chat.name) groupEvent(chatId, 'group_renamed', { params: { name: patch.name } });
+    if ((patch.photoURL != null && patch.photoURL !== chat.photoURL) || (patch.avatar != null && patch.avatar !== chat.avatar)) groupEvent(chatId, 'group_photo_changed');
     const headerName = document.querySelector('#activeChatScreen .chat-header-name');
     const headerAv = document.querySelector('#activeChatScreen .chat-header-avatar');
     if (headerName && patch.name) headerName.textContent = patch.name;
@@ -386,7 +399,7 @@
       if (successor) {
         await setMemberAdmin(chat, successor, true);
         const name = chat.memberProfiles?.[successor]?.name || 'a member';
-        if (typeof showToast === 'function') showToast(t('group_now_admin',{name}));
+        if (typeof showToast === 'function') showToast(t('group_now_admin',{name: bidi(name)}));
       }
     }
     await removeMemberFromGroup(chat, uid);
@@ -434,7 +447,7 @@
       if (mode === 'approval') {
         await db.collection('chats').doc(chatId).collection('joinRequests').doc(uid).set({
           uid,
-          name: userProfile?.name || currentUser.displayName || 'Member',
+          name: userProfile?.name || currentUser.displayName || tEn('common.member'),
           avatar: userProfile?.avatar || '👤',
           photoURL: currentUser.photoURL || '',
           profileType:
@@ -449,7 +462,7 @@
         return {
           ok: true,
           pending: true,
-          chat: { id: chatId, firestoreId: chatId, type: 'group', name: inviteMeta.name || 'Group' },
+          chat: { id: chatId, firestoreId: chatId, type: 'group', name: inviteMeta.name || t('common.group') },
         };
       }
 
@@ -466,7 +479,7 @@
               id: chatId,
               firestoreId: chatId,
               type: 'group',
-              name: inviteMeta.name || 'Group',
+              name: inviteMeta.name || tEn('common.group'),
               participants: parts,
             },
           };
@@ -479,7 +492,7 @@
         .update({
           participants: firebase.firestore.FieldValue.arrayUnion(uid),
           [`memberProfiles.${uid}`]: {
-            name: userProfile?.name || currentUser.displayName || 'Member',
+            name: userProfile?.name || currentUser.displayName || tEn('common.member'),
             avatar: userProfile?.avatar || '👤',
             photoURL: currentUser.photoURL || '',
             role: 'member',
@@ -495,12 +508,13 @@
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
 
+      await groupEvent(chatId, 'member_joined');
       const data = await fetchGroupDoc(chatId);
       const chat = data || normalizeGroupChat({
         id: chatId,
         firestoreId: chatId,
         type: 'group',
-        name: inviteMeta.name || 'Group',
+        name: inviteMeta.name || t('common.group'),
         participants: [uid],
       });
       if (typeof baithakChats !== 'undefined') {
@@ -524,41 +538,41 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="group-info-header archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'group-info-back', attrs: 'data-group-info-close' }):'<button type="button" class="group-info-back cp-back-btn" data-group-info-close aria-label="Back">←</button>'}
-        <div class="group-info-title">Group info</div>
+        ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'group-info-back', attrs: 'data-group-info-close' }):'<button type="button" class="group-info-back cp-back-btn" data-group-info-close aria-label="' + tHtml('common.back') + '">←</button>'}
+        <div class="group-info-title">${tHtml('baithak.group_info')}</div>
       </div>
       <div class="group-info-scroll" data-gi-scroll>
         <div class="group-info-hero" data-gi-hero></div>
         <div class="group-info-section" data-gi-requests hidden></div>
         <div class="group-info-section" data-gi-privacy hidden>
-          <div class="group-info-section-head">${typeof t==='function'?t('group_visibility'):'Visibility'}</div>
-          <div class="group-vis-seg" role="radiogroup" aria-label="Group visibility" data-gi-vis-seg>
-            <button type="button" class="group-vis-opt" data-gi-vis="private" role="radio">Private</button>
-            <button type="button" class="group-vis-opt" data-gi-vis="discoverable" role="radio">Discoverable</button>
-            <button type="button" class="group-vis-opt" data-gi-vis="public" role="radio">Public</button>
+          <div class="group-info-section-head">${typeof t==='function'?t('group_visibility'):tHtml('baithak.group_visibility')}</div>
+          <div class="group-vis-seg" role="radiogroup" aria-label="${tHtml('baithak.group_visibility_2')}" data-gi-vis-seg>
+            <button type="button" class="group-vis-opt" data-gi-vis="private" role="radio">${tHtml('baithak.group_vis_private')}</button>
+            <button type="button" class="group-vis-opt" data-gi-vis="discoverable" role="radio">${tHtml('baithak.group_discoverable')}</button>
+            <button type="button" class="group-vis-opt" data-gi-vis="public" role="radio">${tHtml('baithak.group_vis_public')}</button>
           </div>
           <div class="group-info-muted group-vis-hint" data-gi-vis-hint style="font-size:12px;margin-top:8px;line-height:1.45;"></div>
         </div>
         <div class="group-info-section">
-          <div class="group-info-section-head">Members <span data-gi-count></span></div>
+          <div class="group-info-section-head">${tHtml('baithak.members')} <span data-gi-count></span></div>
           <div class="group-info-members" data-gi-members></div>
-          <button type="button" class="group-info-action" data-gi-add-member hidden>+ Add member</button>
+          <button type="button" class="group-info-action" data-gi-add-member hidden>${tHtml('baithak.add_member')}</button>
         </div>
         <div class="group-info-section" data-gi-invite-section>
-          <div class="group-info-section-head">Invite link</div>
+          <div class="group-info-section-head">${tHtml('baithak.invite_link')}</div>
           <div class="group-info-invite-row" data-gi-invite-row></div>
           <label class="group-info-toggle" data-gi-invite-mode hidden>
-            <span>Admin must approve joins</span>
+            <span>${tHtml('baithak.admin_must_approve_joins')}</span>
             <input type="checkbox" data-gi-approval-toggle>
           </label>
         </div>
         <div class="group-info-section" data-gi-perms hidden>
-          <div class="group-info-section-head">Permissions</div>
-          <label class="group-info-toggle"><span>Any member can add people</span><input type="checkbox" data-gi-perm-add></label>
-          <label class="group-info-toggle"><span>Any member can edit group info</span><input type="checkbox" data-gi-perm-edit></label>
+          <div class="group-info-section-head">${tHtml('baithak.permissions')}</div>
+          <label class="group-info-toggle"><span>${tHtml('baithak.any_member_can_add_people')}</span><input type="checkbox" data-gi-perm-add></label>
+          <label class="group-info-toggle"><span>${tHtml('baithak.any_member_can_edit_group_info')}</span><input type="checkbox" data-gi-perm-edit></label>
         </div>
-        <button type="button" class="group-info-join" data-gi-join hidden>Join group</button>
-        <button type="button" class="group-info-leave" data-gi-leave>Leave group</button>
+        <button type="button" class="group-info-join" data-gi-join hidden>${tHtml('baithak.join_group')}</button>
+        <button type="button" class="group-info-leave" data-gi-leave>${tHtml('baithak.leave_group')}</button>
       </div>`;
 
     const device = document.querySelector('.device');
@@ -616,8 +630,8 @@
           ${photo ? `<img src="${esc(photo)}" alt="">` : `<span>${esc(chat.avatar || '👥')}</span>`}
         </button>
         <div class="group-info-name-row">
-          <div class="group-info-name" data-gi-name>${esc(chat.name || 'Group')}</div>
-          ${canEditInfo(chat, uid) ? `<button type="button" class="group-info-edit-name" data-gi-edit-name aria-label="Edit name">✎</button>` : ''}
+          <div class="group-info-name" data-gi-name>${esc(chat.name || t('common.group'))}</div>
+          ${canEditInfo(chat, uid) ? `<button type="button" class="group-info-edit-name" data-gi-edit-name aria-label="${tHtml('baithak.edit_name')}">✎</button>` : ''}
         </div>
         ${chat.description ? `<div class="group-info-desc">${esc(chat.description)}</div>` : ''}`;
 
@@ -626,16 +640,16 @@
         if (vis === 'public') {
           return typeof t === 'function'
             ? t('group_vis_public_hint')
-            : 'Anyone can find and join instantly, and see chat history.';
+            : t('baithak.group_vis_public_hint');
         }
         if (vis === 'discoverable') {
           return typeof t === 'function'
             ? t('group_vis_discoverable_hint')
-            : 'Appears in search. People can request to join — no history until accepted.';
+            : t('baithak.group_vis_discoverable_hint');
         }
         return typeof t === 'function'
           ? t('group_vis_private_hint')
-          : 'Invite-only. Hidden from search.';
+          : t('baithak.group_vis_private_hint');
       };
       if (admin) {
         privacyEl.hidden = false;
@@ -674,7 +688,7 @@
                 v === 'public'
                   ? t('group_public')
                   : v === 'discoverable'
-                    ? t('group_discoverable') || 'Discoverable'
+                    ? t('group_discoverable') || t('baithak.group_discoverable')
                     : t('group_private')
               );
             }
@@ -687,12 +701,12 @@
       listEl.innerHTML = members
         .map((m) => {
           const isMe = m.uid === uid;
-          const badge = m.role === 'admin' ? '<span class="group-info-admin-badge">Admin</span>' : '';
+          const badge = m.role === 'admin' ? '<span class="group-info-admin-badge">' + tHtml('baithak.admin') + '</span>' : '';
           const av = m.photoURL || m.avatar;
           return `<div class="group-info-member" data-member-uid="${esc(m.uid)}">
             <div class="group-info-member-av">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(m,{decorative:true}):(/^https:/.test(av)?`<img src="${esc(av)}" alt="">`:esc(m.avatar||'👤'))}</div>
             <div class="group-info-member-meta"><div class="group-info-member-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):esc(m.name)}${isMe ? ' (You)' : ''}</div>${badge}</div>
-            ${admin && !isMe ? `<button type="button" class="group-info-member-menu" data-member-menu aria-label="More options">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:18}):'⋮'}</button>` : ''}
+            ${admin && !isMe ? `<button type="button" class="group-info-member-menu" data-member-menu aria-label="${tHtml('common.more_options')}">${typeof iconHtml==='function'?iconHtml('more-vertical',{size:18}):'⋮'}</button>` : ''}
           </div>`;
         })
         .join('');
@@ -711,7 +725,7 @@
               chatId: chat.firestoreId || chat.id,
               mode: inv.mode === 'approval' ? 'approval' : 'instant',
               enabled: inv.enabled !== false,
-              name: String(chat.name || 'Group').slice(0, 80),
+              name: String(chat.name || tEn('common.group')).slice(0, 80),
               createdBy: chat.createdBy || uid,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             },
@@ -721,8 +735,8 @@
         const url = inviteUrl(inv.token);
         row.innerHTML = `
           <input class="group-info-invite-input" readonly value="${esc(url)}">
-          <button type="button" class="group-info-copy" data-gi-copy>Copy</button>
-          <button type="button" class="group-info-share" data-gi-share>Share</button>`;
+          <button type="button" class="group-info-copy" data-gi-copy>${tHtml('baithak.msg_copy')}</button>
+          <button type="button" class="group-info-share" data-gi-share>${tHtml('common.share')}</button>`;
         row.querySelector('[data-gi-copy]')?.addEventListener('click', () => {
           navigator.clipboard?.writeText(url);
           if (typeof showToast === 'function') showToast(t('group_link_copied'));
@@ -750,7 +764,7 @@
           if (typeof showToast === 'function') showToast(mode==='approval'?t('group_join_approval'):t('group_join_anyone'));
         };
       } else {
-        row.innerHTML = `<div class="group-info-muted">Invite link available to admins</div>`;
+        row.innerHTML = `<div class="group-info-muted">${tHtml('baithak.invite_link_available_to_admins')}</div>`;
         overlay.querySelector('[data-gi-invite-mode]').hidden = true;
       }
 
@@ -785,12 +799,8 @@
         joinBtn.hidden = isMember || !canJoinUi;
         joinBtn.textContent =
           vis === 'discoverable' || chat.invite?.mode === 'approval'
-            ? typeof t === 'function'
-              ? t('group_request_join') || 'Request to join'
-              : 'Request to join'
-            : typeof t === 'function'
-              ? t('group_join') || 'Join group'
-              : 'Join group';
+            ? t('baithak.request_to_join')
+            : t('baithak.join_group');
       }
 
       listEl.querySelectorAll('[data-member-menu]').forEach((btn) => {
@@ -815,14 +825,14 @@
       }
       box.hidden = false;
       box.innerHTML = `
-        <div class="group-info-section-head">Join requests (${reqs.length})</div>
+        <div class="group-info-section-head">${tHtml('baithak.join_requests_count', { count: reqs.length })}</div>
         ${reqs
           .map(
             (r) => `<div class="group-info-request" data-req-uid="${esc(r.uid)}">
           <div class="group-info-member-av">${esc(r.avatar || '👤')}</div>
-          <div class="group-info-member-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(r.name || 'Member',r):esc(r.name || 'Member')}</div>
-          <button type="button" class="group-info-accept" data-req-accept>Accept</button>
-          <button type="button" class="group-info-reject" data-req-reject>Decline</button>
+          <div class="group-info-member-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(r.name || t('common.member'),r):esc(r.name || t('common.member'))}</div>
+          <button type="button" class="group-info-accept" data-req-accept>${tHtml('common.accept')}</button>
+          <button type="button" class="group-info-reject" data-req-reject>${tHtml('baithak.decline')}</button>
         </div>`
           )
           .join('')}`;
@@ -859,13 +869,13 @@
           <div class="group-info-sheet-title">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(member.name,member):esc(member.name)}</div>
           <button type="button" class="cp-menu-item" data-act-promote>
             <span class="cp-menu-ico" aria-hidden="true">${ic(isAd ? 'user-minus' : 'shield')}</span>
-            <span>${isAd ? 'Remove admin' : 'Make admin'}</span>
+            <span>${isAd ? tHtml('baithak.remove_admin') : tHtml('baithak.make_admin')}</span>
           </button>
           <button type="button" class="cp-menu-item is-danger danger" data-act-remove>
             <span class="cp-menu-ico" aria-hidden="true">${ic('user-x')}</span>
-            <span>Remove from group</span>
+            <span>${tHtml('baithak.remove_from_group')}</span>
           </button>
-          <button type="button" class="cp-menu-item" data-act-cancel>Cancel</button>
+          <button type="button" class="cp-menu-item" data-act-cancel>${tHtml('common.cancel')}</button>
         </div>`;
       device.appendChild(sheet);
       const done = () => {
@@ -909,12 +919,12 @@
         if (typeof showToast === 'function') showToast(t('group_friends_unavailable'));
         return;
       }
-      const friend = await openFriendPickerSheet({ title: 'Add to group', subtitle: chat.name });
+      const friend = await openFriendPickerSheet({ title: t('baithak.add_to_group'), subtitle: chat.name });
       if (!friend?.uid && !friend?.id) return;
       const ok = await addMemberToGroup(chat, friend);
       if (ok) {
         await refresh();
-        if (typeof showToast === 'function') showToast(t('group_friend_added',{name:friend.name}));
+        if (typeof showToast === 'function') showToast(t('group_friend_added',{name:bidi(friend.name)}));
       }
     });
 
@@ -939,7 +949,7 @@
         if (chat.invite?.mode === 'approval') {
           await db.collection('chats').doc(chatId).collection('joinRequests').doc(uid).set({
             uid,
-            name: userProfile?.name || currentUser.displayName || 'Member',
+            name: userProfile?.name || currentUser.displayName || tEn('common.member'),
             avatar: userProfile?.avatar || '👤',
             photoURL: currentUser.photoURL || '',
             status: 'pending',
@@ -966,7 +976,7 @@
         await db.collection('chats').doc(chatId).update({
           participants: firebase.firestore.FieldValue.arrayUnion(uid),
           [`memberProfiles.${uid}`]: {
-            name: userProfile?.name || currentUser.displayName || 'Member',
+            name: userProfile?.name || currentUser.displayName || tEn('common.member'),
             avatar: userProfile?.avatar || '👤',
             photoURL: currentUser.photoURL || '',
             role: 'member',
@@ -992,7 +1002,7 @@
       if (e.target.closest('[data-gi-edit-name]')) {
         const name =
           typeof promptNameSheet === 'function'
-            ? await promptNameSheet({ title: 'Group name', defaultValue: chat.name, confirmLabel: 'Save' })
+            ? await promptNameSheet({ title: t('baithak.group_name'), defaultValue: chat.name, confirmLabel: t('common.save') })
             : null;
         if (name) {
           await updateGroupDetails(chat, { name: String(name).trim() });
@@ -1046,7 +1056,7 @@
       return;
     }
     if (typeof showToast === 'function') {
-      showToast(typeof t === 'function' ? t('group_private_blocked') || 'This group is private' : 'This group is private');
+      showToast(typeof t === 'function' ? t('group_private_blocked') || t('baithak.group_private_blocked') : t('baithak.group_private_blocked'));
     }
   }
 

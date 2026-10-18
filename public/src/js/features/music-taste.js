@@ -141,7 +141,7 @@
     if (s.playlists.length >= MAX_PLAYLISTS) return null;
     const pl = {
       id: `pl_${Date.now()}`,
-      name: String(name || 'Playlist').slice(0, 48),
+      name: String(name || t('music.playlist')).slice(0, 48),
       tracks: [],
     };
     s.playlists.push(pl);

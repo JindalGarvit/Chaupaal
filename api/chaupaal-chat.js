@@ -4,6 +4,7 @@
  */
 const { sendSuccess, sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
 const { requireUser, initAdmin } = require('../server-lib/auth');
+const { serverT } = require('../server-lib/i18n-server');
 const { callAI, AiDisabledError } = require('../server-lib/ai');
 const { isAiFeaturesEnabled } = require('../server-lib/ai-config');
 const {
@@ -83,7 +84,7 @@ async function ensureChatDoc(db, uid) {
       name: 'Chaupaal',
       createdAt: new Date(),
       updatedAt: new Date(),
-      preview: 'Your space with Chaupaal',
+      preview: serverT('en', 'chat.auto.chaupaal_space'),
       serverOwned: true,
     });
   } else {

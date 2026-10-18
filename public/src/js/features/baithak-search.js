@@ -94,7 +94,7 @@
     if (chat.type === 'group') {
       const nick = NS.getGroupNickname(chat.firestoreId || chat.id);
       if (nick) return nick;
-      return realName || chat._realName || chat.name || 'Group';
+      return realName || chat._realName || chat.name || t('common.group');
     }
     const peer = peerUidOfChat(chat);
     const nick = peer ? NS.getDmNickname(peer) : '';
@@ -358,7 +358,7 @@
       list.appendChild(row);
     }
     if (row) {
-      row.textContent = tt('baithak_search_everywhere', `Search everywhere for “${inlineQuery.trim()}”`);
+      row.textContent = t('baithak.search_everywhere_for', { query: inlineQuery.trim() });
       row.onclick = () => openBaithakSearchOverlay({ initialQuery: inlineQuery.trim(), tab: 'all' });
       row.hidden = !inlineQuery.trim();
     }
@@ -400,13 +400,13 @@
       if (!hay.includes(q)) return;
       seen.add(id);
       const label =
-        vis === 'public' ? 'Public' : vis === 'discoverable' ? 'Discoverable' : 'Private';
+        vis === 'public' ? t('baithak.group_vis_public') : vis === 'discoverable' ? t('baithak.group_vis_discoverable') : t('baithak.group_vis_private');
       out.push({
         type: 'group',
         id,
         chatId: id,
-        name: raw.name || 'Group',
-        subtitle: `${(raw.participants || []).length} members · ${label}`,
+        name: raw.name || t('common.group'),
+        subtitle: t('baithak.members_and_label', { count: (raw.participants || []).length, label }),
         isPublic: vis === 'public',
         isMember: !!isMember,
         discoverableInSearch: searchable,
@@ -469,7 +469,7 @@
   function renderOverlayResults(container, rows, { tab, query }) {
     if (!container) return;
     if (!rows.length) {
-      container.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak_search_none', 'No results'))}</div>`;
+      container.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak.baithak_search_none', 'No results'))}</div>`;
       return;
     }
     container.innerHTML = rows
@@ -479,7 +479,7 @@
           const name =
             typeof resolvePersonDisplayName === 'function'
               ? resolvePersonDisplayName(row)
-              : row.title || row.name || (row.username ? `@${row.username}` : 'Someone');
+              : row.title || row.name || (row.username ? `@${row.username}` : t('common.someone'));
           const sub = row.subtitle || row.username || '';
           return `<button type="button" class="baithak-search-hit" data-person="${esc(uid)}">
             <span class="baithak-search-hit-title">${esc(name)}</span>
@@ -489,7 +489,7 @@
         if (row.type === 'group' || row.category === 'groups') {
           const id = row.chatId || row.id;
           return `<button type="button" class="baithak-search-hit" data-group="${esc(id)}">
-            <span class="baithak-search-hit-title">${esc(row.name || row.title || 'Group')}</span>
+            <span class="baithak-search-hit-title">${esc(row.name || row.title || t('common.group'))}</span>
             <span class="baithak-search-hit-sub">${esc(row.subtitle || '')}</span>
           </button>`;
         }
@@ -544,17 +544,17 @@
     overlay.dataset.navManaged = '1';
     overlay.innerHTML = `
       <div class="baithak-search-overlay-head">
-        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-bs-back' }) : '<button type="button" data-bs-back aria-label="Back" class="cp-back-btn">←</button>'}
+        ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-bs-back' }) : '<button type="button" data-bs-back aria-label="' + tHtml('common.back') + '" class="cp-back-btn">←</button>'}
         <div class="baithak-search-overlay-field search-field">
-          <input type="search" id="baithakSearchOverlayInput" class="search-field-input search-field-hide-native-clear" placeholder="${esc(tt('baithak_search_ph', 'Search chats, people, groups…'))}" value="${esc(initialQuery)}" autocomplete="off">
+          <input type="search" id="baithakSearchOverlayInput" class="search-field-input search-field-hide-native-clear" placeholder="${esc(tt('baithak.baithak_search_ph', 'Search chats, people, groups…'))}" value="${esc(initialQuery)}" autocomplete="off">
           <button type="button" class="search-field-clear" id="baithakOverlayClearBtn" aria-label="${esc(tt('search_clear', 'Clear search'))}" hidden>✕</button>
         </div>
       </div>
       <div class="baithak-search-tabs" role="tablist">
-        <button type="button" data-tab="all" class="active">${esc(tt('baithak_tab_all', 'All'))}</button>
-        <button type="button" data-tab="chats">${esc(tt('baithak_tab_chats', 'Chats'))}</button>
-        <button type="button" data-tab="people">${esc(tt('baithak_tab_people', 'People'))}</button>
-        <button type="button" data-tab="groups">${esc(tt('baithak_tab_groups', 'Groups'))}</button>
+        <button type="button" data-tab="all" class="active">${esc(tt('baithak.baithak_tab_all', 'All'))}</button>
+        <button type="button" data-tab="chats">${esc(tt('baithak.baithak_tab_chats', 'Chats'))}</button>
+        <button type="button" data-tab="people">${esc(tt('baithak.baithak_tab_people', 'People'))}</button>
+        <button type="button" data-tab="groups">${esc(tt('baithak.baithak_tab_groups', 'Groups'))}</button>
       </div>
       <div class="baithak-search-results" id="baithakSearchResults"></div>`;
     (document.querySelector('.device') || document.body).appendChild(overlay);
@@ -584,10 +584,10 @@
     async function runOverlaySearch() {
       const q = normalizeQuery(input?.value || '');
       if (!q) {
-        results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak_search_start', 'Type to search your chats'))}</div>`;
+        results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak.baithak_search_start', 'Type to search your chats'))}</div>`;
         return;
       }
-      results.innerHTML = `<div class="baithak-search-empty">${esc(tt('loading', 'Searching…'))}</div>`;
+      results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak.loading', 'Searching…'))}</div>`;
       const messageHits = q.length >= 2 ? await searchMessageIndex(q, 40) : [];
       const chatRows = NS.filterChatsForSearch(q, { messageHits }).filter((c) => !isSelfChatRow(c) && !isChaupaalChatRow(c));
       const chatResults = chatRows.map((c) => ({ chat: c, snippet: c._searchSnippet || '' }));
@@ -620,13 +620,13 @@
         surfaceId: 'baithak_overlay',
         onClear() {
           clearTimeout(timer);
-          results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak_search_start', 'Type to search your chats'))}</div>`;
+          results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak.baithak_search_start', 'Type to search your chats'))}</div>`;
         },
       });
     }
     input?.focus();
     if (initialQuery) runOverlaySearch();
-    else results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak_search_start', 'Type to search your chats'))}</div>`;
+    else results.innerHTML = `<div class="baithak-search-empty">${esc(tt('baithak.baithak_search_start', 'Type to search your chats'))}</div>`;
   }
 
   function openNicknameSheet({ chat, peerUid, title }) {
@@ -643,9 +643,9 @@
     sheet.innerHTML = `
       <div class="baithak-nickname-card">
         <div class="baithak-nickname-head">${esc(title || tt('baithak_set_nickname', 'Set nickname'))}</div>
-        <input type="text" maxlength="64" value="${esc(current)}" placeholder="${esc(tt('baithak_nickname_ph', 'Private nickname (only you see this)'))}">
+        <input type="text" maxlength="64" value="${esc(current)}" placeholder="${esc(tt('baithak.baithak_nickname_ph', 'Private nickname (only you see this)'))}">
         <div class="baithak-nickname-actions">
-          <button type="button" data-clear>${esc(tt('clear', 'Clear'))}</button>
+          <button type="button" data-clear>${esc(tt('baithak.clear', 'Clear'))}</button>
           <button type="button" data-cancel>${esc(tt('cancel', 'Cancel'))}</button>
           <button type="button" data-save class="primary">${esc(tt('save', 'Save'))}</button>
         </div>
@@ -662,7 +662,7 @@
         await setChatNickname(isGroup ? { chatId, nickname: '' } : { peerUid: targetUid, nickname: '' });
         close();
       } catch (e) {
-        if (typeof showToast === 'function') showToast('Could not clear nickname');
+        if (typeof showToast === 'function') showToast(t('baithak.could_not_clear_nickname'));
       }
     });
     sheet.querySelector('[data-save]')?.addEventListener('click', async () => {
@@ -671,7 +671,7 @@
         await setChatNickname(isGroup ? { chatId, nickname: val } : { peerUid: targetUid, nickname: val });
         close();
       } catch (e) {
-        if (typeof showToast === 'function') showToast('Could not save nickname');
+        if (typeof showToast === 'function') showToast(t('baithak.could_not_save_nickname'));
       }
     });
     input?.focus();

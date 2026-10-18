@@ -5,29 +5,29 @@
 (function () {
   'use strict';
 
-  const TEMPLATES = {
+  const TEMPLATES = /* i18n-copy */ {
     birthday: [
-      'Happy birthday, {{name}}! 🎂 Hope today feels as warm as your chai.',
+      t('baithak.happy_birthday_name_hope_today_feels'),
       '{{name}} — birthday vibes! Wishing you an easy, joyful day.',
-      'Hey {{name}}, happy birthday! Saving you a slice of the celebration 🎉',
-      'Birthday greetings, {{name}}! May this year be kinder than the last.',
+      t('baithak.hey_name_happy_birthday_saving_you'),
+      t('baithak.birthday_greetings_name_may_this_year'),
     ],
     anniversary: [
-      'Happy anniversary, {{name}}! 💍 Hope you two get a quiet moment today.',
+      t('baithak.happy_anniversary_name_hope_you_two'),
       '{{name}} — anniversary wishes! Celebrating your story from afar.',
-      'Hey {{name}}, happy anniversary! Sending warm vibes your way.',
+      t('baithak.hey_name_happy_anniversary_sending_warm'),
     ],
     friend_update: [
-      'Hey {{name}} — saw your update and had to say hi. How’s it going?',
+      t('baithak.hey_name_saw_your_update_and'),
       '{{name}}, that update made me smile. Catch up soon?',
-      'Thinking of you, {{name}} — hope the week’s treating you well.',
+      t('baithak.thinking_of_you_name_hope_the'),
     ],
     trip: [
-      'Safe travels, {{name}}! Send a postcard vibe when you land ✈️',
+      t('baithak.safe_travels_name_send_a_postcard'),
       '{{name}} — have an amazing trip! Can’t wait to hear the stories.',
     ],
     generic: [
-      'Hey {{name}} — thinking of you. How’s your day?',
+      t('baithak.hey_name_thinking_of_you_how'),
       '{{name}}, just dropping by to say hi 👋',
     ],
   };
@@ -95,7 +95,7 @@
     prefill,
     username,
   } = {}) {
-    const displayName = name || username || 'Friend';
+    const displayName = name || username || t('common.friend');
     const text =
       prefill ||
       baithakWishMessage({ type: type || 'generic', name: displayName, uid });
@@ -105,7 +105,7 @@
     } catch (e) {}
 
     if (!uid) {
-      if (typeof showToast === 'function') showToast('Open Baithak to message them');
+      if (typeof showToast === 'function') showToast(t('baithak.open_baithak_to_message_them'));
       return null;
     }
 
@@ -148,7 +148,7 @@
               ? [currentUser.uid, uid].sort().join('_')
               : '';
         if (!chatId) {
-          if (typeof showToast === 'function') showToast('Sign in to message');
+          if (typeof showToast === 'function') showToast(t('baithak.sign_in_to_message'));
           return null;
         }
         chat = {
@@ -169,7 +169,7 @@
       applyPrefill(text, 400);
       return chat;
     } catch (e) {
-      if (typeof showToast === 'function') showToast('Open Baithak to message them');
+      if (typeof showToast === 'function') showToast(t('baithak.open_baithak_to_message_them'));
       return null;
     }
   }

@@ -18,7 +18,7 @@
 const acorn = require('acorn');
 const walk = require('acorn-walk');
 
-const T_FUNCS = new Set(['t', 'tt', 'tr', 'tx', 'txv', 'tn', 'tHtml', 'htt', 'i18nT', 'ptrLabel', 'tLabel', 'optionLabel', 'tv']);
+const T_FUNCS = new Set(['t', 'tt', 'tr', 'tx', 'txv', 'tn', 'tHtml', 'htt', 'i18nT', 'ptrLabel', 'tLabel', 'optionLabel', 'optionLabelHtml', 'tv', 'tEn']);
 const LOG_CALLS = new Set(['log', 'warn', 'error', 'info', 'debug', 'trace', 'reportClientError', 'trackEvent', 'trackSignal', 'logEvent', 'captureException', 'debugLog', 'gtag', 'track']);
 const NONUI_METHODS = new Set([
   'querySelector', 'querySelectorAll', 'getElementById', 'getElementsByClassName', 'closest', 'matches',
@@ -128,6 +128,8 @@ function classify(src, isCopy) {
     let i = ancestors.length - 2;
     let concat = false;
     let html = false;
+    let inTag = false;
+    let copyAttr = false;
     while (i >= 0) {
       const p = ancestors[i];
       if (p.type === 'ConditionalExpression' && p.test !== child) {
@@ -147,18 +149,31 @@ function classify(src, isCopy) {
         continue;
       }
       if (p.type === 'TemplateLiteral') {
-        if (p.quasis.some((q) => HTML_RE.test(q.value.cooked || q.value.raw))) html = true;
+        if (p.quasis.some((q) => HTML_RE.test(q.value.cooked || q.value.raw))) {
+          html = true;
+          // ${…} inside a tag (`class="x ${on?'active':''}"`) is markup unless it sits in a copy attribute.
+          const at = p.expressions.indexOf(child);
+          if (at >= 0 && !inTag) {
+            const before = p.quasis.slice(0, at + 1).map((q) => q.value.raw).join('\u0000');
+            const lt = before.lastIndexOf('<');
+            if (lt > before.lastIndexOf('>')) {
+              inTag = true;
+              copyAttr = /\b(title|aria-label|placeholder|alt)=["'][^"']*$/.test(before.slice(lt));
+            }
+          }
+        }
         child = p;
         i--;
         continue;
       }
       break;
     }
-    return { parent: ancestors[i] || null, child, concat, html, grand: ancestors[i - 1] || null };
+    return { parent: ancestors[i] || null, child, concat, html, grand: ancestors[i - 1] || null, inTag, copyAttr };
   }
 
   function decide(node, ancestors) {
-    const { parent: p, child, concat, html, grand } = context(node, ancestors);
+    const { parent: p, child, concat, html, grand, inTag, copyAttr } = context(node, ancestors);
+    if (inTag && !copyAttr) return { role: 'skip' };
     if (!p) return { role: 'prose', concat, html };
     // Anything inside a  i18n-values  list or map is a stored value / id, never copy.
     if (marked(ancestors, valueMarks)) return { role: 'skip' };

@@ -552,25 +552,11 @@ async function getUserStatus(uid){
 }
 
 function formatActivityStatus(statusData){
-  const tt = (k, fb) => (typeof t === 'function' ? t(k) || fb : fb);
-  if(!statusData) return `<span class="chat-presence-line">${tt('presence_offline','Offline')}</span>`;
-  if(statusData.online || statusData.state === 'online') {
-    return `<span class="chat-presence-line is-online"><span class="chat-presence-dot" aria-hidden="true"></span>${tt('presence_online','Online')}</span>`;
-  }
-  const lastSeen = statusData.lastSeen?.toDate?.()
-    || (statusData.lastSeen ? new Date(statusData.lastSeen) : null)
-    || (statusData.at ? new Date(statusData.at) : null);
-  const valid = lastSeen && !Number.isNaN(lastSeen.getTime()) && lastSeen.getTime() > 0;
-  if(!valid) return `<span class="chat-presence-line">${tt('presence_offline','Offline')}</span>`;
-  const age = Date.now() - lastSeen.getTime();
-  if (age < 60_000) {
-    return `<span class="chat-presence-line">${tt('presence_last_just_now','Last seen just now')}</span>`;
-  }
-  const rel = typeof formatRelativeTime==='function'
-    ? formatRelativeTime(lastSeen)
-    : (typeof formatDate==='function'?formatDate(lastSeen,'dayMonth'):lastSeen.toLocaleDateString('en-IN',{day:'numeric',month:'short'}));
-  const when = String(rel || '').replace(/^last seen\s+/i, '');
-  return `<span class="chat-presence-line">${tt('presence_last_seen','Last seen')} ${when}</span>`;
+  // Copy + relative time live in core/chat-presence.js (Global L3).
+  const line = typeof ChatPresence !== 'undefined' && ChatPresence.presenceLine ? ChatPresence.presenceLine(statusData) : { online: false, html: '' };
+  return line.online
+    ? `<span class="chat-presence-line is-online"><span class="chat-presence-dot" aria-hidden="true"></span>${line.html}</span>`
+    : `<span class="chat-presence-line">${line.html}</span>`;
 }
 
 function injectChatActivityStatus(uid){

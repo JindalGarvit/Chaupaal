@@ -125,7 +125,7 @@ function markMsgRowFailed(row, text, chat, isGroup) {
     status.textContent = '!';
     status.classList.remove('is-sent');
     status.classList.add('is-failed');
-    status.title = 'Failed · Tap to retry';
+    status.title = t('chat.failed_tap_to_retry');
   }
   const retry = () => {
     row.remove();
@@ -166,9 +166,9 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
 
   // Instant composer when peer + canonical id known; verify in background
   if (needsBootstrap && peerEarly && chatId && typeof dmChatIdFor === 'function' && chatId === dmChatIdFor(peerEarly)) {
-    setChatComposerReady(screen, true, 'Checking activity…');
+    setChatComposerReady(screen, true, t('chat.checking_activity'));
   } else if (needsBootstrap) {
-    setChatComposerReady(screen, false, 'Connecting…');
+    setChatComposerReady(screen, false, t('chat.connecting'));
   }
 
   // Paint IDB cache deferred to loadRealtimeMessages (single warm path)
@@ -254,15 +254,15 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
       reportClientError({ feature: 'ensure_before_listen', message: e?.message || String(e) });
     }
     if (needsBootstrap) {
-      setChatComposerReady(screen, false, 'Could not connect — go back and try again');
+      setChatComposerReady(screen, false, t('chat.could_not_connect_go_back_and'));
       if (typeof renderErrorState === 'function') {
         renderErrorState(area, {
-          message: typeof friendlyDmError === 'function' ? friendlyDmError(e) : 'Could not open chat',
+          message: typeof friendlyDmError === 'function' ? friendlyDmError(e) : t('chat.could_not_open_chat'),
           onRetry: () => prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }),
         });
       }
       if (typeof showToast === 'function') {
-        showToast(typeof friendlyDmError === 'function' ? friendlyDmError(e) : e?.message || 'Could not open chat', 3000, { type: 'error' });
+        showToast(typeof friendlyDmError === 'function' ? friendlyDmError(e) : errorText(e, t('chat.could_not_open_chat')), 3000, { type: 'error' });
       }
       return;
     }
@@ -309,13 +309,13 @@ async function prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }) 
   }
 
   if (isSelf || isChaupaal) {
-    setChatComposerReady(screen, true, isChaupaal ? 'Your space with Chaupaal' : 'Notes to self · testing space');
+    setChatComposerReady(screen, true, isChaupaal ? t('chat.auto.chaupaal_space') : t('chat.notes_to_self_testing_space'));
   } else if (isGroup) {
-    setChatComposerReady(screen, true, 'Group chat');
+    setChatComposerReady(screen, true, t('chat.group_chat'));
   } else if (!peerUid) {
-    setChatComposerReady(screen, false, 'Could not connect');
+    setChatComposerReady(screen, false, t('chat.could_not_connect'));
   } else {
-    setChatComposerReady(screen, true, 'Checking activity…');
+    setChatComposerReady(screen, true, t('chat.checking_activity'));
     if (!isGroup && chat.uid) injectChatActivityStatus(chat.uid);
     else {
       const el = document.getElementById('chatActivityStatus');
@@ -351,8 +351,8 @@ function openChatScreen(chat){
         if (typeof showToast === 'function') {
           showToast(
             gate.reason === 'teen_adult_stranger'
-              ? 'Teen Mode: message friends (or other teens) only'
-              : 'This teen can only be messaged by friends'
+              ? t('chat.teen_mode_message_friends_or_other')
+              : t('chat.this_teen_can_only_be_messaged')
           );
         }
         return;
@@ -425,30 +425,30 @@ function openChatScreen(chat){
   }
 
   const statusLine = isChaupaal
-    ? 'Your space with Chaupaal'
-    : (isSelf ? 'Notes to self · testing space' : 'Checking activity…');
+    ? t('chat.auto.chaupaal_space')
+    : (isSelf ? t('chat.notes_to_self_testing_space') : t('chat.checking_activity'));
   const placeholder = isChaupaal
-    ? 'Talk with Chaupaal…'
-    : (isSelf ? 'Write a note to yourself...' : 'Type a message...');
+    ? t('chat.talk_with_chaupaal')
+    : (isSelf ? t('chat.write_a_note_to_yourself') : t('chat.type_a_message'));
 
   screen.innerHTML = `
     <div class="chat-screen-header">
-      ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'chat-back', id: 'chatBack' }):`<button class="chat-back cp-back-btn" id="chatBack" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
+      ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'chat-back', id: 'chatBack' }):`<button class="chat-back cp-back-btn" id="chatBack" aria-label="${tHtml('common.back')}">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
       <div class="chat-header-avatar${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>${isGroup || isSelf || isChaupaal ? (chat.avatar || '👤') : (typeof chatAvatarMarkup === 'function' ? chatAvatarMarkup(chat) : (chat.avatar || '👤'))}</div>
       <div class="chat-header-info${isGroup || !isSelf ? ' chat-header-tappable' : ''}" ${isGroup ? 'data-open-group-info' : !isSelf ? 'data-open-chat-profile' : ''} role="${isGroup || !isSelf ? 'button' : ''}" ${!isSelf ? 'tabindex="0"' : ''}>
-        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self'||isChaupaal)?(headerTitle||chat.name||'Chat'):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(headerTitle||'…',chat):(headerTitle||'…'))}</div>
+        <div class="chat-header-name">${(chat.type==='group'||chat.type==='self'||isChaupaal)?(headerTitle||chat.name||tHtml('common.chat')):(typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(headerTitle||'…',chat):(headerTitle||'…'))}</div>
         <div id="chatActivityStatus" class="chat-activity-status">${statusLine}</div>
       </div>
       <div class="chat-header-actions">
         ${isSelf
-          ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}" aria-label="Journal"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('notebook',{size:18}):''}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_journal','Journal'):'Journal'}</span></button>
-            <button class="chat-header-btn chat-header-btn--labeled" id="chatSelfArchiveBtn" title="Archive" aria-label="Archive"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('archive',{size:18}):''}</span><span class="chat-header-btn-label">Archive</span></button>`
+          ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatJournalBtn" title="${typeof t==='function'?t('chaupaal_journal','Journal'):tHtml('chat.attach_journal')}" aria-label="${tHtml('chat.attach_journal')}"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('notebook',{size:18}):''}</span><span class="chat-header-btn-label">${typeof t==='function'?t('chaupaal_journal','Journal'):tHtml('chat.attach_journal')}</span></button>
+            <button class="chat-header-btn chat-header-btn--labeled" id="chatSelfArchiveBtn" title="${tHtml('common.chaupaal_archive')}" aria-label="${tHtml('common.chaupaal_archive')}"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('archive',{size:18}):''}</span><span class="chat-header-btn-label">${tHtml('common.chaupaal_archive')}</span></button>`
           :(isChaupaal
-            ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatFeedbackBtn" title="Feedback" aria-label="Feedback"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('message-square',{size:18}):''}</span><span class="chat-header-btn-label">Feedback</span></button>
-              <button class="chat-header-btn chat-header-btn--labeled" id="chatSelfSettingsBtn" title="Settings" aria-label="Settings"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):''}</span><span class="chat-header-btn-label">Settings</span></button>`
+            ?`<button class="chat-header-btn chat-header-btn--labeled" id="chatFeedbackBtn" title="${tHtml('common.feedback_title')}" aria-label="${tHtml('common.feedback_title')}"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('message-square',{size:18}):''}</span><span class="chat-header-btn-label">${tHtml('common.feedback_title')}</span></button>
+              <button class="chat-header-btn chat-header-btn--labeled" id="chatSelfSettingsBtn" title="${tHtml('common.settings')}" aria-label="${tHtml('common.settings')}"><span class="chat-header-btn-ico">${typeof iconHtml==='function'?iconHtml('settings',{size:18}):''}</span><span class="chat-header-btn-label">${tHtml('common.settings')}</span></button>`
             :`<button class="chat-header-btn mehfil-entry" id="chatMehfilBtn" title="${typeof t==='function'?t('mehfil_title'):'Mehfil'}" aria-label="${typeof t==='function'?t('mehfil_title'):'Mehfil'}">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(20):(typeof iconHtml==='function'?iconHtml('home',{size:18}):'🏠')}</button>
-            <button class="chat-header-btn" id="chatMehfilRingBtn" title="${typeof t==='function'?t('mehfil_ring','Ring'):'Ring'}" aria-label="${typeof t==='function'?t('mehfil_ring','Ring'):'Ring'}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>`)}
-        ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="Create challenge" aria-label="Create challenge">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
+            <button class="chat-header-btn" id="chatMehfilRingBtn" title="${typeof t==='function'?t('mehfil_ring','Ring'):tHtml('chat.ring')}" aria-label="${typeof t==='function'?t('mehfil_ring','Ring'):tHtml('chat.ring')}">${typeof iconHtml==='function'?iconHtml('phone',{size:18}):'☎'}</button>`)}
+        ${!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatChallengeBtn" title="${tHtml('chat.create_challenge')}" aria-label="${tHtml('chat.create_challenge')}">${typeof iconHtml==='function'?iconHtml('target',{size:18}):'🎯'}</button>`:''}
         ${!isGroup&&!isSelf&&!isChaupaal?`<button class="chat-header-btn" id="chatMuqabalaBtn" title="Muqabala" aria-label="Muqabala">${typeof iconHtml==='function'?iconHtml('swords',{size:18}):'⚔️'}</button>`:''}
       </div>
     </div>
@@ -456,61 +456,61 @@ function openChatScreen(chat){
     ${hasDuelStreak?`
     <div class="duel-ritual-bar" id="duelRitualBar">
       <div>
-        <div class="duel-ritual-info">Daily Duel Ritual 🔥</div>
+        <div class="duel-ritual-info">${tHtml('chat.daily_duel_ritual')}</div>
         <div class="duel-ritual-streak">${chat.duelStreak} day streak with ${chat.name}</div>
       </div>
-      <button class="duel-ritual-cta" id="startRitualBtn">Play today!</button>
+      <button class="duel-ritual-cta" id="startRitualBtn">${tHtml('chat.play_today')}</button>
     </div>`:''}
     ${!isSelf&&!isChaupaal?`<div class="mehfil-live-banner" id="mehfilLiveBanner" hidden>
       <span class="mehfil-mark-wrap">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):'🏠'}</span>
       <div class="mehfil-live-banner-copy">
-        <strong data-mehfil-live-title>Mehfil is live</strong>
-        <span data-mehfil-live-sub>Others are in the room</span>
+        <strong data-mehfil-live-title>${tHtml('chat.mehfil_is_live')}</strong>
+        <span data-mehfil-live-sub>${tHtml('chat.others_are_in_the_room')}</span>
       </div>
-      <button type="button" class="mehfil-live-banner-cta" id="mehfilLiveJoin">${typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'}</button>
+      <button type="button" class="mehfil-live-banner-cta" id="mehfilLiveJoin">${typeof t==='function'?t('mehfil_join_cta'):tHtml('chat.auto.mehfil_invite')}</button>
     </div>`:''}
     <div class="chat-messages-area" id="chatMsgsArea">
       ${msgs.map(m => renderMsgBubble(m, isGroup)).join('')}
     </div>
     <div class="ai-suggestion-bar hidden" id="aiSuggestionBar"></div>
-    <div class="chat-attach-menu" id="chatAttachMenu" role="menu" aria-label="${typeof t==='function'?t('attach_menu','Attach'):'Attach'}">
+    <div class="chat-attach-menu" id="chatAttachMenu" role="menu" aria-label="${typeof t==='function'?t('attach_menu','Attach'):tHtml('chat.attach_menu')}">
       <button type="button" class="chat-attach-option" id="attachPhoto" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--photo">${typeof iconHtml==='function'?iconHtml('camera',{size:22}):''}</span>
-        <span class="chat-attach-label">${typeof t==='function'?t('attach_photo','Photo'):'Photo'}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_photo','Photo'):tHtml('chat.attach_photo')}</span>
       </button>
       <button type="button" class="chat-attach-option" id="attachMedia" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--media">${typeof iconHtml==='function'?iconHtml('image',{size:22}):''}</span>
-        <span class="chat-attach-label">${typeof t==='function'?t('attach_gif_more','GIF & more'):'GIF & more'}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_gif_more','GIF & more'):tHtml('chat.attach_gif_more')}</span>
       </button>
       <button type="button" class="chat-attach-option" id="attachFile" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--file">${typeof iconHtml==='function'?iconHtml('file',{size:22}):''}</span>
-        <span class="chat-attach-label">${typeof t==='function'?t('attach_file','File'):'File'}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_file','File'):tHtml('chat.attach_file')}</span>
       </button>
       ${isChaupaal ? '' : `<button type="button" class="chat-attach-option" id="attachGame" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--game">${typeof iconHtml==='function'?iconHtml('gamepad',{size:22}):''}</span>
-        <span class="chat-attach-label">${typeof t==='function'?t('attach_game','Game'):'Game'}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_game','Game'):tHtml('chat.attach_game')}</span>
       </button>`}
       ${isChaupaal
         ? `<button type="button" class="chat-attach-option" id="attachJournal" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--journal">${typeof iconHtml==='function'?iconHtml('notebook',{size:22}):''}</span>
-        <span class="chat-attach-label">${typeof t==='function'?t('attach_journal','Journal'):'Journal'}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_journal','Journal'):tHtml('chat.attach_journal')}</span>
       </button>`
         : `<button type="button" class="chat-attach-option" id="attachSong" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--song">${typeof iconHtml==='function'?iconHtml('music',{size:22}):''}</span>
-        <span class="chat-attach-label">${typeof t==='function'?t('attach_song','Song'):'Song'}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_song','Song'):tHtml('chat.attach_song')}</span>
       </button>`}
       <button type="button" class="chat-attach-option" id="attachLocation" role="menuitem">
         <span class="chat-attach-icon chat-attach-icon--location">${typeof iconHtml==='function'?iconHtml('map-pin',{size:22}):''}</span>
-        <span class="chat-attach-label">${typeof t==='function'?t('attach_location','Location'):'Location'}</span>
+        <span class="chat-attach-label">${typeof t==='function'?t('attach_location','Location'):tHtml('chat.attach_location')}</span>
       </button>
     </div>
     <div class="chat-input-bar"${previewJoin ? ' hidden' : ''}>
-      <button class="chat-action-btn" id="chatPlusBtn" aria-label="Attach">${typeof iconHtml==='function'?iconHtml('plus',{size:22}):'＋'}</button>
+      <button class="chat-action-btn" id="chatPlusBtn" aria-label="${tHtml('chat.attach_menu')}">${typeof iconHtml==='function'?iconHtml('plus',{size:22}):'＋'}</button>
       <textarea id="chatMsgInput" rows="1" placeholder="${placeholder}" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
-      <button class="chat-action-btn mic-btn" id="chatMicBtn" title="Voice typing" aria-label="Voice typing">🎙️</button>
-      <button class="chat-action-btn chat-send-btn" id="chatSendBtn" aria-label="Send message">➤</button>
+      <button class="chat-action-btn mic-btn" id="chatMicBtn" title="${tHtml('chat.voice_typing')}" aria-label="${tHtml('chat.voice_typing')}">🎙️</button>
+      <button class="chat-action-btn chat-send-btn" id="chatSendBtn" aria-label="${tHtml('chat.send_message')}">➤</button>
     </div>
-    ${previewJoin ? `<div class="chat-preview-join-bar"><button type="button" id="chatPreviewJoinBtn" class="chat-preview-join-btn">Join group to send messages</button></div>` : ''}
+    ${previewJoin ? `<div class="chat-preview-join-bar"><button type="button" id="chatPreviewJoinBtn" class="chat-preview-join-btn">${tHtml('chat.join_group_to_send_messages')}</button></div>` : ''}
     <input type="file" id="chatPhotoInput" accept="image/*" style="display:none">
     <input type="file" id="chatFileInput" style="display:none">
   `;
@@ -590,7 +590,7 @@ function openChatScreen(chat){
   document.getElementById('chatSendBtn')?.addEventListener('click', () => sendMsg(chat));
 
   if (!isSelf && !isChaupaal && !isGroup) {
-    setChatComposerReady(screen, false, 'Connecting…');
+    setChatComposerReady(screen, false, t('chat.connecting'));
   }
 
   prepareChatThread(chat, screen, { isGroup, isSelf, isChaupaal }).catch((e) => {
@@ -604,29 +604,29 @@ function openChatScreen(chat){
       if (chat.invite?.mode === 'approval') {
         await db.collection('chats').doc(chatId).collection('joinRequests').doc(currentUser.uid).set({
           uid: currentUser.uid,
-          name: userProfile?.name || currentUser.displayName || 'Member',
+          name: userProfile?.name || currentUser.displayName || tEn('common.member'),
           status: 'pending',
           requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
-        if (typeof showToast === 'function') showToast('Join request sent');
+        if (typeof showToast === 'function') showToast(t('chat.join_request_sent'));
         return;
       }
       await db.collection('chats').doc(chatId).update({
         participants: firebase.firestore.FieldValue.arrayUnion(currentUser.uid),
         [`memberProfiles.${currentUser.uid}`]: {
-          name: userProfile?.name || currentUser.displayName || 'Member',
+          name: userProfile?.name || currentUser.displayName || tEn('common.member'),
           photoURL: currentUser.photoURL || '',
         },
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       chat.participants = [...new Set([...(chat.participants || []), currentUser.uid])];
       delete chat._previewJoin;
-      if (typeof showToast === 'function') showToast('Joined group');
+      if (typeof showToast === 'function') showToast(t('common.joined_group'));
       closeChatScreen({ updateHistory: true, animate: false });
       openChatScreen(chat);
       if (typeof loadBaithakChatsPage === 'function') loadBaithakChatsPage({ reset: false }).catch(() => {});
     } catch (e) {
-      if (typeof showToast === 'function') showToast('Could not join group');
+      if (typeof showToast === 'function') showToast(t('chat.could_not_join_group'));
     }
   });
   const msgInput = document.getElementById('chatMsgInput');
@@ -724,7 +724,7 @@ function openChatScreen(chat){
     attachMenu.classList.remove('show');
     const openPicker = typeof openKlipyMediaPicker === 'function' ? openKlipyMediaPicker : openGifPicker;
     if(typeof openPicker !== 'function'){
-      showToast(typeof t==='function'?t('baithak_gif_unavailable','Media picker unavailable'):'Media picker unavailable');
+      showToast(typeof t==='function'?t('baithak_gif_unavailable','Media picker unavailable'):t('chat.media_picker_unavailable'));
       return;
     }
     openPicker({
@@ -736,13 +736,14 @@ function openChatScreen(chat){
           const pending = addMsgBubble({from:'me',text:emoji,time:'now',pending:true}, isGroup);
           if(typeof sendRealtimeMessage==='function'){
             try{ await sendRealtimeMessage(chat.firestoreId||chat.id, emoji, isGroup); }
-            catch(e){ pending?.remove?.(); showToast(typeof friendlyError==='function'?friendlyError(e):'Could not send'); }
+            catch(e){ pending?.remove?.(); showToast(typeof friendlyError==='function'?friendlyError(e):t('chat.could_not_send')); }
           }
           return;
         }
         if(!item.url) return;
         const kind = ['gif','sticker','meme','clip'].includes(item.kind||item.type) ? (item.kind||item.type) : 'gif';
-        const label = kind === 'gif' ? 'GIF' : kind === 'sticker' ? 'Sticker' : kind === 'meme' ? 'Meme' : 'Clip';
+        // Sent as the message text → canonical English; readers see it localised (chat.auto.*).
+        const label = tEn('chat.auto.' + (kind === 'gif' ? 'gif' : kind === 'sticker' ? 'sticker' : kind === 'meme' ? 'meme' : 'clip'));
         const att = {
           type: kind,
           kind,
@@ -760,7 +761,7 @@ function openChatScreen(chat){
           await sendRealtimeMessage(chat.firestoreId||chat.id, label, isGroup, null, att);
         }catch(e){
           pendingRow?.remove?.();
-          showToast(typeof friendlyError==='function'?friendlyError(e):'Could not send');
+          showToast(typeof friendlyError==='function'?friendlyError(e):t('chat.could_not_send'));
         }
       },
     });
@@ -790,11 +791,11 @@ function openChatScreen(chat){
           });
         }catch(sendErr){
           pendingPhoto?.remove?.();
-          showToast(typeof friendlyError==='function'?friendlyError(sendErr):(sendErr.message||t('baithak_photo_fail')));
+          showToast(errorText(sendErr, t('baithak_photo_fail')));
         }
       }
     }catch(err){
-      showToast(typeof friendlyError==='function'?friendlyError(err):(err.message||t('baithak_photo_fail')));
+      showToast(errorText(err, t('baithak_photo_fail')));
     }
   });
   document.getElementById('attachFile').addEventListener('click',()=>{
@@ -803,7 +804,7 @@ function openChatScreen(chat){
   });
   document.getElementById('chatFileInput').addEventListener('change', e=>{
     const file=e.target.files[0];if(!file)return;
-    const name=file.name||'File';
+    const name=file.name||t('chat.file');
     addMsgBubble({from:'me',text:`📄 ${name}`,attachment:{type:'file',name},time:'now',pending:true}, isGroup);
     if(typeof sendRealtimeMessage==='function'){
       sendRealtimeMessage(chat.firestoreId||chat.id, `📄 ${name}`, isGroup, null, { type:'file', name });
@@ -817,14 +818,14 @@ function openChatScreen(chat){
     attachMenu.classList.remove('show');
     if (typeof openJournalComposeSheet === 'function') openJournalComposeSheet({});
     else if (typeof JournalCheckIn?.openCompose === 'function') JournalCheckIn.openCompose({});
-    else if (typeof showToast === 'function') showToast('Journal');
+    else if (typeof showToast === 'function') showToast(t('chat.attach_journal'));
   });
   document.getElementById('attachSong')?.addEventListener('click',()=>{
     attachMenu.classList.remove('show');
     const openMusic = typeof openMusicHub==='function' ? openMusicHub : openSongPicker;
     if(typeof openMusic!=='function'){showToast(t('baithak_song_unavailable'));return;}
     openMusic({
-      title:'Share music',
+      title:t('chat.share_music'),
       tab:'search',
       onSelect:async (music)=>{
         if(!music) return;
@@ -842,7 +843,7 @@ function openChatScreen(chat){
             await sendRealtimeMessage(chat.firestoreId||chat.id, '📻 Radio', isGroup, null, att);
           }catch(e){
             pendingRow?.remove?.();
-            showToast(typeof friendlyError==='function'?friendlyError(e):'Could not share radio');
+            showToast(typeof friendlyError==='function'?friendlyError(e):t('chat.could_not_share_radio'));
           }
           return;
         }
@@ -852,7 +853,7 @@ function openChatScreen(chat){
           await sendRealtimeMessage(chat.firestoreId||chat.id, music.title?`🎵 ${music.title}`:'🎵 Song', isGroup, music);
         }catch(e){
           pendingRow?.remove?.();
-          showToast(typeof friendlyError==='function'?friendlyError(e):'Could not share song');
+          showToast(typeof friendlyError==='function'?friendlyError(e):t('chat.could_not_share_song'));
         }
       },
     });
@@ -861,24 +862,24 @@ function openChatScreen(chat){
     attachMenu.classList.remove('show');
     if(typeof openLocationComposer!=='function'){showToast(t('baithak_loc_unavailable'));return;}
     openLocationComposer({
-      title:'Share location',
+      title:t('chat.share_location'),
       peerUid: !isGroup && !isSelf && !isChaupaal
         ? (chat.uid || chat.peerUid || (chat.participants || []).find((u) => u !== currentUser?.uid) || null)
         : null,
       onSelect:async (loc)=>{
         try{
-          const label=loc.label||loc.placeName||'Location';
+          const label=(loc.label&&typeof ChatEvents!=='undefined'&&ChatEvents.autoText(loc.label))||loc.label||loc.placeName||t('location.location');
           const pendingRow=addMsgBubble({from:'me',text:`📍 ${label}`,attachment:loc,time:'now',pending:true}, isGroup);
           if(typeof sendRealtimeMessage==='function'){
             try{
               await sendRealtimeMessage(chat.firestoreId||chat.id, `📍 ${label}`, isGroup, null, loc);
             }catch(err){
               pendingRow?.remove?.();
-              showToast(typeof friendlyError==='function'?friendlyError(err):'Could not share location');
+              showToast(typeof friendlyError==='function'?friendlyError(err):t('chat.could_not_share_location'));
             }
           }
         }catch(e){
-          showToast('Could not share location');
+          showToast(t('chat.could_not_share_location'));
         }
       },
     });
@@ -908,7 +909,7 @@ function openChatScreen(chat){
 
   document.getElementById('chatSelfArchiveBtn')?.addEventListener('click', () => {
     if (typeof openArchiveHub === 'function') openArchiveHub('journal');
-    else if (typeof showToast === 'function') showToast('Archive');
+    else if (typeof showToast === 'function') showToast(t('common.chaupaal_archive'));
   });
   document.getElementById('chatSelfSettingsBtn')?.addEventListener('click', () => {
     if (typeof openSettingsModal === 'function') openSettingsModal();
@@ -922,7 +923,7 @@ function openChatScreen(chat){
   document.getElementById('chatFeedbackBtn')?.addEventListener('click', () => {
     if (typeof openProductFeedbackSheet === 'function') openProductFeedbackSheet({ source: 'chaupaal_chat_feedback' });
     else if (typeof openCompanionFeedbackSheet === 'function') openCompanionFeedbackSheet(null);
-    else if (typeof showToast === 'function') showToast('Feedback');
+    else if (typeof showToast === 'function') showToast(t('common.feedback_title'));
   });
   // Chaupaal / 1:1: avatar or name → full profile (not peek). Groups keep group-info.
   async function openChatPeerFullProfile() {
@@ -984,7 +985,7 @@ function openChatScreen(chat){
               : null);
           openAvatarLightbox({
             photoURL: chat.photoURL || (typeof chat.avatar === 'string' && /^https?:/i.test(chat.avatar) ? chat.avatar : ''),
-            name: chat.name || (isGroup ? 'Group' : 'Friend'),
+            name: chat.name || (isGroup ? t('common.group') : t('common.friend')),
             avatar: chat.avatar || (isSelf ? '📝' : isChaupaal ? '🏠' : isGroup ? '👥' : '👤'),
             uid: isChaupaal ? 'chaupaal' : isGroup ? '' : peerUid || '',
             isGroup,
@@ -1028,13 +1029,13 @@ function openChatScreen(chat){
   document.getElementById('chatMehfilBtn')?.addEventListener('click', () => {
     if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
     else if (typeof openMehfil === 'function') openMehfil(chat);
-    else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('mehfil_joining') : 'Joining Mehfil…');
+    else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('mehfil_joining') : t('chat.joining_mehfil'));
   });
   document.getElementById('chatMehfilRingBtn')?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (typeof startMehfilRing === 'function') startMehfilRing(chat);
     else if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
-    else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('mehfil_joining') : 'Joining Mehfil…');
+    else if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('mehfil_joining') : t('chat.joining_mehfil'));
   });
   document.getElementById('mehfilLiveJoin')?.addEventListener('click', () => {
     if (typeof ensureOpenMehfil === 'function') ensureOpenMehfil(chat);
@@ -1060,24 +1061,24 @@ function openChatScreen(chat){
           title.textContent = isLive
             ? typeof t === 'function'
               ? t('mehfil_live_title')
-              : 'Mehfil is live'
+              : t('chat.mehfil_is_live')
             : typeof MEHFIL_WAITING_LABEL !== 'undefined'
               ? MEHFIL_WAITING_LABEL
-              : 'Waiting in Mehfil';
+              : t('chat.waiting_in_mehfil');
         }
         if (sub) {
           // Group = ambient channel count; DM = still ambient but clearer join cue
           if (isLive) {
             sub.textContent =
               total === 1
-                ? '1 in Mehfil'
+                ? t('chat.1_in_mehfil')
                 : typeof t === 'function'
                   ? t('mehfil_live_sub', { n: String(total) })
-                  : `${total} in Mehfil`;
+                  : t('chat.total_in_mehfil', { total });
           } else {
             sub.textContent = isGroup
-              ? '1 waiting — drop in anytime'
-              : '1 in room — join to go Live';
+              ? t('chat.1_waiting_drop_in_anytime')
+              : t('chat.1_in_room_join_to_go');
           }
         }
       }
@@ -1117,7 +1118,7 @@ if (typeof safeFeature === 'function') openChatScreen = safeFeature('chat_open',
 window.openChatScreen = openChatScreen;
 
 // ===================== AI SUGGESTION BAR (no autocorrect, smart next-word/emoji) =====================
-const QUICK_PHRASES = ["Sounds good!","On my way","Let's do it","Haha 😄","I agree","Not sure yet","Talk later?","Great idea!"];
+const QUICK_PHRASES = /* i18n-copy */ [t('chat.sounds_good'),t('chat.on_my_way'),t('chat.let_s_do_it'),t('chat.haha'),"I agree",t('chat.not_sure_yet'),t('chat.talk_later'),t('chat.great_idea')];
 const EMOJI_KEYWORDS = {
   'good':'👍','great':'🎉','love':'❤️','happy':'😄','sad':'😢','win':'🏆','lol':'😂',
   'cricket':'🏏','game':'🎮','play':'🎲','food':'🍛','tea':'☕','today':'📅','news':'📰',
@@ -1129,7 +1130,7 @@ function updateAiSuggestions(text,targetInput){
   const bar=document.getElementById('aiSuggestionBar');
   if(!bar)return;
   const inp=targetInput||document.getElementById('chatMsgInput');
-  const aiChip=`<button class="ai-kb-trigger" onclick="openAiKeyboard(document.getElementById('chatMsgInput'))">✨ Ask Chaupaal</button>`;
+  const aiChip=`<button class="ai-kb-trigger" onclick="openAiKeyboard(document.getElementById('chatMsgInput'))">${tHtml('chat.ask_chaupaal')}</button>`;
   if(!text.trim()){
     bar.innerHTML=aiChip+QUICK_PHRASES.slice(0,4).map(p=>`<button class="ai-suggestion-chip" data-val="${p}">${p}</button>`).join('');
     bar.classList.remove('hidden');wireSuggestionChips(bar);return;
@@ -1138,7 +1139,7 @@ function updateAiSuggestions(text,targetInput){
     const lastWord=text.trim().split(/\s+/).pop().toLowerCase();
     const suggestions=[];
     Object.entries(EMOJI_KEYWORDS).forEach(([kw,emoji])=>{if(lastWord.includes(kw)||kw.includes(lastWord))suggestions.push(emoji);});
-    const completions=['definitely','for sure','let me check','sounds perfect'].filter(c=>c.startsWith(lastWord)&&lastWord.length>1);
+    const completions=/* i18n-copy */ ['definitely',t('chat.for_sure'),t('chat.let_me_check'),t('chat.sounds_perfect')].filter(c=>c.startsWith(lastWord)&&lastWord.length>1);
     const chips=[...new Set([...suggestions,...completions])].slice(0,5);
     bar.innerHTML=aiChip+chips.map(c=>`<button class="ai-suggestion-chip" data-val="${c}">${c}</button>`).join('');
     bar.classList.remove('hidden');wireSuggestionChips(bar);
@@ -1166,11 +1167,13 @@ function renderMsgBubble(m, isGroup){
   const isMe = m.from === 'me';
   const uid = m.uid || m.user?.uid || '';
   const name = m.name || m.user?.name || '';
+  // Structured system event (member added, group renamed …) — rendered in the viewer's language.
+  if (m.sys && typeof ChatEvents !== 'undefined') {
+    const line = ChatEvents.renderSysHtml(m.sys);
+    if (line) return `<div class="msg-row msg-row--system" data-sys="${chatEsc(m.sys.type)}"><div class="msg-system" role="note">${line}</div></div>`;
+  }
   if (m.deletedForEveryone) {
-    const delLabel =
-      typeof t === 'function'
-        ? t('baithak_msg_deleted_everyone') || 'This message was deleted'
-        : 'This message was deleted';
+    const delLabel = tHtml('baithak.msg_deleted_everyone');
     return `<div class="msg-row ${isMe ? 'me' : 'them'} msg-row--deleted" data-deleted-everyone="1">
       <div class="msg-bubble msg-bubble--deleted"><em>${delLabel}</em></div>
     </div>`;
@@ -1207,12 +1210,12 @@ function renderMsgBubble(m, isGroup){
     body=`<div class="chat-clip-wrap baithak-3d-edge"><video class="chat-clip-msg" src="${chatEsc(att.url)}"${poster?` poster="${chatEsc(poster)}"`:''} muted playsinline controls preload="metadata"></video></div>`;
     rich=true;
   } else if(att && att.type==='file'){
-    body=`<div class="chat-file-msg baithak-3d-edge">${typeof iconHtml==='function'?iconHtml('file',{size:18}):''}<span class="chat-file-name">${chatEsc(att.name||'File')}</span></div>`;
+    body=`<div class="chat-file-msg baithak-3d-edge">${typeof iconHtml==='function'?iconHtml('file',{size:18}):''}<span class="chat-file-name">${chatEsc(att.name||t('chat.file'))}</span></div>`;
     rich=true;
   } else if(att && att.type==='location'){
     body=typeof renderLocationCard==='function'
       ?renderLocationCard(att,{variant:'chat'})
-      :`<div class="chat-location-msg">📍 ${chatEsc(att.label||att.placeName||'Location shared')}</div>`;
+      :`<div class="chat-location-msg">📍 ${chatEsc(att.label||att.placeName||t('chat.location_shared'))}</div>`;
     rich=true;
   } else if(att && att.type==='muqabala_challenge'){
     const n=Array.isArray(att.questions)?att.questions.length:0;
@@ -1228,22 +1231,23 @@ function renderMsgBubble(m, isGroup){
       };
       try{ localStorage.setItem('chaupaal_challenge_'+att.challengeId, JSON.stringify(window.__pendingMuqabalaChallenges[att.challengeId])); }catch(e){}
     }
-    body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">⚔️ Custom Challenge</div><div class="challenge-title">${n} questions · ${secs}s</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">Answer →</button></div>`;
+    body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">${tHtml('chat.custom_challenge')}</div><div class="challenge-title">${n} questions · ${secs}s</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">${tHtml('chat.answer')}</button></div>`;
     rich=true;
   } else if(att && att.type==='game_challenge'){
     const myUid=typeof currentUser!=='undefined'?currentUser?.uid:'';
     body=typeof renderChallengeCard==='function'
       ?renderChallengeCard(m,myUid)
-      :`<div class="baithak-challenge-card">${chatEsc(att.gameName||m.text||'Challenge')}</div>`;
+      :`<div class="baithak-challenge-card">${chatEsc(att.gameName||(m.text&&typeof ChatEvents!=='undefined'&&ChatEvents.autoText(m.text))||m.text||t('chat.challenge'))}</div>`;
     rich=true;
   } else if(att && att.type==='mehfil_invite'){
-    const label=chatEsc(att.label||(typeof t==='function'?t('mehfil_join_cta'):'Join Mehfil'));
-    body=`<div class="mehfil-invite-card">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):''}<strong>${chatEsc(m.text||(typeof t==='function'?t('mehfil_nudge_text',{name:m.name||'Someone'}):'Join Mehfil'))}</strong><button type="button" data-mehfil-invite-join>${label}</button></div>`;
+    const label=chatEsc((att.label&&typeof ChatEvents!=='undefined'&&ChatEvents.autoText(att.label))||att.label||t('chat.auto.mehfil_join'));
+    const invite=(m.text&&typeof ChatEvents!=='undefined'&&ChatEvents.autoText(m.text))||m.text||t('chat.auto.mehfil_nudge',{name:bidi(m.name||t('common.someone'))});
+    body=`<div class="mehfil-invite-card">${typeof mehfilMarkHtml==='function'?mehfilMarkHtml(28):''}<strong>${chatEsc(invite)}</strong><button type="button" data-mehfil-invite-join>${label}</button></div>`;
     rich=true;
   } else if(att && att.type==='party_invite'){
     body=typeof PartyKit!=='undefined'&&PartyKit.inviteCardHtml
       ?PartyKit.inviteCardHtml(att,m)
-      :`<div class="party-invite-card"><strong>${chatEsc(m.text||'Join the game')}</strong></div>`;
+      :`<div class="party-invite-card"><strong>${chatEsc(m.text||t('chat.join_the_game'))}</strong></div>`;
     rich=true;
   } else if(att && (att.type==='shabd_result'||att.type==='shabd_challenge')){
     body=typeof ShabdFive!=='undefined'&&ShabdFive.chatCardHtml
@@ -1253,11 +1257,11 @@ function renderMsgBubble(m, isGroup){
   } else if(att && att.type==='solo_result'){
     body=typeof SoloHub!=='undefined'&&SoloHub.chatCardHtml
       ?SoloHub.chatCardHtml(att,m)
-      :`<div class="solo-card"><strong>${chatEsc(m.text||'Result')}</strong></div>`;
+      :`<div class="solo-card"><strong>${chatEsc(m.text||t('chat.result'))}</strong></div>`;
     rich=true;
   } else if(att && att.type==='duniya_post'){
     const thumb = att.thumb || att.url || '';
-    const cap = att.caption || m.text || 'Post';
+    const cap = att.caption || (m.text && typeof ChatEvents !== 'undefined' && ChatEvents.autoText(m.text)) || m.text || t('chat.post');
     body=`<button type="button" class="chat-duniya-post-card" data-duniya-post="${chatEsc(att.postId||'')}">
       ${thumb?`<img src="${chatEsc(thumb)}" alt="">`:`<span class="chat-duniya-post-card-text">${chatEsc(cap.slice(0,80))}</span>`}
       <span>${chatEsc(att.author||'Duniya')}</span>
@@ -1266,7 +1270,7 @@ function renderMsgBubble(m, isGroup){
     rich=true;
   } else if(att && att.type==='peepal_post'){
     const thumb = att.thumb || att.url || '';
-    const cap = att.caption || m.text || 'Discussion';
+    const cap = att.caption || (m.text && typeof ChatEvents !== 'undefined' && ChatEvents.autoText(m.text)) || m.text || t('chat.discussion');
     body=`<button type="button" class="chat-duniya-post-card chat-peepal-post-card" data-peepal-post="${chatEsc(att.postId||'')}">
       ${thumb?`<img src="${chatEsc(thumb)}" alt="">`:`<span class="chat-duniya-post-card-text">🌳 ${chatEsc(cap.slice(0,80))}</span>`}
       <span>${chatEsc(att.author||'Peepal')}</span>
@@ -1278,37 +1282,42 @@ function renderMsgBubble(m, isGroup){
     const thumb = att.thumb || att.url || '';
     body=`<button type="button" class="ds-story-card" data-story-id="${chatEsc(att.storyId||'')}" data-story-dest="${chatEsc(att.destination||'duniya')}" ${live?'':'data-expired="1"'} style="display:block;width:120px;border:0;padding:0;background:none;text-align:left;cursor:pointer;">
       <span style="display:block;width:120px;height:180px;border-radius:12px;overflow:hidden;background:#111;">${thumb?`<img src="${chatEsc(thumb)}" alt="" style="width:100%;height:100%;object-fit:cover;">`:''}</span>
-      <span style="display:block;font-size:11px;font-weight:700;margin-top:4px;">${chatEsc(att.name||'Story')}</span>
-      ${live?'':`<span style="font-size:11px;color:var(--muted);">Story unavailable</span>`}
+      <span style="display:block;font-size:11px;font-weight:700;margin-top:4px;">${chatEsc(att.name||t('chat.story'))}</span>
+      ${live?'':`<span style="font-size:11px;color:var(--muted);">${tHtml('chat.story_unavailable')}</span>`}
     </button>`;
     rich=true;
   } else if(att && att.type==='radio_share'){
     body=typeof renderRadioShareCard==='function'
       ?renderRadioShareCard({mood:att.mood,genre:att.genre,language:att.language}, att.sample)
-      :`<div class="radio-share-card baithak-3d-edge">📻 Radio · ${chatEsc(att.mood||'discovery')}</div>`;
+      :`<div class="radio-share-card baithak-3d-edge">${tHtml('chat.radio_mood', { mood: optionLabel('music.opt.mood', att.mood||'discovery') })}</div>`;
     rich=true;
   } else if(att && att.type==='commerce_card'){
     const feat = att.feature ? chatEsc(String(att.feature)) : '';
     const intro =
       typeof t === 'function'
         ? chatEsc(t('chat_commerce_nudge'))
-        : 'See membership or your Chaupaal Money account.';
+        : t('chat.see_membership_or_your_chaupaal_money');
     body=`<div class="commerce-card"><div>${intro}${feat ? ` <strong>${feat}</strong>` : ''}</div>
       <div class="commerce-card-actions">
-        <button type="button" class="btn" data-cm-membership>See membership</button>
-        <button type="button" class="btn" data-cm-money>Chaupaal Money account</button>
+        <button type="button" class="btn" data-cm-membership>${tHtml('chat.see_membership')}</button>
+        <button type="button" class="btn" data-cm-money>${tHtml('chat.chaupaal_money_account')}</button>
       </div></div>`;
     rich=true;
   }
 
-  if(!rich) body=chatEsc(body);
+  // App-written labels ("📷 Photo", "Sent a story") are stored in English; user text shows as typed.
+  if(!rich){
+    const auto=typeof ChatEvents!=='undefined'?ChatEvents.autoText(body):null;
+    body=chatEsc(auto!=null?auto:body);
+  }
 
+  const deliveryKey = 'chat.status.' + (m.failed ? 'failed' : m.pending ? 'sending' : m.read ? 'read' : m.delivered ? 'delivered' : 'sent');
   const absTime = m.time || '';
   const relTime = (typeof formatRelativeTime === 'function' && (m.ts || m.time))
     ? formatRelativeTime(m.ts || m.time)
     : absTime;
   const statusHtml = isMe
-    ? `<span class="msg-status${m.failed ? ' is-failed' : m.pending ? '' : ' is-sent'}" aria-hidden="true" title="${m.failed ? 'Failed · Tap to retry' : ''}">${m.failed ? '!' : m.pending ? '○' : '✓'}</span>`
+    ? `<span class="msg-status${m.failed ? ' is-failed' : m.pending ? '' : ' is-sent'}" role="img" aria-label="${tHtml(deliveryKey)}" title="${tHtml(m.failed ? 'chat.failed_tap_to_retry' : deliveryKey)}">${m.failed ? '!' : m.pending ? '○' : m.read ? '✓✓' : '✓'}</span>`
     : '';
 
   return `
@@ -1318,7 +1327,7 @@ function renderMsgBubble(m, isGroup){
         ${(isGroup&&!isMe&&m.name)?`<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(m.name,m):chatEsc(m.name)}</div>`:''}
         <div class="msg-bubble ${isMe?'me':'them'}${att&&att.type==='muqabala_challenge'?' challenge':''}${att&&att.type==='mehfil_invite'?' mehfil-invite':''}" data-msg-text="${chatEsc(m.text||'')}">${body}</div>
         <div class="msg-meta">
-          <span class="msg-time" data-rel="${chatEsc(relTime||'')}" data-abs="${chatEsc(absTime||relTime||'')}" title="Tap for time">${chatEsc(relTime||absTime||'')}</span>
+          <span class="msg-time" data-rel="${chatEsc(relTime||'')}" data-abs="${chatEsc(absTime||relTime||'')}" title="${tHtml('chat.tap_for_time')}">${chatEsc(relTime||absTime||'')}</span>
           ${statusHtml}
         </div>
       </div>
@@ -1343,7 +1352,7 @@ function wireChallengeBubble(root){
       const chat=window.currentOpenChat;
       if(chat && typeof ensureOpenMehfil==='function') ensureOpenMehfil(chat);
       else if(chat && typeof openMehfil==='function') openMehfil(chat);
-      else if(typeof showToast==='function') showToast(typeof t==='function'?t('mehfil_unavailable'):'Mehfil unavailable');
+      else if(typeof showToast==='function') showToast(typeof t==='function'?t('mehfil_unavailable'):t('chat.mehfil_unavailable'));
     });
   });
   root?.querySelectorAll?.('[data-party-invite-join]').forEach((btn)=>{
@@ -1352,7 +1361,7 @@ function wireChallengeBubble(root){
     btn.addEventListener('click',()=>{
       if(typeof PartyKit!=='undefined'&&PartyKit.joinFromLink){
         PartyKit.joinFromLink(btn.dataset.partyGame||'imposter',btn.dataset.partyInviteJoin,{chat:window.currentOpenChat||null});
-      } else if(typeof showToast==='function') showToast('Party games are loading — try again');
+      } else if(typeof showToast==='function') showToast(t('chat.party_games_are_loading_try_again'));
     });
   });
   root?.querySelectorAll?.('[data-story-id]').forEach((btn)=>{
@@ -1360,12 +1369,12 @@ function wireChallengeBubble(root){
     btn.dataset.wired='1';
     btn.addEventListener('click',()=>{
       if(btn.dataset.expired==='1'){
-        if(typeof showToast==='function') showToast(typeof t==='function'?t('story_unavailable','Story unavailable'):'Story unavailable');
+        if(typeof showToast==='function') showToast(typeof t==='function'?t('chat.story_unavailable','Story unavailable'):t('chat.story_unavailable'));
         return;
       }
       const id=btn.dataset.storyId;
       if(typeof DuniyaStory!=='undefined' && DuniyaStory.openById) DuniyaStory.openById(id);
-      else if(typeof showToast==='function') showToast('Story unavailable');
+      else if(typeof showToast==='function') showToast(t('chat.story_unavailable'));
     });
   });
   root?.querySelectorAll?.('[data-duniya-post]').forEach((btn)=>{
@@ -1384,7 +1393,7 @@ function wireChallengeBubble(root){
           }
         }
       }catch(e){}
-      if(typeof showToast==='function') showToast('Post unavailable');
+      if(typeof showToast==='function') showToast(t('chat.post_unavailable'));
     });
   });
   root?.querySelectorAll?.('[data-peepal-post]').forEach((btn)=>{
@@ -1407,7 +1416,7 @@ function wireChallengeBubble(root){
           }
         }
       }catch(e){}
-      if(typeof showToast==='function') showToast('Post unavailable');
+      if(typeof showToast==='function') showToast(t('chat.post_unavailable'));
     });
   });
 }
@@ -1423,7 +1432,7 @@ function bindMsgAvatarLongPress(root, fallbackProfile){
     el.dataset.lpBound='1';
     const profile={
       uid,
-      name:row?.dataset?.name||fallbackProfile?.name||'Member',
+      name:row?.dataset?.name||fallbackProfile?.name||t('common.member'),
       avatar:el.textContent?.trim()||fallbackProfile?.avatar||'👤',
       photoURL:fallbackProfile?.photoURL||'',
     };
@@ -1478,7 +1487,7 @@ function addMsgBubble(msg, isGroup){
 async function sendMsg(chat){
   const screen = document.getElementById('activeChatScreen');
   if (screen?.dataset.chatReady !== '1') {
-    if (typeof showToast === 'function') showToast(typeof t==='function'?t('baithak_send_failed','Chat still connecting — try again'):'Chat still connecting — try again');
+    if (typeof showToast === 'function') showToast(typeof t==='function'?t('baithak_send_failed','Chat still connecting — try again'):t('chat.chat_still_connecting_try_again'));
     return;
   }
   const input=document.getElementById('chatMsgInput');
@@ -1491,7 +1500,7 @@ async function sendMsg(chat){
     (!currentUser || !db)
   ) {
     if (typeof showToast === 'function') {
-      showToast('Demo chat — sign in to message real people');
+      showToast(t('chat.demo_chat_sign_in_to_message'));
     }
     try {
       if (typeof stashPendingDeepLink === 'function') stashPendingDeepLink();
@@ -1501,7 +1510,7 @@ async function sendMsg(chat){
     return;
   }
   const tempId='local_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  const bubble={from:'me',text,time:'now',_tempId:tempId,pending:true,name:userProfile?.name||currentUser?.displayName||'You'};
+  const bubble={from:'me',text,time:'now',_tempId:tempId,pending:true,name:userProfile?.name||currentUser?.displayName||t('common.you')};
   const prevValue=input.value;
 
   const apply=()=>{
@@ -1589,8 +1598,8 @@ async function sendMsg(chat){
                 const rem = await PolicyUsage.getRemaining('aiDiscoveryMsg').catch(() => null);
                 const msg =
                   limErr?.code === 'QUOTA_UNAVAILABLE'
-                    ? 'Couldn’t verify your message limit — try again shortly'
-                    : rem?.unlock || limErr?.message || 'AI Discovery message limit reached';
+                    ? t('chat.couldn_t_verify_your_message_limit')
+                    : rem?.unlock || limErr?.message || t('chat.ai_discovery_message_limit_reached');
                 throw Object.assign(new Error(msg), {
                   code: limErr?.code || 'AI_DISC_LIMIT',
                 });
@@ -1623,7 +1632,7 @@ async function sendMsg(chat){
           if(typeof demoMarkSeenSoon==='function') demoMarkSeenSoon();
           // Never invent demo replies that look like a real conversation.
           if(!isChaupaal && (!db||!currentUser)){
-            if(typeof showToast==='function') showToast('Sign in to keep chatting for real');
+            if(typeof showToast==='function') showToast(t('chat.sign_in_to_keep_chatting_for'));
             try{ if(typeof stashPendingDeepLink==='function') stashPendingDeepLink(); }catch(e){}
             if(typeof openAuthSheet==='function') openAuthSheet('login');
           }
@@ -1637,7 +1646,7 @@ async function sendMsg(chat){
             return t===text;
           })||pending[0];
           markMsgRowFailed(row,text,chat,isGroup);
-          if(typeof showToast==='function') showToast(err?.message||(typeof t==='function'?t('baithak_send_failed','Message not sent'):'Message not sent'));
+          if(typeof showToast==='function') showToast(errorText(err, t('chat.message_not_sent')));
           if(typeof reportClientError==='function'){
             reportClientError({feature:'dm_send',message:err?.message||String(err),code:err?.code||''});
           }
@@ -1678,7 +1687,7 @@ function leaveGroupChat(chat){
   if(!chat||chat.type!=='group') return;
   if(typeof leaveGroupPersist==='function'){
     leaveGroupPersist(chat).catch((e)=>{
-      if(typeof showToast==='function') showToast(e?.message||'Could not leave group');
+      if(typeof showToast==='function') showToast(errorText(e, t('chat.could_not_leave_group')));
     });
     return;
   }
@@ -1690,16 +1699,16 @@ function leaveGroupChat(chat){
   closeChatScreen({ updateHistory:true, animate:true });
   if(typeof refreshBaithakInbox==='function') refreshBaithakInbox({ reason: 'leave_group' });
   else if(typeof renderChatList==='function') renderChatList(baithakChats);
-  if(typeof showToast==='function') showToast(t('baithak_left_group',{name:chat.name||'group'}));
+  if(typeof showToast==='function') showToast(t('baithak_left_group',{name:bidi(chat.name||'group')}));
 }
 
 // ===================== DAILY DUEL RITUAL =====================
 const RITUAL_QUESTIONS = [
-  {q:"When is Mahatma Gandhi's birthday?",options:["September 27","October 2","November 14","January 26"],correct:1},
-  {q:"What is India's national animal?",options:["Lion","Elephant","Tiger","Peacock"],correct:2},
-  {q:"In which city is the Taj Mahal located?",options:["Delhi","Jaipur","Agra","Lucknow"],correct:2},
-  {q:"Which is the largest planet in the solar system?",options:["Saturn","Mars","Jupiter","Neptune"],correct:2},
-  {q:"'Jai Hind' kiska nara tha?",options:["Gandhi","Nehru","Subhas Chandra Bose","Patel"],correct:2},
+  {q:t('chat.when_is_mahatma_gandhi_s_birthday'),options:["September 27","October 2","November 14","January 26"],correct:1},
+  {q:t('chat.what_is_india_s_national_animal'),options:["Lion","Elephant","Tiger","Peacock"],correct:2},
+  {q:t('chat.in_which_city_is_the_taj'),options:["Delhi","Jaipur","Agra","Lucknow"],correct:2},
+  {q:t('chat.which_is_the_largest_planet_in'),options:["Saturn","Mars","Jupiter","Neptune"],correct:2},
+  {q:t('chat.jai_hind_kiska_nara_tha'),options:["Gandhi","Nehru","Subhas Chandra Bose","Patel"],correct:2},
 ];
 
 function startDailyDuelRitual(chat){
@@ -1716,16 +1725,16 @@ function startDailyDuelRitual(chat){
     const q = questions[qIdx];
     overlay.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">🔥 Daily Ritual — Q${qIdx+1}/5</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">🔥 ${tHtml('chat.ritual_q_of', { n: qIdx + 1, total: 5 })}</div>
         <button id="closeRitual" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:16px;">
         <div style="flex:1;background:var(--white);border-radius:14px;padding:12px;text-align:center;">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);">You</div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);">${tHtml('chat.loc_you')}</div>
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:var(--red);">${myAnswers.filter(a=>a).length}</div>
         </div>
         <div style="flex:1;background:var(--white);border-radius:14px;padding:12px;text-align:center;">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);">${chat.name}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);">${chatEsc(chat.name || '')}</div>
           <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;color:var(--gold);">${theirAnswers.filter(a=>a).length}</div>
         </div>
       </div>
@@ -1734,7 +1743,7 @@ function startDailyDuelRitual(chat){
         <div style="display:flex;flex-direction:column;gap:10px;" id="ritualOpts">
           ${q.options.map((o,i)=>`<button class="opt" data-i="${i}"><span>${o}</span><span class="mark"></span></button>`).join('')}
         </div>
-        <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:12px;" id="waitingFor">Waiting for ${chat.name}...</div>
+        <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:12px;" id="waitingFor">${tHtml('chat.waiting_for_name', { name: bidi(chat.name || t('common.friend')) })}</div>
       </div>
     `;
     document.getElementById('closeRitual').addEventListener('click', () => overlay.remove());
@@ -1759,7 +1768,7 @@ function startDailyDuelRitual(chat){
         const theirCorrect = Math.random() < 0.6;
         theirAnswers.push(theirCorrect);
         const w = overlay.querySelector('#waitingFor');
-        if(w) w.textContent = theirCorrect ? `${chat.name} answered correctly ✓` : `${chat.name} got it wrong ✕`;
+        if(w) w.textContent = theirCorrect ? t('chat.name_answered_correctly', { name: bidi(chat.name) }) : t('chat.name_got_it_wrong', { name: bidi(chat.name) });
         // both answered — advance
         setTimeout(() => { qIdx++; delete overlay.dataset.myAnswered; renderRitualQ(); }, 900);
       }, oppDelay);
@@ -1773,25 +1782,25 @@ function startDailyDuelRitual(chat){
     const tie = myTotal === theirTotal;
     overlay.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">🔥 Ritual complete!</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;">${tHtml('chat.ritual_complete')}</div>
         <button id="closeRitual2" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
       </div>
       <div style="text-align:center;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
         <div style="font-size:56px;">${tie?'🤝':won?'🎉':'😅'}</div>
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;">${tie?"It's a tie!":won?'You won!':`${chat.name} won this time!`}</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:22px;">${tie?tHtml('common.tie'):won?tHtml('chat.you_won'):tHtml('chat.name_won_this_time', { name: bidi(chat.name) })}</div>
         <div style="background:var(--white);border-radius:16px;padding:16px;width:100%;">
-          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:16px;"><span>You</span><span>${myTotal}/5</span></div>
+          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:16px;"><span>${tHtml('chat.loc_you')}</span><span>${myTotal}/5</span></div>
           <div style="display:flex;justify-content:space-between;font-weight:700;font-size:16px;color:var(--muted);margin-top:8px;"><span>${chat.name}</span><span>${theirTotal}/5</span></div>
         </div>
         <div style="background:rgba(255,201,60,0.12);border:1.5px solid var(--gold);border-radius:14px;padding:14px;width:100%;text-align:center;">
-          <div style="font-size:11px;font-weight:700;color:#A8780E;text-transform:uppercase;letter-spacing:0.06em;">🔥 Streak</div>
-          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;color:var(--red);">${(chat.duelStreak||0)+1} days</div>
+          <div style="font-size:11px;font-weight:700;color:#A8780E;text-transform:uppercase;letter-spacing:0.06em;">${tHtml('chat.streak')}</div>
+          <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:28px;color:var(--red);">${tHtml('chat.days_count', { count: (chat.duelStreak||0)+1 })}</div>
         </div>
       </div>
-      <button style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="closeRitual2Btn">Done 🙏</button>
+      <button style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="closeRitual2Btn">${tHtml('chat.done')}</button>
     `;
     document.getElementById('closeRitual2').addEventListener('click', () => overlay.remove());
-    document.getElementById('closeRitual2Btn').addEventListener('click', () => { overlay.remove(); showToast(`See you tomorrow! 🔥 ${(chat.duelStreak||0)+1}-day streak!`); });
+    document.getElementById('closeRitual2Btn').addEventListener('click', () => { overlay.remove(); showToast(t('chat.see_you_tomorrow_streak', { count: (chat.duelStreak||0)+1 })); });
   }
 
   document.querySelector('.device').appendChild(overlay);
@@ -1817,13 +1826,13 @@ function openBaithakStoryViewer(story, allStories) {
   if (typeof openStoryViewer === 'function') {
     return openStoryViewer(story, allStories, { destination: 'baithak' });
   }
-  if (typeof showToast === 'function') showToast('Story viewer unavailable');
+  if (typeof showToast === 'function') showToast(t('chat.story_viewer_unavailable'));
 }
 
 function showAddStoryOptions() {
   if (typeof expandBaithakSplitComposer === 'function') expandBaithakSplitComposer();
   else if (typeof openBaithakInstantComposer === 'function') openBaithakInstantComposer();
-  else if (typeof showToast === 'function') showToast('Splits unavailable');
+  else if (typeof showToast === 'function') showToast(t('chat.splits_unavailable'));
 }
 
 function openBaithakStoryComposer(mode) {
@@ -1857,7 +1866,7 @@ async function shareAkhbaarScore() {
       score: parseInt(document.getElementById('streakNum')?.textContent, 10) || 0,
     });
   }
-  if (typeof showToast === 'function') showToast('Could not share');
+  if (typeof showToast === 'function') showToast(t('chat.could_not_share'));
 }
 
 window.openBaithakStoryViewer = openBaithakStoryViewer;
@@ -1896,11 +1905,11 @@ function openInAppCamera({onCapture,facingMode='environment',hint}={}){
     <video class="story-camera-video" playsinline autoplay muted></video>
     <canvas class="story-camera-canvas hidden"></canvas>
     <div class="story-camera-chrome">
-      <button type="button" data-cam-close aria-label="Close">✕</button>
-      <div class="story-camera-hint">${hint || 'Story'}</div>
-      <button type="button" data-cam-flip aria-label="Flip camera">↻</button>
+      <button type="button" data-cam-close aria-label="${tHtml('common.close')}">✕</button>
+      <div class="story-camera-hint">${hint || tHtml('chat.story')}</div>
+      <button type="button" data-cam-flip aria-label="${tHtml('chat.flip_camera')}">↻</button>
     </div>
-    <button type="button" class="story-camera-shutter" data-cam-shutter aria-label="Capture"></button>`;
+    <button type="button" class="story-camera-shutter" data-cam-shutter aria-label="${tHtml('chat.capture')}"></button>`;
   document.querySelector('.device')?.appendChild(overlay);
   let stream=null;
   let facing=facingMode;
@@ -1949,7 +1958,7 @@ function openInAppCamera({onCapture,facingMode='environment',hint}={}){
 }
 
 function openBaithakInstantCamera(){
-  const signInMsg = typeof t==='function' ? t('baithak_sign_in_instant') : 'Sign in to share a Split';
+  const signInMsg = typeof t==='function' ? t('baithak_sign_in_instant') : t('chat.sign_in_to_share_a_split');
   if(!currentUser){
     try {
       if (typeof stashPendingAction === 'function') stashPendingAction('baithak_split_camera');
@@ -1966,7 +1975,7 @@ function openBaithakInstantCamera(){
   }
   const hint = typeof t==='function' && t('instants_camera_hint')!=='instants_camera_hint'
     ? t('instants_camera_hint')
-    : 'Split · Friends';
+    : t('chat.split_friends');
   openInAppCamera({hint,onCapture:async (file)=>{
     try{
       if(typeof processAndUploadMedia!=='function') throw new Error('Media upload unavailable');
@@ -1989,7 +1998,7 @@ function openBaithakInstantCamera(){
         if(typeof renderBaithakInstants==='function') renderBaithakInstants();
       }
     }catch(error){
-      if(typeof showToast==='function') showToast(error?.message||'Could not share Split');
+      if(typeof showToast==='function') showToast(errorText(error, t('chat.could_not_share_split')));
     }
   }});
 }

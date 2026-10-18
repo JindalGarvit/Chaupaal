@@ -316,7 +316,9 @@
     const count = Math.max(1, Number(n.actorCount) || actors.length || 1);
     const others = Math.max(0, count - 1);
     const type = String(n.type || '').toLowerCase();
-    const preview = String(n.preview || '').trim();
+    const rawPreview = String(n.preview || '').trim();
+    // App-written English labels ("📷 Photo") read in the viewer's language; user text stays as written.
+    const preview = (rawPreview && typeof ChatEvents !== 'undefined' && ChatEvents.autoText(rawPreview)) || rawPreview;
     const family = n.grouped ? n.groupFamily : crossTargetFamily(type);
     // Server bundles carry a catalog key (language-neutral) instead of English preview text.
     if (n.previewKey && !n.grouped && !others) {

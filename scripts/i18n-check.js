@@ -23,7 +23,7 @@ const ROOT = path.join(__dirname, '..');
 const DIR = path.join(ROOT, 'public', 'src', 'i18n');
 const NAMESPACES = [
   'common', 'auth', 'onboarding', 'profile', 'settings', 'baithak', 'chat', 'mehfil', 'music', 'duniya',
-  'akhbaar', 'peepal', 'khoj', 'vriksha', 'dangal', 'games', 'errors', 'notifications',
+  'akhbaar', 'peepal', 'khoj', 'vriksha', 'dangal', 'games', 'errors', 'notifications', 'location', 'media',
 ];
 
 function loadWindowVar(file, name) {

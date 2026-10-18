@@ -79,13 +79,13 @@
   function transportHtml(playing) {
     return `<div class="music-card-controls">
       <div class="music-card-transport" data-music-transport data-nav-ignore="1">
-        <button type="button" class="music-card-transport-btn" data-music-prev aria-label="Previous track">${ico('skip-back', 16) || skipBackIcon()}</button>
-        <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="-10" aria-label="Back 10 seconds">${ico('rewind', 16) || skipBackIcon()}</button>
-        <button type="button" class="music-card-play" data-music-play aria-label="${playing ? 'Pause song' : 'Play song'}">${playing ? pauseIcon() : playIcon()}</button>
-        <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="10" aria-label="Forward 10 seconds">${ico('fast-forward', 16) || skipFwdIcon()}</button>
-        <button type="button" class="music-card-transport-btn" data-music-next aria-label="Next track">${ico('skip-forward', 16) || skipFwdIcon()}</button>
+        <button type="button" class="music-card-transport-btn" data-music-prev aria-label="${tHtml('music.previous_track')}">${ico('skip-back', 16) || skipBackIcon()}</button>
+        <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="-10" aria-label="${tHtml('music.back_10_seconds')}">${ico('rewind', 16) || skipBackIcon()}</button>
+        <button type="button" class="music-card-play" data-music-play aria-label="${playing ? tHtml('music.pause_song') : tHtml('music.play_song')}">${playing ? pauseIcon() : playIcon()}</button>
+        <button type="button" class="music-card-transport-btn music-card-transport-skip" data-music-skip="10" aria-label="${tHtml('music.forward_10_seconds')}">${ico('fast-forward', 16) || skipFwdIcon()}</button>
+        <button type="button" class="music-card-transport-btn" data-music-next aria-label="${tHtml('music.next_track')}">${ico('skip-forward', 16) || skipFwdIcon()}</button>
       </div>
-      <div class="music-card-progress-track" data-music-seek role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="music-card-progress-bar" data-music-progress></div></div>
+      <div class="music-card-progress-track" data-music-seek role="slider" tabindex="0" aria-label="${tHtml('music.seek')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="music-card-progress-bar" data-music-progress></div></div>
       <div class="music-card-times">
         <span data-music-elapsed>0:00</span>
         <span data-music-remain>−0:00</span>
@@ -99,7 +99,7 @@
         el.classList.remove('is-playing');
         const btn = el.querySelector('[data-music-play]');
         if (btn) {
-          btn.setAttribute('aria-label', 'Play song');
+          btn.setAttribute('aria-label', t('music.play_song'));
           btn.innerHTML = playIcon();
         }
       }
@@ -108,7 +108,7 @@
       activeCardEl.classList.add('is-playing');
       const btn = activeCardEl.querySelector('[data-music-play]');
         if (btn) {
-          btn.setAttribute('aria-label', 'Pause song');
+          btn.setAttribute('aria-label', t('music.pause_song'));
           btn.innerHTML = pauseIcon();
         }
     }
@@ -181,7 +181,7 @@
     if (!track || track.dataset.seekBound === '1') return;
     track.dataset.seekBound = '1';
     track.setAttribute('role', 'slider');
-    track.setAttribute('aria-label', 'Seek');
+    track.setAttribute('aria-label', t('music.seek'));
     track.setAttribute('tabindex', '0');
     let dragging = false;
     const onMove = (e) => {
@@ -337,7 +337,7 @@
     const previewUrl = m.previewUrl ? ensureHttpsUrl(m.previewUrl) : null;
     return {
       title,
-      artist: String(m.artist || 'Unknown artist').trim(),
+      artist: String(m.artist || t('music.unknown_artist')).trim(),
       thumbnail: ensureHttpsUrl(m.thumbnail || '') || String(m.thumbnail || '').trim(),
       previewUrl: previewUrl || null,
       source: m.source || (previewUrl ? 'jiosaavn' : 'none'),
@@ -355,7 +355,7 @@
       : `<div class="music-card-art music-card-art--empty" aria-hidden="true">♪</div>`;
     const controls = playable
       ? transportHtml(false)
-      : `<span class="music-card-unavailable">Preview not available</span>`;
+      : `<span class="music-card-unavailable">${tHtml('music.preview_not_available')}</span>`;
 
     return `<div class="music-card music-card--${variant}${playable ? '' : ' music-card--static'}"
       data-music-card
@@ -429,14 +429,14 @@
       transport.replaceWith(
         Object.assign(document.createElement('span'), {
           className: 'music-card-unavailable',
-          textContent: 'Preview not available',
+          textContent: t('music.preview_not_available'),
         })
       );
     } else if (play) {
       play.replaceWith(
         Object.assign(document.createElement('span'), {
           className: 'music-card-unavailable',
-          textContent: 'Preview not available',
+          textContent: t('music.preview_not_available'),
         })
       );
     }
@@ -457,11 +457,11 @@
       if (fromUserGesture) {
         // Still inside the original click stack only if resolve was sync — usually not.
         // Prefer a second tap on iOS/Android rather than a NotAllowedError loop.
-        if (typeof showToast === 'function') showToast('Tap play to listen');
+        if (typeof showToast === 'function') showToast(t('music.tap_play_to_listen'));
         syncActiveCard(false);
         return;
       }
-      if (typeof showToast === 'function') showToast('Tap play to listen');
+      if (typeof showToast === 'function') showToast(t('music.tap_play_to_listen'));
       syncActiveCard(false);
       return;
     }
@@ -469,7 +469,7 @@
     if (typeof reportClientError === 'function') {
       reportClientError({
         feature: 'music_preview',
-        message: 'Preview resolve failed',
+        message: t('music.preview_resolve_failed'),
       });
     }
   }
@@ -481,7 +481,7 @@
     );
     if (!cards.length) return;
     const tracks = cards.map((c) => ({
-      title: c.dataset.musicTitle || 'Track',
+      title: c.dataset.musicTitle || t('music.track'),
       artist: c.dataset.musicArtist || '',
       previewUrl: ensureHttpsUrl(c.dataset.musicPreview || ''),
       thumb: ensureHttpsUrl(c.dataset.musicThumb || '') || c.dataset.musicThumb || '',
@@ -494,7 +494,7 @@
   async function playCard(card) {
     if (typeof quietMode !== 'undefined' && quietMode) {
       if (typeof showToast === 'function') {
-        showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : 'Quiet mode is on');
+        showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : t('music.quiet_mode_is_on'));
       }
       return;
     }
@@ -546,7 +546,7 @@
       const name = e?.name || '';
       if (name === 'NotAllowedError') {
         syncActiveCard(false);
-        if (typeof showToast === 'function') showToast('Tap play again to start the song');
+        if (typeof showToast === 'function') showToast(t('music.tap_play_again_to_start_the'));
         return;
       }
       // Media/network error — resolve alternate preview; do NOT auto-play after await
@@ -588,7 +588,8 @@
       const authFail = e?.code === 'AUTH_REQUIRED' || /sign in/i.test(e?.message || '');
       return {
         results: [],
-        error: authFail ? 'Sign in to search songs' : e?.message || 'search_failed',
+        error: authFail ? 'auth_required' : 'search_failed',
+        authRequired: authFail,
       };
     }
   }
@@ -619,19 +620,19 @@
     sheet.className = 'music-picker-sheet';
     sheet.dataset.navManaged = '1';
     sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-label', title || 'Share a song');
+    sheet.setAttribute('aria-label', title || t('music.share_title'));
     sheet.innerHTML = `
       <div class="music-picker-handle" aria-hidden="true"></div>
       <div class="music-picker-head">
-        <div class="music-picker-title">${esc(title || 'Share a song')}</div>
-        <button type="button" class="music-picker-close" data-music-picker-close aria-label="Close">✕</button>
+        <div class="music-picker-title">${esc(title || t('music.share_title'))}</div>
+        <button type="button" class="music-picker-close" data-music-picker-close aria-label="${tHtml('common.close')}">✕</button>
       </div>
       <label class="music-picker-search-wrap">
-        <span class="sr-only">Search songs</span>
-        <input type="search" class="music-picker-input" placeholder="Song or artist…" autocomplete="off" enterkeyhint="search">
+        <span class="sr-only">${tHtml('music.search_songs')}</span>
+        <input type="search" class="music-picker-input" placeholder="${tHtml('music.song_or_artist')}" autocomplete="off" enterkeyhint="search">
       </label>
       <div class="music-picker-results" data-music-picker-results>
-        <div class="music-picker-hint">Search for a song to share in-app</div>
+        <div class="music-picker-hint">${tHtml('music.search_for_a_song_to_share')}</div>
       </div>`;
 
     const device = document.querySelector('.device');
@@ -712,7 +713,7 @@
 
     const renderResults = (list, emptyMsg) => {
       if (!list.length) {
-        resultsEl.innerHTML = `<div class="music-picker-empty">${esc(emptyMsg || 'No results')}</div>`;
+        resultsEl.innerHTML = `<div class="music-picker-empty">${esc(emptyMsg || t('music.no_results'))}</div>`;
         return;
       }
       resultsEl.innerHTML = list
@@ -735,7 +736,7 @@
           if (!song || closed) return;
           let music = normalizeMusic(song) || {
             title: song.title,
-            artist: song.artist || 'Unknown artist',
+            artist: song.artist || t('music.unknown_artist'),
             thumbnail: song.thumbnail || '',
             previewUrl: song.previewUrl || null,
             source: song.previewUrl ? song.source || 'jiosaavn' : 'none',
@@ -781,7 +782,7 @@
       const seq = ++searchSeq;
       const query = q.trim();
       if (query.length < 1) {
-        resultsEl.innerHTML = `<div class="music-picker-hint">Search for a song to share in-app</div>`;
+        resultsEl.innerHTML = `<div class="music-picker-hint">${tHtml('music.search_for_a_song_to_share')}</div>`;
         return;
       }
       resultsEl.innerHTML = skeletonRows(5);
@@ -790,10 +791,10 @@
       const err = Array.isArray(packed) ? null : packed?.error;
       if (seq !== searchSeq) return;
       if (err && !list.length) {
-        renderResults([], /sign in/i.test(String(err)) ? String(err) : 'Couldn’t search songs — try again');
+        renderResults([], packed?.authRequired ? t('music.sign_in_to_search_songs') : t('music.couldn_t_search_songs_try_again'));
         return;
       }
-      renderResults(list, 'No results');
+      renderResults(list, t('music.no_results'));
     };
 
     input?.addEventListener('input', () => {

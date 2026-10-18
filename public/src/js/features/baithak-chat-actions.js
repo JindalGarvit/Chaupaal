@@ -176,11 +176,11 @@
   }
 
   function displayTitle(chat) {
-    if (typeof resolveBaithakTitle === 'function') return resolveBaithakTitle(chat, viewerUid()) || chat?.name || 'Chat';
+    if (typeof resolveBaithakTitle === 'function') return resolveBaithakTitle(chat, viewerUid()) || chat?.name || t('common.chat');
     if (typeof BaithakSearch !== 'undefined' && BaithakSearch.resolveChatDisplayName) {
-      return BaithakSearch.resolveChatDisplayName(chat, chat?._realName || chat?.name) || chat?.name || 'Chat';
+      return BaithakSearch.resolveChatDisplayName(chat, chat?._realName || chat?.name) || chat?.name || t('common.chat');
     }
-    return chat?.name || 'Chat';
+    return chat?.name || t('common.chat');
   }
 
   function peerOf(chat) {
@@ -288,7 +288,7 @@
         icon: 'users',
         fn: () => {
           if (typeof openGroupInfo === 'function') openGroupInfo(chat);
-          else if (typeof showToast === 'function') showToast('Group info unavailable');
+          else if (typeof showToast === 'function') showToast(t('chat.group_info_unavailable'));
         },
       });
     } else {
@@ -615,7 +615,7 @@
         publicKey: {
           challenge,
           rp: { name: 'Chaupaal', id: location.hostname },
-          user: { id: userId, name: uid, displayName: 'Hidden chats' },
+          user: { id: userId, name: uid, displayName: t('common.shortcut_baithak_hidden') },
           pubKeyCredParams: [
             { type: 'public-key', alg: -7 },
             { type: 'public-key', alg: -257 },
@@ -668,7 +668,7 @@
       ).filter((c) => !isSelfChatRow?.(c) && !isChaupaalChatRow?.(c));
       host.innerHTML = `
         <div class="baithak-hidden-header">
-          ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-hidden-back' }) : '<button type="button" data-hidden-back class="cp-back-btn" aria-label="Back">←</button>'}
+          ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-hidden-back' }) : '<button type="button" data-hidden-back class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
           <div class="baithak-hidden-title">${tt('shortcut_baithak_hidden', 'Hidden chats')}</div>
           <button type="button" class="baithak-hidden-lock-btn" data-relock aria-label="${tt('baithak_lock', 'Lock')}">${typeof iconHtml === 'function' ? iconHtml('lock', { size: 18 }) : '🔒'}</button>
         </div>
@@ -689,8 +689,8 @@
         row.innerHTML = `
           <div class="chat-avatar">${typeof chatAvatarMarkup === 'function' ? chatAvatarMarkup(chat) : chat.avatar || '👤'}</div>
           <div class="chat-info">
-            <div class="chat-name">${displayTitle(chat)}</div>
-            <div class="chat-preview">${chat.preview || ''}</div>
+            <div class="chat-name">${typeof baithakEsc === 'function' ? baithakEsc(displayTitle(chat)) : ''}</div>
+            <div class="chat-preview">${typeof baithakEsc === 'function' ? baithakEsc(typeof ChatEvents !== 'undefined' ? ChatEvents.chatPreviewText(chat) : chat.preview || '') : ''}</div>
           </div>`;
         row.addEventListener('click', () => {
           close();
@@ -711,7 +711,7 @@
           : { supported: !!window.PublicKeyCredential };
       host.innerHTML = `
         <div class="baithak-hidden-lock">
-          <button type="button" class="baithak-hidden-lock-close" data-hidden-back aria-label="Back">✕</button>
+          <button type="button" class="baithak-hidden-lock-close" data-hidden-back aria-label="${tHtml('common.back')}">✕</button>
           <div class="baithak-hidden-lock-mark">${typeof iconHtml === 'function' ? iconHtml('lock', { size: 36 }) : '🔒'}</div>
           <h2>${tt('shortcut_baithak_hidden', 'Hidden chats')}</h2>
           <p>${tt('baithak_hidden_sub', 'Unlock with device biometrics or your Chaupaal PIN')}</p>

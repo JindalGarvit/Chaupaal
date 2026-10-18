@@ -36,8 +36,8 @@
       (typeof digitalProfile !== 'undefined' && digitalProfile.displayName) ||
       (typeof userProfile !== 'undefined' && userProfile?.name) ||
       (typeof currentUser !== 'undefined' && currentUser?.displayName) ||
-      'You';
-    const meLabel = `Me (${firstNameFrom(name)})`;
+      t('common.you');
+    const meLabel = t('chat.me_name', { name: bidi(firstNameFrom(name)) });
     const avatar = '📝';
     const photo =
       (typeof currentUser !== 'undefined' && currentUser?.photoURL) ||
@@ -54,8 +54,8 @@
       displayName: name,
       avatar,
       photoURL: photo,
-      preview: 'Notes to self · try games & features here',
-      time: 'Pinned',
+      preview: tEn('chat.auto.self_notes'),
+      time: t('baithak.pinned'),
       unread: 0,
       duelStreak: 0,
       uid: typeof currentUser !== 'undefined' ? currentUser?.uid : null,
@@ -70,10 +70,10 @@
       participants: [currentUser.uid],
       type: 'self',
       pinned: true,
-      name: 'Message Yourself',
+      name: tEn('chat.message_yourself'),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      preview: 'Notes to self',
+      preview: tEn('chat.auto.self_notes_short'),
     };
     const repairPayload = {
       participants: [currentUser.uid],
@@ -155,8 +155,8 @@
       const seed = [
         {
           from: 'me',
-          text: 'This is your space — notes to yourself, and a place to try chats, games, and features without another person.',
-          time: 'Pinned',
+          text: t('chat.this_is_your_space_notes_to'),
+          time: t('baithak.pinned'),
         },
       ];
       if (!SAMPLE_MESSAGES[LEGACY_SELF_CHAT_ID]) SAMPLE_MESSAGES[LEGACY_SELF_CHAT_ID] = seed;

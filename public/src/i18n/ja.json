@@ -19,6 +19,7 @@
   "mehfil.title": "{{@mehfil}}",
   "music.hub_title": "ミュージック",
   "music.liked": "いいねに保存",
+  "music.quiet_mode_is_on": "静音モードオン",
   "music.start_radio": "ラジオ開始",
   "notifications.messages_label": "メッセージ",
   "onboarding.quiet_mode_is_on": "静音モードオン",

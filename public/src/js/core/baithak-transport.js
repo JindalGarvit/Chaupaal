@@ -5,6 +5,25 @@
 // ===================== REAL-TIME CHAT (Firestore) =====================
 let activeChatListener=null;
 
+/** Attachment type → catalog key for the message text stored when the sender typed nothing. */
+const CHAT_AUTO_LABEL_KEYS = {
+  photo: 'chat.auto.photo',
+  file: 'chat.auto.file',
+  location: 'chat.auto.location',
+  radio_share: 'chat.auto.radio',
+  muqabala_challenge: 'chat.auto.challenge_quiz',
+  game_challenge: 'chat.auto.challenge_game',
+  story: 'chat.auto.story',
+  duniya_post: 'chat.auto.post',
+  peepal_post: 'chat.auto.discussion',
+  mehfil_invite: 'chat.auto.mehfil_invite',
+  party_invite: 'chat.auto.party_invite',
+  gif: 'chat.auto.gif',
+  sticker: 'chat.auto.sticker',
+  meme: 'chat.auto.meme',
+  clip: 'chat.auto.clip',
+};
+
 async function loadRealtimeMessages(chatId, msgsArea, isGroup){
   if(!db||!currentUser||!msgsArea) return;
   let id=String(chatId||'');
@@ -55,6 +74,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
           profileType:m.profileType||null,
           music:m.deletedForEveryone ? null : (m.music||null),
           attachment:m.deletedForEveryone ? null : (m.attachment||null),
+          sys:m.sys||null,
           uid:m.uid,
           deletedForEveryone: !!m.deletedForEveryone,
         },isGroup);
@@ -107,6 +127,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
       profileType:m.profileType||null,
       music:m.deletedForEveryone ? null : (m.music||null),
       attachment:m.deletedForEveryone ? null : (m.attachment||null),
+          sys:m.sys||null,
       uid:m.uid,
       deletedForEveryone: !!m.deletedForEveryone,
     },isGroup);
@@ -189,6 +210,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
                   profileType:m.profileType,
                   music:m.music,
                   attachment:m.attachment,
+                  sys:m.sys||null,
                   clientTempId:m.clientTempId||null,
                   systemCard:m.systemCard,
                   kind:m.kind,
@@ -226,7 +248,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
               const bubble=row.querySelector('.msg-bubble');
               if(bubble){
                 bubble.classList.add('msg-bubble--deleted');
-                bubble.innerHTML=`<em>${typeof t==='function'?t('baithak_msg_deleted_everyone')||'This message was deleted':'This message was deleted'}</em>`;
+                bubble.innerHTML=`<em>${tHtml('baithak.msg_deleted_everyone')}</em>`;
               }
             }
             return;
@@ -259,6 +281,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
               clientTempId:m2.clientTempId||null,
               music:m2.music,
               attachment:m2.attachment,
+              sys:m2.sys||null,
             }).catch(()=>{});
           }
         });
@@ -271,7 +294,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
         if(code==='permission-denied'||/permission/i.test(String(err?.message||''))){
           const banner=document.createElement('div');
           banner.className='chat-listener-banner';
-          banner.textContent="Can't load messages — check connection or reopen chat";
+          banner.textContent=t('chat.can_t_load_messages_check_connection');
           if(!msgsArea.querySelector('.chat-listener-banner')){
             msgsArea.insertBefore(banner, msgsArea.firstChild);
           }
@@ -287,7 +310,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
         msgsArea.parentElement?.insertBefore(wrap, msgsArea);
       }
       ensureLoadMoreButton(wrap,{
-        label:'Load earlier messages',
+        label:t('chat.load_earlier_messages'),
         onLoadMore:async()=>{
           if(!oldestDoc) return;
           const page=await fetchOlderMessages(id,{beforeDoc:oldestDoc,pageSize:30});
@@ -308,6 +331,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
               profileType:m.profileType||null,
               music:m.music||null,
               attachment:m.attachment||null,
+              sys:m.sys||null,
               uid:m.uid,
             },isGroup);
             if(div.firstElementChild){
@@ -410,9 +434,10 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment, opt
   const body=String(text||'').trim();
   if(!body && !(music&&music.title) && !attachment) return;
   const payload={
-    text:body||(music?.title?`🎵 ${music.title}`:(attachment?.type==='photo'?'📷 Photo':attachment?.type==='file'?'📄 File':attachment?.type==='location'?'📍 Location':attachment?.type==='radio_share'?'📻 Radio':attachment?.type==='muqabala_challenge'?'⚔️ Challenge':attachment?.type==='game_challenge'?'🎮 Challenge':attachment?.type==='story'?'Sent a story':attachment?.type==='duniya_post'?'Sent a post':attachment?.type==='peepal_post'?'Sent a discussion':attachment?.type==='mehfil_invite'?(body||'Join Mehfil'):attachment?.type==='party_invite'?(body||'🎉 Party game invite'):attachment?.type==='gif'?'GIF':attachment?.type==='sticker'?'Sticker':attachment?.type==='meme'?'Meme':attachment?.type==='clip'?'Clip':'')),
+    // Auto-labels are stored in canonical English; readers see them in their language (chat.auto.*).
+    text:body||(music?.title?tEn('chat.auto.music',{title:music.title}):(attachment&&CHAT_AUTO_LABEL_KEYS[attachment.type]?tEn(CHAT_AUTO_LABEL_KEYS[attachment.type]):'')),
     uid:currentUser.uid,
-    name:userProfile?.name||currentUser.displayName||'You',
+    name:userProfile?.name||currentUser.displayName||tEn('common.you'),
     avatar:currentUser.photoURL||'',
     profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal')),
     ts:firebase.firestore.FieldValue.serverTimestamp()
@@ -421,7 +446,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment, opt
   if(music && typeof music==='object' && music.title){
     payload.music={
       title:String(music.title||'').slice(0,160),
-      artist:String(music.artist||'Unknown artist').slice(0,160),
+      artist:String(music.artist||t('chat.unknown_artist')).slice(0,160),
       thumbnail:String(music.thumbnail||'').slice(0,2048),
       previewUrl:music.previewUrl?String(music.previewUrl).slice(0,2048):null,
       source:['jiosaavn','itunes','none'].includes(music.source)?music.source:(music.previewUrl?'jiosaavn':'none'),
@@ -441,7 +466,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment, opt
           lat, lng,
           placeName:attachment.placeName?String(attachment.placeName).slice(0,120):null,
           address:attachment.address?String(attachment.address).slice(0,240):null,
-          label:attachment.label?String(attachment.label).slice(0,160):'Location',
+          label:attachment.label?String(attachment.label).slice(0,160):t('chat.attach_location'),
           liveShareId:attachment.liveShareId?String(attachment.liveShareId).slice(0,80):null,
           expiresAt:attachment.expiresAt!=null?(Number(attachment.expiresAt)||null):null,
           durationMs:Number(attachment.durationMs)||null,
@@ -558,7 +583,7 @@ async function sendRealtimeMessage(chatId, text, isGroup, music, attachment, opt
           action: 'notif_dm',
           chatId: id,
           recipientUid: others[0],
-          preview: previewText || 'New message',
+          preview: previewText || tEn('chat.auto.new_message'),
           actorName: payload.name,
           actorAvatar: payload.avatar || '👤',
         },

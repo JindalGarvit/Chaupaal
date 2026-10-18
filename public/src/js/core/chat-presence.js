@@ -11,6 +11,10 @@
   let activeChatId = null;
   let demoTypingTimer = null;
 
+  function presenceEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  }
+
   function presenceEnabled() {
     if (typeof isNotifEnabled === 'function') return isNotifEnabled('chatPresence');
     try {
@@ -71,7 +75,7 @@
       else delete el.dataset.typerProfileType;
       el.innerHTML =
         `<span class="chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>` +
-        `<span>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(name||'Someone',{profileType:el.dataset.typerProfileType||profileType||'personal'}):(name||'Someone')} is typing</span>`;
+        `<span>${tHtml('chat.name_is_typing', { name: { html: '<bdi>' + (typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(name||t('common.someone'),{profileType:el.dataset.typerProfileType||profileType||'personal'}):presenceEsc(name||t('common.someone'))) + '</bdi>', text: name || t('common.someone') } })}</span>`;
       el.classList.remove('hidden');
     } else {
       el.textContent = '';
@@ -91,7 +95,7 @@
       area.appendChild(el);
     }
     if (label && presenceEnabled()) {
-      el.textContent = label === 'Seen' ? 'Seen · just now' : label;
+      el.textContent = label === 'Seen' ? t('chat.seen_just_now') : label;
       el.classList.remove('hidden');
       el.classList.add('chat-read-receipt--soft');
     } else {
@@ -112,7 +116,7 @@
         if (isTyping) {
           ref.set({
             at: Date.now(),
-            name: (typeof userProfile !== 'undefined' && userProfile?.name) || 'You',
+            name: (typeof userProfile !== 'undefined' && userProfile?.name) || tEn('common.you'),
             profileType:
               typeof ownProfileType === 'function'
                 ? ownProfileType()
@@ -133,7 +137,7 @@
         payload['typing.' + uid] = isTyping
           ? {
               at: Date.now(),
-              name: (typeof userProfile !== 'undefined' && userProfile?.name) || 'You',
+              name: (typeof userProfile !== 'undefined' && userProfile?.name) || tEn('common.you'),
               profileType:
                 typeof ownProfileType === 'function'
                   ? ownProfileType()
@@ -206,7 +210,7 @@
     if (!presenceEnabled()) return;
 
     const myUid = typeof currentUser !== 'undefined' && currentUser?.uid;
-    const otherName = chat.name || 'Them';
+    const otherName = chat.name || t('chat.them');
 
     // Typing listener
     try {
@@ -259,7 +263,7 @@
             const peerUid = Object.keys(reads).find((u) => u !== myUid);
             const peerRead = peerUid ? reads[peerUid] : null;
             if (peerRead && Number(peerRead) > 0) {
-              setSeenUi('Seen');
+              setSeenUi(t('chat.status.seen'));
             }
           });
       }
@@ -282,7 +286,7 @@
   function demoMarkSeenSoon() {
     if (!presenceEnabled()) return;
     if (db && currentUser) return;
-    setTimeout(() => setSeenUi('Seen'), 1400);
+    setTimeout(() => setSeenUi(t('chat.status.seen')), 1400);
   }
 
   window.chatPresenceEnabled = presenceEnabled;
@@ -293,4 +297,26 @@
   window.clearChatUnreadBadge = clearChatUnreadBadge;
   window.demoMarkSeenSoon = demoMarkSeenSoon;
   window.publishChatTyping = publishTyping;
+
+  /**
+   * Header line for a user_status doc: Online · Last seen just now · Last seen {relative time}.
+   * Relative time comes from the L1 formatter in the viewer's language.
+   */
+  function presenceLine(status, now) {
+    const at = now || Date.now();
+    if (!status) return { online: false, html: tHtml('chat.presence_offline') };
+    if (status.online || status.state === 'online') return { online: true, html: tHtml('chat.presence_online') };
+    const raw = status.lastSeen?.toDate?.() || (status.lastSeen ? new Date(status.lastSeen) : null) || (status.at ? new Date(status.at) : null);
+    if (!raw || Number.isNaN(raw.getTime()) || raw.getTime() <= 0) return { online: false, html: tHtml('chat.presence_offline') };
+    if (at - raw.getTime() < 60000) return { online: false, html: tHtml('chat.presence_last_seen_just_now') };
+    const when =
+      typeof formatRelativeTime === 'function'
+        ? formatRelativeTime(raw.getTime(), at)
+        : typeof formatDate === 'function'
+          ? formatDate(raw, 'dayMonth')
+          : '';
+    return { online: false, html: tHtml('chat.presence_last_seen_when', { when }) };
+  }
+
+  window.ChatPresence = { presenceLine };
 })();

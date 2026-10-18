@@ -54,6 +54,7 @@
       profileType: m.profileType || null,
       music: m.music || null,
       attachment: m.attachment || null,
+      sys: m.sys || null,
       clientTempId: m.clientTempId || null,
       systemCard: !!m.systemCard,
       kind: m.kind || null,

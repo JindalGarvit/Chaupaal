@@ -226,8 +226,8 @@ function openChallengeCreator(chat){
   function toEngineQuestions(list){
     return list.map(q=>{
       let options = (q.options || []).map(x=>String(x||'').trim()).filter(Boolean);
-      if(q.format === 'binary') options = ['Yes', 'No'];
-      while(options.length < 2) options.push('Option ' + (options.length + 1));
+      if(q.format === 'binary') options = /* i18n-copy */ [t('baithak.yes'), t('baithak.no')];
+      while(options.length < 2) options.push(t('baithak.option_n', { n: options.length + 1 }));
       let correct = parseInt(q.correct, 10);
       if(Number.isNaN(correct) || correct < 0 || correct >= options.length) correct = 0;
       return { q: String(q.text || '').trim(), options: options.slice(0, 4), correct };
@@ -248,13 +248,13 @@ function openChallengeCreator(chat){
     try{ localStorage.setItem('chaupaal_challenge_'+challengeId, JSON.stringify(payload)); }catch(e){}
     addMsgBubble({
       from:'me',
-      text:`⚔️ Challenge · ${engineQs.length}q`,
+      text:tEn('chat.auto.challenge_n', { count: engineQs.length }),
       attachment:{
         type:'muqabala_challenge',
         challengeId,
         questions: engineQs,
         timerSeconds,
-        label:`${engineQs.length} questions · ${timerSeconds}s`,
+        label:tEn('chat.auto.challenge_label', { count: engineQs.length, seconds: timerSeconds }),
       },
       time:'now',
       pending:true,
@@ -262,7 +262,7 @@ function openChallengeCreator(chat){
     if(typeof sendRealtimeMessage==='function'){
       sendRealtimeMessage(
         chat.firestoreId||chat.id,
-        `⚔️ Challenge · ${engineQs.length}q`,
+        tEn('chat.auto.challenge_n', { count: engineQs.length }),
         chat.type==='group',
         null,
         {
@@ -270,7 +270,7 @@ function openChallengeCreator(chat){
           challengeId,
           questions: engineQs,
           timerSeconds,
-          label:`${engineQs.length} questions · ${timerSeconds}s · for ${chat.name}`,
+          label:tEn('chat.auto.challenge_label_for', { count: engineQs.length, seconds: timerSeconds, name: chat.name }),
         }
       );
     }
@@ -279,7 +279,7 @@ function openChallengeCreator(chat){
 
   function launchEngine(engineQs, source){
     if(typeof startMuqabala !== 'function'){
-      showToast('Muqabala engine not ready');
+      showToast(t('baithak.muqabala_engine_not_ready'));
       return;
     }
     startMuqabala(chat.name, source === 'ai' ? 'AI' : 'Custom', {
@@ -299,41 +299,41 @@ function openChallengeCreator(chat){
     const aiComingSoon = !aiEnabledSync;
     creator.innerHTML = `
       <div class="challenge-creator-header">
-        <div class="challenge-creator-title">⚔️ Create challenge</div>
+        <div class="challenge-creator-title">${tHtml('baithak.create_challenge')}</div>
         <button id="closeCreator" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
       </div>
       <div class="challenge-creator-body">
-        <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Content source</div>
+        <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">${tHtml('baithak.content_source')}</div>
         <div class="q-count-row" style="margin-bottom:14px;">
-          <button class="q-count-chip ${contentSource==='manual'?'active':''}" data-src="manual" type="button">✍️ Manual</button>
-          <button class="q-count-chip ${contentSource==='ai'?'active':''}" data-src="ai" type="button" ${aiComingSoon?'disabled aria-disabled="true" title="AI quiz not available yet"':''}>🤖 AI ${aiComingSoon?'(not available)':''}</button>
+          <button class="q-count-chip ${contentSource==='manual'?'active':''}" data-src="manual" type="button">${tHtml('baithak.manual')}</button>
+          <button class="q-count-chip ${contentSource==='ai'?'active':''}" data-src="ai" type="button" ${aiComingSoon?'disabled aria-disabled="true" title="' + tHtml('baithak.ai_quiz_not_available_yet') + '"':''}>${tHtml('baithak.ai_source')} ${aiComingSoon?tHtml('baithak.not_available'):''}</button>
         </div>
 
-        <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Timer per question</div>
+        <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">${tHtml('baithak.timer_per_question')}</div>
         <div class="q-count-row" style="margin-bottom:14px;">
           ${timerOpts.map(s=>`<button class="q-count-chip ${timerSeconds===s?'active':''}" data-timer="${s}" type="button">${s}s</button>`).join('')}
         </div>
 
-        <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">How many questions?</div>
+        <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">${tHtml('baithak.how_many_questions')}</div>
         <div class="q-count-row">
-          ${[3,5,'Custom'].map(n=>`<button class="q-count-chip ${qCount===n?'active':''}" data-n="${n}" type="button">${n}</button>`).join('')}
+          ${/* i18n-values: baithak.q_count */ [3,5,'Custom'].map(n=>`<button class="q-count-chip ${qCount===n?'active':''}" data-n="${n}" type="button">${n==='Custom'?tHtml('baithak.custom'):n}</button>`).join('')}
         </div>
 
         ${contentSource==='ai' ? `
           <div style="margin:14px 0;padding:12px;background:var(--cream);border-radius:12px;font-size:13px;color:var(--muted);line-height:1.45;">
             ${aiComingSoon
-              ? 'AI quiz generation isn’t available yet. Use Manual to write your own questions.'
-              : (aiBusy ? '🤖 Generating questions…' : 'Generate MCQs with AI, then send — same Muqabala engine as Dangal.')}
+              ? tHtml('baithak.ai_quiz_generation_isn_t_available')
+              : (aiBusy ? tHtml('baithak.generating_questions') : tHtml('baithak.generate_mcqs_with_ai_then_send'))}
           </div>
-          ${!aiComingSoon ? `<button class="add-q-btn" id="aiGenBtn" type="button" ${aiBusy?'disabled':''}>🤖 Generate with AI</button>` : ''}
+          ${!aiComingSoon ? `<button class="add-q-btn" id="aiGenBtn" type="button" ${aiBusy?'disabled':''}>${tHtml('baithak.generate_with_ai')}</button>` : ''}
         ` : `
           <div id="questionsContainer">
             ${questions.map((q,i) => renderQuestionBuilder(q,i)).join('')}
           </div>
-          <button class="add-q-btn" id="addQBtn" type="button">+ Add another question</button>
+          <button class="add-q-btn" id="addQBtn" type="button">${tHtml('baithak.add_another_question')}</button>
         `}
 
-        <button class="btn btn--primary btn--block btn--lg send-challenge-btn" id="sendChallengeBtn" type="button">⚔️ Send & play vs ${chat.name}</button>
+        <button class="btn btn--primary btn--block btn--lg send-challenge-btn" id="sendChallengeBtn" type="button">${tHtml('baithak.send_and_play_vs', { name: bidi(chat.name || t('common.friend')) })}</button>
       </div>
     `;
 
@@ -341,7 +341,7 @@ function openChallengeCreator(chat){
       chip.addEventListener('click',()=>{
         const src = chip.dataset.src;
         if(src === 'ai' && aiComingSoon){
-          showToast('AI quiz isn’t available yet — use Manual');
+          showToast(t('baithak.ai_quiz_isn_t_available_yet'));
           return;
         }
         syncFromDom();
@@ -366,9 +366,9 @@ function openChallengeCreator(chat){
           const raw =
             typeof promptNameSheet === 'function'
               ? await promptNameSheet({
-                  title: 'How many questions?',
+                  title: t('baithak.how_many_questions'),
                   placeholder: '1–20',
-                  confirmLabel: 'Set',
+                  confirmLabel: t('baithak.set'),
                   initial: String(qCount || 5),
                   inputMode: 'numeric',
                   maxlength: 2,
@@ -395,7 +395,7 @@ function openChallengeCreator(chat){
       if(aiBusy) return;
       const on = typeof isAiFeaturesEnabled === 'function' ? await isAiFeaturesEnabled() : aiEnabledSync;
       if(!on){
-        showToast('AI quiz isn’t available yet — use Manual');
+        showToast(t('baithak.ai_quiz_isn_t_available_yet'));
         return;
       }
       aiBusy = true;
@@ -405,7 +405,7 @@ function openChallengeCreator(chat){
         : null;
       aiBusy = false;
       if(!gen || !gen.length){
-        showToast('Could not generate questions — try Manual');
+        showToast(t('baithak.could_not_generate_questions_try_manual'));
         contentSource = 'manual';
         render();
         return;
@@ -419,7 +419,7 @@ function openChallengeCreator(chat){
       qCount = questions.length;
       fromAi = true;
       contentSource = 'manual'; // show editable results
-      showToast(`Generated ${questions.length} questions — review & send`);
+      showToast(t('baithak.generated_questionscount_questions_review', { questionsCount: questions.length }));
       render();
     });
 
@@ -427,19 +427,19 @@ function openChallengeCreator(chat){
       syncFromDom();
       const engineQs = toEngineQuestions(questions);
       if(!engineQs.length){
-        showToast('Add at least one question with text');
+        showToast(t('baithak.add_at_least_one_question_with'));
         return;
       }
       const incomplete = engineQs.some(q=>q.options.length < 2);
       if(incomplete){
-        showToast('Each question needs at least 2 options');
+        showToast(t('baithak.each_question_needs_at_least_2'));
         return;
       }
       const source = fromAi ? 'ai' : 'manual';
       // Friend challenges are unlimited — no daily credit.
       postChallengeBubble(engineQs, source);
       closeCreator();
-      showToast(t('baithak_challenge_sent',{name:chat.name}));
+      showToast(t('baithak_challenge_sent',{name:bidi(chat.name)}));
       launchEngine(engineQs, source);
     });
 
@@ -450,7 +450,7 @@ function openChallengeCreator(chat){
         const fmt = chip.dataset.fmt;
         if(questions[qi]){
           questions[qi].format = fmt;
-          if(fmt === 'binary') questions[qi].options = ['Yes', 'No'];
+          if(fmt === 'binary') questions[qi].options = /* i18n-copy */ [t('baithak.yes'), t('baithak.no')];
         }
         render();
         setTimeout(()=>{
@@ -463,16 +463,16 @@ function openChallengeCreator(chat){
 
   function renderQuestionBuilder(q, i){
     const optHtml = {
-      mcq: `${['A','B','C','D'].map((l,oi)=>`<div style="display:flex;align-items:center;gap:6px;"><input class="challenge-opt-input" placeholder="${l}..." value="${(q.options[oi]||'').replace(/"/g,'&quot;')}"><label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;"><input type="radio" name="correct_${i}" ${q.correct===oi?'checked':''} style="accent-color:var(--red);"> Correct</label></div>`).join('')}`,
-      binary: `${['Yes','No'].map((l,oi)=>`<div style="display:flex;align-items:center;gap:6px;"><input class="challenge-opt-input" value="${l}" readonly><label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;"><input type="radio" name="correct_${i}" ${q.correct===oi?'checked':''} style="accent-color:var(--red);"> Correct</label></div>`).join('')}`,
-      dropdown: `${['Option A','Option B','Option C'].map((l,oi)=>`<input class="challenge-opt-input" placeholder="${l}" value="${(q.options[oi]||'').replace(/"/g,'&quot;')}">`).join('')}`,
+      mcq: `${['A','B','C','D'].map((l,oi)=>`<div style="display:flex;align-items:center;gap:6px;"><input class="challenge-opt-input" placeholder="${l}..." value="${(q.options[oi]||'').replace(/"/g,'&quot;')}"><label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;"><input type="radio" name="correct_${i}" ${q.correct===oi?'checked':''} style="accent-color:var(--red);"> ${tHtml('baithak.correct')}</label></div>`).join('')}`,
+      binary: `${/* i18n-copy */ [t('baithak.yes'),t('baithak.no')].map((l,oi)=>`<div style="display:flex;align-items:center;gap:6px;"><input class="challenge-opt-input" value="${l}" readonly><label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;"><input type="radio" name="correct_${i}" ${q.correct===oi?'checked':''} style="accent-color:var(--red);"> ${tHtml('baithak.correct')}</label></div>`).join('')}`,
+      dropdown: `${/* i18n-copy */ [t('baithak.option_a'),t('baithak.option_b'),t('baithak.option_c')].map((l,oi)=>`<input class="challenge-opt-input" placeholder="${l}" value="${(q.options[oi]||'').replace(/"/g,'&quot;')}">`).join('')}`,
     }[q.format] || '';
     return `
       <div class="challenge-q-card">
-        <div class="challenge-q-num">Question ${i+1}</div>
-        <textarea class="challenge-q-input" placeholder="Write your question..." rows="2" data-qi="${i}">${q.text||''}</textarea>
+        <div class="challenge-q-num">${tHtml('baithak.question_n', { n: i + 1 })}</div>
+        <textarea class="challenge-q-input" placeholder="${tHtml('baithak.write_your_question')}" rows="2" data-qi="${i}">${q.text||''}</textarea>
         <div class="format-row">
-          ${[{k:'mcq',l:'MCQ'},{k:'binary',l:'Yes/No'},{k:'dropdown',l:'Dropdown'}].map(f=>`<button class="format-chip ${q.format===f.k?'active':''}" data-qi="${i}" data-fmt="${f.k}" type="button">${f.l}</button>`).join('')}
+          ${[{k:'mcq',l:t('baithak.format_mcq')},{k:'binary',l:t('baithak.format_yes_no')},{k:'dropdown',l:t('baithak.format_dropdown')}].map(f=>`<button class="format-chip ${q.format===f.k?'active':''}" data-qi="${i}" data-fmt="${f.k}" type="button">${f.l}</button>`).join('')}
         </div>
         <div class="challenge-options-area">${optHtml}</div>
       </div>
@@ -488,7 +488,7 @@ function showNewDmSearchSheet(opts){
   if(typeof currentUser==='undefined'||!currentUser){
     if(typeof showGuestSignInBanner==='function') showGuestSignInBanner();
     if(typeof showAuth==='function') showAuth();
-    else if(typeof showToast==='function') showToast('Sign in to message people');
+    else if(typeof showToast==='function') showToast(t('baithak.sign_in_to_message_people'));
     return;
   }
   const sheet=document.createElement('div');
@@ -496,13 +496,13 @@ function showNewDmSearchSheet(opts){
   sheet.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:100;display:flex;flex-direction:column;';
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;padding:16px;background:var(--white);border-bottom:1px solid var(--line);">
-      ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'closeNewDm' }):'<button type="button" id="closeNewDm" class="cp-back-btn" aria-label="Back">←</button>'}
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">Start a new conversation</div>
+      ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'closeNewDm' }):'<button type="button" id="closeNewDm" class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;flex:1;">${tHtml('baithak.start_a_new_conversation')}</div>
     </div>
     <div style="padding:12px 16px;">
-      <input id="newDmSearch" type="search" autocomplete="off" placeholder="Search by name or @username"
+      <input id="newDmSearch" type="search" autocomplete="off" placeholder="${tHtml('baithak.search_by_name_or_username')}"
         style="width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:14px;font-size:15px;box-sizing:border-box;outline:none;">
-      <button type="button" class="btn" id="newDmContactsBtn" style="margin-top:10px;width:100%;">Find from contacts</button>
+      <button type="button" class="btn" id="newDmContactsBtn" style="margin-top:10px;width:100%;">${tHtml('baithak.find_from_contacts')}</button>
     </div>
     <div id="newDmResults" style="flex:1;overflow:auto;padding:0 16px 24px;"></div>`;
   document.querySelector('.device')?.appendChild(sheet);
@@ -515,19 +515,19 @@ function showNewDmSearchSheet(opts){
     if(typeof loadContactsInto==='function') loadContactsInto(results);
   });
   if(typeof ContactsFind!=='undefined'&&ContactsFind.supported&&ContactsFind.supported()){
-    results.innerHTML=`<div class="contacts-fallback">${typeof t==='function'?t('contacts_soft_prompt'):'Optional: find friends already on Chaupaal from your contacts. We never upload your full address book.'}</div>`;
+    results.innerHTML=`<div class="contacts-fallback">${typeof t==='function'?t('contacts_soft_prompt'):tHtml('baithak.optional_find_friends_already_on_chaupaal')}</div>`;
   } else if(opts&&opts.withContacts&&typeof loadContactsInto==='function'){
     loadContactsInto(results);
   }
   let timer=null;
   async function runSearch(q){
-    results.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px;">Searching…</div>';
+    results.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px;">' + tHtml('baithak.searching') + '</div>';
     try{
       const rows=typeof searchUsersProvider==='function'
         ? await searchUsersProvider(q,{limit:20})
         : [];
       if(!rows.length){
-        results.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px;">No people found</div>';
+        results.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px;">' + tHtml('baithak.no_people_found') + '</div>';
         return;
       }
       results.innerHTML=rows.map(r=>`
@@ -535,37 +535,37 @@ function showNewDmSearchSheet(opts){
           style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 0;border:0;border-bottom:1px solid var(--line);background:transparent;cursor:pointer;text-align:left;">
           <div style="width:40px;height:40px;border-radius:50%;background:var(--white);display:grid;place-items:center;overflow:hidden;">${r.photoURL?`<img src="${r.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'👤'}</div>
           <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:14px;">${r.name||r.username||'User'}</div>
+            <div style="font-weight:700;font-size:14px;">${baithakEsc(r.name||r.username||t('common.user'))}</div>
             <div style="font-size:12px;color:var(--muted);">@${r.username||'user'}</div>
           </div>
-          <span style="font-size:12px;font-weight:700;color:var(--red);">Message</span>
+          <span style="font-size:12px;font-weight:700;color:var(--red);">${tHtml('baithak.msg_actions')}</span>
         </button>`).join('');
       results.querySelectorAll('.new-dm-row').forEach(btn=>{
         btn.addEventListener('click',async()=>{
           const uid=btn.dataset.uid;
           if(!uid) return;
           if(uid===currentUser?.uid){
-            if(typeof showToast==='function') showToast("That's you");
+            if(typeof showToast==='function') showToast(t('baithak.that_s_you'));
             return;
           }
           if(typeof dismissedUids!=='undefined'&&dismissedUids instanceof Set&&dismissedUids.has(uid)){
-            if(typeof showToast==='function') showToast("You've blocked this person");
+            if(typeof showToast==='function') showToast(t('baithak.you_ve_blocked_this_person'));
             return;
           }
           close();
           if(typeof openDmWithSharedHello==='function'){
             await openDmWithSharedHello({
               uid,
-              name:btn.dataset.name||'Friend',
+              name:btn.dataset.name||t('common.friend'),
               avatar:btn.dataset.avatar||'👤',
-              starterText:'Hi!',
+              starterText:t('common.starter_hi'),
               origin:'new_dm',
             });
           }
         });
       });
     }catch(e){
-      results.innerHTML='<div style="padding:16px;color:var(--red);font-size:13px;">Search failed — try again</div>';
+      results.innerHTML='<div style="padding:16px;color:var(--red);font-size:13px;">' + tHtml('baithak.search_failed_try_again') + '</div>';
     }
   }
   input?.addEventListener('input',()=>{
@@ -579,12 +579,12 @@ function showNewDmSearchSheet(opts){
 
 function showNewChatOptions(){
   const bodyHtml=`
-    <button type="button" class="btn btn--block" data-new="dm" style="margin-bottom:8px;text-align:left;">💬 Start a new conversation</button>
-    <button type="button" class="btn btn--block" data-new="group" style="margin-bottom:8px;text-align:left;">👥 Gather a group</button>`;
+    <button type="button" class="btn btn--block" data-new="dm" style="margin-bottom:8px;text-align:left;">${tHtml('baithak.start_a_new_conversation_2')}</button>
+    <button type="button" class="btn btn--block" data-new="group" style="margin-bottom:8px;text-align:left;">${tHtml('baithak.gather_a_group')}</button>`;
   if(typeof openHalfSheet==='function'){
     openHalfSheet({
       id:'baithakNewChatSheet',
-      title: typeof t==='function' ? (t('baithak_menu_new_chat')||'New chat') : 'New chat',
+      title: typeof t==='function' ? (t('baithak_menu_new_chat')||t('baithak.menu_new_chat')) : t('baithak.menu_new_chat'),
       accent:'baithak',
       bodyHtml,
       onMount:(sheet,close)=>{
@@ -596,8 +596,8 @@ function showNewChatOptions(){
   }
   const sheet=document.createElement('div');
   sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
-  sheet.innerHTML=`<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;">New chat</div>${bodyHtml}
-    <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
+  sheet.innerHTML=`<div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:17px;margin-bottom:14px;">${tHtml('baithak.menu_new_chat')}</div>${bodyHtml}
+    <button id="closeSheet2" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">${tHtml('common.cancel')}</button>`;
   document.querySelector('.device').appendChild(sheet);
   sheet.querySelector('[data-new="dm"]')?.addEventListener('click',()=>{sheet.remove();showNewDmSearchSheet();});
   sheet.querySelector('[data-new="group"]')?.addEventListener('click',()=>{sheet.remove();showCreateGroup();});
@@ -609,20 +609,20 @@ function showCreateGroup(){
   sheet.style.cssText='position:absolute;inset:0;background:var(--cream);z-index:100;display:flex;flex-direction:column;padding:24px;';
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
-      ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'closeGrp' }):'<button type="button" id="closeGrp" class="cp-back-btn" aria-label="Back">←</button>'}
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">New group</div>
+      ${typeof backButtonHtml==='function'?backButtonHtml({ id: 'closeGrp' }):'<button type="button" id="closeGrp" class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">${tHtml('baithak.menu_new_group')}</div>
     </div>
-    <input class="auth-input" placeholder="Group name" id="grpName">
-    <input class="auth-input" placeholder="Description (optional)" id="grpDesc">
-    <div style="font-size:13px;font-weight:700;margin:14px 0 8px;">${typeof t==='function'?t('group_visibility'):'Visibility'}</div>
+    <input class="auth-input" placeholder="${tHtml('baithak.group_name')}" id="grpName">
+    <input class="auth-input" placeholder="${tHtml('baithak.description_optional')}" id="grpDesc">
+    <div style="font-size:13px;font-weight:700;margin:14px 0 8px;">${typeof t==='function'?t('group_visibility'):tHtml('baithak.group_visibility')}</div>
     <div class="group-vis-seg" role="radiogroup" data-create-vis>
-      <button type="button" class="group-vis-opt is-selected" data-vis="private" role="radio" aria-checked="true">${typeof t==='function'?t('group_vis_private'):'Private'}</button>
-      <button type="button" class="group-vis-opt" data-vis="discoverable" role="radio">${typeof t==='function'?t('group_vis_discoverable'):'Discoverable'}</button>
-      <button type="button" class="group-vis-opt" data-vis="public" role="radio">${typeof t==='function'?t('group_vis_public'):'Public'}</button>
+      <button type="button" class="group-vis-opt is-selected" data-vis="private" role="radio" aria-checked="true">${typeof t==='function'?t('group_vis_private'):tHtml('baithak.group_vis_private')}</button>
+      <button type="button" class="group-vis-opt" data-vis="discoverable" role="radio">${typeof t==='function'?t('group_vis_discoverable'):tHtml('baithak.group_discoverable')}</button>
+      <button type="button" class="group-vis-opt" data-vis="public" role="radio">${typeof t==='function'?t('group_vis_public'):tHtml('baithak.group_vis_public')}</button>
     </div>
-    <div class="group-vis-hint" data-create-vis-hint style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45;">${typeof t==='function'?t('group_vis_private_hint'):'Invite-only. Hidden from search.'}</div>
-    <div style="font-size:13px;color:var(--muted);margin:12px 0 8px;line-height:1.45;">After you create the group, you can copy a real invite link from group info.</div>
-    <button style="margin-top:auto;width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="createGrpBtn">Create group</button>
+    <div class="group-vis-hint" data-create-vis-hint style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45;">${typeof t==='function'?t('group_vis_private_hint'):tHtml('baithak.group_vis_private_hint')}</div>
+    <div style="font-size:13px;color:var(--muted);margin:12px 0 8px;line-height:1.45;">${tHtml('baithak.after_you_create_the_group_you')}</div>
+    <button style="margin-top:auto;width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;" id="createGrpBtn">${tHtml('baithak.create_group')}</button>
   `;
   document.querySelector('.device').appendChild(sheet);
   document.getElementById('closeGrp').addEventListener('click',()=>sheet.remove());
@@ -632,9 +632,9 @@ function showCreateGroup(){
   }
   let vis='private';
   const hints={
-    private: typeof t==='function'?t('group_vis_private_hint'):'Invite-only. Hidden from search.',
-    discoverable: typeof t==='function'?t('group_vis_discoverable_hint'):'Appears in search. Request to join — no history until accepted.',
-    public: typeof t==='function'?t('group_vis_public_hint'):'Anyone can find and join instantly, and see chat history.',
+    private: typeof t==='function'?t('group_vis_private_hint'):t('baithak.group_vis_private_hint'),
+    discoverable: typeof t==='function'?t('group_vis_discoverable_hint'):t('baithak.appears_in_search_request_to_join'),
+    public: typeof t==='function'?t('group_vis_public_hint'):t('baithak.group_vis_public_hint'),
   };
   sheet.querySelectorAll('[data-vis]').forEach((btn)=>{
     btn.addEventListener('click',()=>{
@@ -655,10 +655,10 @@ function showCreateGroup(){
     if(typeof createGroupInFirestore==='function'){
       const chat=await createGroupInFirestore({name,description:desc,visibility:vis});
       if(chat){
-        showToast(t('baithak_group_created',{name}));
+        showToast(t('baithak_group_created',{name: bidi(name)}));
         if(typeof openChatScreen==='function') openChatScreen(chat);
       }
-    } else showToast(t('baithak_group_created',{name}));
+    } else showToast(t('baithak_group_created',{name: bidi(name)}));
   });
 }
 
@@ -667,19 +667,19 @@ function showCreateGroup(){
 function showYearlyWrap(){
   const now=new Date();
   const isUnlocked=(now.getMonth()===11&&now.getDate()>=25)||now.getMonth()===0;
-  if(!isUnlocked){showToast('Yearly Wrap unlocks on December 25th for everyone');return;}
+  if(!isUnlocked){showToast(t('baithak.yearly_wrap_unlocks_on_december_25th'));return;}
   const d=buildWrapData();
   const year=now.getFullYear()-(now.getMonth()===0?1:0);
   const totalSessions=JSON.parse(localStorage.getItem('chaupaal_play_history')||'[]').length;
   const wrap=document.createElement('div');wrap.className='wrap-overlay';
   const pages=[
-    {bg:'linear-gradient(160deg,#0F0C29,#302B63,#24243e)',content:`<div style="font-size:56px;margin-bottom:16px;">✨</div><div class="wrap-label" style="color:rgba(255,255,255,0.6);">${year} on Chaupaal</div><div class="wrap-headline" style="color:#fff;">Your year in review</div><div class="wrap-sub" style="color:rgba(255,255,255,0.6);">Tap to explore →</div>`},
-    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">You showed up</div><div class="wrap-big-num" style="color:#fff;">${totalSessions}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">days you played Akhbaar this year</div>`},
-    {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">Your biggest obsession</div><div style="font-size:64px;margin:8px 0;">${CATEGORY_ICONS[d.topCat]||'🏆'}</div><div class="wrap-headline" style="color:#fff;">${d.topCat}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">You dominated this all year</div>`},
-    {bg:'linear-gradient(160deg,#2A9D8F,#1A6B64)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Accuracy</div><div class="wrap-big-num" style="color:#fff;">${d.accuracy}%</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${d.totalCorrect} correct out of ${d.totalQ}</div>`},
-    {bg:'linear-gradient(160deg,#FF9A3C,#E63946)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Longest streak</div><div class="wrap-big-num" style="color:#fff;">🔥 ${d.streak}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">consecutive days this year</div>`},
-    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">Your personality</div><div style="font-size:48px;margin:12px 0;">${personalityProfile.lifestyle==='outdoorsy'?'🌿':personalityProfile.lifestyle==='intellectual'?'📚':personalityProfile.lifestyle==='cinephile'?'🎬':'🧭'}</div><div class="wrap-headline" style="color:#fff;font-size:28px;">${personalityProfile.lifestyle?personalityProfile.lifestyle.charAt(0).toUpperCase()+personalityProfile.lifestyle.slice(1):'Curious Explorer'}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">From your Aur Sunao answers & daily reflections</div>`},
-    {bg:'linear-gradient(160deg,#C9A227,#B7791F)',content:`<div style="font-size:56px;margin-bottom:16px;">🥂</div><div class="wrap-headline" style="color:#fff;">Here's to ${year+1}!</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">Keep reading, keep playing. The Chaupaal is always open.</div><button class="wrap-share-btn" id="wrapYearShare">Share your ${year} Wrap</button>`},
+    {bg:'linear-gradient(160deg,#0F0C29,#302B63,#24243e)',content:`<div style="font-size:56px;margin-bottom:16px;">✨</div><div class="wrap-label" style="color:rgba(255,255,255,0.6);">${year} on Chaupaal</div><div class="wrap-headline" style="color:#fff;">${tHtml('baithak.your_year_in_review')}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.6);">${tHtml('baithak.tap_to_explore')}</div>`},
+    {bg:'linear-gradient(160deg,#E63946,#C72E3A)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('baithak.you_showed_up')}</div><div class="wrap-big-num" style="color:#fff;">${totalSessions}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${tHtml('baithak.days_you_played_akhbaar_this_year')}</div>`},
+    {bg:'linear-gradient(160deg,var(--navy),#2A3158)',content:`<div class="wrap-label" style="color:var(--gold);">${tHtml('baithak.your_biggest_obsession')}</div><div style="font-size:64px;margin:8px 0;">${CATEGORY_ICONS[d.topCat]||'🏆'}</div><div class="wrap-headline" style="color:#fff;">${d.topCat}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">${tHtml('baithak.you_dominated_this_all_year')}</div>`},
+    {bg:'linear-gradient(160deg,#2A9D8F,#1A6B64)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('baithak.accuracy')}</div><div class="wrap-big-num" style="color:#fff;">${d.accuracy}%</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${d.totalCorrect} correct out of ${d.totalQ}</div>`},
+    {bg:'linear-gradient(160deg,#FF9A3C,#E63946)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('baithak.longest_streak')}</div><div class="wrap-big-num" style="color:#fff;">🔥 ${d.streak}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${tHtml('baithak.consecutive_days_this_year')}</div>`},
+    {bg:'linear-gradient(160deg,#8134AF,#515BD4)',content:`<div class="wrap-label" style="color:rgba(255,255,255,0.7);">${tHtml('baithak.your_personality')}</div><div style="font-size:48px;margin:12px 0;">${personalityProfile.lifestyle==='outdoorsy'?'🌿':personalityProfile.lifestyle==='intellectual'?'📚':personalityProfile.lifestyle==='cinephile'?'🎬':'🧭'}</div><div class="wrap-headline" style="color:#fff;font-size:28px;">${personalityProfile.lifestyle?personalityProfile.lifestyle.charAt(0).toUpperCase()+personalityProfile.lifestyle.slice(1):tHtml('baithak.curious_explorer')}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.7);">${tHtml('baithak.from_your_aur_sunao_answers_daily')}</div>`},
+    {bg:'linear-gradient(160deg,#C9A227,#B7791F)',content:`<div style="font-size:56px;margin-bottom:16px;">🥂</div><div class="wrap-headline" style="color:#fff;">${tHtml('baithak.wrap_heres_to', { year: year + 1 })}</div><div class="wrap-sub" style="color:rgba(255,255,255,0.8);">${tHtml('baithak.keep_reading_keep_playing_the_chaupaal')}</div><button class="wrap-share-btn" id="wrapYearShare">${tHtml('baithak.wrap_share_year', { year })}</button>`},
   ];
   let idx=0;
   function renderPage(){
@@ -689,14 +689,14 @@ function showYearlyWrap(){
       const wrapStats=typeof buildShareStats==='function'
         ? buildShareStats({
             scoreLine:`${d.accuracy}%`,
-            meta:`${totalSessions} days · ${d.streak}-day streak · ${d.topCat}`,
-            text:`My ${year} Chaupaal Wrap\n${totalSessions} days · ${d.accuracy}% accuracy · ${d.streak}-day streak · ${d.topCat}`,
+            meta:t('baithak.totalsessions_days_streak_day_streak_topca', { totalSessions, streak: d.streak, topCat: d.topCat }),
+            text:t('baithak.my_year_chaupaal_wrap_totalsessions_days', { year, totalSessions, accuracy: d.accuracy, streak: d.streak, topCat: d.topCat }),
           })
-        : {scoreLine:`${d.accuracy}%`,meta:`${year}`,text:`My ${year} Chaupaal Wrap`};
+        : {scoreLine:`${d.accuracy}%`,meta:`${year}`,text:t('baithak.my_year_chaupaal_wrap', { year })};
       if(typeof openUnifiedShareSheet==='function'){
-        openUnifiedShareSheet({gameId:'wrap',title:`Share ${year} Wrap`,subtitle:'Your year on Chaupaal',stats:wrapStats});
+        openUnifiedShareSheet({gameId:'wrap',title:t('baithak.share_year_wrap', { year }),subtitle:t('baithak.your_year_on_chaupaal'),stats:wrapStats});
       } else {
-        const text=`My ${year} Chaupaal Wrap\n${totalSessions} days · ${d.accuracy}% accuracy · ${d.streak}-day streak · ${d.topCat}\nchaupaal-chaupaal.web.app`;
+        const text=t('baithak.my_year_chaupaal_wrap_totalsessions_days_2', { year, totalSessions, accuracy: d.accuracy, streak: d.streak, topCat: d.topCat });
         if(navigator.share)navigator.share({text});else{navigator.clipboard.writeText(text);showToast(t('baithak_copied'));}
       }
     });

@@ -30,8 +30,8 @@
         SAMPLE_MESSAGES[id] = [
           {
             from: 'them',
-            text: "Hey — I'm Chaupaal. Type what you'd like to do — post a story, open archive, wish a friend — or just say how your day's going.",
-            time: 'Pinned',
+            text: t('chat.hey_i_m_chaupaal_type_what'),
+            time: t('baithak.pinned'),
             avatar: '🏠',
           },
         ];
@@ -48,8 +48,8 @@
       displayName: 'Chaupaal',
       avatar: '🏠',
       photoURL: null,
-      preview: 'Type what you want to do · Chaupaal will guide you',
-      time: 'Pinned',
+      preview: tEn('chat.auto.chaupaal_guide'),
+      time: t('baithak.pinned'),
       unread: 0,
       duelStreak: 0,
       uid: typeof currentUser !== 'undefined' ? currentUser?.uid : null,
@@ -85,7 +85,7 @@
       name: 'Chaupaal',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      preview: 'Talk with Chaupaal',
+      preview: tEn('chat.auto.chaupaal_talk'),
     };
     const repairPayload = {
       participants: [currentUser.uid],
@@ -131,7 +131,7 @@
     const body =
       typeof t === 'function'
         ? t('chat_commerce_nudge')
-        : "Here's your Chaupaal Money and membership — both live in Chaupaal Profile.";
+        : t('chat.here_s_your_chaupaal_money_and');
     return {
       from: 'them',
       text: body,
@@ -180,7 +180,7 @@
       body: { message: text, history },
     });
     if (!envelope?.ok) {
-      const err = new Error(envelope?.error?.message || 'Chaupaal reply failed');
+      const err = Object.assign(new Error(envelope?.error?.message || 'Chaupaal reply failed'), { code: envelope?.error?.code });
       err.code = envelope?.error?.code;
       throw err;
     }
@@ -199,14 +199,14 @@
         input.placeholder =
           typeof t === 'function'
             ? t('chaupaal_cmd_placeholder', "Tell me what you'd like to do…")
-            : "Tell me what you'd like to do…";
+            : t('common.chaupaal_cmd_placeholder');
       }
-      if (status) status.textContent = 'Navigator · tap an action or type a request';
+      if (status) status.textContent = t('chat.navigator_tap_an_action_or_type');
       screen.dataset.chaupaalQuiet = '1';
       screen.dataset.chaupaalNavigator = '1';
     } else {
-      if (input) input.placeholder = 'Talk with Chaupaal…';
-      if (status) status.textContent = 'Your space with Chaupaal';
+      if (input) input.placeholder = t('chat.talk_with_chaupaal');
+      if (status) status.textContent = t('chat.auto.chaupaal_space');
       delete screen.dataset.chaupaalQuiet;
       delete screen.dataset.chaupaalNavigator;
     }
@@ -257,8 +257,8 @@
       SAMPLE_MESSAGES[chaupaalChatId()] = [
         {
           from: 'them',
-          text: "Hey — I'm Chaupaal. Type what you'd like to do — post a story, open archive, wish a friend — or just say how your day's going.",
-          time: 'Pinned',
+          text: t('chat.hey_i_m_chaupaal_type_what'),
+          time: t('baithak.pinned'),
           avatar: '🏠',
         },
       ];

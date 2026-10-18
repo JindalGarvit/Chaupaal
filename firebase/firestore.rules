@@ -782,7 +782,7 @@ service cloud.firestore {
         'typing', 'reads', 'updatedAt', 'preview', 'lastMessageAt', 'sharedFirstHello',
         'participants', 'memberProfiles', 'discoveryOrigin', 'peerProfileType', 'origin',
         'name', 'description', 'avatar', 'photoURL', 'admins', 'permissions', 'invite',
-        'openedBy', 'createdBy', 'firstMessageAt', 'matchMeta',
+        'openedBy', 'createdBy', 'firstMessageAt', 'matchMeta', 'previewSys', 'previewSysAt',
         'isPublic', 'nameLower', 'memberCount', 'discoverableNoticeAck', 'discoverableInSearch', 'visibility'
       ]);
       let adminOnly = keys.hasAny(['admins', 'permissions', 'invite', 'isPublic', 'discoverableNoticeAck', 'discoverableInSearch', 'visibility']);

@@ -49,7 +49,7 @@ const LANG_CATALOG = [
 const I18N_RETIRED_LANGS = ['gu', 'kn', 'ml', 'pa', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"1c624b66","bn":"9872c9d0","de":"f3d7eb45","es":"50a30a11","fr":"67682a2b","hi":"7b1523da","id":"67b77b06","ja":"4379aa78","ko":"e493b09d","mr":"476b3784","pt":"ef50e133","ta":"c6f61d60","te":"ef2554d7","ur":"e33ea22c","zh":"32548e3c"};
+const I18N_PACK_VERSIONS = {"ar":"99db15dd","bn":"67d28fc5","de":"d296c1ab","es":"83fb50f6","fr":"8db63b86","hi":"3ce35139","id":"edcd35e0","ja":"a207ba5b","ko":"3f9d8b1e","mr":"b6a28fa9","pt":"547f3738","ta":"13947ddc","te":"cc60e965","ur":"8dc4245d","zh":"89caf7ee"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({
@@ -189,7 +189,8 @@ function i18nNumber(n, locale) {
 function i18nMatchBrace(s, open) {
   let depth = 0;
   for (let i = open; i < s.length; i++) {
-    if (s[i] === '{' && s[i + 1] === '{') {
+    // "{{{actor}}": the first brace opens a case, the next two start the {{param}}.
+    if (s[i] === '{' && s[i + 1] === '{' && s[i + 2] !== '{') {
       const end = s.indexOf('}}', i + 2);
       if (end < 0) return -1;
       i = end + 1;
@@ -205,7 +206,7 @@ function i18nMatchBrace(s, open) {
 function i18nIcu(s, params, locale) {
   let out = '';
   for (let i = 0; i < s.length; i++) {
-    if (s[i] === '{' && s[i + 1] === '{') {
+    if (s[i] === '{' && s[i + 1] === '{' && s[i + 2] !== '{') {
       const end = s.indexOf('}}', i + 2);
       if (end < 0) {
         out += s.slice(i);
@@ -429,6 +430,92 @@ function optionLabel(group, value) {
 
 function optionLabelHtml(group, value) {
   return i18nEscape(optionLabel(group, value));
+}
+
+/**
+ * Canonical English for text that is STORED or sent to other people / models (message fallback text,
+ * chat previews, member-name fallbacks). Never the UI language, never pseudo-localised.
+ */
+function tEn(key, vars) {
+  const hit = i18nLookup(key, 'en');
+  return hit ? i18nFormat(hit.v, vars || {}, 'en', 'text') : String(key);
+}
+
+/** A name / @handle / group name inside a sentence: <bdi> in HTML, FSI…PDI isolates in text (RTL-safe). */
+function bidi(value) {
+  const s = String(value == null ? '' : value);
+  return { html: '<bdi>' + i18nEscape(s) + '</bdi>', text: '\u2068' + s + '\u2069' };
+}
+
+/** "Asha, Ravi and Meena" in the UI language with every name isolated. */
+function bidiList(values) {
+  const list = (values || []).map((v) => String(v == null ? '' : v)).filter(Boolean);
+  let parts = null;
+  try {
+    const locale = i18nPseudo ? 'en' : getLangEntry(normalizeLang(currentLang)).html;
+    if (typeof Intl.ListFormat === 'function') parts = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).formatToParts(list);
+  } catch (e) {}
+  if (!parts) {
+    parts = [];
+    list.forEach((v, i) => {
+      if (i) parts.push({ type: 'literal', value: ', ' });
+      parts.push({ type: 'element', value: v });
+    });
+  }
+  return {
+    html: parts.map((p) => (p.type === 'element' ? '<bdi>' + i18nEscape(p.value) + '</bdi>' : i18nEscape(p.value))).join(''),
+    text: parts.map((p) => (p.type === 'element' ? '\u2068' + p.value + '\u2069' : p.value)).join(''),
+  };
+}
+
+/**
+ * Stored English labels written by the app itself ("📷 Photo", "Sent a story", "Group created") →
+ * { key, params } so every reader sees them in their own language — old messages included.
+ * Matches the English of every key under `prefix` ({{param}} → capture).
+ */
+const i18nAutoLabelCache = {};
+function i18nAutoLabelKey(text, prefix) {
+  const s = String(text == null ? '' : text).trim();
+  if (!s) return null;
+  const pre = prefix || 'chat.auto.';
+  let table = i18nAutoLabelCache[pre];
+  if (!table) {
+    table = [];
+    Object.keys(I18N_PACKS.en || {})
+      .filter((k) => k.startsWith(pre))
+      .forEach((k) => {
+        const raw = String(I18N_PACKS.en[k]);
+        const names = [];
+        const english = raw.replace(/\{\{@([a-z0-9]+)\}\}/g, (m, id) => (I18N_GLOSSARY[id] != null ? I18N_GLOSSARY[id] : m));
+        const re = new RegExp(
+          '^' +
+            english
+              .split(/(\{\{\w+\}\})/)
+              .map((part) => {
+                const m = /^\{\{(\w+)\}\}$/.exec(part);
+                if (m) {
+                  names.push(m[1]);
+                  return '(.+?)';
+                }
+                return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              })
+              .join('') +
+            '$'
+        );
+        table.push({ key: k, re, names });
+      });
+    // Exact labels first, then patterns ("🎵 Song" before "🎵 {{title}}").
+    table.sort((a, b) => a.names.length - b.names.length);
+    i18nAutoLabelCache[pre] = table;
+  }
+  for (const row of table) {
+    const m = row.re.exec(s);
+    if (!m) continue;
+    const params = {};
+    row.names.forEach((n, i) => (params[n] = m[i + 1]));
+    return { key: row.key, params };
+  }
+  return null;
 }
 
 /** Plural helper: tn('baithak.unread', 3) → `{count}` and `{{n}}` both bound to 3. */
@@ -796,6 +883,10 @@ if (typeof window !== 'undefined') {
     isRtl,
     optionLabel,
     optionLabelHtml,
+    tEn,
+    bidi,
+    bidiList,
+    i18nAutoLabelKey,
     firebaseAuthLanguage,
     syncFirebaseAuthLanguage,
     reloadForLanguage,

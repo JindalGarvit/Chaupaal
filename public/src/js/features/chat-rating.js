@@ -127,7 +127,7 @@
     } catch (e) {
       console.warn('[chat-rating]', e?.message || e);
     }
-    if (typeof showToast === 'function') showToast('Thanks — that helps keep Chaupaal kinder');
+    if (typeof showToast === 'function') showToast(t('chat.thanks_that_helps_keep_chaupaal_kinder'));
   }
 
   function showRatingBar(chat) {
@@ -135,21 +135,21 @@
     if (!document.getElementById('activeChatScreen')) return;
     injectStyles();
     const peer = peerUidOf(chat);
-    const name = chat.name || 'them';
+    const name = chat.name || t('chat.them');
     const bar = document.createElement('div');
     bar.id = 'chatRatingBar';
     bar.className = 'chat-rating-bar';
     bar.setAttribute('data-nav-ignore', '1');
     bar.innerHTML = `
-      <div class="chat-rating-title">How was this conversation?</div>
-      <div class="chat-rating-sub">Optional · rate ${name.replace(/</g, '')} from 1–10. Personal first contacts only.</div>
+      <div class="chat-rating-title">${tHtml('chat.how_was_this_conversation')}</div>
+      <div class="chat-rating-sub">${tHtml('chat.rating_sub', { name: bidi(name) })}</div>
       <div class="chat-rating-scores">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         .map((n) => `<button type="button" data-score="${n}">${n}</button>`)
         .join('')}</div>
       <div class="chat-rating-actions">
-        <button type="button" data-dismiss>Not now</button>
-        <button type="button" class="danger" data-flag>Flag inappropriate</button>
-        <button type="button" class="danger" data-block>Block</button>
+        <button type="button" data-dismiss>${tHtml('common.not_now')}</button>
+        <button type="button" class="danger" data-flag>${tHtml('chat.flag_inappropriate')}</button>
+        <button type="button" class="danger" data-block>${tHtml('chat.block')}</button>
       </div>`;
     const inputRow =
       document.querySelector('#activeChatScreen .chat-input-area') ||

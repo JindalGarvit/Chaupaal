@@ -13,14 +13,14 @@
   'use strict';
 
   const LOCAL_GIF_PACK = [
-    { id: 'wave', title: 'Wave', url: 'https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif', kind: 'gif' },
-    { id: 'clap', title: 'Clap', url: 'https://media.giphy.com/media/7rj2ZgrrXavTEqIZyH/giphy.gif', kind: 'gif' },
-    { id: 'laugh', title: 'Laugh', url: 'https://media.giphy.com/media/10JhviFuU2bUxG/giphy.gif', kind: 'gif' },
-    { id: 'wow', title: 'Wow', url: 'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif', kind: 'gif' },
-    { id: 'heart', title: 'Heart', url: 'https://media.giphy.com/media/l0MYt5jPR19BpObFV/giphy.gif', kind: 'gif' },
-    { id: 'thumbs', title: 'Thumbs up', url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif', kind: 'gif' },
-    { id: 'dance', title: 'Dance', url: 'https://media.giphy.com/media/l0MYt5jPR19BpObFV/giphy.gif', kind: 'gif' },
-    { id: 'tea', title: 'Chai', url: 'https://media.giphy.com/media/3o6Zt6ML6BklcajjsA/giphy.gif', kind: 'gif' },
+    { id: 'wave', title: t('media.wave'), url: 'https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif', kind: 'gif' },
+    { id: 'clap', title: t('media.clap'), url: 'https://media.giphy.com/media/7rj2ZgrrXavTEqIZyH/giphy.gif', kind: 'gif' },
+    { id: 'laugh', title: t('media.laugh'), url: 'https://media.giphy.com/media/10JhviFuU2bUxG/giphy.gif', kind: 'gif' },
+    { id: 'wow', title: t('media.wow'), url: 'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif', kind: 'gif' },
+    { id: 'heart', title: t('media.heart'), url: 'https://media.giphy.com/media/l0MYt5jPR19BpObFV/giphy.gif', kind: 'gif' },
+    { id: 'thumbs', title: t('media.thumbs_up'), url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif', kind: 'gif' },
+    { id: 'dance', title: t('media.dance'), url: 'https://media.giphy.com/media/l0MYt5jPR19BpObFV/giphy.gif', kind: 'gif' },
+    { id: 'tea', title: t('media.chai'), url: 'https://media.giphy.com/media/3o6Zt6ML6BklcajjsA/giphy.gif', kind: 'gif' },
   ];
 
   const STICKER_PACK = [
@@ -57,7 +57,7 @@
     sheet.innerHTML = `
       <div class="media-picker-header">
         <div class="media-picker-title">${title}</div>
-        <button type="button" class="media-picker-close" aria-label="Close">✕</button>
+        <button type="button" class="media-picker-close" aria-label="${tHtml('common.close')}">✕</button>
       </div>
       <div class="media-picker-body">${bodyHtml}</div>`;
     document.querySelector('.device')?.appendChild(sheet);
@@ -164,8 +164,8 @@
       };
       const isClip = payload.type === 'clip';
       preview.innerHTML = isClip
-        ? `<div class="duniya-gif-preview duniya-clip-preview"><video src="${escAttr(payload.url)}" poster="${escAttr(payload.preview || '')}" muted playsinline controls preload="metadata"></video><button type="button" class="duniya-gif-clear" aria-label="Remove">✕</button></div>`
-        : `<div class="duniya-gif-preview"><img src="${escAttr(payload.url)}" alt="${escAttr(payload.title || '')}"><button type="button" class="duniya-gif-clear" aria-label="Remove">✕</button></div>`;
+        ? `<div class="duniya-gif-preview duniya-clip-preview"><video src="${escAttr(payload.url)}" poster="${escAttr(payload.preview || '')}" muted playsinline controls preload="metadata"></video><button type="button" class="duniya-gif-clear" aria-label="${tHtml('media.remove')}">✕</button></div>`
+        : `<div class="duniya-gif-preview"><img src="${escAttr(payload.url)}" alt="${escAttr(payload.title || '')}"><button type="button" class="duniya-gif-clear" aria-label="${tHtml('media.remove')}">✕</button></div>`;
       preview.querySelector('.duniya-gif-clear')?.addEventListener('click', () => {
         window.__duniyaPendingGif = null;
         preview.innerHTML = '';
@@ -281,7 +281,7 @@
               const preview = g.preview || g.previewUrl || g.url;
               const dur = kind === 'clip' ? formatDuration(g.duration) : '';
               if (kind === 'clip') {
-                return `<button type="button" class="media-picker-cell media-picker-cell--clip" data-url="${escAttr(g.url)}" data-preview="${escAttr(preview)}" data-title="${escAttr(g.title || 'Clip')}" data-kind="clip" data-mime="${escAttr(g.mime || '')}" data-duration="${escAttr(g.duration || '')}" title="${escAttr(g.title || 'Clip')}">
+                return `<button type="button" class="media-picker-cell media-picker-cell--clip" data-url="${escAttr(g.url)}" data-preview="${escAttr(preview)}" data-title="${escAttr(g.title || t('media.clip'))}" data-kind="clip" data-mime="${escAttr(g.mime || '')}" data-duration="${escAttr(g.duration || '')}" title="${escAttr(g.title || t('media.clip'))}">
                   <img src="${escAttr(preview)}" alt="" loading="lazy">
                   ${dur ? `<span class="media-picker-clip-dur">${dur}</span>` : '<span class="media-picker-clip-dur">▶</span>'}
                 </button>`;

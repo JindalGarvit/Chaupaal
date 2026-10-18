@@ -10,9 +10,9 @@ const path = require('path');
 const { runtime: rt } = require('./i18n-node-shim');
 
 const ROOT = path.join(__dirname, '..', '..');
-const KEY_RE = /\b(?:t|tt|tr|tHtml|htt|tn|tx|txv)\(\s*['"]([\w.]+)['"]/g;
+const KEY_RE = /\b(?:t|tt|tr|tHtml|htt|tn|tx|txv|tEn)\(\s*['"]([\w.]+)['"]/g;
 const DATA_RE = /data-i18n(?:-[a-z]+)?="([\w.]+)"/g;
-const OPT_RE = /\boptionLabel\(\s*['"]([\w.]+)['"]/g;
+const OPT_RE = /\boptionLabel(?:Html)?\(\s*['"]([\w.]+)['"]/g;
 
 function withCopy(src) {
   const s = String(src);

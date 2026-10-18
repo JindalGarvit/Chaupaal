@@ -359,7 +359,28 @@ function lint() {
   return { total: hits.length, bySurface, hits };
 }
 
-if (require.main === module) {
+/** Findings in the files one extraction arc owns (scripts/i18n-surfaces.json → <id>). */
+function lintSurface(id) {
+  const files = Object.keys(require('./i18n-surfaces.json')[id] || {});
+  const hits = [];
+  files.forEach((rel) => {
+    const abs = path.join(ROOT, rel);
+    if (!fs.existsSync(abs)) return;
+    const src = fs.readFileSync(abs, 'utf8');
+    hits.push(...(rel.endsWith('.html') ? scanIndex(rel, src) : scanJs(rel, src)));
+  });
+  return { files: files.length, hits };
+}
+
+if (require.main === module && process.argv.includes('--surface')) {
+  const id = process.argv[process.argv.indexOf('--surface') + 1];
+  const res = lintSurface(id);
+  res.hits.forEach((h) => console.log(`${h.file}:${h.line}  [${h.kind}]  ${h.text}`));
+  console.log(`${id}: ${res.hits.length} hard-coded strings in ${res.files} files`);
+  process.exit(res.hits.length ? 1 : 0);
+}
+
+if (require.main === module && !process.argv.includes('--surface')) {
   const res = lint();
   const args = process.argv.slice(2);
   if (args.includes('--json')) {
@@ -386,4 +407,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { lint, isCopy, scanJs, scanIndex, surfaceOf, stripExpressions };
+module.exports = { lint, lintSurface, isCopy, scanJs, scanIndex, surfaceOf, stripExpressions };

@@ -69,5 +69,29 @@
     "public/src/js/features/profile-preview.js": "profile",
     "public/src/js/features/profile.js": "profile",
     "public/src/js/features/streak.js": "settings"
+  },
+  "l3": {
+    "public/src/js/features/baithak.js": "baithak",
+    "public/src/js/features/baithak-data.js": "baithak",
+    "public/src/js/features/baithak-search.js": "baithak",
+    "public/src/js/features/group-info.js": "baithak",
+    "public/src/js/core/baithak-wish.js": "baithak",
+    "public/src/js/core/baithak-msg-cache.js": "baithak",
+    "public/src/js/features/baithak-chat.js": "chat",
+    "public/src/js/features/baithak-chat-actions.js": "chat",
+    "public/src/js/features/chaupaal-chat.js": "chat",
+    "public/src/js/features/self-chat.js": "chat",
+    "public/src/js/features/chat-rating.js": "chat",
+    "public/src/js/core/chat-presence.js": "chat",
+    "public/src/js/core/baithak-transport.js": "chat",
+    "public/src/js/core/chat-events.js": "chat",
+    "public/src/js/features/mehfil.js": "mehfil",
+    "public/src/js/features/mehfil-effects.js": "mehfil",
+    "public/src/js/features/music-card.js": "music",
+    "public/src/js/features/music-hub.js": "music",
+    "public/src/js/features/music-taste.js": "music",
+    "public/src/js/features/location-share.js": "location",
+    "public/src/js/features/media-picker.js": "media",
+    "public/src/js/core/image-pipeline.js": "media"
   }
 }

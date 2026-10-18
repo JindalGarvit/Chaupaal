@@ -246,7 +246,8 @@ async function run() {
   {
     const res = lint();
     const base = JSON.parse(read('scripts/i18n-lint-baseline.json'));
-    assert(res.total > 0 && Object.keys(res.bySurface).length >= 10, `lint ran: ${res.total} hard-coded strings across ${Object.keys(res.bySurface).length} surfaces`);
+    // Extraction arcs (L2+) empty whole surfaces, so only "the lint found something somewhere" is stable.
+    assert(res.total > 0 && Object.keys(res.bySurface).length >= 1, `lint ran: ${res.total} hard-coded strings across ${Object.keys(res.bySurface).length} surfaces`);
     const worse = Object.entries(res.bySurface).filter(([s, n]) => n > (base.bySurface[s] || 0));
     assert(worse.length === 0, 'no surface above its baseline (ratchet) ' + worse.map((w) => w.join('=')).join(' '));
     assert(res.hits.every((h) => h.file && h.line > 0 && h.text), 'every hit has file:line + text');

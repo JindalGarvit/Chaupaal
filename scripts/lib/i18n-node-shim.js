@@ -16,6 +16,9 @@ const globals = {
   optionLabel: (...a) => rt.optionLabel(...a),
   optionLabelHtml: (...a) => rt.optionLabelHtml(...a),
   optionCode: (...a) => rt.optionCode(...a),
+  tEn: (...a) => rt.tEn(...a),
+  bidi: (...a) => rt.bidi(...a),
+  bidiList: (...a) => rt.bidiList(...a),
 };
 Object.entries(globals).forEach(([k, v]) => {
   if (typeof globalThis[k] !== 'function') globalThis[k] = v;
