@@ -147,7 +147,7 @@
     const data = await storyCall('profile', { targetUid });
     const stories = [...(data.stories?.duniya || []), ...(data.stories?.baithak || [])];
     if (!stories.length) {
-      showToast('No live stories');
+      showToast(t('duniya.no_live_stories'));
       return;
     }
     // Public stories intentionally play first, then Friends-only Baithak stories.
@@ -227,9 +227,9 @@
       music: payload.music || null,
       expiresInHours: 24,
     });
-    if (!story) throw new Error(splitTt('instants_fail', 'Could not share Split'));
+    if (!story) throw new Error(splitTt('instants_fail', t('duniya.could_not_share_split')));
     if (toastOnSuccess && typeof showToast === 'function') {
-      showToast(splitTt('instants_shared', 'Split shared'));
+      showToast(splitTt('instants_shared', t('duniya.split_shared')));
     }
     if (refresh) await renderBaithakInstants();
     return story;
@@ -250,7 +250,7 @@
     const cleaned = String(name || '').trim();
     if (!cleaned || /^(someone|friend|member)$/i.test(cleaned)) {
       if (story.username) return `@${String(story.username).replace(/^@/, '')}`;
-      return 'Friend';
+      return t('common.friend');
     }
     return cleaned;
   }
@@ -323,7 +323,7 @@
         collapseBaithakSplitComposer();
       } catch (error) {
         if (typeof showToast === 'function') {
-          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
+          showToast(error?.message || splitTt('instants_fail', t('duniya.could_not_share_split')));
         }
       }
     }
@@ -331,7 +331,7 @@
     bar.querySelector('[data-split-send]')?.addEventListener('click', async () => {
       const text = ta?.value?.trim() || '';
       if (!text) {
-        if (typeof showToast === 'function') showToast(splitTt('instants_need_text', 'Write something first'));
+        if (typeof showToast === 'function') showToast(splitTt('instants_need_text', t('duniya.write_something_first')));
         return;
       }
       const btn = bar.querySelector('[data-split-send]');
@@ -341,7 +341,7 @@
         collapseBaithakSplitComposer();
       } catch (error) {
         if (typeof showToast === 'function') {
-          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
+          showToast(error?.message || splitTt('instants_fail', t('duniya.could_not_share_split')));
         }
       } finally {
         if (btn) btn.disabled = false;
@@ -399,7 +399,7 @@
                 ? openMusicPicker
                 : null;
           if (!picker) {
-            if (typeof showToast === 'function') showToast(splitTt('baithak_song_unavailable', 'Song sharing unavailable'));
+            if (typeof showToast === 'function') showToast(splitTt('baithak_song_unavailable', t('duniya.song_sharing_unavailable')));
             return;
           }
           picker({
@@ -463,7 +463,7 @@
       if (sendBtn) sendBtn.disabled = true;
       try {
         if (typeof processAndUploadMedia !== 'function') {
-          throw new Error(splitTt('instants_fail', 'Could not share Split'));
+          throw new Error(splitTt('instants_fail', t('duniya.could_not_share_split')));
         }
         const up = await processAndUploadMedia(file, { folder: 'splits' });
         const media = up?.url || up?.secure_url || up?.media;
@@ -477,7 +477,7 @@
         collapseBaithakSplitComposer();
       } catch (error) {
         if (typeof showToast === 'function') {
-          showToast(error?.message || splitTt('instants_fail', 'Could not share Split'));
+          showToast(error?.message || splitTt('instants_fail', t('duniya.could_not_share_split')));
         }
       } finally {
         if (photoBtn) photoBtn.disabled = false;
@@ -496,10 +496,10 @@
       const ico = (name) => (typeof iconHtml === 'function' ? iconHtml(name, { size: 16 }) : '');
       bar.innerHTML = `
         <textarea id="splitNoteText" class="instant-compose-text baithak-split-text" rows="2" maxlength="280"
-          placeholder="${splitTt('instants_ph', 'Leave a Split…')}" data-living-ph="instant_note"
-          aria-label="${splitTt('instants_compose_title', 'Leave a Split')}"></textarea>
+          placeholder="${splitTt('instants_ph', t('common.leave_a_split'))}" data-living-ph="instant_note"
+          aria-label="${splitTt('instants_compose_title', t('duniya.leave_a_split'))}"></textarea>
         <div class="baithak-split-actions">
-          <button type="button" class="btn btn--primary baithak-split-send" data-split-send>${splitTt('instants_share', 'Share Split')}</button>
+          <button type="button" class="btn btn--primary baithak-split-send" data-split-send>${splitTt('instants_share', t('duniya.share_split'))}</button>
         </div>
         <div class="instant-compose-tools baithak-split-tools">
           <button type="button" class="btn" data-split-tool="gif" aria-label="GIF">${ico('gif') || 'GIF'}</button>
@@ -532,7 +532,7 @@
     if (typeof openAuthSheet === 'function') openAuthSheet('login');
     else if (typeof showAuth === 'function') showAuth();
     else if (typeof showToast === 'function') {
-      showToast(splitTt('baithak_sign_in_instant', 'Sign in to share a Split'));
+      showToast(splitTt('baithak_sign_in_instant', t('duniya.sign_in_to_share_a_split')));
     }
   }
 
@@ -582,7 +582,7 @@
     row.innerHTML = `
       <button type="button" class="baithak-instant baithak-instant--prompt" data-instant-compose role="listitem">
         <span class="baithak-instant-stub">✎</span>
-        <small>${splitTt('instants_leave_note', 'Leave a Split')}</small>
+        <small>${splitTt('instants_leave_note', t('duniya.leave_a_split'))}</small>
       </button>`;
     const composeBtn = row.querySelector('[data-instant-compose]');
     composeBtn?.addEventListener('click', () => expandBaithakSplitComposer());
@@ -656,7 +656,7 @@
     row.innerHTML = `
         <button type="button" class="baithak-instant baithak-instant--prompt" data-instant-compose role="listitem">
           <span class="baithak-instant-stub">${own ? '＋' : '✎'}</span>
-          <small>${splitTt('instants_leave_note', 'Leave a Split')}</small>
+          <small>${splitTt('instants_leave_note', t('duniya.leave_a_split'))}</small>
         </button>
         ${
           own
@@ -885,32 +885,34 @@
           ? `<img src="${story.thumb || story.media}" alt="">`
           : `<span class="story-archive-fallback">${story.kind === 'split' || story.kind === 'instant' ? '⚡' : story.type === 'score' ? '🎯' : '📖'}</span>`}
         <span class="story-archive-meta">
-          <strong>${story.destination === 'duniya' ? 'Duniya' : 'Baithak'}${story.kind === 'split' || story.kind === 'instant' ? ' · Split' : ''}</strong>
-          <small>${story.own && (story.kind === 'split' || story.kind === 'instant') ? ' · Split' : story.destination === 'duniya' ? 'Public' : 'Friends'}${
-            story.expiresAt && story.expiresAt > Date.now() ? ' · live' : ' · archived'
-          }</small>
+          <strong>${story.kind === 'split' || story.kind === 'instant'
+            ? tHtml(story.destination === 'duniya' ? 'duniya.archive_dest_duniya_split' : 'duniya.archive_dest_baithak_split')
+            : tHtml(story.destination === 'duniya' ? 'duniya.archive_dest_duniya' : 'duniya.archive_dest_baithak')}</strong>
+          <small>${tHtml(story.expiresAt && story.expiresAt > Date.now() ? 'duniya.archive_meta_live' : 'duniya.archive_meta_archived', {
+            audience: t(story.own && (story.kind === 'split' || story.kind === 'instant') ? 'duniya.archive_aud_split' : story.destination === 'duniya' ? 'duniya.archive_aud_public' : 'duniya.archive_aud_friends'),
+          })}</small>
         </span>
       </button>`;
 
     overlay.innerHTML = `
       <div class="archive-header">
-        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-archive-back' }):'<button type="button" data-archive-back class="cp-back-btn" aria-label="Back">←</button>'}
+        ${typeof backButtonHtml==='function'?backButtonHtml({ attrs: 'data-archive-back' }):'<button type="button" data-archive-back class="cp-back-btn" aria-label="' + tHtml('common.back') + '">←</button>'}
         <div style="flex:1">
-          <strong>Archive</strong>
-          <div class="relationship-private-note">Stories (Duniya) · Splits (Baithak). Only you see this.</div>
+          <strong>${tHtml('common.chaupaal_archive')}</strong>
+          <div class="relationship-private-note">${tHtml('duniya.stories_duniya_splits_baithak_only_you')}</div>
         </div>
       </div>
       <div class="story-archive-body">
         <div class="story-archive-stats">
-          <span><strong>${live.length}</strong> live</span>
-          <span><strong>${splits.length}</strong> Splits</span>
-          <span><strong>${duniya.length}</strong> Duniya</span>
-          <span><strong>${expired.length}</strong> expired</span>
+          <span>${tHtml('duniya.live_count', { count: live.length })}</span>
+          <span><strong>${splits.length}</strong> ${tHtml('common.splits')}</span>
+          <span>${tHtml('duniya.archive_duniya_count', { count: duniya.length })}</span>
+          <span>${tHtml('duniya.expired_count', { count: expired.length })}</span>
         </div>
         ${
           stories.length
             ? `<div class="story-archive-grid">${stories.map((s, i) => cell(s, i)).join('')}</div>`
-            : `<div class="comments-empty">No stories or Splits yet.</div>`
+            : `<div class="comments-empty">${tHtml('duniya.no_stories_or_splits_yet')}</div>`
         }
       </div>`;
     document.querySelector('.device')?.appendChild(overlay);

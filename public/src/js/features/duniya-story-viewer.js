@@ -12,7 +12,7 @@
       .map((g) => (g || []).filter(viewable))
       .filter((g) => g.length);
     if (!tray.length || !viewable(story)) {
-      if (typeof showToast === 'function') showToast(NS.tt('story_unavailable', 'Story unavailable'));
+      if (typeof showToast === 'function') showToast(NS.tt('duniya.story_unavailable', 'Story unavailable'));
       return;
     }
     let bundleIdx = Math.max(
@@ -40,7 +40,7 @@
     root.className = 'ds-overlay';
     root.dataset.navManaged = '1';
     root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-label', 'Story');
+    root.setAttribute('aria-label', t('duniya.story'));
     const device = document.querySelector('.device') || document.body;
     device.appendChild(root);
 
@@ -58,7 +58,7 @@
       } catch (e) {}
     };
     let layer = { close: teardown };
-    if (typeof openLayer === 'function') layer = openLayer(root, teardown, { host: device, remove: true, label: 'Story' });
+    if (typeof openLayer === 'function') layer = openLayer(root, teardown, { host: device, remove: true, label: t('duniya.story') });
 
     function current() {
       const bundle = tray[bundleIdx] || [];
@@ -80,7 +80,7 @@
       if (s.type === 'score') {
         const score = Number(s.score) || 0;
         const total = Number(s.total) || 0;
-        return `<div class="ds-text-fallback ds-text-fallback--score"><strong>${score}${total ? ` / ${total}` : ''}</strong><span>Score story</span></div>`;
+        return `<div class="ds-text-fallback ds-text-fallback--score"><strong>${score}${total ? ` / ${total}` : ''}</strong><span>${tHtml('duniya.score_story')}</span></div>`;
       }
       if (text) {
         return `<div class="ds-text-fallback"><p>${NS.esc(text)}</p></div>`;
@@ -91,7 +91,7 @@
       if (s.location?.placeName || s.location?.label) {
         return `<div class="ds-text-fallback"><p>${NS.esc(s.location.placeName || s.location.label)}</p></div>`;
       }
-      return `<div class="ds-text-fallback"><p>${NS.tt('story_unavailable', 'Story unavailable')}</p></div>`;
+      return `<div class="ds-text-fallback"><p>${NS.tt('duniya.story_unavailable', 'Story unavailable')}</p></div>`;
     }
 
     function setPaused(v) {
@@ -197,7 +197,7 @@
       clearInterval(progressTimer);
       const s = current();
       if (!s || !viewable(s)) {
-        if (typeof showToast === 'function') showToast(NS.tt('story_unavailable', 'Story unavailable'));
+        if (typeof showToast === 'function') showToast(NS.tt('duniya.story_unavailable', 'Story unavailable'));
         layer.close();
         return;
       }
@@ -205,7 +205,7 @@
       NS.markStorySeen(s);
       const name =
         (typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(s) : s.name) ||
-        (s.username ? `@${s.username}` : 'Someone');
+        (s.username ? `@${s.username}` : t('common.someone'));
       const av = typeof renderUserAvatarHtml==='function'&&s.uid&&String(s.uid).length>12
         ? renderUserAvatarHtml(s,{decorative:true})
         :(s.avatar && /^https:/.test(s.avatar) ? `<img src="${NS.esc(s.avatar)}" alt="">` : `<div class="ds-av">${NS.esc((s.avatar || '👤').slice(0, 2))}</div>`);
@@ -231,10 +231,10 @@
             <div style="font-weight:700;font-size:14px;">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(name, s) : NS.esc(name)}</div>
             <div style="font-size:11px;opacity:.7;">${typeof timeAgoStr === 'function' ? timeAgoStr(s.createdAt) : ''}</div>
           </div>
-          ${own ? `<button type="button" class="ds-icon-btn" data-viewers aria-label="Viewers">👁</button>` : ''}
-          <button type="button" class="ds-icon-btn" data-more aria-label="More">⋯</button>
-          <button type="button" class="ds-icon-btn" data-mute aria-label="Mute">${muted ? '🔇' : '🔊'}</button>
-          <button type="button" class="ds-icon-btn" data-close aria-label="Close">✕</button>
+          ${own ? `<button type="button" class="ds-icon-btn" data-viewers aria-label="${tHtml('duniya.viewers')}">👁</button>` : ''}
+          <button type="button" class="ds-icon-btn" data-more aria-label="${tHtml('duniya.more')}">⋯</button>
+          <button type="button" class="ds-icon-btn" data-mute aria-label="${tHtml('duniya.mute')}">${muted ? '🔇' : '🔊'}</button>
+          <button type="button" class="ds-icon-btn" data-close aria-label="${tHtml('common.close')}">✕</button>
         </div>
         <div class="ds-hit">
           <div class="ds-hit-l" data-prev></div>
@@ -243,14 +243,14 @@
         <div class="ds-bottombar">
           ${
             own
-              ? `<button type="button" class="ds-cta" data-viewers>${NS.tt('story_viewers', 'Viewers')}${s.viewCount != null ? ` · ${Number(s.viewCount) || 0}` : ''}</button>
-                 <button type="button" class="ds-icon-btn" data-comments aria-label="Comments">💬</button>
-                 <button type="button" class="ds-icon-btn" data-send aria-label="Send">✈</button>`
-              : `<button type="button" class="ds-icon-btn" data-like aria-label="Like">♡</button>
+              ? `<button type="button" class="ds-cta" data-viewers>${NS.tt('duniya.story_viewers', 'Viewers')}${s.viewCount != null ? ` · ${Number(s.viewCount) || 0}` : ''}</button>
+                 <button type="button" class="ds-icon-btn" data-comments aria-label="${tHtml('common.comment_sheet_title')}">💬</button>
+                 <button type="button" class="ds-icon-btn" data-send aria-label="${tHtml('common.send')}">✈</button>`
+              : `<button type="button" class="ds-icon-btn" data-like aria-label="${tHtml('common.comment_like')}">♡</button>
                  ${likeCount ? `<button type="button" class="ds-like-count" data-likers>${likeCount}</button>` : ''}
-                 <button type="button" class="ds-icon-btn" data-comments aria-label="Comments">💬</button>
-                 <form class="ds-compose" data-reply><input type="text" maxlength="280" placeholder="${NS.esc(NS.tt('story_reply', 'Message ') + (name.split(' ')[0] || ''))}"><button type="submit" class="ds-icon-btn" aria-label="Send reply">➤</button></form>
-                 <button type="button" class="ds-icon-btn" data-send aria-label="Send">✈</button>`
+                 <button type="button" class="ds-icon-btn" data-comments aria-label="${tHtml('common.comment_sheet_title')}">💬</button>
+                 <form class="ds-compose" data-reply><input type="text" maxlength="280" placeholder="${NS.esc(NS.tt('duniya.story_reply', 'Message ') + (name.split(' ')[0] || ''))}"><button type="submit" class="ds-icon-btn" aria-label="${tHtml('duniya.send_reply')}">➤</button></form>
+                 <button type="button" class="ds-icon-btn" data-send aria-label="${tHtml('common.send')}">✈</button>`
           }
         </div>`;
       const stage = root.querySelector('[data-stage]');
@@ -440,10 +440,10 @@
       });
       stage.querySelector('[data-ask]')?.addEventListener('click', () => {
         openSheet(
-          `<h3>${NS.esc(s.overlays?.find((o) => o.type === 'question')?.prompt || 'Answer')}</h3><textarea data-a maxlength="280"></textarea>`,
+          `<h3>${NS.esc(s.overlays?.find((o) => o.type === 'question')?.prompt || t('duniya.answer'))}</h3><textarea data-a maxlength="280"></textarea>`,
           (sheet, close) => {
             sheet.querySelector('[data-done]') ||
-              sheet.insertAdjacentHTML('beforeend', `<button type="button" class="ds-cta" data-send-a>Send</button>`);
+              sheet.insertAdjacentHTML('beforeend', `<button type="button" class="ds-cta" data-send-a>${tHtml('common.send')}</button>`);
             sheet.querySelector('[data-send-a],[data-done]')?.addEventListener('click', async () => {
               const text = sheet.querySelector('[data-a]')?.value?.trim();
               if (text) {
@@ -496,10 +496,10 @@
     async function showViewers(s) {
       if (!(s.own || (typeof currentUser !== 'undefined' && s.uid === currentUser?.uid))) return;
       openSheet(
-        `<h3>${NS.tt('story_viewers', 'Viewers')}</h3>
+        `<h3>${NS.tt('duniya.story_viewers', 'Viewers')}</h3>
          <div data-list-filter-host></div>
          <div data-list class="ds-empty">…</div>
-         <div class="ds-empty" data-list-filter-empty hidden>No matches</div>`,
+         <div class="ds-empty" data-list-filter-empty hidden>${tHtml('common.no_matches')}</div>`,
         (sheet) => {
           const listEl = sheet.querySelector('[data-list]');
           const filterHost = sheet.querySelector('[data-list-filter-host]');
@@ -507,15 +507,15 @@
           const paint = (rows) => {
             lastRows = rows || [];
             if (typeof pinYouInProfiles === 'function') lastRows = pinYouInProfiles(lastRows);
-            const you = typeof selfListLabel === 'function' ? selfListLabel() : { title: 'You', name: '' };
+            const you = typeof selfListLabel === 'function' ? selfListLabel() : { title: t('common.you'), name: '' };
             listEl.className = '';
             listEl.innerHTML = lastRows.length
               ? lastRows
                   .map((v) => {
                     const isYou = !!(v._isYou || (currentUser && v.uid === currentUser.uid));
                     const label = isYou
-                      ? `You${you.name && you.name !== 'You' ? ` · ${you.name}` : ''}`
-                      : v.name || v.username || 'Member';
+                      ? (you.name && you.name !== 'You' && you.name !== t('common.you') ? t('duniya.viewer_you_name', { name: bidi(you.name) }) : t('common.you'))
+                      : v.name || v.username || t('common.member');
                     const filterText = `${label} ${v.username || ''}`.toLowerCase();
                     return `<div class="ds-row" data-uid="${NS.esc(v.uid)}" data-filter-text="${NS.esc(filterText)}"${
                       isYou ? ' data-is-you="1"' : ''
@@ -528,7 +528,7 @@
                     )}</small></div></div>`;
                   })
                   .join('')
-              : `<div class="ds-empty">${NS.tt('story_no_views', 'No views yet')}</div>`;
+              : `<div class="ds-empty">${NS.tt('duniya.story_no_views', 'No views yet')}</div>`;
             listEl.querySelectorAll('[data-uid]').forEach((row) =>
               row.addEventListener('click', () => {
                 const uid = row.dataset.uid;
@@ -544,7 +544,7 @@
               filterHost.dataset.wired = '1';
               mountListFilter({
                 host: filterHost,
-                placeholder: NS.tt('search_viewers', 'Search viewers…'),
+                placeholder: NS.tt('duniya.search_viewers', 'Search viewers…'),
                 surfaceId: 'story_viewers',
                 getRows: () => [...listEl.querySelectorAll('.ds-row')],
                 emptyEl: sheet.querySelector('[data-list-filter-empty]'),
@@ -557,7 +557,7 @@
               paint(data.viewers || []);
             } catch (e) {
               NS.report('duniya_story_views', e);
-              listEl.innerHTML = `<div class="ds-empty">${NS.tt('story_no_views', 'No views yet')}</div>`;
+              listEl.innerHTML = `<div class="ds-empty">${NS.tt('duniya.story_no_views', 'No views yet')}</div>`;
             }
           };
           load('');
@@ -567,10 +567,10 @@
 
     async function showLikers(s) {
       openSheet(
-        `<h3>${NS.tt('story_likes', 'Likes')}</h3>
+        `<h3>${NS.tt('duniya.story_likes', 'Likes')}</h3>
          <div data-list-filter-host></div>
          <div data-list class="ds-empty">…</div>
-         <div class="ds-empty" data-list-filter-empty hidden>No matches</div>`,
+         <div class="ds-empty" data-list-filter-empty hidden>${tHtml('common.no_matches')}</div>`,
         (sheet) => {
           const listEl = sheet.querySelector('[data-list]');
           const filterHost = sheet.querySelector('[data-list-filter-host]');
@@ -582,7 +582,7 @@
               ? list
                   .map((u) => {
                     const label =
-                      typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name || 'Member';
+                      typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name || t('common.member');
                     const filterText = `${label} ${u.username || ''}`.toLowerCase();
                     const av =
                       typeof renderUserAvatarHtml === 'function' && u.uid
@@ -597,7 +597,7 @@
                     }</div></div>`;
                   })
                   .join('')
-              : `<div class="ds-empty">${NS.tt('no_likes', 'No likes yet')}</div>`;
+              : `<div class="ds-empty">${NS.tt('duniya.no_likes', 'No likes yet')}</div>`;
             listEl.querySelectorAll('[data-uid]').forEach((row) =>
               row.addEventListener('click', () => {
                 const uid = row.dataset.uid;
@@ -609,7 +609,7 @@
               filterHost.dataset.wired = '1';
               mountListFilter({
                 host: filterHost,
-                placeholder: NS.tt('search_likes', 'Search…'),
+                placeholder: NS.tt('duniya.search_likes', 'Search…'),
                 surfaceId: 'story_likes',
                 getRows: () => [...listEl.querySelectorAll('.ds-row')],
                 emptyEl: sheet.querySelector('[data-list-filter-empty]'),
@@ -625,7 +625,7 @@
               paint(likers);
             } catch (e) {
               NS.report('duniya_story_likers', e);
-              listEl.innerHTML = `<div class="ds-empty">${NS.tt('no_likes', 'No likes yet')}</div>`;
+              listEl.innerHTML = `<div class="ds-empty">${NS.tt('duniya.no_likes', 'No likes yet')}</div>`;
             }
           })();
         }
@@ -637,7 +637,7 @@
       s._ix = ix;
       const comments = ix.comments || [];
       openSheet(
-        `<h3>${NS.tt('comments', 'Comments')}</h3>
+        `<h3>${NS.tt('duniya.comments', 'Comments')}</h3>
          ${comments.length > 8 ? '<div data-list-filter-host></div>' : ''}
          <div data-list>${comments.length
            ? comments
@@ -645,27 +645,27 @@
                  const cName =
                    typeof resolvePersonDisplayName === 'function'
                      ? resolvePersonDisplayName(c)
-                     : c.name || 'Member';
+                     : c.name || t('common.member');
                  const nameHtml =
                    typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(cName, c) : NS.esc(cName);
                  const filterText = `${cName} ${c.username || ''} ${c.text || ''}`.toLowerCase();
                  return `<div class="ds-row" data-cid="${NS.esc(c.id)}" data-filter-text="${NS.esc(filterText)}"><div><strong>${nameHtml}</strong> ${NS.esc(c.text)}</div>${
                    own || c.uid === currentUser?.uid
-                     ? `<button type="button" data-del="${NS.esc(c.id)}" aria-label="Delete">✕</button>`
+                     ? `<button type="button" data-del="${NS.esc(c.id)}" aria-label="${tHtml('duniya.delete')}">✕</button>`
                      : ''
                  }</div>`;
                })
                .join('')
-           : `<div class="ds-empty">${NS.tt('no_comments', 'No comments yet')}</div>`}</div>
-         ${comments.length > 8 ? '<div class="ds-empty" data-list-filter-empty hidden>No matches</div>' : ''}
-         <form data-cform class="ds-compose" style="margin-top:8px;"><input type="text" maxlength="500" placeholder="${NS.tt('write_comment', 'Write a comment')}"><button class="ds-cta" type="submit">Send</button></form>`,
+           : `<div class="ds-empty">${NS.tt('duniya.no_comments', 'No comments yet')}</div>`}</div>
+         ${comments.length > 8 ? '<div class="ds-empty" data-list-filter-empty hidden>' + tHtml('common.no_matches') + '</div>' : ''}
+         <form data-cform class="ds-compose" style="margin-top:8px;"><input type="text" maxlength="500" placeholder="${NS.tt('duniya.write_comment', 'Write a comment')}"><button class="ds-cta" type="submit">${tHtml('common.send')}</button></form>`,
         (sheet) => {
           if (comments.length > 8 && typeof mountListFilter === 'function') {
             const filterHost = sheet.querySelector('[data-list-filter-host]');
             const listEl = sheet.querySelector('[data-list]');
             mountListFilter({
               host: filterHost,
-              placeholder: NS.tt('search_comments', 'Search comments…'),
+              placeholder: NS.tt('duniya.search_comments', 'Search comments…'),
               surfaceId: 'story_comments',
               getRows: () => [...listEl.querySelectorAll('.ds-row')],
               emptyEl: sheet.querySelector('[data-list-filter-empty]'),
@@ -678,7 +678,7 @@
             try {
               await commentPlatformStory(s, text);
               sheet.querySelector('input').value = '';
-              if (typeof showToast === 'function') showToast(NS.tt('commented', 'Comment sent'));
+              if (typeof showToast === 'function') showToast(NS.tt('duniya.commented', 'Comment sent'));
             } catch (err) {
               NS.report('duniya_story_comment', err);
             }
@@ -698,7 +698,7 @@
     }
 
     async function showSend(s) {
-      openSheet(`<h3>${NS.tt('story_send', 'Send')}</h3><input type="search" data-q placeholder="${NS.tt('search', 'Search friends')}"><div data-list></div><button type="button" class="ds-cta" data-go>${NS.tt('send', 'Send')}</button>`, async (sheet, close) => {
+      openSheet(`<h3>${NS.tt('duniya.story_send', 'Send')}</h3><input type="search" data-q placeholder="${NS.tt('duniya.search', 'Search friends')}"><div data-list></div><button type="button" class="ds-cta" data-go>${NS.tt('send', 'Send')}</button>`, async (sheet, close) => {
         const selected = new Set();
         const listEl = sheet.querySelector('[data-list]');
         const paint = async (q) => {
@@ -714,7 +714,7 @@
               (u) =>
                 `<label class="ds-row"><input type="checkbox" data-uid="${NS.esc(u.uid)}"><span>${NS.esc(u.name || u.username)}</span></label>`
             )
-            .join('') || `<div class="ds-empty">${NS.tt('search_friends', 'Search people to send to')}</div>`;
+            .join('') || `<div class="ds-empty">${NS.tt('duniya.search_friends', 'Search people to send to')}</div>`;
           listEl.querySelectorAll('[data-uid]').forEach((cb) =>
             cb.addEventListener('change', () => {
               if (cb.checked) selected.add(cb.dataset.uid);
@@ -732,11 +732,11 @@
           if (!uids.length) return;
           try {
             if (typeof sendStoryToPeers === 'function') await sendStoryToPeers(s, { uids });
-            if (typeof showToast === 'function') showToast(NS.tt('story_sent', 'Sent'));
+            if (typeof showToast === 'function') showToast(NS.tt('duniya.story_sent', 'Sent'));
             close();
           } catch (err) {
             NS.report('duniya_story_send', err);
-            if (typeof showToast === 'function') showToast(err.message || 'Could not send');
+            if (typeof showToast === 'function') showToast(err.message || t('duniya.could_not_send'));
           }
         });
       });
@@ -764,7 +764,7 @@
             expiresAt: s.expiresAt,
           });
         }
-        if (typeof showToast === 'function') showToast(NS.tt('story_replied', 'Reply sent'));
+        if (typeof showToast === 'function') showToast(NS.tt('duniya.story_replied', 'Reply sent'));
       } catch (e) {
         NS.report('duniya_story_reply', e);
       }
@@ -772,20 +772,20 @@
 
     function showMore(s, own) {
       openSheet(
-        `<h3>${NS.tt('more', 'More')}</h3>
-         ${own ? `<button type="button" data-a="delete">${NS.tt('delete', 'Delete')}</button>
-                  <button type="button" data-a="highlight">${NS.tt('add_highlight', 'Add to Highlight')}</button>
-                  <button type="button" data-a="save">${NS.tt('save', 'Save')}</button>` : `<button type="button" data-a="restory">${NS.tt('restory', 'Restory')}</button>
-                  <button type="button" data-a="mute">${NS.tt('mute_stories', 'Mute stories')}</button>
-                  <button type="button" data-a="flag">${NS.tt('report', 'Report')}</button>`}
-         <button type="button" data-a="post">${NS.tt('share_as_post', 'Share as Duniya post')}</button>
-         <button type="button" data-a="copy">${NS.tt('copy_link', 'Copy link')}</button>`,
+        `<h3>${NS.tt('duniya.more', 'More')}</h3>
+         ${own ? `<button type="button" data-a="delete">${NS.tt('duniya.delete', 'Delete')}</button>
+                  <button type="button" data-a="highlight">${NS.tt('duniya.add_highlight', 'Add to Highlight')}</button>
+                  <button type="button" data-a="save">${NS.tt('save', 'Save')}</button>` : `<button type="button" data-a="restory">${NS.tt('duniya.restory', 'Restory')}</button>
+                  <button type="button" data-a="mute">${NS.tt('duniya.mute_stories', 'Mute stories')}</button>
+                  <button type="button" data-a="flag">${NS.tt('duniya.report', 'Report')}</button>`}
+         <button type="button" data-a="post">${NS.tt('duniya.share_as_post', 'Share as Duniya post')}</button>
+         <button type="button" data-a="copy">${NS.tt('duniya.copy_link', 'Copy link')}</button>`,
         (sheet, close) => {
           sheet.querySelectorAll('[data-a]').forEach((b) =>
             b.addEventListener('click', async () => {
               const a = b.dataset.a;
               close();
-              if (a === 'delete' && window.confirm(NS.tt('delete_story_q', 'Delete this story?'))) {
+              if (a === 'delete' && window.confirm(NS.tt('duniya.delete_story_q', 'Delete this story?'))) {
                 try {
                   await deletePlatformStory(s);
                   if (typeof renderDuniyaStories === 'function') renderDuniyaStories();
@@ -798,11 +798,11 @@
                   const data = await storyCall('list_highlights', {});
                   const h = (data.highlights || [])[0];
                   if (!h) {
-                    if (typeof showToast === 'function') showToast(NS.tt('make_highlight_first', 'Create a highlight on your profile first'));
+                    if (typeof showToast === 'function') showToast(NS.tt('duniya.make_highlight_first', 'Create a highlight on your profile first'));
                     return;
                   }
                   await storyCall('add_highlight_story', { highlightId: h.id, destination: 'duniya', storyId: s.id });
-                  if (typeof showToast === 'function') showToast(NS.tt('added_highlight', 'Added to highlight'));
+                  if (typeof showToast === 'function') showToast(NS.tt('duniya.added_highlight', 'Added to highlight'));
                 } catch (e) {
                   NS.report('duniya_story_highlight', e);
                 }
@@ -834,12 +834,12 @@
                 const url = `${location.origin}/story/${s.id}`;
                 try {
                   await navigator.clipboard.writeText(url);
-                  if (typeof showToast === 'function') showToast(NS.tt('copied', 'Copied'));
+                  if (typeof showToast === 'function') showToast(NS.tt('duniya.copied', 'Copied'));
                 } catch (e) {}
               } else if (a === 'mute') {
                 NS.muteAuthor(s.uid);
                 if (typeof renderDuniyaStories === 'function') renderDuniyaStories();
-                if (typeof showToast === 'function') showToast(NS.tt('muted_stories', 'Stories muted'));
+                if (typeof showToast === 'function') showToast(NS.tt('duniya.muted_stories', 'Stories muted'));
               } else if (a === 'flag' && typeof openFlagSheet === 'function') {
                 openFlagSheet({ uid: s.uid, name: s.name });
               }
@@ -854,10 +854,10 @@
         const data = await listStoryInteractive(s);
         const answers = data.answers || [];
         openSheet(
-          `<h3>${NS.tt('answers', 'Answers')}</h3>${
+          `<h3>${NS.tt('duniya.answers', 'Answers')}</h3>${
             answers.length
               ? answers.map((a) => `<div class="ds-row"><div><strong>${NS.esc(a.name)}</strong><div>${NS.esc(a.text)}</div></div></div>`).join('')
-              : `<div class="ds-empty">${NS.tt('no_answers', 'No answers yet')}</div>`
+              : `<div class="ds-empty">${NS.tt('duniya.no_answers', 'No answers yet')}</div>`
           }`
         );
       } catch (e) {

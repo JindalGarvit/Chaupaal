@@ -7,7 +7,21 @@
 
   if (typeof ChaupaalIntents === 'undefined') return;
 
-  const tt = (key, fallback) => (typeof t === 'function' ? t(key, fallback) : fallback);
+  const tt = (key, fallback, vars) => (typeof t === 'function' ? t(key, vars || fallback) : fallback);
+
+  /** Every UI language the app ships; keyword lists are keyed by these codes. */
+  const KW_LANGS = typeof LANG_CATALOG !== 'undefined' ? LANG_CATALOG.map((l) => l.code) : ['en'];
+  /**
+   * Per-language search keywords: English is the source; other languages start empty and are filled
+   * in place (kw([...en], { hi: [...] })). Matching reads the UI language + English + "Languages I read".
+   */
+  function kw(en, more) {
+    const out = {};
+    KW_LANGS.forEach((c) => (out[c] = []));
+    out.en = (en || []).filter(Boolean);
+    Object.assign(out, more || {});
+    return out;
+  }
 
   function switchTab(tab) {
     const btn = document.querySelector(`.bottom-tabs .tab-btn[data-tab="${tab}"]`);
@@ -35,9 +49,9 @@
     reg({
       id: `tab.${tab}`,
       category: 'navigate',
-      label: `Open ${tab.charAt(0).toUpperCase() + tab.slice(1)}`,
+      label: tt('khoj.intent_open_surface', '', { name: typeof I18N_GLOSSARY !== 'undefined' ? I18N_GLOSSARY[tab] : tab }),
       icon: 'compass',
-      keywords: [tab, tab === 'akhbaar' ? 'news' : tab === 'baithak' ? 'chats' : tab === 'dangal' ? 'games' : ''],
+      keywords: kw([tab, tab === 'akhbaar' ? 'news' : tab === 'baithak' ? 'chats' : tab === 'dangal' ? 'games' : '']),
       phrases: tab === 'baithak' ? [/open (my )?chats/i, /open baithak/i] : [new RegExp(`open ${tab}`, 'i')],
       priority: 70,
       requiresAuth: false,
@@ -49,9 +63,9 @@
   reg({
     id: 'peepal.khoj',
     category: 'navigate',
-    label: 'Khoj · Find people',
+    label: t('common.khoj_find_people'),
     icon: 'users',
-    keywords: ['khoj', 'find people', 'discover people'],
+    keywords: kw(['khoj', 'find people', 'discover people']),
     phrases: [/find people/i, /open khoj/i],
     priority: 72,
     run: () => {
@@ -63,9 +77,9 @@
   reg({
     id: 'peepal.vriksha',
     category: 'navigate',
-    label: 'Vriksha discussions',
+    label: t('khoj.vriksha_discussions'),
     icon: 'message-circle',
-    keywords: ['vriksha', 'discussions'],
+    keywords: kw(['vriksha', 'discussions']),
     phrases: [/open vriksha/i],
     priority: 68,
     run: () => {
@@ -76,9 +90,9 @@
   reg({
     id: 'peepal.mashhoor',
     category: 'navigate',
-    label: 'Mashhoor · Popular',
+    label: t('common.mashhoor_popular'),
     icon: 'trending',
-    keywords: ['mashhoor', 'popular'],
+    keywords: kw(['mashhoor', 'popular']),
     phrases: [/open mashhoor/i],
     priority: 68,
     run: () => {
@@ -89,9 +103,9 @@
   reg({
     id: 'peepal.search',
     category: 'navigate',
-    label: 'Search Chaupaal',
+    label: t('common.search_chaupaal'),
     icon: 'search',
-    keywords: ['search chaupaal', 'universal search', 'look up'],
+    keywords: kw(['search chaupaal', 'universal search', 'look up']),
     phrases: [/search (for|chaupaal)/i],
     priority: 70,
     run: () => {
@@ -104,9 +118,9 @@
     reg({
       id: `duniya.${mode}`,
       category: 'navigate',
-      label: `Duniya ${mode.charAt(0).toUpperCase() + mode.slice(1)}`,
+      label: tt('khoj.intent_duniya_mode', '', { name: mode.charAt(0).toUpperCase() + mode.slice(1) }),
       icon: mode === 'lehar' ? 'video' : 'image',
-      keywords: [mode, mode === 'lehar' ? 'reels' : ''],
+      keywords: kw([mode, mode === 'lehar' ? 'reels' : '']),
       phrases: mode === 'lehar' ? [/lehar/i, /reels/i] : [new RegExp(mode, 'i')],
       priority: 68,
       run: () => {
@@ -118,16 +132,16 @@
 
   // —— Baithak sections ——
   [
-    ['sambhavanayein', 'Sambhavanayein', /sambhavanayein/i],
-    ['sabha', 'Sabha', /open sabha/i],
-    ['mitra', 'Mitra', /open mitra/i],
+    ['sambhavanayein', 'Sambhavanayein', /sambhavanayein/i], // i18n-ignore (brand name / code)
+    ['sabha', 'Sabha', /open sabha/i], // i18n-ignore (brand name / code)
+    ['mitra', 'Mitra', /open mitra/i], // i18n-ignore (brand name / code)
   ].forEach(([sec, label, phrase]) => {
     reg({
       id: `baithak.${sec}`,
       category: 'navigate',
-      label: `Baithak ${label}`,
+      label: tt('khoj.intent_baithak_section', '', { name: label }),
       icon: 'message',
-      keywords: [sec, 'baithak'],
+      keywords: kw([sec, 'baithak']),
       phrases: [phrase],
       priority: 65,
       run: () => {
@@ -141,9 +155,9 @@
   reg({
     id: 'baithak.hidden',
     category: 'navigate',
-    label: 'Hidden chats',
+    label: t('common.shortcut_baithak_hidden'),
     icon: 'lock',
-    keywords: ['hidden', 'vault', 'secret chats'],
+    keywords: kw(['hidden', 'vault', 'secret chats']),
     phrases: [/hidden (chats|vault)/i],
     priority: 72,
     requiresAuth: true,
@@ -157,9 +171,9 @@
   reg({
     id: 'akhbaar.surkhiya',
     category: 'navigate',
-    label: 'Akhbaar Surkhiya',
+    label: t('khoj.akhbaar_surkhiya'),
     icon: 'newspaper',
-    keywords: ['surkhiya', 'headlines'],
+    keywords: kw(['surkhiya', 'headlines']),
     phrases: [/surkhiya/i],
     priority: 68,
     run: () => {
@@ -171,9 +185,9 @@
   reg({
     id: 'akhbaar.khabar',
     category: 'navigate',
-    label: 'Akhbaar Khabar',
+    label: t('khoj.akhbaar_khabar'),
     icon: 'newspaper',
-    keywords: ['khabar', 'all news'],
+    keywords: kw(['khabar', 'all news']),
     phrases: [/all news/i, /khabar/i],
     priority: 65,
     run: () => {
@@ -185,9 +199,9 @@
   reg({
     id: 'akhbaar.saathi',
     category: 'navigate',
-    label: 'Akhbaar Saathi',
+    label: t('khoj.akhbaar_saathi'),
     icon: 'users',
-    keywords: ['saathi'],
+    keywords: kw(['saathi']),
     phrases: [/saathi/i],
     priority: 65,
     run: () => {
@@ -199,9 +213,9 @@
   reg({
     id: 'akhbaar.safar',
     category: 'navigate',
-    label: 'Akhbaar Safar',
+    label: t('khoj.akhbaar_safar'),
     icon: 'map',
-    keywords: ['safar', 'journey'],
+    keywords: kw(['safar', 'journey']),
     phrases: [/safar/i],
     priority: 65,
     run: () => {
@@ -214,9 +228,9 @@
   reg({
     id: 'akhbaar.add_category',
     category: 'navigate',
-    label: 'Add Akhbaar category',
+    label: t('khoj.add_akhbaar_category'),
     icon: 'plus',
-    keywords: ['add category', 'new category'],
+    keywords: kw(['add category', 'new category']),
     phrases: [/add (a )?category/i],
     priority: 60,
     run: () => {
@@ -232,9 +246,9 @@
   reg({
     id: 'dangal.khel',
     category: 'navigate',
-    label: 'Dangal Khel',
+    label: t('khoj.dangal_khel'),
     icon: 'gamepad',
-    keywords: ['khel', 'game of the day', 'gotd'],
+    keywords: kw(['khel', 'game of the day', 'gotd']),
     phrases: [/game of the day/i, /gotd/i],
     priority: 68,
     run: () => {
@@ -245,9 +259,9 @@
   reg({
     id: 'dangal.manch',
     category: 'navigate',
-    label: 'Dangal Manch',
+    label: t('khoj.dangal_manch'),
     icon: 'library',
-    keywords: ['manch', 'library'],
+    keywords: kw(['manch', 'library']),
     phrases: [/open manch/i],
     priority: 65,
     run: () => {
@@ -258,9 +272,9 @@
   reg({
     id: 'dangal.maidan',
     category: 'navigate',
-    label: 'Dangal Maidan',
+    label: t('khoj.dangal_maidan'),
     icon: 'play',
-    keywords: ['maidan', 'resume game'],
+    keywords: kw(['maidan', 'resume game']),
     phrases: [/resume (my )?game/i],
     priority: 65,
     run: () => {
@@ -271,9 +285,9 @@
   reg({
     id: 'dangal.tarakki',
     category: 'navigate',
-    label: 'Dangal Tarakki',
+    label: t('khoj.dangal_tarakki'),
     icon: 'chart',
-    keywords: ['tarakki', 'progress'],
+    keywords: kw(['tarakki', 'progress']),
     phrases: [/tarakki/i],
     priority: 62,
     run: () => {
@@ -287,9 +301,9 @@
   reg({
     id: 'dangal.challenge_gotd',
     category: 'navigate',
-    label: 'Challenge a friend',
+    label: t('khoj.challenge_a_friend'),
     icon: 'swords',
-    keywords: ['challenge', 'duel'],
+    keywords: kw(['challenge', 'duel']),
     phrases: [/challenge (someone|friend)/i],
     priority: 70,
     run: () => {
@@ -303,9 +317,9 @@
   reg({
     id: 'duniya.post',
     category: 'create',
-    label: 'Create Duniya post',
+    label: t('khoj.create_duniya_post'),
     icon: 'image',
-    keywords: ['post', 'photo', 'upload', 'duniya post', 'share photo'],
+    keywords: kw(['post', 'photo', 'upload', 'duniya post', 'share photo']),
     phrases: [/post (a |on )?duniya/i, /share (a )?photo/i, /create (a )?post/i],
     priority: 82,
     requiresAuth: true,
@@ -318,9 +332,9 @@
   reg({
     id: 'duniya.story',
     category: 'create',
-    label: 'Post a Duniya story',
+    label: t('khoj.post_a_duniya_story'),
     icon: 'circle',
-    keywords: ['story', 'stories', 'duniya story'],
+    keywords: kw(['story', 'stories', 'duniya story']),
     phrases: [/post (a )?story/i, /add (a )?story/i, /new story/i],
     priority: 80,
     requiresAuth: true,
@@ -335,9 +349,9 @@
   reg({
     id: 'baithak.split',
     category: 'create',
-    label: 'New Split',
+    label: t('common.shortcut_baithak_instant'),
     icon: 'zap',
-    keywords: ['split', 'baithak story', 'status'],
+    keywords: kw(['split', 'baithak story', 'status']),
     phrases: [/new split/i, /baithak story/i, /leave a split/i],
     priority: 78,
     requiresAuth: true,
@@ -352,9 +366,9 @@
   reg({
     id: 'peepal.discuss',
     category: 'create',
-    label: 'Ask on Peepal',
+    label: t('khoj.ask_on_peepal'),
     icon: 'message-circle',
-    keywords: ['ask', 'question', 'discuss', 'peepal'],
+    keywords: kw(['ask', 'question', 'discuss', 'peepal']),
     phrases: [/ask (on )?peepal/i, /post (a )?question/i, /discuss something/i],
     priority: 78,
     requiresAuth: true,
@@ -366,9 +380,9 @@
   reg({
     id: 'peepal.form',
     category: 'create',
-    label: 'Peepal form poll',
+    label: t('khoj.peepal_form_poll'),
     icon: 'list',
-    keywords: ['form', 'poll', 'survey'],
+    keywords: kw(['form', 'poll', 'survey']),
     phrases: [/create (a )?(form|poll)/i],
     priority: 70,
     requiresAuth: true,
@@ -383,9 +397,9 @@
   reg({
     id: 'mehfil.start',
     category: 'create',
-    label: 'Start Mehfil',
+    label: t('khoj.start_mehfil'),
     icon: 'users',
-    keywords: ['mehfil', 'watch party', 'group watch'],
+    keywords: kw(['mehfil', 'watch party', 'group watch']),
     phrases: [/start mehfil/i, /watch together/i],
     priority: 72,
     requiresAuth: true,
@@ -397,7 +411,7 @@
       else {
         switchTab('baithak');
         if (typeof showToast === 'function') {
-          showToast(tt('mehfil_pick_chat', 'Open a chat first, then start Mehfil from there.'));
+          showToast(tt('khoj.mehfil_pick_chat', 'Open a chat first, then start Mehfil from there.'));
         }
       }
     },
@@ -405,9 +419,9 @@
   reg({
     id: 'muqabala.challenge',
     category: 'create',
-    label: 'Muqabala challenge',
+    label: t('khoj.muqabala_challenge'),
     icon: 'swords',
-    keywords: ['muqabala', 'quiz challenge', 'trivia'],
+    keywords: kw(['muqabala', 'quiz challenge', 'trivia']),
     phrases: [/muqabala/i, /quiz challenge/i],
     priority: 75,
     requiresAuth: true,
@@ -415,15 +429,15 @@
       if (needSignIn()) return;
       switchTab('dangal');
       if (typeof setDangalSection === 'function') setDangalSection('khel');
-      else if (typeof showToast === 'function') showToast('Open Dangal to start Muqabala.');
+      else if (typeof showToast === 'function') showToast(t('khoj.open_dangal_to_start_muqabala'));
     },
   });
   reg({
     id: 'dangal.play',
     category: 'create',
-    label: 'Pick a game',
+    label: t('khoj.pick_a_game'),
     icon: 'gamepad',
-    keywords: ['play', 'start game', 'pick game', 'chess', 'ludo'],
+    keywords: kw(['play', 'start game', 'pick game', 'chess', 'ludo']),
     phrases: [/play (chess|ludo|game)/i, /start (a )?game/i],
     priority: 76,
     run: () => {
@@ -438,9 +452,9 @@
   reg({
     id: 'social.wish_friend',
     category: 'social',
-    label: 'Wish a friend',
+    label: t('common.chaupaal_cmd_wish_title'),
     icon: 'heart',
-    keywords: ['wish', 'birthday', 'greet', 'congratulate', 'anniversary', 'happy birthday'],
+    keywords: kw(['wish', 'birthday', 'greet', 'congratulate', 'anniversary', 'happy birthday']),
     phrases: [/wish (my )?friend/i, /happy birthday/i, /send (a )?greeting/i],
     priority: 85,
     requiresAuth: true,
@@ -454,9 +468,9 @@
   reg({
     id: 'social.message_friend',
     category: 'social',
-    label: 'Message a friend',
+    label: t('khoj.message_a_friend'),
     icon: 'message',
-    keywords: ['message', 'dm', 'text friend', 'chat with'],
+    keywords: kw(['message', 'dm', 'text friend', 'chat with']),
     phrases: [/message (a |my )?friend/i, /dm (someone|friend)/i],
     priority: 80,
     requiresAuth: true,
@@ -471,9 +485,9 @@
   reg({
     id: 'social.find_people',
     category: 'social',
-    label: 'Find people',
+    label: t('common.shortcut_baithak_search'),
     icon: 'users',
-    keywords: ['find people', 'meet people', 'khoj'],
+    keywords: kw(['find people', 'meet people', 'khoj']),
     phrases: [/find (new )?people/i, /meet someone/i],
     priority: 78,
     run: () => {
@@ -487,14 +501,14 @@
   reg({
     id: 'social.invite',
     category: 'social',
-    label: 'Invite friends',
+    label: t('khoj.invite_friends'),
     icon: 'share',
-    keywords: ['invite', 'share app', 'refer'],
+    keywords: kw(['invite', 'share app', 'refer']),
     phrases: [/invite (friends|someone)/i],
     priority: 70,
     run: () => {
       if (typeof shareInviteToChaupaal === 'function') shareInviteToChaupaal();
-      else if (typeof showToast === 'function') showToast('Invite link copied');
+      else if (typeof showToast === 'function') showToast(t('common.invite_link_copied'));
     },
   });
 
@@ -502,9 +516,9 @@
   reg({
     id: 'profile.open',
     category: 'profile',
-    label: 'Open your profile',
+    label: t('khoj.open_your_profile'),
     icon: 'user',
-    keywords: ['my profile', 'open profile'],
+    keywords: kw(['my profile', 'open profile']),
     phrases: [/open (my )?profile/i],
     priority: 72,
     requiresAuth: true,
@@ -519,9 +533,9 @@
   reg({
     id: 'profile.edit',
     category: 'profile',
-    label: 'Edit profile',
+    label: t('khoj.edit_profile'),
     icon: 'pen',
-    keywords: ['edit profile', 'update profile'],
+    keywords: kw(['edit profile', 'update profile']),
     phrases: [/edit (my )?profile/i],
     priority: 70,
     requiresAuth: true,
@@ -536,9 +550,9 @@
   reg({
     id: 'profile.archive',
     category: 'profile',
-    label: 'Open Archive',
+    label: t('common.open_archive'),
     icon: 'archive',
-    keywords: ['archive', 'my posts', 'saved posts'],
+    keywords: kw(['archive', 'my posts', 'saved posts']),
     phrases: [/open (my )?archive/i, /see (my )?archive/i],
     priority: 80,
     requiresAuth: true,
@@ -550,9 +564,9 @@
   reg({
     id: 'profile.journal',
     category: 'profile',
-    label: 'Private journal',
+    label: t('khoj.private_journal'),
     icon: 'book',
-    keywords: ['journal', 'diary', 'private notes'],
+    keywords: kw(['journal', 'diary', 'private notes']),
     phrases: [/open (my )?journal/i, /write (in )?journal/i],
     priority: 78,
     requiresAuth: true,
@@ -564,9 +578,9 @@
   reg({
     id: 'profile.settings',
     category: 'profile',
-    label: 'Settings',
+    label: t('common.settings'),
     icon: 'settings',
-    keywords: ['settings', 'preferences'],
+    keywords: kw(['settings', 'preferences']),
     phrases: [/open settings/i],
     priority: 75,
     run: () => {
@@ -576,9 +590,9 @@
   reg({
     id: 'profile.notifications',
     category: 'profile',
-    label: 'Notifications',
+    label: t('common.notifications'),
     icon: 'bell',
-    keywords: ['notifications', 'alerts'],
+    keywords: kw(['notifications', 'alerts']),
     phrases: [/open notifications/i, /notification (inbox|center)/i],
     priority: 72,
     requiresAuth: true,
@@ -590,9 +604,9 @@
   reg({
     id: 'money.account',
     category: 'profile',
-    label: 'Chaupaal Money',
+    label: t('khoj.chaupaal_money'),
     icon: 'wallet',
-    keywords: ['money', 'balance', 'pradhan', 'wallet', 'account'],
+    keywords: kw(['money', 'balance', 'pradhan', 'wallet', 'account']),
     phrases: [/chaupaal money/i, /my balance/i],
     priority: 78,
     requiresAuth: true,
@@ -604,9 +618,9 @@
   reg({
     id: 'money.membership',
     category: 'profile',
-    label: 'Membership',
+    label: t('khoj.membership'),
     icon: 'star',
-    keywords: ['membership', 'subscribe', 'upgrade', 'premium', 'sarpanch'],
+    keywords: kw(['membership', 'subscribe', 'upgrade', 'premium', 'sarpanch']),
     phrases: [/see membership/i, /upgrade (my )?plan/i],
     priority: 78,
     requiresAuth: true,
@@ -620,9 +634,9 @@
   reg({
     id: 'tool.search',
     category: 'help',
-    label: 'Search Chaupaal',
+    label: t('common.search_chaupaal'),
     icon: 'search',
-    keywords: ['search'],
+    keywords: kw(['search']),
     phrases: [/^search\b/i],
     priority: 55,
     run: () => {
@@ -632,9 +646,9 @@
   reg({
     id: 'tool.feedback',
     category: 'help',
-    label: 'Send feedback',
+    label: t('common.feedback_send'),
     icon: 'message-square',
-    keywords: ['feedback', 'bug', 'report', 'complaint'],
+    keywords: kw(['feedback', 'bug', 'report', 'complaint']),
     phrases: [/send feedback/i, /report (a )?bug/i],
     priority: 75,
     run: () => {
@@ -646,9 +660,9 @@
   reg({
     id: 'tool.music',
     category: 'help',
-    label: 'Music hub',
+    label: t('khoj.music_hub'),
     icon: 'music',
-    keywords: ['music', 'songs', 'radio'],
+    keywords: kw(['music', 'songs', 'radio']),
     phrases: [/open music/i, /music hub/i],
     priority: 65,
     run: () => {
@@ -659,9 +673,9 @@
   reg({
     id: 'help.what_can_you_do',
     category: 'help',
-    label: 'What can you do?',
+    label: t('khoj.what_can_you_do'),
     icon: 'help-circle',
-    keywords: ['help', 'what can you do', 'commands', 'menu'],
+    keywords: kw(['help', 'what can you do', 'commands', 'menu']),
     phrases: [/what can you do/i, /^help$/i, /show (me )?options/i],
     priority: 90,
     run: () => {
@@ -685,9 +699,9 @@
       reg({
         id: `dangal.game.${g.id}`,
         category: 'create',
-        label: `Play ${g.name}`,
+        label: t('khoj.play_name', { name: g.name }),
         icon: 'gamepad',
-        keywords: [name].concat(g.keys.filter((k) => k.length > 3).slice(0, 6)),
+        keywords: kw([name].concat(g.keys.filter((k) => k.length > 3).slice(0, 6))),
         phrases: [new RegExp(`\\b(play|start|open)\\s+(a\\s+)?(game\\s+of\\s+)?${esc(name)}\\b`, 'i')],
         priority: 77,
         run: () => openGame(g.id),
@@ -696,9 +710,9 @@
     reg({
       id: 'dangal.find_game',
       category: 'create',
-      label: 'Find a game',
+      label: t('khoj.find_a_game'),
       icon: 'gamepad',
-      keywords: ['game with friends', 'party game', 'daily puzzle', 'daily word game', 'card game'],
+      keywords: kw(['game with friends', 'party game', 'daily puzzle', 'daily word game', 'card game']),
       phrases: [/\b(play|start)\b.+\b(with friends|game|puzzle)\b/i, /\bdaily (word|puzzle|quiz)\b/i],
       priority: 75,
       run: (ctx) => {

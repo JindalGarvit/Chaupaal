@@ -22,20 +22,20 @@
 
   function controlsHtml() {
     return `<div class="cp-media-controls" data-cp-media-controls data-nav-ignore="1">
-      <button type="button" class="cp-media-skip" data-cp-skip="-10" aria-label="Back 10 seconds">−10</button>
+      <button type="button" class="cp-media-skip" data-cp-skip="-10" aria-label="${tHtml('duniya.back_10_seconds')}">−10</button>
       <div class="cp-media-times"><span data-cp-elapsed>0:00</span><span data-cp-remain>−0:00</span></div>
-      <button type="button" class="cp-media-skip" data-cp-skip="10" aria-label="Forward 10 seconds">+10</button>
+      <button type="button" class="cp-media-skip" data-cp-skip="10" aria-label="${tHtml('duniya.forward_10_seconds')}">+10</button>
       <div class="cp-media-seek-wrap">
-        <input type="range" class="cp-media-seek" data-cp-seek min="0" max="1000" value="0" step="1" aria-label="Seek">
+        <input type="range" class="cp-media-seek" data-cp-seek min="0" max="1000" value="0" step="1" aria-label="${tHtml('duniya.seek')}">
       </div>
-      <span class="cp-media-buffering hidden" data-cp-buffering aria-live="polite">Loading…</span>
+      <span class="cp-media-buffering hidden" data-cp-buffering aria-live="polite">${tHtml('common.loading')}</span>
     </div>`;
   }
 
   function quietBlocked() {
     if (typeof quietMode === 'undefined' || !quietMode) return false;
     if (typeof showToast === 'function') {
-      showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : 'Quiet mode is on');
+      showToast(typeof t === 'function' ? t('quiet_voice_muted', 'Quiet mode is on') : t('duniya.quiet_mode_is_on'));
     }
     return true;
   }
@@ -295,35 +295,35 @@
     bar.dataset.navIgnore = '1';
     bar.setAttribute('data-nav-ignore', '1');
     bar.setAttribute('role', 'group');
-    bar.setAttribute('aria-label', 'Now playing');
+    bar.setAttribute('aria-label', t('duniya.now_playing'));
     bar.innerHTML = `
       <div class="cp-mini-compact" data-cp-mini-body>
-        <button type="button" class="cp-mini-art" data-cp-mini-art aria-label="Expand player" tabindex="-1">♪</button>
+        <button type="button" class="cp-mini-art" data-cp-mini-art aria-label="${tHtml('duniya.expand_player')}" tabindex="-1">♪</button>
         <div class="cp-mini-meta">
-          <div class="cp-mini-title" data-cp-mini-title>Now playing</div>
+          <div class="cp-mini-title" data-cp-mini-title>${tHtml('duniya.now_playing')}</div>
           <div class="cp-mini-artist" data-cp-mini-artist></div>
         </div>
         <div class="cp-mini-actions">
-          <button type="button" data-cp-mini-play aria-label="Play">▶</button>
-          <button type="button" data-cp-mini-close aria-label="Stop and dismiss">✕</button>
+          <button type="button" data-cp-mini-play aria-label="${tHtml('common.saathi_cta_play')}">▶</button>
+          <button type="button" data-cp-mini-close aria-label="${tHtml('duniya.stop_and_dismiss')}">✕</button>
         </div>
       </div>
       <div class="cp-mini-expanded-panel" data-cp-mini-panel hidden>
         <div class="cp-mini-seek-row">
           <span data-cp-mini-elapsed>0:00</span>
           <div class="cp-mini-seek-wrap">
-            <input type="range" class="cp-mini-seek" data-cp-mini-seek min="0" max="1000" value="0" step="1" aria-label="Seek">
+            <input type="range" class="cp-mini-seek" data-cp-mini-seek min="0" max="1000" value="0" step="1" aria-label="${tHtml('duniya.seek')}">
           </div>
           <span data-cp-mini-remain>−0:00</span>
         </div>
         <div class="cp-mini-transport">
-          <button type="button" data-cp-mini-prev aria-label="Previous">⏮</button>
-          <button type="button" data-cp-mini-skip="-10" aria-label="Back 10 seconds">−10</button>
-          <button type="button" data-cp-mini-play-exp aria-label="Play">▶</button>
-          <button type="button" data-cp-mini-skip="10" aria-label="Forward 10 seconds">+10</button>
-          <button type="button" data-cp-mini-next aria-label="Next">⏭</button>
-          <button type="button" data-cp-mini-collapse aria-label="Collapse">▴</button>
-          <button type="button" data-cp-mini-close-exp aria-label="Stop and dismiss">✕</button>
+          <button type="button" data-cp-mini-prev aria-label="${tHtml('duniya.previous')}">⏮</button>
+          <button type="button" data-cp-mini-skip="-10" aria-label="${tHtml('duniya.back_10_seconds')}">−10</button>
+          <button type="button" data-cp-mini-play-exp aria-label="${tHtml('common.saathi_cta_play')}">▶</button>
+          <button type="button" data-cp-mini-skip="10" aria-label="${tHtml('duniya.forward_10_seconds')}">+10</button>
+          <button type="button" data-cp-mini-next aria-label="${tHtml('duniya.next')}">⏭</button>
+          <button type="button" data-cp-mini-collapse aria-label="${tHtml('duniya.collapse')}">▴</button>
+          <button type="button" data-cp-mini-close-exp aria-label="${tHtml('duniya.stop_and_dismiss')}">✕</button>
         </div>
       </div>`;
     device.appendChild(bar);
@@ -422,7 +422,7 @@
       audio.dataset.cpTitle ||
       qItem?.title ||
       document.querySelector('.music-card.is-playing .music-card-title')?.textContent ||
-      'Now playing';
+      t('duniya.now_playing');
     let artist =
       audio.dataset.cpArtist ||
       qItem?.artist ||
@@ -446,7 +446,7 @@
     const playBtns = bar.querySelectorAll('[data-cp-mini-play], [data-cp-mini-play-exp]');
     playBtns.forEach((playBtn) => {
       playBtn.textContent = audio.paused ? '▶' : '⏸';
-      playBtn.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
+      playBtn.setAttribute('aria-label', audio.paused ? t('common.saathi_cta_play') : t('duniya.pause'));
     });
     const prevBtn = bar.querySelector('[data-cp-mini-prev]');
     const nextBtn = bar.querySelector('[data-cp-mini-next]');
@@ -618,7 +618,7 @@
     const audio = getSharedAudio() || window.__chaupaalSharedAudio;
     if (!audio) return;
 
-    audio.dataset.cpTitle = item.title || 'Track';
+    audio.dataset.cpTitle = item.title || t('music.track');
     audio.dataset.cpArtist = item.artist || '';
     try {
       audio.removeAttribute('src');

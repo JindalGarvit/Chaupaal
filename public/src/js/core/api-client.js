@@ -32,6 +32,10 @@
   async function apiFetch(path, { method = 'GET', body, needAuth = false, idempotencyKey } = {}) {
     const headers = { Accept: 'application/json' };
     if (body != null) headers['Content-Type'] = 'application/json';
+    // Viewer's UI language — the server answers per-viewer AI text (rules Q&A, coach tips) in it.
+    try {
+      if (typeof currentLang !== 'undefined' && typeof normalizeLang === 'function') headers['X-Chaupaal-Lang'] = normalizeLang(currentLang);
+    } catch (e) {}
     if (needAuth) {
       try {
         let u = typeof auth !== 'undefined' ? auth.currentUser : null;

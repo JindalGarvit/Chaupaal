@@ -81,11 +81,13 @@
       .toLowerCase();
   }
 
+  /** Comparison form (diacritics, full-width, NFKC, kana folded). Firestore prefix queries keep normalizeQuery(). */
+  function fold(s) {
+    return typeof SearchNormalize !== 'undefined' ? SearchNormalize.fold(s) : String(s == null ? '' : s).toLowerCase();
+  }
+
   function textHaystack(...parts) {
-    return parts
-      .filter(Boolean)
-      .map((p) => String(p).toLowerCase())
-      .join(' ');
+    return fold(parts.filter(Boolean).map((p) => String(p)).join(' '));
   }
 
   function isHiddenFromDiscovery(u) {
@@ -117,6 +119,7 @@
   async function searchUsersProvider(query, { limit = SEE_MORE_LIMIT } = {}) {
     const q = normalizeQuery(query);
     if (!q || q.length < 1) return [];
+    const fq = fold(q);
     const me = viewerUid();
     const results = [];
     const seen = new Set();
@@ -127,16 +130,16 @@
       const row = mapUserResult(uid, u, usernameFallback);
       const hay = textHaystack(row.name, row.username, row.bio, row.city, ...(u.interests || []));
       let score = scoreBoost || 0;
-      const uname = String(row.username || '').toLowerCase();
-      const dname = String(row.name || '').toLowerCase();
+      const uname = fold(row.username);
+      const dname = fold(row.name);
       // Exact / strong identity matches always win ranking.
-      if (uname === q) score += 500;
-      else if (uname.startsWith(q)) score += 200;
-      else if (uname.includes(q)) score += 80;
-      if (dname === q) score += 450;
-      else if (dname.startsWith(q)) score += 160;
-      else if (dname.includes(q)) score += 50;
-      if (hay.includes(q)) score += 15;
+      if (uname === fq) score += 500;
+      else if (uname.startsWith(fq)) score += 200;
+      else if (uname.includes(fq)) score += 80;
+      if (dname === fq) score += 450;
+      else if (dname.startsWith(fq)) score += 160;
+      else if (dname.includes(fq)) score += 50;
+      if (hay.includes(fq)) score += 15;
       // Soft signal from discovery / openToMeet when present
       if (u.openToMeet) score += 5;
       row.score = score;
@@ -151,25 +154,23 @@
         .filter((u) => {
           if (!u?.uid || u.uid === me) return false;
           if (isHiddenFromDiscovery(u)) return false;
-          const un = String(u.username || u.name || '')
-            .toLowerCase()
-            .replace(/\s+/g, '_');
-          const nm = String(u.name || '').toLowerCase();
-          return un.includes(q) || nm.includes(q);
+          const un = fold(u.username || u.name || '').replace(/\s+/g, '_');
+          const nm = fold(u.name);
+          return un.includes(fq) || nm.includes(fq);
         })
         .map((u) => {
           const row = mapUserResult(u.uid, { ...u, isSample: true, isDemo: true });
           row.isSample = true;
           row.isDemo = true;
-          const uname = String(row.username || '').toLowerCase();
-          const dname = String(row.name || '').toLowerCase();
+          const uname = fold(row.username);
+          const dname = fold(row.name);
           let score = 0;
-          if (uname === q) score += 500;
-          else if (uname.startsWith(q)) score += 200;
-          else if (uname.includes(q)) score += 80;
-          if (dname === q) score += 450;
-          else if (dname.startsWith(q)) score += 160;
-          else if (dname.includes(q)) score += 50;
+          if (uname === fq) score += 500;
+          else if (uname.startsWith(fq)) score += 200;
+          else if (uname.includes(fq)) score += 80;
+          if (dname === fq) score += 450;
+          else if (dname.startsWith(fq)) score += 160;
+          else if (dname.includes(fq)) score += 50;
           row.score = score;
           return row;
         })
@@ -241,8 +242,8 @@
     const recency = Math.max(0, 48 - ageHours);
     const text = textHaystack(raw.caption, raw.question, raw.text, ...(raw.tags || []));
     let score = likes * 2 + comments * 3 + shares + recency;
-    if (text.includes(q)) score += 40;
-    if (text.startsWith(q)) score += 20;
+    if (text.includes(fold(q))) score += 40;
+    if (text.startsWith(fold(q))) score += 20;
     return score;
   }
 
@@ -283,7 +284,7 @@
         if (!isPostVisibleClient(raw, 'duniya')) return;
         if (raw.audience && raw.audience !== 'public' && raw.uid !== currentUser?.uid) return;
         const hay = textHaystack(raw.caption, raw.text, ...(raw.tags || []));
-        if (!hay.includes(q)) return;
+        if (!hay.includes(fold(q))) return;
         rows.push({
           type: 'duniya',
           category: 'duniya',
@@ -332,7 +333,7 @@
         if (!isPostVisibleClient(raw, 'peepal')) return;
         if (raw.uid && hiddenAuthors.has(raw.uid)) return;
         const hay = textHaystack(raw.question, raw.text, raw.tag, raw.format);
-        if (!hay.includes(q)) return;
+        if (!hay.includes(fold(q))) return;
         rows.push({
           type: 'peepal',
           category: 'peepal',
@@ -375,8 +376,8 @@
       const hay = textHaystack(name, g.description, g.nameLower);
       let score = scoreBoost || 0;
       score += Math.min(40, members);
-      if (name.toLowerCase().startsWith(q)) score += 50;
-      else if (hay.includes(q)) score += 25;
+      if (fold(name).startsWith(fold(q))) score += 50;
+      else if (hay.includes(fold(q))) score += 25;
       results.push({
         type: 'group',
         category: 'groups',
@@ -401,7 +402,7 @@
         .filter((c) => c.type === 'group')
         .forEach((c) => {
           const hay = textHaystack(c.name, c.description);
-          if (hay.includes(q)) pushGroup(typeof normalizeGroupChat === 'function' ? normalizeGroupChat(c) : c, 10);
+          if (hay.includes(fold(q))) pushGroup(typeof normalizeGroupChat === 'function' ? normalizeGroupChat(c) : c, 10);
         });
     }
 
@@ -432,7 +433,7 @@
           snap.docs.forEach((doc) => {
             const raw = { id: doc.id, firestoreId: doc.id, ...doc.data() };
             const hay = textHaystack(raw.name, raw.description, raw.nameLower);
-            if (hay.includes(q)) {
+            if (hay.includes(fold(q))) {
               pushGroup(typeof normalizeGroupChat === 'function' ? normalizeGroupChat(raw) : raw, 15);
             }
           });
@@ -498,7 +499,7 @@
             { type: 'game', category: 'games', id: 'chess', title: t('common.chess'), subtitle: t('common.board'), score: 60 },
           ];
     return catalog
-      .filter((g) => textHaystack(g.title, g.subtitle).includes(q))
+      .filter((g) => textHaystack(g.title, g.subtitle).includes(fold(q)))
       .slice(0, limit);
   });
   // Legacy stubs kept for callers

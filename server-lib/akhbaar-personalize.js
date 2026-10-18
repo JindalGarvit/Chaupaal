@@ -212,6 +212,8 @@ async function maybeDigestCard(db, uid, profile, state, stateRef) {
         tier: 'fast',
         feature: 'akhbaar_digest',
         max_tokens: 180,
+        lang: await require('./i18n-server').langForUser(db, uid),
+        langJson: true,
         system:
           'Write one short Akhbaar-style prompt card for an Indian social app. Use ONLY the provided profile fields. No guilt. JSON: {"title":"...","text":"..."}',
         messages: [

@@ -53,7 +53,7 @@
       (typeof getProfileType === 'function' ? getProfileType() : 'personal');
     return {
       uid: currentUser.uid,
-      name: String(source.name || currentUser.displayName || 'You').slice(0, 80),
+      name: String(source.name || currentUser.displayName || tEn('common.you')).slice(0, 80),
       avatar: String(source.avatar || '🪑').slice(0, 16),
       photoURL: String(source.photoURL || currentUser.photoURL || '').slice(0, 1000),
       profileType: String(profileType || 'personal').toLowerCase() === 'professional' ? 'professional' : 'personal',
@@ -217,7 +217,7 @@
       });
     }
     if (result.liked) {
-      emitSocialNotif(collection, content, 'like', 'liked your post');
+      emitSocialNotif(collection, content, 'like', t('duniya.liked_your_post'));
     }
     return result;
   }
@@ -287,7 +287,7 @@
       id: doc.id,
       parentId: raw.parentId || null,
       uid: raw.uid || raw.user?.uid || '',
-      user: raw.user || { uid: raw.uid || '', name: 'User', avatar: '👤' },
+      user: raw.user || { uid: raw.uid || '', name: t('common.user'), avatar: '👤' },
       text: raw.text || '',
       createdAt,
       editedAt: raw.editedAt?.toMillis?.() || null,
@@ -368,7 +368,7 @@
     if (result.liked) {
       const ownerUid = comment.uid || comment.user?.uid;
       if (ownerUid && ownerUid !== currentUser.uid) {
-        emitSocialNotif(collection, { ...content, uid: ownerUid }, 'like', 'liked your comment').catch(() => {});
+        emitSocialNotif(collection, { ...content, uid: ownerUid }, 'like', t('duniya.liked_your_comment')).catch(() => {});
       }
     }
 
@@ -526,7 +526,7 @@
               apply,
               revert,
               commit: () => updateContentComment(collection, content, comment, nextText),
-              errorToast: 'Couldn’t edit comment — undone',
+              errorToast: t('duniya.couldn_t_edit_comment_undone'),
             });
           } else {
             apply();
@@ -564,7 +564,7 @@
           if (saved.persisted && Number.isFinite(saved.comments)) content.comments = saved.comments;
         };
         if (typeof runOptimistic === 'function') {
-          await runOptimistic({ apply, revert, commit, errorToast: 'Couldn’t delete comment — restored' });
+          await runOptimistic({ apply, revert, commit, errorToast: t('duniya.couldn_t_delete_comment_restored') });
         } else {
           apply();
           await commit();
@@ -572,7 +572,7 @@
       },
       onReport(comment) {
         if (typeof openFlagSheet === 'function') {
-          openFlagSheet(comment.user || { uid: comment.uid, name: 'User' }, {
+          openFlagSheet(comment.user || { uid: comment.uid, name: t('common.user') }, {
             targetType: 'comment',
             postId: contentId(content),
             commentId: comment.id,
@@ -725,7 +725,7 @@
     sheet.id = 'chaupaalLikersSheet';
     sheet.className = 'likers-sheet';
     sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-label', title || 'Likes');
+    sheet.setAttribute('aria-label', title || t('duniya.story_likes'));
     const esc = (s) =>
       String(s ?? '').replace(/[&<>"']/g, (ch) =>
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])
@@ -735,8 +735,8 @@
     sheet.innerHTML = `
       <div class="likers-sheet-handle" aria-hidden="true"></div>
       <div class="likers-sheet-header">
-        <strong>${esc(title || 'Likes')}</strong>
-        <button type="button" data-likers-close aria-label="Close">✕</button>
+        <strong>${esc(title || t('duniya.likes_title'))}</strong>
+        <button type="button" data-likers-close aria-label="${tHtml('common.close')}">✕</button>
       </div>
       <div class="likers-sheet-filter" data-list-filter-host></div>
       <div class="likers-sheet-list" data-likers-list>${
@@ -744,7 +744,7 @@
           ? rows
               .map((u) => {
                 const label =
-                  typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name || 'Member';
+                  typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name || t('common.member');
                 const nameHtml =
                   typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(label, u) : esc(label);
                 const filterText = `${label} ${u.username || ''}`.toLowerCase();
@@ -759,9 +759,9 @@
                 }</span></button>`;
               })
               .join('')
-          : `<div class="comments-empty">No likes yet</div>`
+          : `<div class="comments-empty">${tHtml('duniya.no_likes')}</div>`
       }</div>
-      <div class="comments-empty" data-list-filter-empty hidden>No matches</div>`;
+      <div class="comments-empty" data-list-filter-empty hidden>${tHtml('common.no_matches')}</div>`;
     const host = document.querySelector('.device') || document.body;
     host.appendChild(sheet);
     const close = () => {
@@ -782,7 +782,7 @@
     if (filterHost && typeof mountListFilter === 'function' && rows.length > 6) {
       mountListFilter({
         host: filterHost,
-        placeholder: 'Search…',
+        placeholder: t('duniya.search_likes'),
         surfaceId: 'content_likers',
         getRows: () => [...listEl.querySelectorAll('.likers-sheet-row')],
         emptyEl: sheet.querySelector('[data-list-filter-empty]'),
@@ -791,7 +791,7 @@
       filterHost.remove();
     }
     if (typeof openLayer === 'function') {
-      openLayer(sheet, close, { role: 'dialog', label: title || 'Likes' });
+      openLayer(sheet, close, { role: 'dialog', label: title || t('duniya.story_likes') });
     } else if (typeof pushNavLayer === 'function') {
       sheet.dataset.navManaged = '1';
       pushNavLayer(sheet, close);

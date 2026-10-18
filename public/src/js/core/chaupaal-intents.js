@@ -10,11 +10,11 @@
   const intents = new Map();
 
   const CATEGORY_LABELS = {
-    navigate: 'Get around',
-    create: 'Create',
-    social: 'People',
-    profile: 'Profile & account',
-    help: 'Tools',
+    navigate: t('khoj.get_around'),
+    create: t('khoj.cat_create'),
+    social: t('khoj.cat_people'),
+    profile: t('khoj.profile_account'),
+    help: t('khoj.cat_tools'),
   };
 
   function compilePhrase(p) {
@@ -26,24 +26,50 @@
     }
   }
 
+  const SN = typeof SearchNormalize !== 'undefined' ? SearchNormalize : null;
+  const fold = (s) => (SN ? SN.fold(s) : String(s == null ? '' : s).toLowerCase().trim());
+  const expand = (s) => (SN ? SN.expand(s) : fold(s));
+
+  /** Keywords are { [lang]: [...] }; a bare array (older registrations) is English. */
+  function keywordMap(k) {
+    if (Array.isArray(k)) return { en: k.filter(Boolean) };
+    return k && typeof k === 'object' ? k : { en: [] };
+  }
+
+  /** UI language first, then English, then the user's "Languages I read". */
+  function searchLangs() {
+    const ui = typeof currentLang !== 'undefined' && typeof normalizeLang === 'function' ? normalizeLang(currentLang) : 'en';
+    const read = typeof getContentLangs === 'function' ? getContentLangs() : [];
+    return [...new Set([ui, 'en', ...read])];
+  }
+
+  /** Short Latin keywords ("dm", "gk") must match a whole word; everything else (incl. CJK) is a substring. */
+  function keywordHit(hay, k) {
+    if (!k) return false;
+    if (/^[a-z0-9]{1,3}$/.test(k)) return new RegExp(`(^|[^a-z0-9])${k}([^a-z0-9]|$)`).test(hay);
+    return hay.includes(k);
+  }
+
   function register(def) {
     if (!def || !def.id) return;
-    intents.set(def.id, { ...def });
+    intents.set(def.id, { ...def, keywords: keywordMap(def.keywords) });
   }
 
   function list() {
     return [...intents.values()].sort((a, b) => (b.priority || 0) - (a.priority || 0));
   }
 
-  function parse(text) {
+  function parse(text, opts) {
     const raw = String(text || '').trim();
-    const lower = raw.toLowerCase();
-    if (!lower) return { matches: [], best: null, confidence: 'low' };
+    const folded = fold(raw);
+    if (!folded) return { matches: [], best: null, confidence: 'low' };
+    const hay = expand(raw);
+    const langs = (opts && opts.langs) || searchLangs();
 
     if (/^help$|what can you do/i.test(raw)) {
       const help = intents.get('help.what_can_you_do') || {
         id: 'help.what_can_you_do',
-        label: 'What can you do?',
+        label: t('khoj.what_can_you_do'),
         category: 'help',
         icon: 'help-circle',
       };
@@ -58,19 +84,32 @@
     for (const intent of intents.values()) {
       let score = Number(intent.priority) || 50;
       let hit = false;
-      for (const kw of intent.keywords || []) {
-        const k = String(kw).toLowerCase();
-        if (k && lower.includes(k)) {
-          score += 12;
-          hit = true;
+      const seen = new Set();
+      for (const lang of langs) {
+        for (const kw of intent.keywords[lang] || []) {
+          const k = fold(kw);
+          if (!k || seen.has(k)) continue;
+          seen.add(k);
+          if (keywordHit(hay, k)) {
+            score += 12;
+            hit = true;
+          }
         }
       }
       for (const p of intent.phrases || []) {
         const re = compilePhrase(p);
-        if (re && re.test(raw)) {
+        if (re && (re.test(raw) || re.test(hay))) {
           score += 45;
           hit = true;
         }
+      }
+      // The visible (localised) label is a keyword too — people type what they see.
+      const label = fold(intent.label);
+      const cjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(folded);
+      const labelHit = cjk ? folded.length >= 2 && label.includes(folded) : folded.length >= 4 && (' ' + label).includes(' ' + folded);
+      if (label && folded.length >= (cjk ? 2 : 3) && (label === folded || labelHit)) {
+        score += 20;
+        hit = true;
       }
       if (hit) {
         scored.push({
@@ -116,7 +155,7 @@
         reply:
           typeof t === 'function'
             ? t('chaupaal_cmd_help_intro', 'I can help you get around Chaupaal — pick something below.')
-            : 'I can help you get around Chaupaal — pick something below.',
+            : t('common.chaupaal_cmd_help_intro'),
         attachment: { type: 'help_card', categories: buildHelpCategories() },
         navigator: true,
       };
@@ -130,7 +169,7 @@
                 'chaupaal_cmd_no_match',
                 'I can help you get around Chaupaal — pick something below or describe what you want.'
               )
-            : 'I can help you get around Chaupaal — pick something below or describe what you want.',
+            : t('common.chaupaal_cmd_no_match'),
         attachment: { type: 'help_card', categories: buildHelpCategories() },
         navigator: true,
       };
@@ -139,10 +178,10 @@
     const picks = confidence === 'high' ? [best] : matches.slice(0, 3);
     const intro =
       picks.length === 1
-        ? `Got it — tap below to ${String(picks[0].label || 'continue').toLowerCase()}.`
+        ? t('khoj.got_it_tap_below', { action: picks[0].label || t('common.continue') })
         : typeof t === 'function'
           ? t('chaupaal_cmd_disambig', 'A few things match — which one did you mean?')
-          : 'A few things match — which one did you mean?';
+          : t('common.chaupaal_cmd_disambig');
 
     return {
       reply: intro,
@@ -167,21 +206,21 @@
     const signedIn = typeof currentUser !== 'undefined' && currentUser?.uid;
     if (signedIn) return true;
     if (typeof requireSignIn === 'function') {
-      requireSignIn(typeof t === 'function' ? t('auth_sign_in_short', 'Sign in to continue') : 'Sign in to continue');
+      requireSignIn(typeof t === 'function' ? t('auth_sign_in_short', 'Sign in to continue') : t('khoj.sign_in_to_continue'));
     } else if (typeof showAuth === 'function') showAuth();
-    else if (typeof showToast === 'function') showToast('Sign in to continue');
+    else if (typeof showToast === 'function') showToast(t('khoj.sign_in_to_continue'));
     return false;
   }
 
   function run(id, ctx) {
     const intent = intents.get(id);
     if (!intent) {
-      if (typeof showToast === 'function') showToast('That action is not available right now.');
+      if (typeof showToast === 'function') showToast(t('khoj.that_action_is_not_available_right'));
       return false;
     }
     if (!requireAuth(intent)) return false;
     if (typeof intent.run !== 'function') {
-      if (typeof showToast === 'function') showToast('That action is not wired yet.');
+      if (typeof showToast === 'function') showToast(t('khoj.that_action_is_not_wired_yet'));
       return false;
     }
     try {
@@ -189,7 +228,7 @@
       return true;
     } catch (e) {
       console.warn('[ChaupaalIntents]', id, e?.message || e);
-      if (typeof showToast === 'function') showToast('Could not open that — try again.');
+      if (typeof showToast === 'function') showToast(t('khoj.could_not_open_that_try_again'));
       return false;
     }
   }
@@ -201,6 +240,7 @@
     run,
     buildNavigatorReply,
     buildHelpCategories,
+    searchLangs,
     CATEGORY_LABELS,
   };
 })();

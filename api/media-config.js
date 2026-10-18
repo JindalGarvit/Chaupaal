@@ -961,7 +961,8 @@ async function handlePost(req, res) {
       const adminApp = initAdmin();
       const ai = sharedAI(adminApp ? { db: adminApp.firestore(), admin: adminApp } : {});
       const input = body.input && typeof body.input === 'object' ? body.input : {};
-      const out = await ai.run(hook, input, { uid: user.uid });
+      const lang = String(body.lang || (req.headers && req.headers['x-chaupaal-lang']) || 'en').slice(0, 12);
+      const out = await ai.run(hook, input, { uid: user.uid, lang });
       return sendSuccess(res, { data: out.data, source: out.source, reason: out.reason || '' });
     } catch (e) {
       console.warn('[media-config] dangal_ai', e?.message || e);

@@ -18,7 +18,7 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, p), 'utf8'));
 
 const api = read('api/peepal-reactions.js');
 assert(/professionalMatch|professional_match/.test(api), 'professional_match action wired');

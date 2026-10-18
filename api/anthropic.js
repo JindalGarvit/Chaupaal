@@ -88,12 +88,16 @@ module.exports = async function handler(req, res) {
       max_tokens: checked.value.max_tokens,
       enableWebSearch: incoming.enableWebSearch === true,
       feature: typeof incoming.feature === 'string' ? incoming.feature.slice(0, 64) : null,
+      lang: typeof incoming.lang === 'string' ? incoming.lang.slice(0, 12) : null,
+      langJson: incoming.langJson === true,
     });
 
     const data = {
       ...(result.raw || {}),
       content: result.content,
       text: result.text,
+      lang: result.lang || null,
+      langFallback: !!result.langFallback,
     };
     const envelope = { ok: true, data };
     completeIdempotent(idem, 200, envelope);

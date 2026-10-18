@@ -120,7 +120,7 @@
       return drafts.map((d, i) => ({
         id: String(d.id || `seg_${i + 1}`),
         order: i,
-        label: String(d.label || `Segment ${i + 1}`).slice(0, 60),
+        label: String(d.label || tEn('peepal.segment_n', { n: i + 1 })).slice(0, 60),
         audience: d.audience || mapped,
         customAudienceText: d.customAudienceText || '',
         criteria: (d.parsed || parseCustomAudienceText(d.customAudienceText || '')).criteria || {},
@@ -140,7 +140,7 @@
       {
         id: 'seg_1',
         order: 0,
-        label: mapped === 'followers' ? 'Followers' : mapped === 'custom' ? 'Custom' : 'Everyone',
+        label: mapped === 'followers' ? t('peepal.followers') : mapped === 'custom' ? t('peepal.custom') : t('peepal.everyone'),
         audience: mapped,
         customAudienceText: parsed.customAudienceText || '',
         criteria: parsed.criteria,

@@ -112,16 +112,16 @@
       <div class="comment-item ${isReply ? 'comment-item--reply' : ''} ${c.pending ? 'comment-item--pending' : ''} ${c.deleted ? 'comment-item--deleted' : ''}" data-cid="${escapeHtml(c.id)}" ${c.parentId ? `data-parent="${escapeHtml(c.parentId)}"` : ''}>
         <div class="comment-avatar">${avatar}</div>
         <div class="comment-body">
-          <div class="comment-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml((c.user && c.user.name) || 'User', c.user) : escapeHtml((c.user && c.user.name) || 'User')}</div>
+          <div class="comment-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml((c.user && c.user.name) || t('common.user'), c.user) : escapeHtml((c.user && c.user.name) || t('common.user'))}</div>
           ${replyLabel}
           <div class="comment-text">${c.deleted ? escapeHtml(tt('comment_deleted', 'Comment deleted')) : formatCommentText(c.text)}</div>
           <div class="comment-meta">
-            <span class="comment-time">${escapeHtml(c.time || 'just now')}${c.editedAt ? ' · edited' : ''}</span>
+            <span class="comment-time">${escapeHtml(c.time || t('common.just_now_2'))}${c.editedAt ? ' · edited' : ''}</span>
             ${!c.deleted ? `<button type="button" class="comment-reply-btn" data-reply="${escapeHtml(c.id)}">${escapeHtml(tt('comment_reply', 'Reply'))}</button>` : ''}
             ${!c.deleted ? commentLikeHtml(c, { surface, likedByMe, likeCount: c.likeCount }) : ''}
           </div>
         </div>
-        ${c.deleted ? '' : `<button type="button" class="comment-actions-btn" data-comment-actions="${escapeHtml(c.id)}" aria-label="More options">${typeof iconHtml === 'function' ? iconHtml('more-vertical', { size: 18 }) : '⋮'}</button>`}
+        ${c.deleted ? '' : `<button type="button" class="comment-actions-btn" data-comment-actions="${escapeHtml(c.id)}" aria-label="${tHtml('duniya.more_options')}">${typeof iconHtml === 'function' ? iconHtml('more-vertical', { size: 18 }) : '⋮'}</button>`}
       </div>`;
   }
 
@@ -193,7 +193,7 @@
               : escapeHtml((c.user && c.user.avatar) || '👤');
         const text = c.deleted ? tt('comment_deleted', 'Comment deleted') : c.text || '';
         return `<div class="feed-comment-row" data-comment-id="${escapeHtml(c.id)}" role="group">
-          <button type="button" class="feed-comment-avatar" aria-label="Open profile">${avatar}</button>
+          <button type="button" class="feed-comment-avatar" aria-label="${tHtml('duniya.open_profile')}">${avatar}</button>
           <div class="feed-comment-body">
             <button type="button" class="feed-comment-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(name, c.user) : escapeHtml(name)}</button>
             <span class="feed-comment-text">${formatCommentText(text)}</span>
@@ -410,7 +410,7 @@
           ? getProfileType()
           : 'personal';
     return {
-      name: (typeof userProfile !== 'undefined' && userProfile?.name) || (typeof currentUser !== 'undefined' && currentUser?.displayName) || 'You',
+      name: (typeof userProfile !== 'undefined' && userProfile?.name) || (typeof currentUser !== 'undefined' && currentUser?.displayName) || tEn('common.you'),
       avatar: '🪑',
       photoURL: (typeof userProfile !== 'undefined' && userProfile?.photoURL) || (typeof currentUser !== 'undefined' && currentUser?.photoURL) || '',
       uid: (typeof currentUser !== 'undefined' && currentUser?.uid) || 'me',

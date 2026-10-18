@@ -752,6 +752,7 @@ async function openAiKeyboard(targetInput,context=''){
         tier:'balanced',
         max_tokens:600,
         feature:'assistant_keyboard',
+        lang: typeof aiUiLang==='function'?aiUiLang():undefined,
         system:`You are Chaupaal AI, an intelligent assistant in Chaupaal — India's social news and discovery app. Help users search for information, summarise news, write replies, explain topics, or answer anything. ${context?`Context: ${context}.`:''}Be concise, friendly, conversational. Never mention Claude or Anthropic — you are Chaupaal AI. Use light markdown (headings, bold, lists) when it helps readability.`, // i18n-ignore (LLM system prompt)
         messages:aiKbHistory
       });

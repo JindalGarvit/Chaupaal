@@ -104,7 +104,7 @@
         ? window.PolicyLimits.unlockMessage({ dayExhausted, weekExhausted })
         : '';
     if (u.readFailed) {
-      unlock = 'Couldn’t verify your limit — try again in a moment.';
+      unlock = t('premium.couldn_t_verify_your_limit_try');
     }
     return {
       ...u,
@@ -159,7 +159,7 @@
     if (typeof reportClientError === 'function') {
       reportClientError({
         feature: 'policy_usage_consume',
-        message: `${feature}: ${code || envelope?.error?.message || 'request failed'}`,
+        message: `${feature}: ${code || envelope?.error?.message || t('premium.request_failed')}`,
         screen: feature,
       });
     }

@@ -12,7 +12,7 @@
   function softNudge(state, lim) {
     const dayLeft = state?.dayLeft ?? lim.perDay;
     const exhausted = !!state?.exhausted || !!state?.readFailed;
-    if (state?.readFailed) return 'Couldn’t verify your limit — try again shortly.';
+    if (state?.readFailed) return t('khoj.couldn_t_verify_your_limit_try');
     if (exhausted) {
       return (
         state?.unlock ||
@@ -21,14 +21,14 @@
               dayExhausted: !state?.dayLeft,
               weekExhausted: !state?.weekLeft,
             })
-          : 'Limit reached — browsing stays free.')
+          : t('khoj.limit_reached_browsing_stays_free'))
       );
     }
-    if (dayLeft === 1) return 'One careful hello left today — make it count.';
+    if (dayLeft === 1) return t('khoj.nudge_low');
     if (dayLeft <= Math.ceil(lim.perDay / 2)) {
-      return `${dayLeft} hellos left today — save them for people you’ll actually message.`;
+      return t('khoj.dayleft_hellos_left_today_save_them', { dayLeft });
     }
-    return 'Browsing is free. Messaging new Personal profiles via discovery counts toward your limit.';
+    return t('khoj.browsing_is_free_messaging_new_personal');
   }
 
   /**
@@ -47,34 +47,34 @@
     const weekDeg = Math.round(weekFrac * 270);
     const exhausted = !!state?.exhausted || !!state?.readFailed;
     const unlock = state?.readFailed
-      ? state.unlock || 'Couldn’t verify your limit — try again shortly.'
+      ? state.unlock || t('khoj.couldn_t_verify_your_limit_try')
       : state?.unlock || '';
     const nudge = o.nudge !== false ? softNudge(state, lim) : '';
     const compact = !!o.compact;
     return `
-      <div class="ai-disc-meter${compact ? ' ai-disc-meter--compact' : ''}${exhausted ? ' is-exhausted' : ''}" data-nav-ignore="1" title="AI Discovery messages to Personal profiles">
+      <div class="ai-disc-meter${compact ? ' ai-disc-meter--compact' : ''}${exhausted ? ' is-exhausted' : ''}" data-nav-ignore="1" title="${tHtml('khoj.ai_discovery_messages_to_personal_profiles')}">
         <div class="ai-disc-meter-dials">
-          <div class="ai-disc-meter-dial" style="--meter-deg:${dayDeg}deg;" aria-label="${dayLeft} of ${lim.perDay} left today">
+          <div class="ai-disc-meter-dial" style="--meter-deg:${dayDeg}deg;" aria-label="${tHtml('khoj.meter_left_today', { left: dayLeft, total: lim.perDay })}">
             <div class="ai-disc-meter-hub">
               <span class="ai-disc-meter-num">${exhausted ? '0' : dayLeft}</span>
-              <span class="ai-disc-meter-sub">today</span>
+              <span class="ai-disc-meter-sub">${tHtml('khoj.today')}</span>
             </div>
           </div>
-          <div class="ai-disc-meter-dial ai-disc-meter-dial--week" style="--meter-deg:${weekDeg}deg;" aria-label="${weekLeft} of ${lim.perWeek} left this week">
+          <div class="ai-disc-meter-dial ai-disc-meter-dial--week" style="--meter-deg:${weekDeg}deg;" aria-label="${tHtml('khoj.meter_left_week', { left: weekLeft, total: lim.perWeek })}">
             <div class="ai-disc-meter-hub">
               <span class="ai-disc-meter-num">${exhausted ? '0' : weekLeft}</span>
-              <span class="ai-disc-meter-sub">week</span>
+              <span class="ai-disc-meter-sub">${tHtml('khoj.week')}</span>
             </div>
           </div>
         </div>
         <div class="ai-disc-meter-copy">
-          <div class="ai-disc-meter-title">${state?.readFailed ? 'Limit unavailable' : exhausted ? 'Outreach pause' : 'Remaining outreach'}</div>
-          <div class="ai-disc-meter-meta">${exhausted ? '—' : `${dayLeft}/${lim.perDay} today · ${weekLeft}/${lim.perWeek} this week`}</div>
+          <div class="ai-disc-meter-title">${state?.readFailed ? tHtml('khoj.limit_unavailable') : exhausted ? tHtml('khoj.outreach_pause') : tHtml('khoj.remaining_outreach')}</div>
+          <div class="ai-disc-meter-meta">${exhausted ? '—' : tHtml('khoj.meter_meta', { dayLeft, perDay: lim.perDay, weekLeft, perWeek: lim.perWeek })}</div>
           ${nudge ? `<div class="ai-disc-meter-nudge">${nudge}</div>` : ''}
           ${exhausted && unlock && !nudge.includes(unlock) ? `<div class="ai-disc-meter-unlock">${unlock}</div>` : ''}
           ${
             o.disclosePro !== false
-              ? `<div class="ai-disc-meter-note">Personal profiles found via AI search count toward this limit. Professional profiles do not.</div>`
+              ? `<div class="ai-disc-meter-note">${tHtml('khoj.personal_profiles_found_via_ai_search')}</div>`
               : ''
           }
         </div>
@@ -167,7 +167,7 @@
     const pill = document.createElement('span');
     pill.className = 'ai-disc-mini-pill';
     pill.textContent = `${dayLeft}/${lim.perDay} · ${weekLeft}/${lim.perWeek}`;
-    pill.title = `AI Discovery outreach: ${dayLeft} of ${lim.perDay} left today · ${weekLeft} of ${lim.perWeek} left this week`;
+    pill.title = t('khoj.ai_discovery_outreach_dayleft_of_perday', { dayLeft, perDay: lim.perDay, weekLeft, perWeek: lim.perWeek });
     const nudgeRow = head.querySelector('.peepal-intent-mini-icons');
     if (nudgeRow) head.insertBefore(pill, nudgeRow);
     else head.appendChild(pill);

@@ -238,7 +238,7 @@ function graduation() {
     assert(/DA\.searchGames\(query/.test(search) && /openRetiredGameScreen\(r\.id\)/.test(search) && /getGames\(\{ dangal: true \}\)/.test(search), 'Khoj search uses DangalAssist, routes retired titles, and hides 18+ titles like Manch');
     // Intents manifest in a tiny window.
     const regs = [];
-    const ictx = { console, RegExp, window: null, document: { querySelector: () => null }, ChaupaalIntents: { register: (d) => regs.push(d) }, DangalAssist: DA };
+    const ictx = { console, RegExp, window: null, document: { querySelector: () => null }, ChaupaalIntents: { register: (d) => regs.push(d) }, DangalAssist: DA, t: global.t || ((k) => k), tt: global.tt };
     ictx.window = ictx;
     vm.createContext(ictx);
     vm.runInContext(read('public/src/js/core/chaupaal-intents-manifest.js'), ictx);

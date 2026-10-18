@@ -16,7 +16,7 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, p), 'utf8'));
 
 const stories = read('api/stories.js');
 assert(/prasidha_trending/.test(stories), 'prasidha_trending action in stories.js');

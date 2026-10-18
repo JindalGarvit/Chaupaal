@@ -7,24 +7,24 @@
   'use strict';
 
   const INTENT_CHIPS_PERSONAL = [
-    { icon: 'heart', label: 'Dating', hint: 'someone warm to date near me', tint: '#E63946', intent: 'dating' },
-    { icon: 'handshake', label: 'Friendship', hint: 'new friends with similar interests', tint: '#2E7D32', intent: 'friendship' },
-    { icon: 'briefcase', label: 'Job', hint: 'someone hiring or looking for work', tint: '#EF6C00', intent: 'job' },
-    { icon: 'home', label: 'Flatmate', hint: 'flatmate or roommate nearby', tint: '#00838F', intent: 'flatmate' },
-    { icon: 'plane', label: 'Travel', hint: 'travel companion for an upcoming trip', tint: '#00897B', intent: 'travel' },
-    { icon: 'gamepad', label: 'Gaming', hint: 'someone to play games with', tint: '#5E35B1', intent: 'gaming' },
-    { icon: 'music', label: 'Music', hint: 'music lover with similar taste', tint: '#AD1457', intent: 'music' },
-    { icon: 'rocket', label: 'Co-founder', hint: 'startup-minded person to collaborate', tint: '#1565C0', intent: 'cofounder' },
+    { icon: 'heart', label: t('khoj.dating'), hint: t('khoj.someone_warm_to_date_near_me'), tint: '#E63946', intent: 'dating' },
+    { icon: 'handshake', label: t('khoj.friendship'), hint: t('khoj.new_friends_with_similar_interests'), tint: '#2E7D32', intent: 'friendship' },
+    { icon: 'briefcase', label: t('khoj.job'), hint: t('khoj.someone_hiring_or_looking_for_work'), tint: '#EF6C00', intent: 'job' },
+    { icon: 'home', label: t('khoj.flatmate'), hint: t('khoj.flatmate_or_roommate_nearby'), tint: '#00838F', intent: 'flatmate' },
+    { icon: 'plane', label: t('common.travel'), hint: t('khoj.travel_companion_for_an_upcoming_trip'), tint: '#00897B', intent: 'travel' },
+    { icon: 'gamepad', label: t('khoj.gaming'), hint: t('khoj.someone_to_play_games_with'), tint: '#5E35B1', intent: 'gaming' },
+    { icon: 'music', label: t('common.music'), hint: t('khoj.music_lover_with_similar_taste'), tint: '#AD1457', intent: 'music' },
+    { icon: 'rocket', label: t('khoj.cofounder'), hint: t('khoj.startup_minded_person_to_collaborate'), tint: '#1565C0', intent: 'cofounder' },
   ];
 
   const INTENT_CHIPS_PRO = [
-    { icon: 'briefcase', label: 'Networking', hint: 'professionals to grow my network with', tint: '#1565C0', intent: 'networking' },
-    { icon: 'briefcase', label: 'Hiring', hint: 'someone I could hire or bring onto a project', tint: '#EF6C00', intent: 'job' },
-    { icon: 'briefcase', label: 'Job seek', hint: 'someone hiring or open to career conversations', tint: '#00838F', intent: 'job' },
-    { icon: 'rocket', label: 'Co-founder', hint: 'startup-minded co-founder or collaborator', tint: '#5E35B1', intent: 'cofounder' },
-    { icon: 'handshake', label: 'Mentor', hint: 'a mentor or peer I can learn from', tint: '#2E7D32', intent: 'mentor' },
-    { icon: 'rocket', label: 'Collab', hint: 'someone to collaborate on a project with', tint: '#AD1457', intent: 'collab' },
-    { icon: 'handshake', label: 'Friendship', hint: 'new friends with similar interests', tint: '#00897B', intent: 'friendship' },
+    { icon: 'briefcase', label: t('khoj.networking'), hint: t('khoj.professionals_to_grow_my_network_with'), tint: '#1565C0', intent: 'networking' },
+    { icon: 'briefcase', label: t('khoj.hiring'), hint: t('khoj.someone_i_could_hire_or_bring'), tint: '#EF6C00', intent: 'job' },
+    { icon: 'briefcase', label: t('khoj.job_seek'), hint: t('khoj.someone_hiring_or_open_to_career'), tint: '#00838F', intent: 'job' },
+    { icon: 'rocket', label: t('khoj.cofounder'), hint: t('khoj.startup_minded_co_founder_or_collaborator'), tint: '#5E35B1', intent: 'cofounder' },
+    { icon: 'handshake', label: t('khoj.mentor'), hint: t('khoj.a_mentor_or_peer_i_can'), tint: '#2E7D32', intent: 'mentor' },
+    { icon: 'rocket', label: t('khoj.collab'), hint: t('khoj.someone_to_collaborate_on_a_project'), tint: '#AD1457', intent: 'collab' },
+    { icon: 'handshake', label: t('khoj.friendship'), hint: t('khoj.new_friends_with_similar_interests'), tint: '#00897B', intent: 'friendship' },
   ];
 
   function isProViewer() {
@@ -83,7 +83,7 @@
     const o = opts || {};
     const reset = o.reset !== false;
     if (reset) {
-      listEl.innerHTML = `<div class="discovery-loading" style="padding:10px;font-size:12px;">Ranking compatible people…</div>`;
+      listEl.innerHTML = `<div class="discovery-loading" style="padding:10px;font-size:12px;">${tHtml('khoj.ranking_compatible_people')}</div>`;
       khojShownPeeks = [];
     }
     try {
@@ -104,12 +104,12 @@
         if (!peeks.length) {
           listEl.innerHTML = `<div class="khoj-compat-empty">
             <p>${tt(
-              'khoj_empty_peeks',
+              'khoj.khoj_empty_peeks',
               'No eligible people yet — we never invent profiles. Invite a friend, or describe who you hope to meet above.'
             )}</p>
             <div class="khoj-empty-ctas" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
               <button type="button" class="btn btn--primary" data-khoj-cta="invite">${tt('contacts_invite_cta', 'Invite friends')}</button>
-              <button type="button" class="btn btn--ghost" data-khoj-cta="akhbaar">${tt('day0_play_akhbaar', 'Play Akhbaar')}</button>
+              <button type="button" class="btn btn--ghost" data-khoj-cta="akhbaar">${tt('khoj.day0_play_akhbaar', 'Play Akhbaar')}</button>
             </div>
           </div>`;
           listEl.querySelector('[data-khoj-cta="invite"]')?.addEventListener('click', () => {
@@ -133,7 +133,7 @@
           moreBtn = document.createElement('button');
           moreBtn.type = 'button';
           moreBtn.className = 'khoj-compat-more';
-          moreBtn.textContent = tt('khoj_more', 'See more compatible people');
+          moreBtn.textContent = tt('khoj.khoj_more', 'See more compatible people');
           listEl.after(moreBtn);
           moreBtn.addEventListener('click', () => loadKhojPeeks(listEl, { reset: false, limit: 5 }));
         }
@@ -143,7 +143,7 @@
       }
     } catch (e) {
       if (reset) {
-        listEl.innerHTML = `<div class="khoj-compat-empty">${tt('khoj_peek_err', 'Couldn’t load peeks — try again.')}</div>`;
+        listEl.innerHTML = `<div class="khoj-compat-empty">${tt('khoj.khoj_peek_err', 'Couldn’t load peeks — try again.')}</div>`;
       }
     }
   }
@@ -166,7 +166,7 @@
     try {
       sessionStorage.setItem('chaupaal_khoj_interests_ask', '1');
     } catch (e) {}
-    const chips = (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.INTEREST_CHIPS) || [
+    const chips = (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.INTEREST_CHIPS) || /* i18n-values: interest */ [
       'Travel',
       'Music',
       'Films',
@@ -180,18 +180,18 @@
     banner.style.cssText =
       'margin:10px 0 12px;padding:12px;border-radius:14px;border:1.5px solid var(--line);background:var(--cream);';
     banner.innerHTML = `
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Add interests → better people in Khoj</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4;">One quick pick — or dismiss. Used for matching when visible.</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">${tHtml('khoj.add_interests_better_people_in_khoj')}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4;">${tHtml('khoj.one_quick_pick_or_dismiss_used')}</div>
       <div class="dp-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
         ${chips
           .slice(0, 10)
           .map(
             (c) =>
-              `<button type="button" class="dp-chip" data-khoj-interest="${String(c).replace(/"/g, '&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--line);background:var(--white);font-size:12px;font-weight:600;cursor:pointer;">${c}</button>`
+              `<button type="button" class="dp-chip" data-khoj-interest="${String(c).replace(/"/g, '&quot;')}" style="padding:6px 12px;border-radius:999px;border:2px solid var(--line);background:var(--white);font-size:12px;font-weight:600;cursor:pointer;">${optionLabelHtml('interest', c)}</button>`
           )
           .join('')}
       </div>
-      <button type="button" class="auth-guest-btn" data-khoj-ask-dismiss style="font-size:12px;">Not now</button>`;
+      <button type="button" class="auth-guest-btn" data-khoj-ask-dismiss style="font-size:12px;">${tHtml('common.not_now')}</button>`;
     const filtersBar = host.querySelector('.khoj-filters-bar');
     if (filtersBar) filtersBar.after(banner);
     else host.insertBefore(banner, host.firstChild?.nextSibling || host.firstChild);
@@ -239,7 +239,7 @@
       }
     } catch (e) {}
     if (typeof showToast === 'function') {
-      showToast(tt('khoj_find_signin', 'Sign in to find people to meet'));
+      showToast(tt('khoj.khoj_find_signin', 'Sign in to find people to meet'));
     }
     if (typeof openAuthSheet === 'function') openAuthSheet('login');
     else if (typeof showAuth === 'function') showAuth();
@@ -286,7 +286,7 @@
           ${
             pro
               ? tt(
-                  'khoj_sub_pro',
+                  'khoj.khoj_sub_pro',
                   'Find people to work with — networking strangers, with short reasons. Or scroll peeks below.'
                 )
               : tt(
@@ -301,7 +301,7 @@
             <textarea id="khojIntentInput" class="peepal-ai-search-input khoj-intent-input" rows="2"
               placeholder="${
                 pro
-                  ? tt('khoj_ph_pro', 'Who do you want to work with? Hire, mentor, co-founder…')
+                  ? tt('khoj.khoj_ph_pro', 'Who do you want to work with? Hire, mentor, co-founder…')
                   : tt('khoj_ph', 'Who are you hoping to meet? Any description works.')
               }"
               data-living-ph="khoj_intent" enterkeyhint="search"></textarea>
@@ -309,7 +309,7 @@
           <button type="button" class="peepal-ai-search-btn khoj-intent-go" id="khojIntentGo">${icon('search', 16)} ${tt('khoj_go', 'Find')}</button>
         </div>
         ${filtersHtml}
-        <button type="button" class="khoj-back-peeks hidden" id="khojBackToPeeks">${tt('khoj_back_peeks', '← Back to peeks')}</button>
+        <button type="button" class="khoj-back-peeks hidden" id="khojBackToPeeks">${tt('khoj.khoj_back_peeks', '← Back to peeks')}</button>
         <div id="khojCompatList" class="khoj-compat-scroll" aria-live="polite"></div>
         <div id="khojIntentResults" class="khoj-results peepal-intent-results"></div>
       </div>`;

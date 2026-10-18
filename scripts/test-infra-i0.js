@@ -12,7 +12,7 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, p), 'utf8'));
 
 const vercel = JSON.parse(read('vercel.json'));
 const refresh = read('api/refresh-category-cache.js');

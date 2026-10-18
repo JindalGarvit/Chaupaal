@@ -119,7 +119,7 @@
     if (!n) return null;
     if (prefs.items.some((i) => i.name.toLowerCase() === n.toLowerCase())) {
       if (typeof showToast === 'function') {
-        showToast(typeof t === 'function' ? t('cat_exists', { name: n }) : 'Already added');
+        showToast(typeof t === 'function' ? t('cat_exists', { name: n }) : t('discovery.already_added'));
       }
       return null;
     }
@@ -153,8 +153,8 @@
       if (typeof showToast === 'function') {
         showToast(
           typeof t === 'function'
-            ? t('cat_core_locked', 'Core categories stay pinned')
-            : 'Core categories stay pinned'
+            ? t('discovery.cat_core_locked', 'Core categories stay pinned')
+            : t('discovery.core_categories_stay_pinned')
         );
       }
       return false;
@@ -270,38 +270,38 @@
     overlay.className = 'akh-add-cat-overlay';
     overlay.dataset.navManaged = '1';
     overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-label', 'Add category');
+    overlay.setAttribute('aria-label', t('common.shortcut_akhbaar_add_cat'));
     overlay.innerHTML = `
       <div class="akh-add-cat-screen">
         <header class="akh-add-cat-head">
-          <button type="button" class="akh-add-cat-back" data-add-cat-close aria-label="Close">←</button>
+          <button type="button" class="akh-add-cat-back" data-add-cat-close aria-label="${tHtml('common.close')}">←</button>
           <div class="akh-add-cat-title-wrap">
             <span class="akh-add-cat-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7B2CBF" stroke-width="2" stroke-linecap="round"><path d="M12 8v8M8 12h8"/></svg>
             </span>
-            <h2>Add category</h2>
+            <h2>${tHtml('common.shortcut_akhbaar_add_cat')}</h2>
           </div>
         </header>
         <div class="akh-add-cat-body">
-          <input type="text" class="akh-add-cat-input" data-add-cat-name placeholder="Category name…" maxlength="40" autocomplete="off">
+          <input type="text" class="akh-add-cat-input" data-add-cat-name placeholder="${tHtml('discovery.category_name')}" maxlength="40" autocomplete="off">
           <label class="akh-add-cat-pin">
             <input type="checkbox" data-add-cat-pin checked>
-            <span>Show on Akhbaar bar</span>
+            <span>${tHtml('discovery.show_on_akhbaar_bar')}</span>
           </label>
           ${
             suggestions.length
-              ? `<p class="akh-add-cat-sug-label">Suggestions</p>
+              ? `<p class="akh-add-cat-sug-label">${tHtml('discovery.suggestions')}</p>
           <div class="akh-add-cat-sug-grid">
             ${suggestions
               .map(
                 (s) =>
-                  `<button type="button" class="akh-add-cat-sug" data-add-sug-name="${escHtml(s.name)}" data-add-sug-emoji="${escHtml(s.emoji || '✨')}">${escHtml(s.emoji || '✨')} ${escHtml(s.name)}</button>`
+                  `<button type="button" class="akh-add-cat-sug" data-add-sug-name="${escHtml(s.name)}" data-add-sug-emoji="${escHtml(s.emoji || '✨')}">${escHtml(s.emoji || '✨')} ${optionLabelHtml('akhbaar.cat', s.name)}</button>`
               )
               .join('')}
           </div>`
               : ''
           }
-          <button type="button" class="akh-add-cat-cta" data-add-cat-submit disabled>Add</button>
+          <button type="button" class="akh-add-cat-cta" data-add-cat-submit disabled>${tHtml('discovery.add')}</button>
         </div>
       </div>`;
 

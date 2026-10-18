@@ -778,7 +778,13 @@
         const snippet = formatValueSnippet(value).slice(0, 80);
         const prompt = t('profile.one_short_fun_world_trivia_fact', { fieldName, snippet });
         const ai = await Promise.race([
-          callAI({ prompt, maxTokens: 60 }),
+          callAI({
+            tier: 'fast',
+            max_tokens: 60,
+            feature: 'profile_fact_trivia',
+            messages: [{ role: 'user', content: prompt }],
+            lang: typeof aiUiLang === 'function' ? aiUiLang() : undefined,
+          }).catch(() => null),
           new Promise((r) => setTimeout(() => r(null), 1200)),
         ]);
         const line = typeof ai === 'string' ? ai : ai?.text || ai?.reply || '';

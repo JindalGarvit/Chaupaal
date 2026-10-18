@@ -155,7 +155,7 @@
     root.className = 'ds-overlay ds-editor';
     root.dataset.navManaged = '1';
     root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-label', NS.tt('duniya_story_editor', 'Edit story'));
+    root.setAttribute('aria-label', NS.tt('duniya.duniya_story_editor', 'Edit story'));
     const device = document.querySelector('.device') || document.body;
     device.appendChild(root);
 
@@ -175,10 +175,10 @@
     };
 
     let layer = { close: closeLayer };
-    if (typeof openLayer === 'function') layer = openLayer(root, closeLayer, { host: device, remove: true, label: 'Story editor' });
+    if (typeof openLayer === 'function') layer = openLayer(root, closeLayer, { host: device, remove: true, label: t('duniya.story_editor') });
 
     function confirmClose() {
-      if (dirty && !window.confirm(NS.tt('duniya_story_discard', 'Discard this story?'))) return;
+      if (dirty && !window.confirm(NS.tt('duniya.duniya_story_discard', 'Discard this story?'))) return;
       layer.close();
     }
 
@@ -330,7 +330,7 @@
         if (hR) hR.style.left = r + '%';
         if (label) {
           const span = Math.round((item.trimEndMs - item.trimStartMs) / 100) / 10;
-          label.textContent = d > MAX_VIDEO_MS ? `${NS.tt('story_trim_needed', 'Trim to 90s or less')} · ${span}s` : `${span}s selected`;
+          label.textContent = d > MAX_VIDEO_MS ? `${NS.tt('duniya.story_trim_needed', 'Trim to 90s or less')} · ${span}s` : t('duniya.span_s_selected', { span });
         }
         try {
           v.currentTime = (item.trimStartMs || 0) / 1000;
@@ -378,7 +378,7 @@
     function addInlineText() {
       const item = queue[idx];
       const id = uid();
-      const ov = { id, type: 'text', text: NS.tt('story_tap_edit', 'Tap to edit'), x: 0.5, y: 0.4, scale: 1, rotate: 0, z: 6, color: '#fff', style: 'display', align: 'center' };
+      const ov = { id, type: 'text', text: NS.tt('duniya.story_tap_edit', 'Tap to edit'), x: 0.5, y: 0.4, scale: 1, rotate: 0, z: 6, color: '#fff', style: 'display', align: 'center' };
       item.overlays.push(ov);
       activeTextId = id;
       render();
@@ -401,34 +401,34 @@
             ${Object.keys(BRUSHES)
               .map((b) => `<button type="button" class="${drawBrush === b ? 'is-on' : ''}" data-brush="${b}">${b}</button>`)
               .join('')}
-            <input type="range" min="2" max="24" value="${drawSize}" data-size aria-label="Size">
-            <input type="color" value="${drawColor}" data-color aria-label="Color">
-            <button type="button" data-undo aria-label="Undo">↶</button>
-            <button type="button" data-redo aria-label="Redo">↷</button>
+            <input type="range" min="2" max="24" value="${drawSize}" data-size aria-label="${tHtml('duniya.size')}">
+            <input type="color" value="${drawColor}" data-color aria-label="${tHtml('duniya.color')}">
+            <button type="button" data-undo aria-label="${tHtml('duniya.undo')}">↶</button>
+            <button type="button" data-redo aria-label="${tHtml('duniya.redo')}">↷</button>
             <button type="button" data-draw-done>${NS.tt('done', 'Done')}</button>
           </div>`
         : '';
       const cropBar = cropMode
-        ? `<div class="ds-crop-bar"><button type="button" data-crop-cancel>${NS.tt('cancel', 'Cancel')}</button><span>${NS.tt('story_crop', 'Crop')}</span><button type="button" data-crop-done>${NS.tt('done', 'Done')}</button></div>`
+        ? `<div class="ds-crop-bar"><button type="button" data-crop-cancel>${NS.tt('cancel', 'Cancel')}</button><span>${NS.tt('duniya.story_crop', 'Crop')}</span><button type="button" data-crop-done>${NS.tt('done', 'Done')}</button></div>`
         : '';
       root.innerHTML = `
         <div class="ds-stage${NS.filterClass(item.filter)}${cropMode ? ' is-crop' : ''}" data-stage>${media}</div>
         ${cropBar}
         ${item.mediaType === 'video' ? `<div class="ds-trim-scrub" data-trim><div class="ds-trim-track" data-trim-track><div class="ds-trim-range" data-trim-range></div></div><div class="ds-trim-handle ds-trim-l" data-h-l></div><div class="ds-trim-handle ds-trim-r" data-h-r></div><small data-trim-label></small></div>` : ''}
         <div class="ds-topbar">
-          <button type="button" class="ds-icon-btn" data-close aria-label="Close">✕</button>
+          <button type="button" class="ds-icon-btn" data-close aria-label="${tHtml('common.close')}">✕</button>
           <div class="ds-topbar-actions">
-            <button type="button" class="ds-icon-btn" data-save aria-label="Save">${NS.tt('story_save', 'Save')}</button>
-            <button type="button" class="ds-cta" data-share>${NS.tt('story_share', 'Share')}</button>
+            <button type="button" class="ds-icon-btn" data-save aria-label="${tHtml('common.save')}">${NS.tt('duniya.story_save', 'Save')}</button>
+            <button type="button" class="ds-cta" data-share>${NS.tt('duniya.story_share', 'Share')}</button>
           </div>
         </div>
         ${!cropMode && !drawing ? `<div class="ds-toolbar">
-          <button type="button" data-tool="text"><span>Aa</span><small>Text</small></button>
-          <button type="button" data-tool="stickers"><span>☺</span><small>Stickers</small></button>
-          <button type="button" data-tool="draw"><span>✎</span><small>Draw</small></button>
-          <button type="button" data-tool="music"><span>♪</span><small>Music</small></button>
-          <button type="button" data-tool="effects"><span>✦</span><small>Effects</small></button>
-          <button type="button" data-tool="more"><span>⋯</span><small>More</small></button>
+          <button type="button" data-tool="text"><span>${tHtml('duniya.aa')}</span><small>${tHtml('duniya.text')}</small></button>
+          <button type="button" data-tool="stickers"><span>☺</span><small>${tHtml('duniya.stickers')}</small></button>
+          <button type="button" data-tool="draw"><span>✎</span><small>${tHtml('duniya.draw')}</small></button>
+          <button type="button" data-tool="music"><span>♪</span><small>${tHtml('common.music')}</small></button>
+          <button type="button" data-tool="effects"><span>✦</span><small>${tHtml('duniya.effects')}</small></button>
+          <button type="button" data-tool="more"><span>⋯</span><small>${tHtml('common.more')}</small></button>
         </div>` : ''}
         ${filterBar}${drawBar}
         <div class="ds-bottombar">
@@ -458,7 +458,7 @@
               ov.text = el.textContent.trim() || ov.text;
             });
             el.addEventListener('blur', () => {
-              ov.text = el.textContent.trim() || NS.tt('story_tap_edit', 'Tap to edit');
+              ov.text = el.textContent.trim() || NS.tt('duniya.story_tap_edit', 'Tap to edit');
               activeTextId = null;
             });
           }
@@ -557,7 +557,7 @@
         render();
       } else if (tool === 'stickers') {
         promptSheet(
-          NS.tt('story_stickers', 'Stickers'),
+          NS.tt('duniya.story_stickers', 'Stickers'),
           `<div data-emoji class="ds-emoji-grid">${['🔥', '✨', '❤️', '😂', '🙏', '☕', '🏏', '🎵', '🌟', '🏠'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><button type="button" class="btn" data-gif>GIF</button>`,
           (sheet, done) => {
             sheet.querySelectorAll('[data-e]').forEach((b) =>
@@ -632,13 +632,13 @@
         render();
       } else if (tool === 'more') {
         promptSheet(
-          NS.tt('more', 'More'),
+          NS.tt('duniya.more', 'More'),
           `
-          <button type="button" class="ds-sheet-btn" data-m="mention">@${NS.tt('mention', 'Mention')}</button>
-          <button type="button" class="ds-sheet-btn" data-m="location">📍 ${NS.tt('location', 'Location')}</button>
-          <button type="button" class="ds-sheet-btn" data-m="interactive">◍ ${NS.tt('story_interactive', 'Interactive')}</button>
-          <button type="button" class="ds-sheet-btn" data-m="crop">⛶ ${NS.tt('story_crop', 'Crop')}</button>
-          <button type="button" class="ds-sheet-btn" data-m="camera">📷 ${NS.tt('camera', 'Camera')}</button>`,
+          <button type="button" class="ds-sheet-btn" data-m="mention">@${NS.tt('duniya.mention', 'Mention')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="location">📍 ${NS.tt('duniya.location', 'Location')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="interactive">◍ ${NS.tt('duniya.story_interactive', 'Interactive')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="crop">⛶ ${NS.tt('duniya.story_crop', 'Crop')}</button>
+          <button type="button" class="ds-sheet-btn" data-m="camera">📷 ${NS.tt('duniya.camera', 'Camera')}</button>`,
           (sheet, done) => {
             sheet.querySelectorAll('[data-m]').forEach((b) =>
               b.addEventListener('click', () => {
@@ -671,7 +671,7 @@
 
     function runMention() {
       const item = queue[idx];
-      promptSheet(NS.tt('story_mention', 'Mention'), `<input type="search" data-q placeholder="@username">`, (sheet) => {
+      promptSheet(NS.tt('duniya.story_mention', 'Mention'), `<input type="search" data-q placeholder="${tHtml('common.username')}">`, (sheet) => {
         const q = sheet.querySelector('[data-q]');
         const run = async () => {
           if (typeof searchUsersProvider !== 'function') return;
@@ -689,7 +689,7 @@
                 if (typeof getBlockedSet === 'function') blocked = getBlockedSet().has(u.uid);
               } catch (e) {}
               if (blocked) {
-                if (typeof showToast === 'function') showToast(NS.tt('story_blocked', 'You can’t mention this person'));
+                if (typeof showToast === 'function') showToast(NS.tt('duniya.story_blocked', 'You can’t mention this person'));
                 return;
               }
               item.overlays.push({
@@ -734,15 +734,15 @@
 
     function runInteractiveMenu() {
       promptSheet(
-        NS.tt('story_interactive', 'Stickers'),
+        NS.tt('duniya.story_interactive', 'Stickers'),
         `
-          <button type="button" data-k="poll">Poll</button>
-          <button type="button" data-k="question">Question</button>
-          <button type="button" data-k="quiz">Quiz</button>
-          <button type="button" data-k="slider">Slider</button>
-          <button type="button" data-k="countdown">Countdown</button>
-          <button type="button" data-k="addyours">Add yours</button>
-          <button type="button" data-k="link">Link</button>
+          <button type="button" data-k="poll">${tHtml('duniya.poll')}</button>
+          <button type="button" data-k="question">${tHtml('duniya.question')}</button>
+          <button type="button" data-k="quiz">${tHtml('common.quiz')}</button>
+          <button type="button" data-k="slider">${tHtml('duniya.slider')}</button>
+          <button type="button" data-k="countdown">${tHtml('duniya.countdown')}</button>
+          <button type="button" data-k="addyours">${tHtml('duniya.add_yours')}</button>
+          <button type="button" data-k="link">${tHtml('duniya.link')}</button>
         `,
         (sheet, done) => {
           sheet.querySelectorAll('[data-k]').forEach((b) =>
@@ -758,58 +758,58 @@
     function addInteractive(kind) {
       const item = queue[idx];
       if (kind === 'poll') {
-        promptSheet('Poll', `<input data-p placeholder="Question" maxlength="80"><input data-a placeholder="Option 1"><input data-b placeholder="Option 2"><input data-c placeholder="Option 3 (optional)">`, (sheet, done) => {
+        promptSheet(t('duniya.poll'), `<input data-p placeholder="${tHtml('duniya.question')}" maxlength="80"><input data-a placeholder="${tHtml('duniya.option_1')}"><input data-b placeholder="${tHtml('duniya.option_2')}"><input data-c placeholder="${tHtml('duniya.option_3_optional')}">`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
             const options = [sheet.querySelector('[data-a]').value, sheet.querySelector('[data-b]').value, sheet.querySelector('[data-c]').value].map((x) => x.trim()).filter(Boolean);
             if (options.length >= 2) {
-              item.overlays.push({ id: uid(), type: 'poll', prompt: sheet.querySelector('[data-p]').value.trim() || 'Vote', options, x: 0.5, y: 0.55, scale: 1, rotate: 0, z: 9 });
+              item.overlays.push({ id: uid(), type: 'poll', prompt: sheet.querySelector('[data-p]').value.trim() || tEn('duniya.sticker_vote'), options, x: 0.5, y: 0.55, scale: 1, rotate: 0, z: 9 });
             }
             done();
             render();
           });
         });
       } else if (kind === 'question') {
-        promptSheet('Question', `<input data-p placeholder="Ask something" maxlength="100">`, (sheet, done) => {
+        promptSheet(t('duniya.question'), `<input data-p placeholder="${tHtml('duniya.ask_something')}" maxlength="100">`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
-            item.overlays.push({ id: uid(), type: 'question', prompt: sheet.querySelector('[data-p]').value.trim() || 'Ask me', x: 0.5, y: 0.5, scale: 1, rotate: 0, z: 9 });
+            item.overlays.push({ id: uid(), type: 'question', prompt: sheet.querySelector('[data-p]').value.trim() || tEn('duniya.ask_me'), x: 0.5, y: 0.5, scale: 1, rotate: 0, z: 9 });
             done();
             render();
           });
         });
       } else if (kind === 'quiz') {
-        promptSheet('Quiz', `<input data-p placeholder="Prompt"><input data-a placeholder="Correct answer"><input data-b placeholder="Wrong 1"><input data-c placeholder="Wrong 2">`, (sheet, done) => {
+        promptSheet(t('duniya.sticker_quiz'), `<input data-p placeholder="${tHtml('duniya.prompt')}"><input data-a placeholder="${tHtml('duniya.correct_answer')}"><input data-b placeholder="${tHtml('duniya.wrong_1')}"><input data-c placeholder="${tHtml('duniya.wrong_2')}">`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
             const options = [sheet.querySelector('[data-a]').value, sheet.querySelector('[data-b]').value, sheet.querySelector('[data-c]').value].map((x) => x.trim()).filter(Boolean);
             if (options.length >= 2) {
-              item.overlays.push({ id: uid(), type: 'quiz', prompt: sheet.querySelector('[data-p]').value.trim() || 'Quiz', options, correctIndex: 0, x: 0.5, y: 0.55, scale: 1, rotate: 0, z: 9 });
+              item.overlays.push({ id: uid(), type: 'quiz', prompt: sheet.querySelector('[data-p]').value.trim() || tEn('duniya.sticker_quiz'), options, correctIndex: 0, x: 0.5, y: 0.55, scale: 1, rotate: 0, z: 9 });
             }
             done();
             render();
           });
         });
       } else if (kind === 'slider') {
-        promptSheet('Slider', `<input data-p placeholder="How spicy?" maxlength="80"><input data-e value="🔥" maxlength="4">`, (sheet, done) => {
+        promptSheet(t('duniya.slider'), `<input data-p placeholder="${tHtml('duniya.how_spicy')}" maxlength="80"><input data-e value="🔥" maxlength="4">`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
-            item.overlays.push({ id: uid(), type: 'slider', prompt: sheet.querySelector('[data-p]').value.trim() || 'Slide', emoji: sheet.querySelector('[data-e]').value || '🔥', x: 0.5, y: 0.6, scale: 1, rotate: 0, z: 9 });
+            item.overlays.push({ id: uid(), type: 'slider', prompt: sheet.querySelector('[data-p]').value.trim() || tEn('duniya.sticker_slide'), emoji: sheet.querySelector('[data-e]').value || '🔥', x: 0.5, y: 0.6, scale: 1, rotate: 0, z: 9 });
             done();
             render();
           });
         });
       } else if (kind === 'countdown') {
-        promptSheet('Countdown', `<input data-t placeholder="Title"><input type="datetime-local" data-d>`, (sheet, done) => {
+        promptSheet(t('duniya.countdown'), `<input data-t placeholder="${tHtml('duniya.title')}"><input type="datetime-local" data-d>`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
             const at = new Date(sheet.querySelector('[data-d]').value).getTime();
             if (at) {
-              item.overlays.push({ id: uid(), type: 'countdown', title: sheet.querySelector('[data-t]').value.trim() || 'Countdown', targetAt: at, x: 0.5, y: 0.45, scale: 1, rotate: 0, z: 9 });
+              item.overlays.push({ id: uid(), type: 'countdown', title: sheet.querySelector('[data-t]').value.trim() || tEn('duniya.countdown'), targetAt: at, x: 0.5, y: 0.45, scale: 1, rotate: 0, z: 9 });
             }
             done();
             render();
           });
         });
       } else if (kind === 'addyours') {
-        promptSheet('Add yours', `<input data-p placeholder="Prompt" maxlength="80">`, (sheet, done) => {
+        promptSheet(t('duniya.add_yours'), `<input data-p placeholder="${tHtml('duniya.prompt')}" maxlength="80">`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
-            item.overlays.push({ id: uid(), type: 'addyours', prompt: sheet.querySelector('[data-p]').value.trim() || 'Add yours', x: 0.5, y: 0.72, scale: 1, rotate: 0, z: 9 });
+            item.overlays.push({ id: uid(), type: 'addyours', prompt: sheet.querySelector('[data-p]').value.trim() || tEn('duniya.add_yours'), x: 0.5, y: 0.72, scale: 1, rotate: 0, z: 9 });
             done();
             render();
           });
@@ -817,14 +817,14 @@
       } else if (kind === 'link') {
         const professional =
           (typeof ownProfileType === 'function' ? ownProfileType() : typeof userProfile !== 'undefined' ? userProfile.profileType : '') === 'professional';
-        promptSheet('Link', `<input data-u placeholder="https://"><small>${professional ? '' : NS.tt('story_link_confirm', 'This will be tappable on your story.')}</small>`, (sheet, done) => {
+        promptSheet(t('duniya.link'), `<input data-u placeholder="https://"><small>${professional ? '' : NS.tt('duniya.story_link_confirm', 'This will be tappable on your story.')}</small>`, (sheet, done) => {
           sheet.querySelector('[data-done]').addEventListener('click', () => {
             const url = String(sheet.querySelector('[data-u]').value || '').trim();
             if (!/^https:\/\//i.test(url) || /javascript:/i.test(url)) {
-              if (typeof showToast === 'function') showToast(NS.tt('story_link_https', 'Use an https link'));
+              if (typeof showToast === 'function') showToast(NS.tt('duniya.story_link_https', 'Use an https link'));
               return;
             }
-            if (!professional && !window.confirm(NS.tt('story_link_confirm', 'This will be tappable on your story.'))) return;
+            if (!professional && !window.confirm(NS.tt('duniya.story_link_confirm', 'This will be tappable on your story.'))) return;
             item.overlays.push({ id: uid(), type: 'link', url, label: url.replace(/^https:\/\//i, '').slice(0, 32), x: 0.5, y: 0.7, scale: 1, rotate: 0, z: 9 });
             done();
             render();
@@ -841,7 +841,7 @@
           const span = (item.trimEndMs || 0) - (item.trimStartMs || 0);
           const dur = item.durationMs || 0;
           if (dur > MAX_VIDEO_MS && span > MAX_VIDEO_MS) {
-            if (typeof showToast === 'function') showToast(NS.tt('story_trim_needed', 'Trim video to 90 seconds'));
+            if (typeof showToast === 'function') showToast(NS.tt('duniya.story_trim_needed', 'Trim video to 90 seconds'));
             if (shareBtn) shareBtn.disabled = false;
             idx = queue.indexOf(item);
             render();
@@ -912,7 +912,7 @@
               : !!(payload.media || payload.thumb || payload.text || (payload.overlays && payload.overlays.length));
           if (!viewable) {
             if (typeof showToast === 'function') {
-              showToast(NS.tt('story_need_content', 'Add a photo, video, or text before sharing'));
+              showToast(NS.tt('duniya.story_need_content', 'Add a photo, video, or text before sharing'));
             }
             if (shareBtn) shareBtn.disabled = false;
             return;
@@ -924,14 +924,14 @@
           const retry = document.createElement('button');
           retry.className = 'ds-retry';
           retry.type = 'button';
-          retry.textContent = NS.tt('story_retry', 'Couldn’t share — Retry');
+          retry.textContent = NS.tt('duniya.story_retry', 'Couldn’t share — Retry');
           retry.addEventListener('click', () => {
             retry.remove();
             share({ saveOnly });
           });
           root.appendChild(retry);
           if (typeof showToast === 'function') {
-            showToast(typeof friendlyError === 'function' ? friendlyError(err) : err.message || 'Could not share');
+            showToast(typeof friendlyError === 'function' ? friendlyError(err) : err.message || t('duniya.could_not_share'));
           }
           return;
         }

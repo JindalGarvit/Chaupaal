@@ -1,11 +1,8 @@
 {
-  "total": 5645,
+  "total": 4648,
   "bySurface": {
-    "common": 183,
-    "khoj": 237,
-    "peepal": 16,
-    "duniya": 390,
-    "dangal": 4555,
-    "akhbaar": 264
+    "common": 18,
+    "dangal": 4627,
+    "akhbaar": 3
   }
 }

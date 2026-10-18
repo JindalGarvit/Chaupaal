@@ -271,7 +271,7 @@
           <thead><tr><th></th><th>${tt('tier_free', 'Free')}</th>${!isPro ? `<th>${tt('tier_pradhan', 'Pradhan')}</th>` : ''}<th>${tt('tier_sarpanch', 'Sarpanch')}</th></tr></thead>
           <tbody>
             <tr><td>${tt('membership_ads', 'Ads')}</td><td>${tt('membership_ads_some', 'Some')}</td>${!isPro ? `<td>${tt('membership_ads_limited', 'Limited')}</td>` : ''}<td>${tt('membership_ads_none', 'None')}</td></tr>
-            <tr><td>Peepal / week</td><td>5</td>${!isPro ? '<td>15</td>' : ''}<td>∞</td></tr>
+            <tr><td>${tHtml('premium.peepal_per_week')}</td><td>5</td>${!isPro ? '<td>15</td>' : ''}<td>∞</td></tr>
             <tr><td>${tHtml('settings.ai_discovery_week')}</td><td>10</td>${!isPro ? '<td>30</td>' : ''}<td>∞</td></tr>
             <tr><td>${tHtml('settings.ai_keyboard_day')}</td><td>5</td>${!isPro ? '<td>15</td>' : ''}<td>∞</td></tr>
             <tr><td>${tHtml('settings.streak_freeze_mo')}</td><td>0</td>${!isPro ? '<td>1</td>' : ''}<td>∞</td></tr>
@@ -282,7 +282,7 @@
             !isPro && pricing.pradhan != null
               ? `<div class="cm-tier-card${tier === 'pradhan' ? ' is-active' : ''}">
               <div class="cm-tier-name">${tt('tier_pradhan', 'Pradhan')}</div>
-              <div class="cm-tier-price">${formatAmount(pricing.pradhan, { cmLabel: true })} / mo</div>
+              <div class="cm-tier-price">${tHtml('premium.price_per_month', { price: formatAmount(pricing.pradhan, { cmLabel: true }) })}</div>
               ${tier === 'pradhan' && sub.activeUntil ? `<div class="cm-tier-renew">${typeof formatDate === 'function' ? formatDate(sub.activeUntil, 'medium') : new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
               ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="pradhan">${tt('membership_subscribe', 'Subscribe')}</button>`}
             </div>`
@@ -290,7 +290,7 @@
           }
           <div class="cm-tier-card${tier === 'sarpanch' ? ' is-active' : ''}">
             <div class="cm-tier-name">${tt('tier_sarpanch', 'Sarpanch')}</div>
-            <div class="cm-tier-price">${formatAmount(pricing.sarpanch, { cmLabel: true })} / mo</div>
+            <div class="cm-tier-price">${tHtml('premium.price_per_month', { price: formatAmount(pricing.sarpanch, { cmLabel: true }) })}</div>
             ${tier === 'sarpanch' && sub.activeUntil ? `<div class="cm-tier-renew">${typeof formatDate === 'function' ? formatDate(sub.activeUntil, 'medium') : new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
             ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="sarpanch">${tier === 'pradhan' && !isPro ? tt('settings.membership_upgrade', 'Upgrade to Sarpanch') : tt('membership_subscribe', 'Subscribe')}</button>`}
           </div>

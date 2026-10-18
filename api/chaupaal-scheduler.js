@@ -136,6 +136,8 @@ async function processRecommendation(db, uid, state, stateRef) {
         tier: 'fast',
         feature: 'chaupaal_recommendation',
         max_tokens: 400,
+        lang: require('../server-lib/i18n-server').serverLang(profile.lang || profile.profile?.lang || 'en'),
+        langJson: true,
         system:
           'You are Chaupaal. Return ONLY JSON: {"items":[{"kind":"game|content|people","title":"...","reason":"..."}]} with 3 short warm recommendations. No guilt. No AI-assistant phrasing.',
         messages: [

@@ -93,7 +93,14 @@
   function autoText(text) {
     if (typeof i18nAutoLabelKey !== 'function') return null;
     const hit = i18nAutoLabelKey(text, 'chat.auto.');
-    return hit ? t(hit.key, hit.params) : null;
+    if (!hit) return null;
+    // A captured param can itself be an app label ("Shared starter: <hello prompt>").
+    const params = {};
+    Object.keys(hit.params).forEach((k) => {
+      const inner = i18nAutoLabelKey(hit.params[k], 'chat.auto.');
+      params[k] = inner && !Object.keys(inner.params).length ? t(inner.key) : hit.params[k];
+    });
+    return t(hit.key, params);
   }
 
   /** Chat-list preview line (plain text): structured event → auto label → stored preview. */

@@ -12,7 +12,7 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, p), 'utf8'));
 
 const api = read('api/peepal-reactions.js');
 const modes = read('public/src/js/core/section-modes.js');
@@ -48,7 +48,8 @@ assert(/discovery_person_signal/.test(discovery) && /discovery_person_signal/.te
 
 // Pro
 assert(/professional_match/.test(core) && /professional_match/.test(api), '13 Pro networking path');
-assert(/INTENT_CHIPS_PRO/.test(khoj) && !/INTENT_CHIPS_PRO[\s\S]*Dating/.test(khoj), '14 Pro chips no Dating');
+const proChips = (khoj.match(/const INTENT_CHIPS_PRO = \[[\s\S]*?\n {2}\];/) || [''])[0];
+assert(proChips && !/intent: 'dating'|khoj\.dating/.test(proChips), '14 Pro chips no Dating');
 assert(/khoj_ph_pro|co-founder/.test(khoj), '15 Pro free-text; Personal has Dating');
 assert(/INTENT_CHIPS_PERSONAL[\s\S]*Dating/.test(khoj), '15 Personal Dating chip');
 

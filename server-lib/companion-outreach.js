@@ -280,6 +280,7 @@ async function processCompanionOutreach(db, uid, state, stateRef) {
         tier: 'fast',
         feature: 'companion_checkin',
         max_tokens: 180,
+        lang: await require('./i18n-server').langForUser(db, uid),
         system: `You write short Chaupaal companion check-ins for an Indian social app.
 Rules:
 - You are clearly an app feature named Chaupaal, never a real person pretending otherwise.

@@ -255,7 +255,7 @@
           emojiWrap.classList.remove('hidden');
           emojiGrid.innerHTML = STICKER_PACK.map(
             (emoji) =>
-              `<button type="button" class="media-picker-sticker" data-sticker="${emoji}" aria-label="Sticker ${emoji}">${emoji}</button>`
+              `<button type="button" class="media-picker-sticker" data-sticker="${emoji}" aria-label="${tHtml('media.sticker_emoji', { emoji })}">${emoji}</button>`
           ).join('');
           emojiGrid.querySelectorAll('[data-sticker]').forEach((btn) => {
             btn.addEventListener('click', () => {

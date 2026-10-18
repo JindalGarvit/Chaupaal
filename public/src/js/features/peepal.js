@@ -19,7 +19,7 @@ function showOnboarding(){
         <div class="onboarding-sub">${s.sub}</div>
         ${s.type==='categories'?`
           <div class="onboarding-chips" id="onboardChips">
-            ${CATEGORY_SUGGESTIONS.slice(0,12).map(c=>`<button class="onboarding-chip" data-name="${c.name}">${c.emoji} ${c.name}</button>`).join('')}
+            ${CATEGORY_SUGGESTIONS.slice(0,12).map(c=>`<button class="onboarding-chip" data-name="${c.name}">${c.emoji} ${optionLabelHtml('akhbaar.cat', c.name)}</button>`).join('')}
           </div>
         `:s.type==='aur_sunao'?`
           <div class="onboarding-chips">
@@ -122,7 +122,7 @@ function showComingSoonModal(kind){
     openLegalSheet(kind==='privacy'?'privacy':'terms');
     return;
   }
-  const title=kind==='privacy'?'Privacy Policy':'Terms of Service';
+  const title=kind==='privacy'?t('common.privacy_policy'):t('peepal.terms_of_service');
   const existing=document.getElementById('comingSoonModal');
   if(existing) existing.remove();
   const backdrop=document.createElement('div');
@@ -132,10 +132,10 @@ function showComingSoonModal(kind){
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="comingSoonTitle">
       <div class="modal-header">
         <div class="modal-title" id="comingSoonTitle">${title}</div>
-        <button type="button" class="icon-btn" data-dismiss="coming-soon" aria-label="Close">✕</button>
+        <button type="button" class="icon-btn" data-dismiss="coming-soon" aria-label="${tHtml('common.close')}">✕</button>
       </div>
-      <p class="modal-sub">Legal text is temporarily unavailable. Please try again later.</p>
-      <button type="button" class="btn btn--primary btn--block modal-btn" data-dismiss="coming-soon">Got it</button>
+      <p class="modal-sub">${tHtml('peepal.legal_text_is_temporarily_unavailable_plea')}</p>
+      <button type="button" class="btn btn--primary btn--block modal-btn" data-dismiss="coming-soon">${tHtml('peepal.got_it')}</button>
     </div>`;
   document.querySelector('.device')?.appendChild(backdrop);
   const close=()=>backdrop.remove();
@@ -155,11 +155,11 @@ function showGuestSignInBanner(){
   bar.id='guestSignInBanner';
   bar.className='guest-signin-banner';
   bar.innerHTML=`
-    <div class="guest-signin-copy"><strong>Sign in to save progress</strong><span>Keep streaks, chats, and categories across devices.</span></div>
+    <div class="guest-signin-copy"><strong>${tHtml('peepal.sign_in_to_save_progress')}</strong><span>${tHtml('peepal.keep_streaks_chats_and_categories_across')}</span></div>
     <div class="guest-signin-actions">
-      <button type="button" class="btn btn--primary" data-guest-auth="signup">Create account</button>
-      <button type="button" class="btn btn--secondary" data-guest-auth="login">Log in</button>
-      <button type="button" class="guest-signin-dismiss" aria-label="Dismiss">✕</button>
+      <button type="button" class="btn btn--primary" data-guest-auth="signup">${tHtml('peepal.create_account')}</button>
+      <button type="button" class="btn btn--secondary" data-guest-auth="login">${tHtml('common.log_in')}</button>
+      <button type="button" class="guest-signin-dismiss" aria-label="${tHtml('common.dismiss')}">✕</button>
     </div>`;
   const device=document.querySelector('.device')||document.body;
   device.appendChild(bar);

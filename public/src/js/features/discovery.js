@@ -1,22 +1,23 @@
-﻿// ===================== PEEPAL AI PEOPLE SEARCH =====================
+// ===================== PEEPAL AI PEOPLE SEARCH =====================
 
 const PEEPAL_SEARCH_NUDGES = [
-  {emoji:'â¤ï¸', text:'Looking for someone to date?', hint:'Type something like "someone fun around 25 who loves movies and travel"'},
-  {emoji:'ðŸ¤', text:'Want new friends?', hint:'Try "cricket fan from Delhi who likes startups"'},
-  {emoji:'ðŸ’¼', text:'Hiring or job hunting?', hint:'Try "frontend developer looking for opportunities" or "hiring designers"'},
-  {emoji:'âœˆï¸', text:'Planning a trip?', hint:'Try "travel buddy for Ladakh in December"'},
-  {emoji:'ðŸŽ®', text:'Find a game partner', hint:'Try "someone to play chess or word games with"'},
-  {emoji:'ðŸŽµ', text:'Bond over music', hint:'Try "Bollywood music lover who also likes jazz"'},
-  {emoji:'ðŸ“š', text:'Start a book club', hint:'Try "non-fiction reader interested in history"'},
-  {emoji:'ðŸ‹ï¸', text:'Find a fitness buddy', hint:'Try "morning runner or gym person in Bangalore"'},
-  {emoji:'ðŸ›', text:'Foodie connections', hint:'Try "food lover who likes trying new restaurants"'},
-  {emoji:'ðŸ§ ', text:'Intellectual debates', hint:'Try "someone who loves discussing politics, philosophy or science"'},
-  {emoji:'ðŸŽ¬', text:'Movie or series partner', hint:'Try "thriller movie buff who watches OTT"'},
-  {emoji:'ðŸš€', text:'Find a co-founder', hint:'Try "startup-minded person with product sense"'},
+  {emoji:'❤️', text:t('discovery.looking_for_someone_to_date'), hint:t('discovery.type_something_like_someone_fun_around')},
+  {emoji:'🤝', text:t('discovery.want_new_friends'), hint:t('discovery.try_cricket_fan_from_delhi_who')},
+  {emoji:'💼', text:t('discovery.hiring_or_job_hunting'), hint:t('discovery.try_frontend_developer_looking_for_opportu')},
+  {emoji:'✈️', text:t('discovery.planning_a_trip'), hint:t('discovery.try_travel_buddy_for_ladakh_in')},
+  {emoji:'🎮', text:t('discovery.find_a_game_partner'), hint:t('discovery.try_someone_to_play_chess_or')},
+  {emoji:'🎵', text:t('discovery.bond_over_music'), hint:t('discovery.try_bollywood_music_lover_who_also')},
+  {emoji:'📚', text:t('discovery.start_a_book_club'), hint:t('discovery.try_non_fiction_reader_interested_in')},
+  {emoji:'🏋️', text:t('discovery.find_a_fitness_buddy'), hint:t('discovery.try_morning_runner_or_gym_person')},
+  {emoji:'🍛', text:t('discovery.foodie_connections'), hint:t('discovery.try_food_lover_who_likes_trying')},
+  {emoji:'🧠', text:t('discovery.intellectual_debates'), hint:t('discovery.try_someone_who_loves_discussing_politics')},
+  {emoji:'🎬', text:t('discovery.movie_or_series_partner'), hint:t('discovery.try_thriller_movie_buff_who_watches')},
+  {emoji:'🚀', text:t('discovery.find_a_co_founder'), hint:t('discovery.try_startup_minded_person_with_product')},
 ];
 
-// Intent â†’ criteria mapping (no API call needed for common patterns)
-const INTENT_MAP = {
+// Intent → criteria mapping (no API call needed for common patterns)
+// Matching criteria + AI hints (English codes / descriptors) — never UI copy.
+const INTENT_MAP = /* i18n-values: discovery.intent_map */ {
   dating: {gender_preference:'opposite', interests:['relationships','lifestyle'], personality:'social', vibe:'romantic connection'},
   friendship: {interests:[], personality:null, vibe:'new friends'},
   'job hunting': {interests:['Business','Tech'], personality:'intellectual', vibe:'career opportunities'},
@@ -52,7 +53,7 @@ async function runPeepalAiSearch(opts){
       showToast(
         typeof t === 'function'
           ? t('peepal_find_empty', "Type who you're looking for")
-          : "Type who you're looking for"
+          : t('discovery.type_who_you_re_looking_for')
       );
     }
     return;
@@ -77,8 +78,8 @@ async function runPeepalAiSearch(opts){
     if (typeof showToast === 'function') {
       showToast(
         typeof t === 'function'
-          ? t('khoj_find_signin', 'Sign in to find people to meet')
-          : 'Sign in to find people to meet'
+          ? t('discovery.khoj_find_signin', 'Sign in to find people to meet')
+          : t('discovery.sign_in_to_find_people_to')
       );
     }
     if (typeof openAuthSheet === 'function') openAuthSheet('login');
@@ -101,7 +102,7 @@ async function runPeepalAiSearch(opts){
   }
 
   if(typeof renderSkeleton==='function') renderSkeleton(resultsEl, {variant:'card', count:2});
-  else resultsEl.innerHTML = `<div class="peepal-ai-thinking">Finding the right people for you...</div>`;
+  else resultsEl.innerHTML = `<div class="peepal-ai-thinking">${tHtml('discovery.finding_the_right_people_for_you')}</div>`;
 
   try{
     // Unified brain: server intent_discover (parse → assume → retrieve → rank → learn hooks)
@@ -141,12 +142,12 @@ async function runPeepalAiSearch(opts){
     console.error(err);
     if(typeof renderErrorState==='function'){
       renderErrorState(resultsEl, {
-        title:'Search couldn’t finish',
-        message: typeof friendlyError==='function'?friendlyError(err):'Couldn’t connect right now. Try again in a moment.',
+        title:t('discovery.search_couldn_t_finish'),
+        message: typeof friendlyError==='function'?friendlyError(err):t('discovery.couldn_t_connect_right_now_try'),
         onRetry:()=>runPeepalAiSearch(o),
       });
     } else {
-      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">Couldn't connect right now. Try again in a moment.</div>`;
+      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${tHtml('discovery.couldn_t_connect_right_now_try_2')}</div>`;
     }
   }
 }
@@ -174,14 +175,14 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
   if(!matches.length){
     const refineHint =
       !data.aiEnabled && Array.isArray(refineChips) && refineChips.some((c) => c.id === 'add_detail')
-        ? ' Try a chip or add an interest / city — AI-off Find works best with a clearer description.'
+        ? t('discovery.try_a_chip_or_add_an')
         : '';
     if(typeof renderEmptyState==='function'){
       renderEmptyState(resultsEl, {
         icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
-        title:'No matches yet',
-        message: (data.emptyMessage || 'No eligible people matched that search. We never invent profiles — try broader wording.') + refineHint,
-        actionLabel: 'Invite',
+        title:t('discovery.no_matches_yet'),
+        message: t('discovery.no_eligible_people_try_broader') + refineHint,
+        actionLabel: t('common.invite'),
         onAction: () => {
           if (typeof shareInviteToChaupaal === 'function') shareInviteToChaupaal();
           else if (typeof ChaupaalReferrals?.openInviteToChaupaalShare === 'function') {
@@ -190,7 +191,7 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
         },
       });
     } else {
-      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${data.emptyMessage || 'No matches found.'}${refineHint}</div>`;
+      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${tHtml('discovery.no_eligible_people_try_broader')}${refineHint}</div>`;
     }
     return;
   }
@@ -199,14 +200,14 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   resultsEl.innerHTML = `
-    ${aiMsgExhausted ? `<div class="peepal-ai-limit-banner">${aiMsgLimit.unlock || 'AI Discovery messaging limit reached — Find still works; Message/Ask may be paused.'} Professional profiles found here stay unlimited.</div>` : ''}
+    ${aiMsgExhausted ? `<div class="peepal-ai-limit-banner">${aiMsgLimit.unlock ? esc(aiMsgLimit.unlock) : tHtml('discovery.ai_discovery_messaging_limit_reached_find')} ${tHtml('discovery.professional_stay_unlimited')}</div>` : ''}
     <div id="peepalAiMeterHost"></div>
     <div id="peepalAiResultsBody">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Top ${matches.length} matches</div>
-        <div style="font-size:11px;color:var(--muted);">${plan.vibe ? `"${esc(String(plan.vibe).slice(0,40))}"` : (data.mode === 'deterministic' ? 'Preference match' : 'AI-assisted')}</div>
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">${tHtml('discovery.top_matches', { count: matches.length })}</div>
+        <div style="font-size:11px;color:var(--muted);">${plan.vibe ? `"${esc(String(plan.vibe).slice(0,40))}"` : (data.mode === 'deterministic' ? tHtml('discovery.preference_match') : tHtml('discovery.ai_assisted'))}</div>
       </div>
-      ${refineChips.length ? `<div class="discovery-refine-chips" data-nav-ignore="1">${refineChips.map(c=>`<button type="button" class="peepal-nudge-chip" data-refine="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div>` : ''}
+      ${refineChips.length ? `<div class="discovery-refine-chips" data-nav-ignore="1">${refineChips.map(c=>`<button type="button" class="peepal-nudge-chip" data-refine="${esc(c.id)}">${esc(optionLabel('discovery.refine', c.id) !== c.id ? optionLabel('discovery.refine', c.id) : c.label)}</button>`).join('')}</div>` : ''}
     </div>
   `;
   const bodyEl = resultsEl.querySelector('#peepalAiResultsBody') || resultsEl;
@@ -245,15 +246,17 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       icebreakers: m.icebreakers || [],
       profileType: m.profileType || 'personal',
       profileTheme: m.profileTheme || null,
-      avatar: 'ðŸ‘¤',
+      avatar: '👤',
     };
-    const reason = m.explain || 'Matched on open profile';
+    const reason = typeof discoveryExplainText === 'function' ? discoveryExplainText(m.explain) : m.explain || t('discovery.matched_on_open_profile');
     const theirIb = typeof resolveIcebreakersFromUser==='function'?resolveIcebreakersFromUser(user):(user.icebreakers||[]);
     const ib = typeof craftSpecificIcebreaker==='function'
       ? craftSpecificIcebreaker(user, { shared: user.interests || [], reason })
       : (typeof pickIcebreakerSnippet==='function' ? pickIcebreakerSnippet(theirIb) : null);
     const starter = (ib && (ib.line || ib.answer))
-      || `Hey ${String(user.name||'').split(' ')[0] || 'there'} — found you while looking for ${plan.searchIntent && plan.searchIntent !== 'any' ? plan.searchIntent : 'people'} on Chaupaal`;
+      || (plan.searchIntent && plan.searchIntent !== 'any'
+      ? t('discovery.starter_found_you_for', { name: String(user.name||'').split(' ')[0] || t('discovery.there'), intent: plan.searchIntent })
+      : t('discovery.starter_found_you', { name: String(user.name||'').split(' ')[0] || t('discovery.there') }));
 
     const card = document.createElement('div');
     card.className = 'peepal-ai-result-card' + (user.profileTheme?.accent ? ' dp-themed cp-author-accent' : '');
@@ -272,14 +275,14 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
       </div>
       ${(user.interests||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">${(user.interests||[]).slice(0,4).map(i=>`<span style="background:rgba(230,57,70,0.07);color:var(--red);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;">${esc(i)}</span>`).join('')}</div>`:''}
       <div class="ai-match-reason" style="margin-top:8px;font-size:12px;color:var(--ink-secondary,var(--muted));">${esc(reason)}</div>
-      ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${esc(ib.line || ib.answer)}"</div></div>`:''}
+      ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">${tHtml('discovery.conversation_starter')}</div><div class="discovery-icebreaker-text">"${esc(ib.line || ib.answer)}"</div></div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
-        <button type="button" class="peepal-ai-feedback" data-sig="more_like" title="More like this">♥ More like this</button>
-        <button type="button" class="peepal-ai-feedback" data-sig="not_interested" title="Not interested">✕ Not interested</button>
+        <button type="button" class="peepal-ai-feedback" data-sig="more_like" title="${tHtml('common.more_like_this')}">${tHtml('discovery.more_like_this')}</button>
+        <button type="button" class="peepal-ai-feedback" data-sig="not_interested" title="${tHtml('common.not_interested')}">${tHtml('discovery.not_interested')}</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="peepal-ai-view-btn" style="flex:1;padding:9px;background:var(--surface-sunken,var(--cream));border:2px solid var(--line);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">View profile</button>
-        <button class="peepal-ai-chat-btn" data-name="${esc(user.name)}" data-uid="${esc(user.uid)}" data-starter="${esc(starter)}" ${aiMsgExhausted && (user.profileType || 'personal') === 'personal' ? 'disabled aria-disabled="true"' : ''} style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;${aiMsgExhausted && (user.profileType || 'personal') === 'personal' ? 'opacity:.55;' : ''}">${esc(ib?.cta || 'Ask them')}</button>
+        <button class="peepal-ai-view-btn" style="flex:1;padding:9px;background:var(--surface-sunken,var(--cream));border:2px solid var(--line);border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;">${tHtml('discovery.view_profile')}</button>
+        <button class="peepal-ai-chat-btn" data-name="${esc(user.name)}" data-uid="${esc(user.uid)}" data-starter="${esc(starter)}" ${aiMsgExhausted && (user.profileType || 'personal') === 'personal' ? 'disabled aria-disabled="true"' : ''} style="flex:1;padding:9px;background:var(--red);color:#fff;border:none;border-radius:12px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:12px;cursor:pointer;${aiMsgExhausted && (user.profileType || 'personal') === 'personal' ? 'opacity:.55;' : ''}">${esc(ib?.cta || t('discovery.ask_them'))}</button>
       </div>
     `;
 
@@ -312,13 +315,13 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
             } catch (err) {}
             card.remove();
             if (typeof showToast === 'function') {
-              showToast('Thanks — we’ll show fewer like this');
+              showToast(t('discovery.thanks_we_ll_show_fewer_like'));
             }
           } else if (typeof showToast === 'function') {
-            showToast("Noted — we'll show more like this");
+            showToast(t('common.noted_we_ll_show_more_like'));
           }
         } catch (err) {
-          if (typeof showToast === 'function') showToast('Could not save preference');
+          if (typeof showToast === 'function') showToast(t('common.could_not_save_preference'));
         }
       });
     });
@@ -333,7 +336,7 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
     card.querySelector('.peepal-ai-chat-btn')?.addEventListener('click', (e) => {
       if (e.currentTarget.disabled || e.currentTarget.getAttribute('aria-disabled') === 'true') {
         if (typeof showToast === 'function') {
-          showToast(aiMsgLimit?.unlock || 'Messaging limit reached — Find still works');
+          showToast(aiMsgLimit?.unlock || t('discovery.messaging_limit_reached_find_still_works'));
         }
         return;
       }
@@ -361,7 +364,7 @@ async function renderIntentDiscoverResults(resultsEl, query, data){
 async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
   const limit = Math.max(1, Math.min(20, Number(opts?.limit) || DISCOVER_LIMIT_DEFAULT));
   const filters = opts?.filters || (typeof getDiscoveryFilterPayload === 'function' ? getDiscoveryFilterPayload() : {});
-  const queryLower = query.toLowerCase();
+  const queryLower = typeof SearchNormalize !== 'undefined' ? SearchNormalize.expand(query) : String(query).toLowerCase();
   let quickCriteria = null;
   for(const [intent, criteria] of Object.entries(INTENT_MAP)){
     if(queryLower.includes(intent)){quickCriteria = {...criteria, detectedIntent: intent};break;}
@@ -398,15 +401,15 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(resultsEl, {
         icon:(typeof TabElements!=='undefined'&&TabElements.markHtml)?TabElements.markHtml('peepal',40):'🌳',
-        title:'No matches yet',
-        message:'No eligible open profiles right now. We never invent people — try inviting a friend or broader wording.',
-        actionLabel:'Invite',
+        title:t('discovery.no_matches_yet'),
+        message:t('discovery.no_eligible_open_profiles_right_now'),
+        actionLabel:t('common.invite'),
         onAction:()=>{
           if(typeof shareInviteToChaupaal==='function') shareInviteToChaupaal();
         },
       });
     } else {
-      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">No eligible open profiles right now.</div>`;
+      resultsEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);">${tHtml('discovery.no_eligible_open_profiles_right_now_2')}</div>`;
     }
     return;
   }
@@ -447,7 +450,7 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
     (criteria.interests||[]).forEach(i=>{
       if(interests.includes(String(i).toLowerCase())){ score += 20; reasons.push(i); }
     });
-    if(criteria.city && String(u.city||'').toLowerCase().includes(String(criteria.city).toLowerCase())){
+    if(criteria.city && (typeof SearchNormalize !== 'undefined' ? SearchNormalize.matches(u.city||'', criteria.city) : String(u.city||'').toLowerCase().includes(String(criteria.city).toLowerCase()))){
       score += 25; reasons.push('city');
     }
     // AI-off vague: still allow open profiles with a soft score when no structured hit
@@ -465,7 +468,7 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
     mode: 'deterministic',
     aiEnabled: false,
     plan: { searchIntent: criteria.searchIntent, vibe: criteria.vibe, hardFilters: {}, appliedAssumptionIds: [], suppressedAssumptionIds: [] },
-    refineChips: vague ? [{ id: 'add_detail', label: 'Add interests or city' }] : [],
+    refineChips: vague ? [{ id: 'add_detail', label: t('discovery.add_interests_or_city') }] : [],
     matches: scored.map(({user, score, reasons})=>({
       uid: user.uid,
       name: user.name,
@@ -477,12 +480,12 @@ async function runPeepalAiSearchLocalFallback(query, resultsEl, opts){
       icebreakers: user.icebreakers || [],
       profileType: user.profileType || 'personal',
       score,
-      explain: reasons.length ? `Matched on ${reasons.slice(0,3).join(' & ')}` : 'Matched on open profile',
+      explain: reasons.length ? t('discovery.matched_on_list', { list: (typeof formatList === 'function' ? formatList : (x) => x.join(', '))(reasons.slice(0,3).map((r) => (r === 'city' ? t('discovery.reason_city') : optionLabel('akhbaar.cat', r)))) }) : t('discovery.matched_on_open_profile'),
     })),
     empty: !scored.length,
     emptyMessage: vague
-      ? 'Try a chip or add more detail — we never invent profiles.'
-      : 'No matches found yet. Try broader terms.',
+      ? t('discovery.try_a_chip_or_add_more')
+      : t('discovery.no_matches_found_yet_try_broader'),
   });
 }
 
@@ -635,14 +638,14 @@ function handleOpenToMeetToggle(newValue){
     const sheet = document.createElement('div');
     sheet.style.cssText='position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:24px;z-index:100;';
     sheet.innerHTML=`
-      <div style="font-size:28px;text-align:center;margin-bottom:12px;">ðŸ‘‹</div>
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;text-align:center;margin-bottom:8px;">You're open to meeting people!</div>
-      <div style="font-size:13px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:16px;">Your profile may now appear in Peepal's "You might enjoy talking to" section and in people's AI search results. You can turn this off anytime in Settings.</div>
+      <div style="font-size:28px;text-align:center;margin-bottom:12px;">👋</div>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;text-align:center;margin-bottom:8px;">${tHtml('discovery.you_re_open_to_meeting_people')}</div>
+      <div style="font-size:13px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:16px;">${tHtml('discovery.your_profile_may_now_appear_in')}</div>
       <div style="background:var(--cream);border-radius:14px;padding:14px;margin-bottom:16px;">
-        <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px;">What this means:</div>
-        ${['Your profile shows up in Peepal discoveries for people with similar interests','AI search results include you when someone describes your type','You\'ll see more relevant people in your own Peepal feed','You can turn off at any time â€” no one is notified'].map(t=>`<div style="font-size:12px;color:var(--muted);padding:4px 0;display:flex;gap:8px;"><span>âœ“</span><span>${t}</span></div>`).join('')}
+        <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px;">${tHtml('discovery.what_this_means')}</div>
+        ${/* i18n-copy */ [t('discovery.your_profile_shows_up_in_peepal'),t('discovery.ai_search_results_include_you_when'),t('discovery.you_ll_see_more_relevant_people'),t('discovery.you_can_turn_off_at_any')].map(line=>`<div style="font-size:12px;color:var(--muted);padding:4px 0;display:flex;gap:8px;"><span>✓</span><span>${line}</span></div>`).join('')}
       </div>
-      <button id="closeOpenToMeetSheet" style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">Got it! ðŸŽ‰</button>
+      <button id="closeOpenToMeetSheet" style="width:100%;padding:14px;background:var(--red);color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">${tHtml('discovery.got_it')}</button>
     `;
     document.querySelector('.device').appendChild(sheet);
     document.getElementById('closeOpenToMeetSheet').addEventListener('click',()=>sheet.remove());
@@ -675,89 +678,89 @@ function openPeepalAskSheet(editPost = null){
   sheet.className = 'peepal-ask-sheet';
   const lim = window.PolicyLimits?.ANON_POSTS || { perDay: 2, perWeek: 7 };
   const attachDefs = [
-    { type: 'photo', icon: '📷', label: 'Photo' },
-    { type: 'video', icon: '🎬', label: 'Video' },
-    { type: 'music', icon: '🎵', label: 'Music' },
-    { type: 'voice', icon: '🎤', label: 'Voice' },
-    { type: 'gif', icon: 'GIF', label: 'GIF & more' },
-    { type: 'sticker', icon: '😄', label: 'Sticker' },
-    { type: 'link', icon: '🔗', label: 'Link' },
-    { type: 'location', icon: '📍', label: 'Location' },
-    { type: 'mention', icon: '@', label: 'Mention' },
-    { type: 'hashtag', icon: '#', label: 'Hashtag' },
-    { type: 'document', icon: '📄', label: 'Document' },
-    { type: 'collab', icon: '🤝', label: 'Collab' },
+    { type: 'photo', icon: '📷', label: t('common.photo') },
+    { type: 'video', icon: '🎬', label: t('discovery.video') },
+    { type: 'music', icon: '🎵', label: t('common.music') },
+    { type: 'voice', icon: '🎤', label: t('discovery.voice') },
+    { type: 'gif', icon: 'GIF', label: t('discovery.gif_more') },
+    { type: 'sticker', icon: '😄', label: t('discovery.sticker') },
+    { type: 'link', icon: '🔗', label: t('discovery.link') },
+    { type: 'location', icon: '📍', label: t('discovery.location') },
+    { type: 'mention', icon: '@', label: t('discovery.mention') },
+    { type: 'hashtag', icon: '#', label: t('discovery.hashtag') },
+    { type: 'document', icon: '📄', label: t('discovery.document') },
+    { type: 'collab', icon: '🤝', label: t('discovery.collab') },
   ];
   let composeAttachments = [];
   let selectedCap = '10';
   sheet.innerHTML = `
     <div class="peepal-ask-header">
-      <button id="closeAsk" aria-label="Close" style="background:var(--surface-sunken,var(--cream));border:none;border-radius:999px;cursor:pointer;padding:8px;color:var(--ink);width:36px;height:36px;display:flex;align-items:center;justify-content:center;">${typeof iconHtml==='function' ? iconHtml('x',{size:18}) : '✕'}</button>
-      <div class="peepal-ask-title">${isEdit ? 'Edit discussion' : 'Discuss'}</div>
-      <button id="peepalPublishBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 20px;font:700 14px 'Space Grotesk',sans-serif;min-width:60px;cursor:pointer;">${isEdit ? 'Save' : 'Share'}</button>
+      <button id="closeAsk" aria-label="${tHtml('common.close')}" style="background:var(--surface-sunken,var(--cream));border:none;border-radius:999px;cursor:pointer;padding:8px;color:var(--ink);width:36px;height:36px;display:flex;align-items:center;justify-content:center;">${typeof iconHtml==='function' ? iconHtml('x',{size:18}) : '✕'}</button>
+      <div class="peepal-ask-title">${isEdit ? tHtml('discovery.edit_discussion') : tHtml('common.discuss')}</div>
+      <button id="peepalPublishBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 20px;font:700 14px 'Space Grotesk',sans-serif;min-width:60px;cursor:pointer;">${isEdit ? tHtml('common.save') : tHtml('common.share')}</button>
     </div>
     <div class="peepal-ask-body">
       <div id="anonToggleRow" style="background:var(--line);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:16px;display:${isEdit ? 'none' : 'flex'};align-items:center;gap:12px;opacity:0.5;">
         <div style="flex:1;">
-          <div style="font-weight:700;font-size:14px;">🎭 Share anonymously</div>
-          <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">Anonymous posts don't reveal your identity</div>
+          <div style="font-weight:700;font-size:14px;">${tHtml('discovery.share_anonymously')}</div>
+          <div id="anonToggleHint" style="font-size:11px;color:var(--muted);">${tHtml('discovery.anonymous_posts_don_t_reveal_your')}</div>
         </div>
         <label class="switch" id="anonToggleLabel" style="pointer-events:none;"><input type="checkbox" id="anonToggle" disabled><span class="slider"></span></label>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;">
-        ${[{id:'open',label:'Open'},{id:'poll',label:'Poll'},{id:'form',label:'Form'}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
+        ${[{id:'open',label:t('common.open')},{id:'poll',label:t('discovery.poll')},{id:'form',label:t('discovery.form')}].map((f,i)=>`<button class="peepal-format-chip${i===0?' active':''}" data-fmt="${f.id}" style="padding:8px 14px;border-radius:999px;border:2px solid ${i===0?'var(--red)':'var(--line)'};background:${i===0?'rgba(230,57,70,0.08)':'var(--white)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;color:${i===0?'var(--red)':'var(--ink)'};">${f.label}</button>`).join('')}
       </div>
-      <textarea id="peepalQText" placeholder="What's on your mind?" style="width:100%;min-height:100px;border:2px solid var(--line);border-radius:14px;padding:12px;font-family:Inter,sans-serif;font-size:15px;outline:none;resize:none;box-sizing:border-box;background:var(--cream);"></textarea>
+      <textarea id="peepalQText" placeholder="${tHtml('discovery.whats_on_your_mind')}" style="width:100%;min-height:100px;border:2px solid var(--line);border-radius:14px;padding:12px;font-family:Inter,sans-serif;font-size:15px;outline:none;resize:none;box-sizing:border-box;background:var(--cream);"></textarea>
       <div class="peepal-compose-toolbar" id="peepalComposeToolbar">
-        <button type="button" class="pct-btn" data-attach="photo" title="Photo">📷</button>
+        <button type="button" class="pct-btn" data-attach="photo" title="${tHtml('common.photo')}">📷</button>
         <button type="button" class="pct-btn" data-attach="gif" title="GIF">GIF</button>
-        <button type="button" class="pct-btn" data-attach="music" title="Music">🎵</button>
-        <button type="button" class="pct-btn pct-btn--more" id="peepalAttachMore" title="More">+</button>
+        <button type="button" class="pct-btn" data-attach="music" title="${tHtml('common.music')}">🎵</button>
+        <button type="button" class="pct-btn pct-btn--more" id="peepalAttachMore" title="${tHtml('common.more')}">+</button>
       </div>
       <div class="peepal-attach-preview" id="peepalAttachPreview"></div>
       <div id="peepalAttachGridHost"></div>
-      <div id="peepalLinkRow" class="peepal-link-row" style="display:none;"><input id="peepalLinkInput" type="url" placeholder="https://"><button type="button" id="peepalLinkAdd">Add</button></div>
-      <div id="peepalCollabRow" class="peepal-collab-row" style="display:none;"><input id="peepalCollabInput" type="text" placeholder="Invite co-author by username"><button type="button" id="peepalCollabAdd">Add</button></div>
+      <div id="peepalLinkRow" class="peepal-link-row" style="display:none;"><input id="peepalLinkInput" type="url" placeholder="https://"><button type="button" id="peepalLinkAdd">${tHtml('discovery.add')}</button></div>
+      <div id="peepalCollabRow" class="peepal-collab-row" style="display:none;"><input id="peepalCollabInput" type="text" placeholder="${tHtml('discovery.invite_co_author_by_username')}"><button type="button" id="peepalCollabAdd">${tHtml('discovery.add')}</button></div>
       <div id="mcqOptions" style="margin-top:10px;display:none;">
-        ${[1,2,3,4].map(i=>`<input id="mcqOpt${i}" placeholder="Option ${i}${i>2?' (optional)':''}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;background:var(--white);">`).join('')}
+        ${[1,2,3,4].map(i=>`<input id="mcqOpt${i}" placeholder="${i>2?tHtml('discovery.option_n_optional', { n: i }):tHtml('discovery.option_n', { n: i })}" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;background:var(--white);">`).join('')}
       </div>
       <div id="peepalFormBuilder" class="peepal-form-builder" style="display:none;margin-top:10px;">
         <div id="peepalFormQs"></div>
-        <button type="button" class="peepal-form-add" id="peepalFormAddQ">+ Add question</button>
+        <button type="button" class="peepal-form-add" id="peepalFormAddQ">${tHtml('discovery.add_question')}</button>
       </div>
       <div id="peepalAudienceRow" style="margin-top:8px;">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Audience</div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">${tHtml('discovery.audience')}</div>
         <select id="peepalAudience" style="width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:var(--white);outline:none;">
-          <option value="everyone">Everyone</option>
-          <option value="followers">Followers only</option>
-          <option value="custom">Custom</option>
-          <option value="save_only">Save without posting</option>
+          <option value="everyone">${tHtml('discovery.everyone')}</option>
+          <option value="followers">${tHtml('discovery.followers_only')}</option>
+          <option value="custom">${tHtml('discovery.custom')}</option>
+          <option value="save_only">${tHtml('discovery.save_without_posting')}</option>
         </select>
-        <p id="peepalAudienceHint" class="peepal-audience-hint">Everyone: ranked for people who may care — followers get a boost, not a wall.</p>
-        <textarea id="peepalCustomAudience" class="peepal-custom-audience" hidden rows="2" placeholder="Describe who should see this (e.g. Bangalore designers into startups)"></textarea>
+        <p id="peepalAudienceHint" class="peepal-audience-hint">${tHtml('discovery.everyone_ranked_for_people_who_may')}</p>
+        <textarea id="peepalCustomAudience" class="peepal-custom-audience" hidden rows="2" placeholder="${tHtml('discovery.describe_who_should_see_this_e')}"></textarea>
         <div id="peepalMultiSeg" class="peepal-multi-seg" hidden></div>
       </div>
       <!-- Response cap -->
       <div style="margin-top:12px;">
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
-                    letter-spacing:0.05em;margin-bottom:6px;">Responses wanted</div>
+                    letter-spacing:0.05em;margin-bottom:6px;">${tHtml('discovery.responses_wanted')}</div>
         <div id="peepalResponseCapRow" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <button type="button" class="peepal-cap-btn active" data-cap="10">10</button>
           <button type="button" class="peepal-cap-btn" data-cap="25">25</button>
           <button type="button" class="peepal-cap-btn peepal-cap-btn--free-max" data-cap="50">50</button>
-          <input type="number" id="peepalCapInput" min="1" max="50" value="10" inputmode="numeric" class="peepal-cap-input" aria-label="Response cap">
+          <input type="number" id="peepalCapInput" min="1" max="50" value="10" inputmode="numeric" class="peepal-cap-input" aria-label="${tHtml('discovery.response_cap')}">
           <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="100"
-                  title="Pradhan / Sarpanch">100 ✦</button>
+                  title="${tHtml('discovery.pradhan_sarpanch')}">100 ✦</button>
           <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="500"
-                  title="Pradhan / Sarpanch">500 ✦</button>
+                  title="${tHtml('discovery.pradhan_sarpanch')}">500 ✦</button>
           <button type="button" class="peepal-cap-btn peepal-cap-btn--pro" data-cap="unlimited"
-                  title="Pradhan / Sarpanch">Unlimited ✦</button>
+                  title="${tHtml('discovery.pradhan_sarpanch')}">${tHtml('discovery.unlimited')}</button>
         </div>
         <div id="peepalCapHint" style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4;">
-          Free posts get up to 50 responses.
+          ${tHtml('discovery.free_posts_get_up_to_50')}
         </div>
         <div id="peepalCapNudge" class="peepal-cap-nudge" hidden></div>
-        <p id="peepalPremiumNudge" class="peepal-premium-nudge">Pradhan / Sarpanch can split responses across several audiences.</p>
+        <p id="peepalPremiumNudge" class="peepal-premium-nudge">${tHtml('discovery.pradhan_sarpanch_can_split_responses_acros')}</p>
       </div>
       <input id="peepalPhotoInput" type="file" accept="image/*" hidden>
       <input id="peepalVideoInput" type="file" accept="video/*" hidden>
@@ -802,12 +805,12 @@ function openPeepalAskSheet(editPost = null){
     if (hint) {
       hint.textContent =
         val === 'followers'
-          ? 'Only people who follow you.'
+          ? t('discovery.only_people_who_follow_you')
           : val === 'custom'
-            ? 'We’ll match this description as best we can — Share still works if it’s vague.'
+            ? t('discovery.we_ll_match_this_description_as')
             : val === 'save_only'
-              ? 'Saved to your archive, not the feed.'
-              : 'Everyone: ranked for people who may care — followers get a boost, not a wall.';
+              ? t('discovery.saved_to_your_archive_not_the')
+              : t('discovery.everyone_ranked_for_people_who_may');
     }
   }
 
@@ -821,23 +824,23 @@ function openPeepalAskSheet(editPost = null){
             ? (q.options || ['', ''])
                 .map(
                   (o, oi) =>
-                    `<input class="peepal-form-opt" data-qi="${i}" data-oi="${oi}" value="${String(o || '').replace(/"/g, '&quot;')}" placeholder="Option ${oi + 1}">`
+                    `<input class="peepal-form-opt" data-qi="${i}" data-oi="${oi}" value="${String(o || '').replace(/"/g, '&quot;')}" placeholder="${tHtml('discovery.option_n', { n: oi + 1 })}">`
                 )
                 .join('') +
-              `<button type="button" class="peepal-form-addopt" data-qi="${i}">+ option</button>`
+              `<button type="button" class="peepal-form-addopt" data-qi="${i}">${tHtml('discovery.option')}</button>`
             : '';
         return `<div class="peepal-form-q" data-qi="${i}">
           <div class="peepal-form-q-head">
             <select data-qtype="${i}">
-              <option value="short"${q.type === 'short' ? ' selected' : ''}>Short text</option>
-              <option value="long"${q.type === 'long' ? ' selected' : ''}>Long text</option>
-              <option value="choice"${q.type === 'choice' ? ' selected' : ''}>Multiple choice</option>
-              <option value="checks"${q.type === 'checks' ? ' selected' : ''}>Checkboxes</option>
+              <option value="short"${q.type === 'short' ? ' selected' : ''}>${tHtml('discovery.short_text')}</option>
+              <option value="long"${q.type === 'long' ? ' selected' : ''}>${tHtml('discovery.long_text')}</option>
+              <option value="choice"${q.type === 'choice' ? ' selected' : ''}>${tHtml('discovery.multiple_choice')}</option>
+              <option value="checks"${q.type === 'checks' ? ' selected' : ''}>${tHtml('discovery.checkboxes')}</option>
             </select>
-            <label><input type="checkbox" data-qreq="${i}" ${q.required ? 'checked' : ''}> Required</label>
-            <button type="button" data-qdel="${i}" ${formQuestions.length < 2 ? 'disabled' : ''}>Delete</button>
+            <label><input type="checkbox" data-qreq="${i}" ${q.required ? 'checked' : ''}> ${tHtml('discovery.required')}</label>
+            <button type="button" data-qdel="${i}" ${formQuestions.length < 2 ? 'disabled' : ''}>${tHtml('discovery.delete')}</button>
           </div>
-          <input data-qprompt="${i}" placeholder="Question ${i + 1}" value="${String(q.prompt || '').replace(/"/g, '&quot;')}">
+          <input data-qprompt="${i}" placeholder="${tHtml('discovery.question_n', { n: i + 1 })}" value="${String(q.prompt || '').replace(/"/g, '&quot;')}">
           ${opts}
         </div>`;
       })
@@ -916,16 +919,16 @@ function openPeepalAskSheet(editPost = null){
           (s, i) =>
             `<div class="peepal-seg-row">
               <select data-seg-aud="${i}">
-                <option value="everyone"${s.audience === 'everyone' ? ' selected' : ''}>Everyone</option>
-                <option value="followers"${s.audience === 'followers' ? ' selected' : ''}>Followers</option>
-                <option value="custom"${s.audience === 'custom' ? ' selected' : ''}>Custom</option>
+                <option value="everyone"${s.audience === 'everyone' ? ' selected' : ''}>${tHtml('discovery.everyone')}</option>
+                <option value="followers"${s.audience === 'followers' ? ' selected' : ''}>${tHtml('discovery.followers')}</option>
+                <option value="custom"${s.audience === 'custom' ? ' selected' : ''}>${tHtml('discovery.custom')}</option>
               </select>
               <input data-seg-cap="${i}" type="number" min="1" value="${s.cap || 10}" style="width:64px;">
-              ${s.audience === 'custom' ? `<input data-seg-txt="${i}" placeholder="Who?" value="${String(s.customAudienceText || '').replace(/"/g, '&quot;')}">` : ''}
+              ${s.audience === 'custom' ? `<input data-seg-txt="${i}" placeholder="${tHtml('discovery.who')}" value="${String(s.customAudienceText || '').replace(/"/g, '&quot;')}">` : ''}
               <button type="button" data-seg-del="${i}">×</button>
             </div>`
         )
-        .join('') + `<button type="button" id="peepalAddSeg">Add audience segment</button>`;
+        .join('') + `<button type="button" id="peepalAddSeg">${tHtml('discovery.add_audience_segment')}</button>`;
     host.querySelector('#peepalAddSeg')?.addEventListener('click', () => {
       extraSegments.push({ audience: 'followers', cap: 10, customAudienceText: '' });
       renderMultiSeg();
@@ -970,7 +973,7 @@ function openPeepalAskSheet(editPost = null){
       row.style.background = 'rgba(230,57,70,0.05)';
       row.style.borderColor = 'var(--red)';
       row.style.opacity = '1';
-      hint.textContent = `${anonQuota.dayLeft} anonymous left today · ${anonQuota.weekLeft} this week (max ${lim.perDay}/day, ${lim.perWeek}/week)`;
+      hint.textContent = t('discovery.dayleft_anonymous_left_today_weekleft_this', { dayLeft: anonQuota.dayLeft, weekLeft: anonQuota.weekLeft, perDay: lim.perDay, perWeek: lim.perWeek });
       label.style.pointerEvents = '';
       toggle.disabled = false;
     } else {
@@ -978,8 +981,8 @@ function openPeepalAskSheet(editPost = null){
       row.style.borderColor = 'var(--line)';
       row.style.opacity = '0.5';
       hint.textContent = anonQuota.readFailed
-        ? (anonQuota.unlock || "Couldn't verify anonymous limit — try again shortly.")
-        : (anonQuota.unlock || 'Anonymous posting unavailable right now.');
+        ? (anonQuota.unlock || t('discovery.couldn_t_verify_anonymous_limit_try'))
+        : (anonQuota.unlock || t('discovery.anonymous_posting_unavailable_right_now'));
       label.style.pointerEvents = 'none';
       toggle.disabled = true;
       toggle.checked = false;
@@ -1004,13 +1007,13 @@ function openPeepalAskSheet(editPost = null){
     if (!host) return;
     host.innerHTML = composeAttachments.map((a) => {
       const lbl = String(a.label || a.name || a.type);
-      return `<div class="peepal-attach-chip">${lbl}<button type="button" data-rm="${a.type}" aria-label="Remove">×</button></div>`;
+      return `<div class="peepal-attach-chip">${lbl}<button type="button" data-rm="${a.type}" aria-label="${tHtml('discovery.remove')}">×</button></div>`;
     }).join('');
     host.querySelectorAll('[data-rm]').forEach((btn) => btn.addEventListener('click', () => removeAttachment(btn.dataset.rm)));
   }
   function toastUnavailable(kind, reason){
     if (typeof showToast === 'function') {
-      showToast(reason || `${kind} isn’t available here`);
+      showToast(reason || t('discovery.kind_isn_t_available_here', { kind }));
     }
   }
   function renderAttachGrid(){
@@ -1034,7 +1037,7 @@ function openPeepalAskSheet(editPost = null){
     if (type === 'document') return document.getElementById('peepalDocInput')?.click();
     if (type === 'music') {
       if (typeof openMusicPicker === 'function') {
-        return openMusicPicker({ onSelect: (song) => song && addAttachment({ type: 'music', label: `🎵 ${song.title || 'Music'}`, song }) });
+        return openMusicPicker({ onSelect: (song) => song && addAttachment({ type: 'music', label: `🎵 ${song.title || t('common.music')}`, song }) });
       }
       return document.getElementById('peepalAudioInput')?.click();
     }
@@ -1045,18 +1048,18 @@ function openPeepalAskSheet(editPost = null){
           : typeof openGifPicker === 'function'
             ? openGifPicker
             : null;
-      if (!openPicker) return toastUnavailable('GIF', 'GIF picker isn’t available right now');
+      if (!openPicker) return toastUnavailable('GIF', t('discovery.gif_picker_isn_t_available_right'));
       return openPicker({
         onSelect: (gif) => {
           if (!gif) return;
           if (gif.emoji && !gif.url) {
-            addAttachment({ type: 'sticker', label: `${gif.emoji} Sticker`, emoji: gif.emoji });
+            addAttachment({ type: 'sticker', label: t('discovery.emoji_sticker', { emoji: gif.emoji }), emoji: gif.emoji });
             return;
           }
           if (!gif.url) return;
           const kind = String(gif.kind || gif.type || 'gif').toLowerCase();
           const label =
-            kind === 'sticker' ? 'Sticker' : kind === 'meme' ? 'Meme' : kind === 'clip' ? 'Clip' : 'GIF';
+            kind === 'sticker' ? t('discovery.sticker') : kind === 'meme' ? t('discovery.meme') : kind === 'clip' ? t('duniya.clip') : 'GIF';
           addAttachment({
             type: kind,
             label,
@@ -1076,25 +1079,25 @@ function openPeepalAskSheet(editPost = null){
           : typeof openKlipyMediaPicker === 'function'
             ? (opts) => openKlipyMediaPicker(Object.assign({ kind: 'sticker' }, opts || {}))
             : null;
-      if (!openStickers) return toastUnavailable('Sticker', 'Stickers aren’t available right now');
+      if (!openStickers) return toastUnavailable(t('discovery.sticker'), t('discovery.stickers_aren_t_available_right_now'));
       return openStickers({
         onSelect: (sticker) => {
           if (!sticker) return;
           if (typeof sticker === 'string') {
-            addAttachment({ type: 'sticker', label: `${sticker} Sticker`, emoji: sticker });
+            addAttachment({ type: 'sticker', label: t('discovery.sticker_sticker', { sticker }), emoji: sticker });
             return;
           }
           if (sticker.emoji && !sticker.url) {
-            addAttachment({ type: 'sticker', label: `${sticker.emoji} Sticker`, emoji: sticker.emoji });
+            addAttachment({ type: 'sticker', label: t('discovery.emoji_sticker', { emoji: sticker.emoji }), emoji: sticker.emoji });
             return;
           }
           if (sticker.url) {
             addAttachment({
               type: 'sticker',
-              label: 'Sticker',
+              label: t('discovery.sticker'),
               url: sticker.url,
               preview: sticker.preview || sticker.previewUrl || sticker.url,
-              title: sticker.title || 'Sticker',
+              title: sticker.title || t('discovery.sticker'),
             });
           }
         },
@@ -1102,7 +1105,7 @@ function openPeepalAskSheet(editPost = null){
     }
     if (type === 'voice') {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-        return toastUnavailable('Voice', 'Voice recording isn’t supported on this device');
+        return toastUnavailable(t('discovery.voice'), t('discovery.voice_recording_isn_t_supported_on'));
       }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1112,19 +1115,19 @@ function openPeepalAskSheet(editPost = null){
         rec.onstop = () => {
           stream.getTracks().forEach((t) => t.stop());
           const blob = new Blob(chunks, { type: 'audio/webm' });
-          addAttachment({ type: 'voice', label: '🎤 Voice', blob });
+          addAttachment({ type: 'voice', label: t('discovery.voice_2'), blob });
         };
         rec.start();
-        if (typeof showToast === 'function') showToast('Recording…');
+        if (typeof showToast === 'function') showToast(t('discovery.recording'));
         setTimeout(() => rec.state !== 'inactive' && rec.stop(), 6000);
       } catch (e) {
-        if (typeof showToast === 'function') showToast('Mic permission denied');
+        if (typeof showToast === 'function') showToast(t('discovery.mic_permission_denied'));
       }
       return;
     }
     if (type === 'location') {
       if (!navigator.geolocation) {
-        return toastUnavailable('Location', 'Location isn’t supported on this device');
+        return toastUnavailable(t('discovery.location'), t('discovery.location_isn_t_supported_on_this'));
       }
       navigator.geolocation.getCurrentPosition((pos) => {
         const lat = Number(pos.coords?.latitude || 0).toFixed(4);
@@ -1132,7 +1135,7 @@ function openPeepalAskSheet(editPost = null){
         const label = typeof resolveLocationLabel === 'function' ? resolveLocationLabel(pos.coords) : `${lat}, ${lng}`;
         addAttachment({ type: 'location', label: `📍 ${label}`, lat: Number(lat), lng: Number(lng) });
       }, () => {
-        if (typeof showToast === 'function') showToast('Location unavailable');
+        if (typeof showToast === 'function') showToast(t('discovery.location_unavailable'));
       });
       return;
     }
@@ -1161,7 +1164,7 @@ function openPeepalAskSheet(editPost = null){
       if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none';
       return;
     }
-    toastUnavailable(type, `${type} isn’t available here`);
+    toastUnavailable(type, t('discovery.type_isn_t_available_here', { type }));
   }
 
   // Wire format chips
@@ -1187,7 +1190,7 @@ function openPeepalAskSheet(editPost = null){
       if (!isPremiumPeepal() && n > freeMax) {
         if (capNudge) {
           capNudge.hidden = false;
-          capNudge.innerHTML = `Free accounts stop at ${freeMax}. <button type="button" class="peepal-soft-cta" id="peepalCapUpsell">See Chaupaal Money</button>`;
+          capNudge.innerHTML = `${tHtml('discovery.free_accounts_stop_at', { count: freeMax })} <button type="button" class="peepal-soft-cta" id="peepalCapUpsell">${tHtml('discovery.see_chaupaal_money')}</button>`;
           capNudge.querySelector('#peepalCapUpsell')?.addEventListener('click', () => {
             if (typeof openProUpsell === 'function') openProUpsell('response_cap');
             else if (typeof ChaupaalMoney?.openMembership === 'function') ChaupaalMoney.openMembership();
@@ -1205,8 +1208,8 @@ function openPeepalAskSheet(editPost = null){
     if (capHint) {
       capHint.textContent =
         selectedCap === 'unlimited'
-          ? 'Unlimited responses (membership).'
-          : `Your post will stop collecting new responses after ${selectedCap}.`;
+          ? t('discovery.unlimited_responses_membership')
+          : t('discovery.your_post_will_stop_collecting_new', { selectedCap });
     }
   };
   capRow?.querySelectorAll('.peepal-cap-btn').forEach(btn => {
@@ -1216,7 +1219,7 @@ function openPeepalAskSheet(editPost = null){
       if (isPro && !isPremiumPeepal()) {
         if (typeof openProUpsell === 'function') openProUpsell('response_cap');
         else if (typeof ChaupaalMoney?.openMembership === 'function') ChaupaalMoney.openMembership();
-        else if (typeof showToast === 'function') showToast('Higher caps on Pradhan / Sarpanch');
+        else if (typeof showToast === 'function') showToast(t('discovery.higher_caps_on_pradhan_sarpanch'));
         return;
       }
       setCapUi(cap);
@@ -1317,14 +1320,14 @@ function openPeepalAskSheet(editPost = null){
 
   document.getElementById('peepalPublishBtn').addEventListener('click',async()=>{
     const text=qText.value.trim();
-    if(!text){showToast('Write something to start a discussion');return;}
+    if(!text){showToast(t('discovery.write_something_to_start_a_discussion'));return;}
     const unlock=typeof beginClientMutation==='function'?beginClientMutation(isEdit?'peepal_edit':'peepal_post'):()=>{};
     if(unlock===false){ showToast(t('peepal_post_submitting')); return; }
     const pubBtn=document.getElementById('peepalPublishBtn');
     const pubLabel=pubBtn?pubBtn.textContent:'';
     if(pubBtn){
       if(typeof setButtonLoading==='function') setButtonLoading(pubBtn, true);
-      else { pubBtn.disabled=true; pubBtn.textContent=isEdit?'Saving…':'Sharing…'; }
+      else { pubBtn.disabled=true; pubBtn.textContent=isEdit?t('common.saving'):t('discovery.sharing'); }
     }
     try{
     if(isEdit){
@@ -1333,7 +1336,7 @@ function openPeepalAskSheet(editPost = null){
         return;
       }
       if(editPost.uid&&editPost.uid!==currentUser.uid){
-        showToast('Not authorized');
+        showToast(t('discovery.not_authorized'));
         return;
       }
       const fmt=sheet.querySelector('.peepal-format-chip.active')?.dataset.fmt||'open';
@@ -1355,7 +1358,7 @@ function openPeepalAskSheet(editPost = null){
             }
           : null;
       if (fmt === 'form' && (!formSchema.questions.length || formSchema.questions.some((q) => !q.prompt))) {
-        showToast('Add prompts for each form question');
+        showToast(t('discovery.add_prompts_for_each_form_question'));
         return;
       }
       const updatePayload={
@@ -1386,7 +1389,7 @@ function openPeepalAskSheet(editPost = null){
       sheet.classList.remove('open');setTimeout(()=>sheet.remove(),350);
       renderPeepalFeed();
       try{ document.dispatchEvent(new CustomEvent('chaupaal:profile-posts-changed')); }catch(e){}
-      showToast('Discussion updated');
+      showToast(t('discovery.discussion_updated'));
       return;
     }
     if(typeof checkRateLimit==='function'){
@@ -1402,7 +1405,7 @@ function openPeepalAskSheet(editPost = null){
     const wantsAnon=!!document.getElementById('anonToggle')?.checked;
     let isAnon=false;
     // Check anon quota before build/write, but consume ONLY after Firestore
-    // succeeds â€” otherwise a denied write still burns a scarce slot.
+    // succeeds — otherwise a denied write still burns a scarce slot.
     if(wantsAnon){
       try{
         anonQuota = await getAnonRemaining();
@@ -1436,7 +1439,7 @@ function openPeepalAskSheet(editPost = null){
           }
         : null;
     if (fmt === 'form' && (!formSchema.questions.length || formSchema.questions.some((q) => !q.prompt))) {
-      showToast('Add prompts for each form question');
+      showToast(t('discovery.add_prompts_for_each_form_question'));
       return;
     }
     const inferredTag =
@@ -1465,7 +1468,7 @@ function openPeepalAskSheet(editPost = null){
     // Firestore create rules require user.uid == auth.uid (Phase A). Display
     // name/avatar stay anonymous; only the public label changes.
     const ownUid=currentUser?.uid||'me';
-    const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:'just now',ts:Date.now(),tag:inferredTag,answered:false,deleted:false,
+    const q={id:`q_${Date.now()}`,question:text,format:fmt,options:opts,responses:opts.map(()=>0),totalResponses:0,comments:0,timeAgo:t('common.just_now_2'),ts:Date.now(),tag:inferredTag,answered:false,deleted:false,
       audience:saveOnly?'private':audience, responseLimitMode:'manual', responseCap:selectedCap, audienceSegments,
       customAudienceText,
       formSchema,
@@ -1474,7 +1477,7 @@ function openPeepalAskSheet(editPost = null){
       archived:!!saveOnly,
       saveOnly:!!saveOnly,
       user:isAnon
-        ?{name:'Anonymous',avatar:'🎭',uid:ownUid,profileType:'personal'}
+        ?{name:tEn('common.anonymous'),avatar:'🎭',uid:ownUid,profileType:'personal'}
         :{name:userProfile?.name||'You',avatar:userProfile?.photoURL||'🪑',uid:ownUid,photoURL:userProfile?.photoURL||null,profileType:(typeof ownProfileType==='function'?ownProfileType():(typeof getProfileType==='function'?getProfileType():'personal'))},
       anonymous:isAnon,uid:ownUid};
 
@@ -1524,7 +1527,7 @@ function openPeepalAskSheet(editPost = null){
             item.url = a.url;
           }
         } catch (e) {
-          if (typeof showToast === 'function') showToast('Couldn’t upload one attachment');
+          if (typeof showToast === 'function') showToast(t('discovery.couldn_t_upload_one_attachment'));
         }
         out.push(item);
       }
@@ -1674,7 +1677,7 @@ function openPeepalAskSheet(editPost = null){
     const input = document.getElementById('peepalLinkInput');
     const url = String(input?.value || '').trim();
     if (!/^https:\/\//i.test(url) || /javascript:/i.test(url)) {
-      if (typeof showToast === 'function') showToast('Use an https link');
+      if (typeof showToast === 'function') showToast(t('discovery.use_an_https_link'));
       return;
     }
     let title = url.replace(/^https:\/\//i, '');

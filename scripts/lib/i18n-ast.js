@@ -177,6 +177,10 @@ function classify(src, isCopy) {
     if (!p) return { role: 'prose', concat, html };
     // Anything inside a  i18n-values  list or map is a stored value / id, never copy.
     if (marked(ancestors, valueMarks)) return { role: 'skip' };
+    // Search vocabulary: kw([...]) keyword lists and *_TERMS / TRANSLIT maps are match terms, not copy.
+    if (ancestors.some((a) => (a.type === 'CallExpression' && calleeName(a) === 'kw') || (a.type === 'VariableDeclarator' && a.id && /^(TRANSLIT|STOP|\w+_(TERMS|KEYWORDS|STOPWORDS))$/.test(a.id.name || '')))) {
+      return { role: 'skip' };
+    }
     switch (p.type) {
       case 'CallExpression':
       case 'NewExpression': {
@@ -207,7 +211,7 @@ function classify(src, isCopy) {
         if (p.key === child && !p.computed) return { role: 'skip' };
         const k = p.key && (p.key.name || p.key.value);
         if (LABEL_KEYS.has(k)) return { role: 'label', concat, html };
-        if (/^(id|key|type|kind|mode|icon|emoji|class|className|cls|tab|section|surface|action|event|route|path|url|href|src|value|code|field|name|slug|tag|variant|accent|color|status|state|role|feature|source|transform|easing|fill|transition|animation)$/i.test(k)) return { role: 'skip' };
+        if (/^(id|key|type|kind|mode|icon|emoji|class|className|cls|tab|section|surface|action|event|route|path|url|href|src|value|code|field|name|slug|tag|variant|accent|color|status|state|role|feature|source|transform|easing|fill|transition|animation|keywords|synonyms|aliases|phrases|terms|tags|stopwords|prompt|system)$/i.test(k)) return { role: 'skip' };
         if (/[a-z](Sec|Section|Tab|Id|Key|Code|Type|Kind|Mode|Status|Visibility|Route|Path|Url)$/.test(k)) return { role: 'skip' };
         return { role: 'prose', concat, html };
       }
@@ -222,10 +226,14 @@ function classify(src, isCopy) {
         return p.computed && p.property === child ? { role: 'skip' } : { role: 'prose', concat, html };
       case 'ArrayExpression': {
         if (marked(ancestors, valueMarks)) return { role: 'skip' };
+        const gp = grand;
+        // Match terms / codes stay codes even inside an i18n-copy block (sample users' interests).
+        if (gp && gp.type === 'Property' && /^(keywords|synonyms|aliases|terms|tags|stopwords|interests|reasons_codes)$/i.test(String(gp.key.name || gp.key.value))) return { role: 'skip' };
         if (marked(ancestors, copyMarks)) return { role: 'copy', concat, html };
         // Option lists: { key, options: [...] } and profileField(label, key, type, ph, [...])
-        const gp = grand;
         if (gp && gp.type === 'Property' && (gp.key.name || gp.key.value) === 'options') return { role: 'skip' };
+        // Match terms / ids (keywords, synonyms, tags …) are never UI copy.
+        if (gp && gp.type === 'Property' && /^(keywords|synonyms|aliases|phrases|terms|tags|stopwords|interests|reasons_codes)$/i.test(String(gp.key.name || gp.key.value))) return { role: 'skip' };
         if (gp && gp.type === 'CallExpression' && calleeName(gp) === 'profileField' && gp.arguments[4] === p) return { role: 'skip' };
         return { role: 'array', concat, html };
       }
@@ -259,6 +267,22 @@ function classify(src, isCopy) {
       if (!isCopy(v)) continue;
       const st = rawStart + m.index + m[0].indexOf(m[3], m[1].length);
       push({ kind: 'html-attr', start: st, end: st + m[3].length, mode, text: v, quote });
+    }
+    // Double-quoted copy attributes the rewriter can't take: an apostrophe inside ("What's …") or a
+    // ${…} splitting the value ("Option ${i}") — report them so they get a full-sentence key.
+    const dq = /\b(placeholder|aria-label|title|alt)=\\?"([^"\\]*'[^"\\]*)\\?"/g;
+    while ((m = dq.exec(raw))) {
+      const v = decode(m[2]);
+      if (/\$\{/.test(v) || !isCopy(v)) continue;
+      push({ kind: 'complex', start: rawStart + m.index, end: rawStart + m.index + m[0].length, text: v, why: 'apostrophe in copy attribute' });
+    }
+    const open = /\b(placeholder|aria-label|title|alt)=\\?"([^"\\]*)$/.exec(raw);
+    if (open && /[A-Za-z]{2,}/.test(open[2]) && isCopy(open[2].trim() || 'x')) {
+      push({ kind: 'complex', start: rawStart + open.index, end: rawStart + raw.length, text: open[2].trim(), why: '${…} inside a copy attribute' });
+    }
+    const close = /^([^"<>]*)\\?"/.exec(raw);
+    if (close && rawStart > 0 && /[A-Za-z]{3,}/.test(close[1]) && /\b(placeholder|aria-label|title|alt)=\\?"[^"]*$/.test(src.slice(Math.max(0, rawStart - 200), rawStart).replace(/\$\{[^}]*$/, ''))) {
+      push({ kind: 'complex', start: rawStart, end: rawStart + close[0].length, text: close[1].trim(), why: '${…} inside a copy attribute' });
     }
   }
 
@@ -307,7 +331,11 @@ function classify(src, isCopy) {
           if (node.expressions.length) {
             const head = qi > 0 ? (/^([^<>]*)</.exec(raw) || [])[1] : null;
             const tail = qi < node.quasis.length - 1 ? (/>([^<>]*)$/.exec(raw) || [])[1] : null;
-            [head, tail].forEach((piece) => {
+            // Text sitting between two ${…} ("${n} likes · ${m}") with no tag of its own.
+            const before = node.quasis.slice(0, qi).map((x) => src.slice(x.start, x.end)).join('');
+            const inTagNow = before.lastIndexOf('<') > before.lastIndexOf('>');
+            const mid = qi > 0 && qi < node.quasis.length - 1 && !inTagNow && !/[<>"]/.test(raw) ? raw : null;
+            [head, tail, mid].forEach((piece) => {
               if (piece && /[A-Za-z]{2,}/.test(piece) && isCopy(piece.trim())) push({ kind: 'complex', start: q.start, end: q.end, text: piece.trim(), why: 'text next to ${…} in HTML' });
             });
           }
@@ -319,7 +347,8 @@ function classify(src, isCopy) {
       const d = decide(node, ancestors);
       if (d.role === 'skip') return;
       const plain = node.quasis.map((q) => q.value.cooked || '').join(' ');
-      const copy = d.role === 'sink' || d.role === 'label' ? isCopy(plain) : isProse(plain);
+      // A plain template nested in an HTML template's ${…} is rendered text too ("${a}/${b} today").
+      const copy = d.role === 'sink' || d.role === 'label' || (d.html && /[A-Za-z]{3,}/.test(plain)) ? isCopy(plain) : isProse(plain);
       if (!copy) return;
       if (d.concat) {
         push({ kind: 'concat', start: node.start, end: node.end, text: plain });
@@ -355,7 +384,7 @@ function classify(src, isCopy) {
   walk.simple(ast, {
     CallExpression(c) {
       const name = calleeName(c);
-      if (!T_FUNCS.has(name) || name === 'optionLabel') return;
+      if (!T_FUNCS.has(name) || name === 'optionLabel' || name === 'optionLabelHtml') return;
       const k = c.arguments[0];
       if (!k || k.type !== 'Literal' || typeof k.value !== 'string') return;
       const fb = c.arguments[1];

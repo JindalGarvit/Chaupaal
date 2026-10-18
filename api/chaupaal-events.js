@@ -196,9 +196,10 @@ module.exports = async function handler(req, res) {
         "Welcome back — no rush. I'm here if you want a gentle check-in or something light to try.";
       try {
         const result = await callAI({
-          tier: 'fast',
-          feature: 'chaupaal_session_nudge',
-          max_tokens: 120,
+        tier: 'fast',
+        feature: 'chaupaal_session_nudge',
+        max_tokens: 120,
+        lang: String((req.headers && req.headers['x-chaupaal-lang']) || body?.lang || 'en').slice(0, 12),
           system:
             'You are Chaupaal, the app itself. Write ONE short warm welcome-back bubble (max 2 sentences). No guilt, no usage stats, no "AI assistant" phrasing. Plain text only.',
           messages: [

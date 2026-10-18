@@ -331,6 +331,7 @@ module.exports = async function handler(req, res) {
         messages,
         max_tokens: 700,
         feature: 'chaupaal_chat',
+        lang: String((req.headers && req.headers['x-chaupaal-lang']) || body?.lang || 'en').slice(0, 12),
       });
       rawText = result.text || '';
     } catch (e) {

@@ -1,15 +1,15 @@
 // ===================== SAMPLE DISCOVERY POOL =====================
-const SAMPLE_DISCOVERY_POOL = [
-  {uid:'u_riya',name:'Riya Sharma',avatar:'😊',photoURL:null,city:'Mumbai',age:24,gender:'female',personality:'social',openToMeet:true,profileType:'personal',interests:['Sports','Tech','Music'],bio:'Cricket on weekends, startups on weekdays',questions:12,icebreakers:[{promptId:'ib14',answer:'Cutting chai, extra adrak — non-negotiable after the local.'}]},
-  {uid:'u_arjun',name:'Arjun Mehta',avatar:'🏔️',photoURL:null,city:'Delhi',age:27,gender:'male',personality:'outdoorsy',openToMeet:true,profileType:'personal',interests:['Sports','Travel','World'],bio:'Always planning the next trek',questions:8,icebreakers:[{promptId:'ib18',answer:'Road trip — windows down, random dhabas, no timetable.'}]},
-  {uid:'u_priya',name:'Priya Nair',avatar:'👩',photoURL:null,city:'Bengaluru',age:25,gender:'female',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['Tech','Business','GK'],bio:'Product manager who loves quizzes',questions:20,icebreakers:[{promptId:'ib05',answer:'Filter coffee forever. Tea is lovely; coffee is a personality.'},{promptId:'ib15',answer:'Church Street walk, then that tiny dosa place before traffic wakes up.'}]},
-  {uid:'u_dev',name:'Dev Sharma',avatar:'👨',photoURL:null,city:'Pune',age:29,gender:'male',personality:'intellectual',openToMeet:true,profileType:'personal',interests:['Business','World','GK'],bio:'Reading non-fiction and debating',questions:15,icebreakers:[{promptId:'ib10',answer:'A stranger returned my dropped metro card. Tiny, but it stuck.'}]},
-  {uid:'u_ananya',name:'Ananya Iyer',avatar:'🎨',photoURL:null,city:'Chennai',age:23,gender:'female',personality:'cinephile',openToMeet:true,profileType:'personal',interests:['Movies','Music','Food'],bio:'Film festivals + filter coffee',questions:6,icebreakers:[{promptId:'ib16',answer:'Pongal — the kolam, the sugarcane, the slow morning with family.'}]},
-  {uid:'u_kabir',name:'Kabir Singh',avatar:'🎮',photoURL:null,city:'Hyderabad',age:26,gender:'male',personality:'social',openToMeet:true,profileType:'personal',interests:['Tech','Sports','Music'],bio:'Gamer, coder, chai addict',questions:10,icebreakers:[{promptId:'ib14',answer:'Irani chai + Osmania biscuit. Hilltop debates optional.'}]},
-  {uid:'u_meera',name:'Meera Kapoor',avatar:'📚',photoURL:null,city:'Jaipur',age:28,gender:'female',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['GK','World','Travel'],bio:'History nerd who loves museums',questions:18,icebreakers:[{promptId:'ib17',answer:'"Khamma ghani" — say it once and the city softens.'}]},
-  {uid:'u_rohan',name:'Rohan Kapoor',avatar:'👨‍💻',photoURL:null,city:'Mumbai',age:30,gender:'male',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['Tech','Business','Sports'],bio:'Building something new',questions:9,icebreakers:[{promptId:'ib19',answer:'Pottery on weekends. Hands full of clay, brain finally quiet.'}]},
-  {uid:'u_sneha',name:'Sneha Joshi',avatar:'🌱',photoURL:null,city:'Mumbai',age:22,gender:'female',personality:'outdoorsy',openToMeet:true,profileType:'personal',interests:['Travel','Food','World'],bio:'Looking for travel buddies',questions:5,icebreakers:[{promptId:'ib15',answer:'Sunset at Bandra bandstand, then whatever stall smells best.'}]},
-  {uid:'u_vikram',name:'Vikram Rao',avatar:'🏏',photoURL:null,city:'Ahmedabad',age:31,gender:'male',personality:'social',openToMeet:true,profileType:'personal',interests:['Sports','Business','India'],bio:'IPL nights and chai debates',questions:14,icebreakers:[{promptId:'ib14',answer:'Cutting chai with extra sugar — fight me.'}]},
+const SAMPLE_DISCOVERY_POOL = /* i18n-copy */ [
+  {uid:'u_riya',name:'Riya Sharma',avatar:'😊',photoURL:null,city:'Mumbai',age:24,gender:'female',personality:'social',openToMeet:true,profileType:'personal',interests:['Sports','Tech','Music'],bio:t('discovery.cricket_on_weekends_startups_on_weekdays'),questions:12,icebreakers:[{promptId:'ib14',answer:t('discovery.cutting_chai_extra_adrak_non_negotiable')}]},
+  {uid:'u_arjun',name:'Arjun Mehta',avatar:'🏔️',photoURL:null,city:'Delhi',age:27,gender:'male',personality:'outdoorsy',openToMeet:true,profileType:'personal',interests:['Sports','Travel','World'],bio:t('discovery.always_planning_the_next_trek'),questions:8,icebreakers:[{promptId:'ib18',answer:t('discovery.road_trip_windows_down_random_dhabas')}]},
+  {uid:'u_priya',name:'Priya Nair',avatar:'👩',photoURL:null,city:'Bengaluru',age:25,gender:'female',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['Tech','Business','GK'],bio:t('discovery.product_manager_who_loves_quizzes'),questions:20,icebreakers:[{promptId:'ib05',answer:'Filter coffee forever. Tea is lovely; coffee is a personality.'},{promptId:'ib15',answer:t('discovery.church_street_walk_then_that_tiny')}]},
+  {uid:'u_dev',name:'Dev Sharma',avatar:'👨',photoURL:null,city:'Pune',age:29,gender:'male',personality:'intellectual',openToMeet:true,profileType:'personal',interests:['Business','World','GK'],bio:t('discovery.reading_non_fiction_and_debating'),questions:15,icebreakers:[{promptId:'ib10',answer:t('discovery.a_stranger_returned_my_dropped_metro')}]},
+  {uid:'u_ananya',name:'Ananya Iyer',avatar:'🎨',photoURL:null,city:'Chennai',age:23,gender:'female',personality:'cinephile',openToMeet:true,profileType:'personal',interests:['Movies','Music','Food'],bio:t('discovery.film_festivals_filter_coffee'),questions:6,icebreakers:[{promptId:'ib16',answer:t('discovery.pongal_the_kolam_the_sugarcane_the')}]},
+  {uid:'u_kabir',name:'Kabir Singh',avatar:'🎮',photoURL:null,city:'Hyderabad',age:26,gender:'male',personality:'social',openToMeet:true,profileType:'personal',interests:['Tech','Sports','Music'],bio:t('discovery.gamer_coder_chai_addict'),questions:10,icebreakers:[{promptId:'ib14',answer:t('discovery.irani_chai_osmania_biscuit_hilltop_debates')}]},
+  {uid:'u_meera',name:'Meera Kapoor',avatar:'📚',photoURL:null,city:'Jaipur',age:28,gender:'female',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['GK','World','Travel'],bio:t('discovery.history_nerd_who_loves_museums'),questions:18,icebreakers:[{promptId:'ib17',answer:t('discovery.khamma_ghani_say_it_once_and')}]},
+  {uid:'u_rohan',name:'Rohan Kapoor',avatar:'👨‍💻',photoURL:null,city:'Mumbai',age:30,gender:'male',personality:'intellectual',openToMeet:true,profileType:'professional',interests:['Tech','Business','Sports'],bio:t('discovery.building_something_new'),questions:9,icebreakers:[{promptId:'ib19',answer:t('discovery.pottery_on_weekends_hands_full_of')}]},
+  {uid:'u_sneha',name:'Sneha Joshi',avatar:'🌱',photoURL:null,city:'Mumbai',age:22,gender:'female',personality:'outdoorsy',openToMeet:true,profileType:'personal',interests:['Travel','Food','World'],bio:t('discovery.looking_for_travel_buddies'),questions:5,icebreakers:[{promptId:'ib15',answer:t('discovery.sunset_at_bandra_bandstand_then_whatever')}]},
+  {uid:'u_vikram',name:'Vikram Rao',avatar:'🏏',photoURL:null,city:'Ahmedabad',age:31,gender:'male',personality:'social',openToMeet:true,profileType:'personal',interests:['Sports','Business','India'],bio:t('discovery.ipl_nights_and_chai_debates'),questions:14,icebreakers:[{promptId:'ib14',answer:t('discovery.cutting_chai_with_extra_sugar_fight')}]},
 ];
 
 let dismissedUids = new Set(JSON.parse(localStorage.getItem('chaupaal_dismissed_uids')||'[]'));
@@ -32,7 +32,7 @@ let discoveryFilters = (() => {
   }
 })();
 
-const PEEPAL_MATCH_INTENTS = [
+const PEEPAL_MATCH_INTENTS = /* i18n-values: intent */ [
   'Friendship',
   'Dating',
   'Marriage',
@@ -137,19 +137,19 @@ function renderKhojFiltersMarkup() {
   const f = discoveryFilters;
   const isPro = isViewerProfessional();
   const intents = PEEPAL_MATCH_INTENTS.map(
-    (i) => `<option value="${i}" ${f.matchIntent === i ? 'selected' : ''}>${i}</option>`
+    (i) => `<option value="${i}" ${f.matchIntent === i ? 'selected' : ''}>${optionLabelHtml('intent', i)}</option>`
   ).join('');
-  const interestOpts = ['Sports', 'Tech', 'Business', 'Music', 'Food', 'Travel', 'Movies', 'GK', 'India', 'World']
-    .map((i) => `<option value="${i}" ${f.interest === i ? 'selected' : ''}>${i}</option>`)
+  const interestOpts = /* i18n-values: akhbaar.cat */ ['Sports', 'Tech', 'Business', 'Music', 'Food', 'Travel', 'Movies', 'GK', 'India', 'World']
+    .map((i) => `<option value="${i}" ${f.interest === i ? 'selected' : ''}>${optionLabelHtml('akhbaar.cat', i)}</option>`)
     .join('');
   const customSel =
     f.matchIntent && !PEEPAL_MATCH_INTENTS.includes(f.matchIntent) ? 'selected' : '';
   const industries =
     (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.INDUSTRIES) ||
-    ['Technology', 'Finance', 'Healthcare', 'Education', 'Media & Entertainment', 'Consulting', 'Startup', 'Other'];
+    /* i18n-values: industry */ ['Technology', 'Finance', 'Healthcare', 'Education', 'Media & Entertainment', 'Consulting', 'Startup', 'Other'];
   const purposes =
     (typeof ProfileTaxonomy !== 'undefined' && ProfileTaxonomy.PURPOSES) ||
-    ['Grow my network', 'Find collaborators', 'Hire talent', 'Find work', 'Learn from peers'];
+    /* i18n-values: purpose */ ['Grow my network', 'Find collaborators', 'Hire talent', 'Find work', 'Learn from peers'];
   const indOpts = industries
     .map((i) => `<option value="${i}" ${f.industry === i ? 'selected' : ''}>${i}</option>`)
     .join('');
@@ -160,46 +160,46 @@ function renderKhojFiltersMarkup() {
   return `
     <div class="khoj-filters-bar">
       <button type="button" class="khoj-filters-toggle" id="khojFiltersToggle" aria-expanded="false">
-        Filters${discoveryFiltersActiveCount() ? ` · ${discoveryFiltersActiveCount()}` : ''}
+        ${discoveryFiltersActiveCount() ? tHtml('discovery.filters_n', { n: discoveryFiltersActiveCount() }) : tHtml('discovery.filters')}
       </button>
-      <button type="button" class="khoj-filters-clear${discoveryFiltersActiveCount() ? '' : ' hidden'}" id="khojFiltersClear" title="Clear filters">Clear</button>
+      <button type="button" class="khoj-filters-clear${discoveryFiltersActiveCount() ? '' : ' hidden'}" id="khojFiltersClear" title="${tHtml('discovery.clear_filters')}">${tHtml('common.clear')}</button>
     </div>
     <div class="khoj-filters-panel hidden" id="khojFiltersPanel" hidden>
       <label class="khoj-filter-field">
-        <span>Intent</span>
-        <select data-discovery-filter="matchIntent" aria-label="Match intent">
-          <option value="">Profile default</option>
+        <span>${tHtml('discovery.intent')}</span>
+        <select data-discovery-filter="matchIntent" aria-label="${tHtml('discovery.match_intent')}">
+          <option value="">${tHtml('discovery.profile_default')}</option>
           ${intents}
-          <option value="__custom__" ${customSel}>Something else…</option>
+          <option value="__custom__" ${customSel}>${tHtml('discovery.something_else')}</option>
         </select>
       </label>
       <label class="khoj-filter-field">
-        <span>Interest</span>
-        <select data-discovery-filter="interest" aria-label="Filter by interest">
-          <option value="any">All interests</option>
+        <span>${tHtml('discovery.interest')}</span>
+        <select data-discovery-filter="interest" aria-label="${tHtml('discovery.filter_by_interest')}">
+          <option value="any">${tHtml('discovery.all_interests')}</option>
           ${interestOpts}
         </select>
       </label>
       ${
         showProFilters
           ? `<label class="khoj-filter-field">
-        <span>Industry</span>
-        <select data-discovery-filter="industry" aria-label="Industry">
-          <option value="">Any industry</option>
+        <span>${tHtml('common.industry')}</span>
+        <select data-discovery-filter="industry" aria-label="${tHtml('common.industry')}">
+          <option value="">${tHtml('discovery.any_industry')}</option>
           ${indOpts}
         </select>
       </label>
       <label class="khoj-filter-field">
-        <span>Purpose</span>
-        <select data-discovery-filter="purpose" aria-label="Purpose">
-          <option value="">Any purpose</option>
+        <span>${tHtml('common.purpose')}</span>
+        <select data-discovery-filter="purpose" aria-label="${tHtml('common.purpose')}">
+          <option value="">${tHtml('discovery.any_purpose')}</option>
           ${purOpts}
         </select>
       </label>`
           : ''
       }
-      <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="sameCity" ${f.sameCity ? 'checked' : ''}> Same city</label>
-      <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="recentlyJoined" ${f.recentlyJoined ? 'checked' : ''}> New here</label>
+      <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="sameCity" ${f.sameCity ? 'checked' : ''}> ${tHtml('discovery.same_city')}</label>
+      <label class="khoj-filter-check"><input type="checkbox" data-discovery-filter="recentlyJoined" ${f.recentlyJoined ? 'checked' : ''}> ${tHtml('discovery.new_here')}</label>
     </div>`;
 }
 
@@ -213,7 +213,7 @@ function wireKhojFilters(root, onChange) {
   const clearBtn = scope.querySelector('#khojFiltersClear');
   const syncChrome = () => {
     const n = discoveryFiltersActiveCount();
-    if (toggle) toggle.textContent = n ? `Filters · ${n}` : 'Filters';
+    if (toggle) toggle.textContent = n ? t('discovery.filters_n', { n }) : t('discovery.filters');
     clearBtn?.classList.toggle('hidden', !n);
   };
   toggle?.addEventListener('click', () => {
@@ -242,11 +242,11 @@ function wireKhojFilters(root, onChange) {
         const typed =
           typeof promptNameSheet === 'function'
             ? await promptNameSheet({
-                title: 'Match intent',
-                placeholder: 'What are you looking for?',
-                confirmLabel: 'Use',
+                title: t('discovery.match_intent'),
+                placeholder: t('discovery.what_are_you_looking_for'),
+                confirmLabel: t('discovery.use'),
               })
-            : window.prompt('What are you looking for?');
+            : window.prompt(t('discovery.what_are_you_looking_for'));
         if (!typed) {
           control.value = discoveryFilters.matchIntent || '';
           return;
@@ -347,8 +347,8 @@ async function getDiscoveryProfiles(){
               m.explain ||
               m.bio ||
               (viewerType === 'professional'
-                ? 'Someone you might work with on Chaupaal'
-                : 'Someone you might enjoy talking to on Peepal'),
+                ? t('discovery.someone_you_might_work_with_on')
+                : t('discovery.someone_you_might_enjoy_talking_to')),
           }));
         if (typeof enrichUsersWithProfileType === 'function') {
           await enrichUsersWithProfileType(out.map((p) => p.user).filter(Boolean));
@@ -428,18 +428,18 @@ async function getDiscoveryProfiles(){
       const theirLooking = String(u.lookingFor || u.profile?.lookingFor || '').toLowerCase();
       const reasons = [];
       if (myLooking.includes('dat') || myLooking.includes('relationship') || myIntents.some((i) => i.includes('dat'))) {
-        if (theirLooking.includes('dat') || theirLooking.includes('relationship')) { score += 18; reasons.push('Both open to dating'); }
-        if (u.age && userProfile?.age && Math.abs(Number(u.age) - Number(userProfile.age)) <= 6) { score += 10; reasons.push('Similar age'); }
+        if (theirLooking.includes('dat') || theirLooking.includes('relationship')) { score += 18; reasons.push(t('discovery.both_open_to_dating')); }
+        if (u.age && userProfile?.age && Math.abs(Number(u.age) - Number(userProfile.age)) <= 6) { score += 10; reasons.push(t('discovery.similar_age')); }
       } else if (myLooking.includes('friend') || myIntents.some((i) => i.includes('friend'))) {
         if (shared.length) { score += 10; reasons.push(`Shared: ${shared[0]}`); }
-        reasons.push('Looking for friendship');
+        reasons.push(t('discovery.looking_for_friendship'));
       } else if (myLooking.includes('network') || myLooking.includes('professional') || myIntents.some((i) => i.includes('recruit') || i.includes('career'))) {
-        if (u.occupation || u.profile?.occupation) { score += 14; reasons.push('Career / networking'); }
-        if (u.city && myCity && String(u.city).toLowerCase() === myCity) { score += 8; reasons.push('Same city'); }
+        if (u.occupation || u.profile?.occupation) { score += 14; reasons.push(t('discovery.career_networking')); }
+        if (u.city && myCity && String(u.city).toLowerCase() === myCity) { score += 8; reasons.push(t('discovery.same_city')); }
       } else {
         // Empty-query friendship-first default
         if (shared.length) reasons.push(`Shared: ${shared[0]}`);
-        else reasons.push('Open to meet');
+        else reasons.push(t('discovery.open_to_meet'));
       }
       shared.slice(0, 2).forEach((s) => {
         const label = s.charAt(0).toUpperCase() + s.slice(1);
@@ -454,8 +454,8 @@ async function getDiscoveryProfiles(){
         reason: reasons[0]
           ? reasons.slice(0, 2).join(' · ')
           : shared.length
-            ? `You both care about ${shared.slice(0,2).join(' & ')}`
-            : (u.bio || 'Someone you might enjoy talking to on Peepal'),
+            ? t('discovery.you_both_care_about', { list: (typeof formatList === 'function' ? formatList(shared.slice(0,2).map((x) => optionLabel('akhbaar.cat', x))) : shared.slice(0,2).map((x) => optionLabel('akhbaar.cat', x)).join(', ')) })
+            : (u.bio || t('discovery.someone_you_might_enjoy_talking_to')),
         isSample: !!u.isSample,
       };
     })
@@ -475,9 +475,9 @@ function renderDiscoverySection(profiles){
     if(typeof renderEmptyState==='function'){
       renderEmptyState(el, {
         icon:'🌳',
-        title:'No people to meet right now',
-        message:'Invite a friend — we never invent matches.',
-        actionLabel: 'Invite',
+        title:t('discovery.no_people_to_meet_right_now'),
+        message:t('discovery.invite_a_friend_we_never_invent'),
+        actionLabel: t('common.invite'),
         onAction: () => {
           if (typeof ChaupaalReferrals?.openInviteToChaupaalShare === 'function') {
             ChaupaalReferrals.openInviteToChaupaalShare();
@@ -487,31 +487,31 @@ function renderDiscoverySection(profiles){
         },
       });
     } else {
-      el.innerHTML = `<div class="discovery-loading">No people suggestions — invite a friend to Chaupaal.</div>`;
+      el.innerHTML = `<div class="discovery-loading">${tHtml('discovery.no_people_suggestions_invite_a_friend')}</div>`;
     }
     return el;
   }
   el.innerHTML = `
-    <div class="discovery-ai-label">People to meet</div>
+    <div class="discovery-ai-label">${tHtml('discovery.people_to_meet')}</div>
     <div class="peepal-discovery-header">
       <div>
-        <div class="peepal-discovery-title">You might enjoy talking to</div>
-        <div class="peepal-discovery-subtitle">Based on your profile &amp; what you’re looking for</div>
+        <div class="peepal-discovery-title">${tHtml('discovery.you_might_enjoy_talking_to')}</div>
+        <div class="peepal-discovery-subtitle">${tHtml('discovery.based_on_your_profile_what_you')}</div>
       </div>
-      <button class="peepal-undo-btn" id="discoveryUndoBtn" ${discoveryPreviousSet.length?'':'disabled'}>↩ Undo</button>
+      <button class="peepal-undo-btn" id="discoveryUndoBtn" ${discoveryPreviousSet.length?'':'disabled'}>${tHtml('discovery.undo')}</button>
     </div>
-    <div class="discovery-filters" aria-label="Discovery filters">
-      <select data-discovery-filter="matchIntent" aria-label="Match intent">
-        <option value="">Intent: profile default</option>
-        ${PEEPAL_MATCH_INTENTS.map((i) => `<option value="${i}" ${discoveryFilters.matchIntent === i ? 'selected' : ''}>${i}</option>`).join('')}
-        <option value="__custom__" ${discoveryFilters.matchIntent && !PEEPAL_MATCH_INTENTS.includes(discoveryFilters.matchIntent) ? 'selected' : ''}>Something else…</option>
+    <div class="discovery-filters" aria-label="${tHtml('discovery.discovery_filters')}">
+      <select data-discovery-filter="matchIntent" aria-label="${tHtml('discovery.match_intent')}">
+        <option value="">${tHtml('discovery.intent_profile_default')}</option>
+        ${PEEPAL_MATCH_INTENTS.map((i) => `<option value="${i}" ${discoveryFilters.matchIntent === i ? 'selected' : ''}>${optionLabelHtml('intent', i)}</option>`).join('')}
+        <option value="__custom__" ${discoveryFilters.matchIntent && !PEEPAL_MATCH_INTENTS.includes(discoveryFilters.matchIntent) ? 'selected' : ''}>${tHtml('discovery.something_else')}</option>
       </select>
-      <select data-discovery-filter="interest" aria-label="Filter by interest">
-        <option value="any">All interests</option>
-        ${['Sports','Tech','Business','Music','Food','Travel','Movies','GK','India','World'].map(i=>`<option value="${i}" ${discoveryFilters.interest===i?'selected':''}>${i}</option>`).join('')}
+      <select data-discovery-filter="interest" aria-label="${tHtml('discovery.filter_by_interest')}">
+        <option value="any">${tHtml('discovery.all_interests')}</option>
+        ${/* i18n-values: akhbaar.cat */ ['Sports','Tech','Business','Music','Food','Travel','Movies','GK','India','World'].map(i=>`<option value="${i}" ${discoveryFilters.interest===i?'selected':''}>${optionLabelHtml('akhbaar.cat', i)}</option>`).join('')}
       </select>
-      <label><input type="checkbox" data-discovery-filter="sameCity" ${discoveryFilters.sameCity?'checked':''}> Same city</label>
-      <label><input type="checkbox" data-discovery-filter="recentlyJoined" ${discoveryFilters.recentlyJoined?'checked':''}> New here</label>
+      <label><input type="checkbox" data-discovery-filter="sameCity" ${discoveryFilters.sameCity?'checked':''}> ${tHtml('discovery.same_city')}</label>
+      <label><input type="checkbox" data-discovery-filter="recentlyJoined" ${discoveryFilters.recentlyJoined?'checked':''}> ${tHtml('discovery.new_here')}</label>
     </div>
     <div class="discovery-cards">
       ${profiles.map(({user, reasons, reason})=>{
@@ -531,20 +531,20 @@ function renderDiscoverySection(profiles){
               <div class="discovery-avatar">${user.photoURL?`<img src="${user.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`:user.avatar||'👤'}</div>
             </div>
             <div class="discovery-info">
-              <div class="discovery-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):user.name}${user.isSample?' <span class="cp-demo-badge">Sample</span>':''}</div>
-              <div class="discovery-meta">${[user.city,user.age?user.age+'y':'',user.personality||''].filter(Boolean).join(' · ')}${user._isNew?' · <span class="discovery-new-badge">New here</span>':''}</div>
+              <div class="discovery-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(user.name,user):user.name}${user.isSample?' <span class="cp-demo-badge">' + tHtml('discovery.sample') + '</span>':''}</div>
+              <div class="discovery-meta">${[user.city,user.age?user.age+'y':'',user.personality||''].filter(Boolean).join(' · ')}${user._isNew?' · <span class="discovery-new-badge">' + tHtml('discovery.new_here') + '</span>':''}</div>
             </div>
-            <button class="discovery-dismiss" data-uid="${user.uid}" title="Not interested">✕</button>
+            <button class="discovery-dismiss" data-uid="${user.uid}" title="${tHtml('common.not_interested')}">✕</button>
           </div>
-          ${(reasons||[]).length?`<div class="discovery-shared">${reasons.slice(0,4).map(r=>`<span class="discovery-shared-tag">${String(r).startsWith('📌')||String(r)==='Sample'?r:`📌 ${r}`}</span>`).join('')}</div>`:''}
-          <div class="discovery-reason">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason||'Shared interests on Chaupaal'}"</div>
-          <div class="discovery-transparency" style="font-size:11px;color:var(--muted);margin:4px 0 8px;">Why this pick: ${(reasons||[]).slice(0,2).join(' · ') || 'profile overlap'}</div>
-          ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">Conversation starter</div><div class="discovery-icebreaker-text">"${ib.line || ib.answer}"</div></div>`:''}
+          ${(reasons||[]).length?`<div class="discovery-shared">${reasons.slice(0,4).map(r=>`<span class="discovery-shared-tag">${String(r)==='Sample'?tHtml('discovery.sample'):String(r).startsWith('📌')?escCompat(r):`📌 ${escCompat(optionLabel('akhbaar.cat', r))}`}</span>`).join('')}</div>`:''}
+          <div class="discovery-reason">"${(typeof interestOverlapReason==='function' && interestOverlapReason(user)) || reason||tHtml('discovery.shared_interests_on_chaupaal')}"</div>
+          <div class="discovery-transparency" style="font-size:11px;color:var(--muted);margin:4px 0 8px;">${tHtml('discovery.why_this_pick', { reasons: (reasons||[]).slice(0,2).map((r) => (String(r) === 'Sample' ? t('discovery.sample') : optionLabel('akhbaar.cat', r))).join(' · ') || t('discovery.profile_overlap') })}</div>
+          ${ib?`<div class="discovery-icebreaker"><div class="discovery-icebreaker-label">${tHtml('discovery.conversation_starter')}</div><div class="discovery-icebreaker-text">"${ib.line || ib.answer}"</div></div>`:''}
           <div class="discovery-actions">
-            <button class="discovery-view-btn" data-uid="${user.uid}">View profile</button>
-            <button class="discovery-friend-btn" data-friend-uid="${user.uid}">Add Friend</button>
+            <button class="discovery-view-btn" data-uid="${user.uid}">${tHtml('discovery.view_profile')}</button>
+            <button class="discovery-friend-btn" data-friend-uid="${user.uid}">${tHtml('common.add_friend')}</button>
           </div>
-          <button class="discovery-nudge-btn discovery-nudge-btn--secondary" data-uid="${user.uid}" data-name="${user.name}" data-avatar="${user.avatar||'👤'}" data-icebreakers="${ibJson}" data-starter="${encodeURIComponent(ib?.line || ib?.answer || '')}">💬 ${ib?.cta || 'Ask about their prompt'}</button>
+          <button class="discovery-nudge-btn discovery-nudge-btn--secondary" data-uid="${user.uid}" data-name="${user.name}" data-avatar="${user.avatar||'👤'}" data-icebreakers="${ibJson}" data-starter="${encodeURIComponent(ib?.line || ib?.answer || '')}">💬 ${ib?.cta || tHtml('discovery.ask_about_their_prompt')}</button>
         </div>`;
       }).join('')}
     </div>
@@ -566,9 +566,9 @@ function renderDiscoverySection(profiles){
         card.classList.add('discovery-card--exit');
         setTimeout(()=>{
           card.remove();
-          if(typeof showToast==='function') showToast('Got it — fewer like this');
+          if(typeof showToast==='function') showToast(t('discovery.got_it_fewer_like_this'));
         },280);
-      } else if(typeof showToast==='function') showToast('Got it — fewer like this');
+      } else if(typeof showToast==='function') showToast(t('discovery.got_it_fewer_like_this'));
     });
   });
 
@@ -577,8 +577,8 @@ function renderDiscoverySection(profiles){
       const key=control.dataset.discoveryFilter;
       if (key === 'matchIntent' && control.value === '__custom__') {
         const typed = typeof promptNameSheet === 'function'
-          ? await promptNameSheet({ title: 'Match intent', placeholder: 'What are you looking for?', confirmLabel: 'Use' })
-          : window.prompt('What are you looking for?');
+          ? await promptNameSheet({ title: t('discovery.match_intent'), placeholder: t('discovery.what_are_you_looking_for'), confirmLabel: t('discovery.use') })
+          : window.prompt(t('discovery.what_are_you_looking_for'));
         if (!typed) return;
         discoveryFilters.matchIntent = String(typed).trim().slice(0, 80);
       } else {
@@ -601,7 +601,7 @@ function renderDiscoverySection(profiles){
       const match=profiles.find(p=>p.user?.uid===btn.dataset.uid);
       if(match?.user&&typeof openPublicProfile==='function'){
         openPublicProfile(match.user,{uid:match.user.uid,username:match.user.username,context:'peepal'});
-      }else if(typeof showToast==='function') showToast('Profile unavailable');
+      }else if(typeof showToast==='function') showToast(t('common.profile_unavailable'));
     });
   });
 
@@ -656,7 +656,7 @@ function renderDiscoverySection(profiles){
         });
         return;
       }
-      if(typeof showToast==='function') showToast('Could not open chat — try again');
+      if(typeof showToast==='function') showToast(t('discovery.could_not_open_chat_try_again'));
     });
   });
 
@@ -771,12 +771,12 @@ function craftSpecificIcebreaker(user, opts) {
         : promptText
       : '';
     const line = shortQ
-      ? `Ask about “${shortQ}” — they said “${snippet.answer}”`
-      : `Ask them about: “${snippet.answer}”`;
+      ? t('discovery.ask_about_shortq_they_said_answer', { shortQ, answer: snippet.answer })
+      : t('discovery.ask_them_about_answer', { answer: snippet.answer });
     return {
       ...snippet,
       line,
-      cta: shortQ ? `Ask: ${shortQ.slice(0, 28)}${shortQ.length > 28 ? '…' : ''}` : 'Ask about their prompt',
+      cta: shortQ ? t('discovery.ask_prompt', { prompt: shortQ.slice(0, 28) + (shortQ.length > 28 ? '…' : '') }) : t('discovery.ask_about_their_prompt'),
       source: 'prompt',
     };
   }
@@ -788,8 +788,8 @@ function craftSpecificIcebreaker(user, opts) {
     const label = String(interest).charAt(0).toUpperCase() + String(interest).slice(1);
     return {
       answer: label,
-      line: `You both light up around ${label} — ask how they got into it`,
-      cta: `Ask about ${label}`,
+      line: t('discovery.you_both_light_up_around_label', { label }),
+      cta: t('discovery.ask_about_label', { label }),
       source: 'shared',
     };
   }
@@ -798,16 +798,16 @@ function craftSpecificIcebreaker(user, opts) {
     const clip = bio.length > 64 ? bio.slice(0, 62) + '…' : bio;
     return {
       answer: clip,
-      line: `Open with their bio: “${clip}”`,
-      cta: 'Ask about their bio',
+      line: t('discovery.open_with_their_bio_clip', { clip }),
+      cta: t('discovery.ask_about_their_bio'),
       source: 'bio',
     };
   }
   if (user?.city) {
     return {
       answer: user.city,
-      line: `Ask what they’d show a friend visiting ${user.city} for one evening`,
-      cta: `Ask about ${user.city}`,
+      line: t('discovery.ask_what_they_d_show_a', { city: user.city }),
+      cta: t('discovery.ask_about_city', { city: user.city }),
       source: 'city',
     };
   }
@@ -925,8 +925,8 @@ async function fetchCompatStrangerPool({ intentOverride = null } = {}) {
     const extra = SAMPLE_DISCOVERY_POOL.filter((u) => isDiscoveryEligibleUser(u)).map((u) => ({
       user: { ...u, isSample: true },
       score: 50,
-      reasons: ['Sample', ...((u.interests || []).slice(0, 1))],
-      reason: 'Sample · sign in for real people',
+      reasons: ['Sample', ...((u.interests || []).slice(0, 1))], // i18n-ignore (brand name / code)
+      reason: t('discovery.sample_sign_in_for_real_people'),
       isSample: true,
     }));
     const seen = new Set(raw.map((p) => p.user?.uid));
@@ -981,7 +981,7 @@ async function getCompatibilityPeeks(opts) {
   if (reset || !_compatPeekCache.length) {
     let intentOverride = null;
     if (networkingDefault && !friendshipOnly) {
-      intentOverride = discoveryFilters.matchIntent || 'Networking / Professional connections';
+      intentOverride = discoveryFilters.matchIntent || 'Networking / Professional connections'; // i18n-ignore (intent code)
     } else if (friendshipOnly || o.emptyFriendship) {
       intentOverride = 'Friendship';
     }
@@ -1014,6 +1014,68 @@ function escCompat(s) {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * "Because you…" lines. The ranking server (and cached results) send English phrases; known ones
+ * are read in the viewer's language, anything else shows as sent.
+ */
+const DISCOVERY_WHY_FIXED = {
+  'matched on open profile': 'discovery.matched_on_open_profile',
+  'also open to hiring': 'discovery.why.open_to_hiring',
+  professional: 'discovery.why.professional',
+  'both active recently': 'discovery.why.active_recently',
+  'same city': 'discovery.why.same_city',
+  nearby: 'discovery.why.nearby',
+  'similar to people you liked': 'discovery.why.similar_people',
+  'new on chaupaal': 'discovery.why.new_member',
+  'topic overlap with your interests': 'discovery.why.topic_overlap',
+  'already follows you': 'discovery.why.follows_you',
+  'likely mutual interest': 'discovery.why.mutual_interest',
+};
+const DISCOVERY_WHY_BITS = {
+  city: 'discovery.why.bit_city',
+  college: 'discovery.why.bit_college',
+  interests: 'discovery.why.bit_interests',
+  preferences: 'discovery.why.bit_preferences',
+  'shared connections': 'discovery.why.bit_shared_connections',
+  intent: 'discovery.why.bit_intent',
+};
+
+function discoveryWhyPhrase(raw) {
+  const s = String(raw || '').trim();
+  const low = s.toLowerCase();
+  if (DISCOVERY_WHY_FIXED[low]) return t(DISCOVERY_WHY_FIXED[low]);
+  let m = /^same industry · (.+)$/i.exec(s);
+  if (m) return t('discovery.why.same_industry', { industry: optionLabel('industry', m[1]) });
+  m = /^shared interest: (.+)$/i.exec(s);
+  if (m) return t('discovery.why.shared_interest', { interest: optionLabel('akhbaar.cat', m[1]) });
+  m = /^matched on (.+)$/i.exec(s);
+  if (m) {
+    const bits = m[1].split(/\s*&\s*/).map((b) => (DISCOVERY_WHY_BITS[b.toLowerCase()] ? t(DISCOVERY_WHY_BITS[b.toLowerCase()]) : optionLabel('akhbaar.cat', b)));
+    return t('discovery.matched_on_list', { list: typeof formatList === 'function' ? formatList(bits) : bits.join(', ') });
+  }
+  return optionLabel('purpose', s);
+}
+
+/** explain (string | string[]) → one display line in the viewer's language. */
+function discoveryExplainText(explain) {
+  const list = Array.isArray(explain) ? explain : explain ? [explain] : [];
+  const parts = [];
+  list.forEach((item) => {
+    const s = String(item || '').trim();
+    if (!s) return;
+    // explainMatch joins up to two human phrases with " · " ("Same industry · Tech · Hiring").
+    const segs = s.split(' · ');
+    for (let i = 0; i < segs.length; i++) {
+      if (/^same industry$/i.test(segs[i]) && segs[i + 1]) {
+        parts.push(discoveryWhyPhrase(segs[i] + ' · ' + segs[i + 1]));
+        i++;
+      } else parts.push(discoveryWhyPhrase(segs[i]));
+    }
+  });
+  return parts.length ? parts.slice(0, 4).join(' · ') : t('discovery.matched_on_open_profile');
+}
+window.discoveryExplainText = discoveryExplainText;
+
 function renderCompatPeekCard(peek) {
   const user = peek.user || {};
   const ice = peek.icebreaker || craftSpecificIcebreaker(user, { shared: peek.shared || peek.reasons });
@@ -1028,8 +1090,8 @@ function renderCompatPeekCard(peek) {
   const nameHtml =
     typeof formatDisplayNameHtml === 'function'
       ? formatDisplayNameHtml(user.name, user)
-      : escCompat(user.name || 'Someone');
-  const why = (peek.reasons || []).slice(0, 2).join(' · ') || peek.reason || '';
+      : escCompat(user.name || t('common.someone'));
+  const why = (peek.reasons || []).slice(0, 2).map((r) => (String(r) === 'Sample' ? t('discovery.sample') : optionLabel('akhbaar.cat', r))).join(' · ') || peek.reason || '';
   return `
     <article class="peepal-compat-peek${user.isSample || peek.isSample ? ' peepal-compat-peek--sample' : ''}" data-uid="${escCompat(user.uid)}">
       <div class="peepal-compat-peek-avatar">${
@@ -1038,20 +1100,20 @@ function renderCompatPeekCard(peek) {
           : escCompat(user.avatar || '👤')
       }</div>
       <div class="peepal-compat-peek-body">
-        <div class="peepal-compat-peek-name">${nameHtml}${user.isSample || peek.isSample ? ' <span class="cp-demo-badge">Sample</span>' : ''}</div>
-        <div class="peepal-compat-peek-meta">${[user.city, user.age ? user.age + 'y' : '', peek.lean === 'friendship' ? 'Friendship' : '']
+        <div class="peepal-compat-peek-name">${nameHtml}${user.isSample || peek.isSample ? ' <span class="cp-demo-badge">' + tHtml('discovery.sample') + '</span>' : ''}</div>
+        <div class="peepal-compat-peek-meta">${[user.city, user.age ? t('discovery.age_short', { age: user.age }) : '', peek.lean === 'friendship' ? t('discovery.friendship') : '']
           .filter(Boolean)
           .map(escCompat)
           .join(' · ')}</div>
         ${why ? `<div class="peepal-compat-peek-why">${escCompat(why)}</div>` : ''}
         ${
           ice
-            ? `<div class="peepal-compat-peek-ice"><strong>Icebreaker</strong>${escCompat(ice.line || ice.answer)}</div>`
+            ? `<div class="peepal-compat-peek-ice"><strong>${tHtml('discovery.icebreaker')}</strong>${escCompat(ice.line || ice.answer)}</div>`
             : ''
         }
         <div class="peepal-compat-peek-actions">
-          <button type="button" class="peepal-compat-peek-view" data-uid="${escCompat(user.uid)}">Profile</button>
-          <button type="button" class="peepal-compat-peek-chat" data-uid="${escCompat(user.uid)}" data-name="${escCompat(user.name || '')}" data-avatar="${escCompat(user.avatar || '👤')}" data-icebreakers="${ibJson}" data-starter="${starter}">${escCompat(ice?.cta || 'Ask them')}</button>
+          <button type="button" class="peepal-compat-peek-view" data-uid="${escCompat(user.uid)}">${tHtml('common.profile')}</button>
+          <button type="button" class="peepal-compat-peek-chat" data-uid="${escCompat(user.uid)}" data-name="${escCompat(user.name || '')}" data-avatar="${escCompat(user.avatar || '👤')}" data-icebreakers="${ibJson}" data-starter="${starter}">${escCompat(ice?.cta || t('discovery.ask_them'))}</button>
         </div>
       </div>
     </article>`;
@@ -1104,7 +1166,7 @@ function wireCompatPeekHost(host, peeks) {
           peerProfileType: match?.user?.profileType || 'personal',
         });
       } else if (typeof showToast === 'function') {
-        showToast(starterText || 'Open chat from Baithak');
+        showToast(starterText || t('discovery.open_chat_from_baithak'));
       }
     });
   });
@@ -1113,7 +1175,7 @@ function wireCompatPeekHost(host, peeks) {
 async function mountCompatPeeks(host, opts) {
   if (!host) return [];
   const o = opts || {};
-  host.innerHTML = `<div class="discovery-loading" style="padding:8px;font-size:12px;">Finding compatible people…</div>`;
+  host.innerHTML = `<div class="discovery-loading" style="padding:8px;font-size:12px;">${tHtml('discovery.finding_compatible_people')}</div>`;
   try {
     const { peeks } = await getCompatibilityPeeks({
       limit: o.limit || 3,
@@ -1123,14 +1185,14 @@ async function mountCompatPeeks(host, opts) {
       friendshipMajority: o.friendshipMajority !== false,
     });
     if (!peeks.length) {
-      host.innerHTML = `<div class="khoj-compat-empty">No eligible people to suggest right now — try Khoj or widen your search. We never invent profiles.</div>`;
+      host.innerHTML = `<div class="khoj-compat-empty">${tHtml('discovery.no_eligible_people_to_suggest_right')}</div>`;
       return [];
     }
     host.innerHTML = peeks.map(renderCompatPeekCard).join('');
     wireCompatPeekHost(host, peeks);
     return peeks;
   } catch (e) {
-    host.innerHTML = `<div class="khoj-compat-empty">Couldn’t load peeks — try again shortly.</div>`;
+    host.innerHTML = `<div class="khoj-compat-empty">${tHtml('discovery.couldn_t_load_peeks_try_again')}</div>`;
     return [];
   }
 }

@@ -729,7 +729,7 @@
     const milestoneHtml = milestones
       .map((m) => {
         const done = stats.streak >= m;
-        return `<div class="safar-milestone${done ? ' is-done' : ''}" aria-label="${m} days">
+        return `<div class="safar-milestone${done ? ' is-done' : ''}" aria-label="${tHtml('chat.days_count', { count: m })}">
           <span class="safar-milestone-num">${m}</span>
           <span class="safar-milestone-mark">${done ? '✓' : '·'}</span>
         </div>`;

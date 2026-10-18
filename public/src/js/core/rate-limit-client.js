@@ -45,7 +45,7 @@
           ok: false,
           remaining: envelope.error?.details?.remaining ?? envelope.data?.remaining,
           reset: envelope.error?.details?.reset,
-          message: envelope.error?.message || 'Too many actions — slow down a bit.',
+          message: envelope.error?.message || t('premium.too_many_actions_slow_down_a'),
         };
       }
       if (!envelope.ok && envelope.httpStatus >= 500) {
@@ -69,7 +69,7 @@
   async function withRateLimit(action, fn) {
     const check = await checkRateLimit(action);
     if (!check.ok) {
-      if (typeof showToast === 'function') showToast(check.message || 'Slow down');
+      if (typeof showToast === 'function') showToast(check.message || t('premium.slow_down'));
       return { ok: false, rateLimited: true };
     }
     const result = await fn();

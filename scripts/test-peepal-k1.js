@@ -12,7 +12,7 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, p), 'utf8'));
 
 const khoj = read('public/src/js/features/khoj.js');
 assert(!/khojChaupaalSearch|openUniversalSearch|data-khoj-cta="search"/.test(khoj), 'Khoj is people-only (no universal search)');

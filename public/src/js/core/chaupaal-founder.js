@@ -3,16 +3,12 @@
  * Goodnight journal engagement hook.
  */
 (function () {
-  const FIRST_HELLO_PROMPTS = [
-    'If we only had one chai together, what would you want to talk about?',
-    "What's a small joy from this week you wouldn't mind sharing?",
-    'Tea stall or coffee shop — and what are you ordering?',
-    "What's something you're curious about lately?",
-    'If Chaupaal had a rainy-day playlist, what song belongs on it?',
-  ];
+  // The hello is stored on the chat for BOTH people → canonical English; each reader sees it in their
+  // language via ChatEvents.autoText (chat.auto.*).
+  const FIRST_HELLO_KEYS = [1, 2, 3, 4, 5].map((n) => `chat.auto.first_hello_${n}`);
 
   function pickSharedHello() {
-    return FIRST_HELLO_PROMPTS[Math.floor(Math.random() * FIRST_HELLO_PROMPTS.length)];
+    return tEn(FIRST_HELLO_KEYS[Math.floor(Math.random() * FIRST_HELLO_KEYS.length)]);
   }
 
   function normalizeInterest(x) {
@@ -37,11 +33,10 @@
     const shared = [...new Set(theirs.filter((i) => mine.has(i)))];
     if (!shared.length) return null;
     const label = shared[0].replace(/\b\w/g, (c) => c.toUpperCase());
-    if (shared.length === 1) return `You both like ${label}`;
-    return `Shared interests: ${shared
+    if (shared.length === 1) return t('peepal.you_both_like_label', { label });
+    return t('peepal.shared_interests_list', { list: (typeof formatList === 'function' ? formatList : (x) => x.join(', '))(shared
       .slice(0, 2)
-      .map((s) => s.replace(/\b\w/g, (c) => c.toUpperCase()))
-      .join(' · ')}`;
+      .map((s) => s.replace(/\b\w/g, (c) => c.toUpperCase()))) });
   }
 
   const ensuredDmIds = new Set();
@@ -58,7 +53,7 @@
     const up = typeof userProfile !== 'undefined' ? userProfile : {};
     const dp = typeof digitalProfile !== 'undefined' ? digitalProfile : {};
     return {
-      name: up.name || dp.displayName || me?.displayName || 'You',
+      name: up.name || dp.displayName || me?.displayName || tEn('common.you'),
       username: up.username || dp.username || '',
       photoURL: up.photoURL || me?.photoURL || '',
       profileType: up.profileType || dp.profileType || 'personal',
@@ -89,7 +84,7 @@
       }
     }
     if (!name && prev.name && !isBlankOrGenericPeerName(prev.name)) name = String(prev.name).trim();
-    if (!name) name = 'Someone';
+    if (!name) name = tEn('common.someone');
     return {
       name,
       username: x.username || prev.username || '',
@@ -111,9 +106,9 @@
 
   function friendlyDmError(err) {
     const code = String(err?.code || '');
-    if (code === 'CHAT_BOOTSTRAP_FAILED') return 'Could not open chat — try again';
-    if (code === 'CHAT_NOT_READY' || code === 'permission-denied') return 'Chat not ready — wait a moment and retry';
-    return err?.message || 'Could not open chat';
+    if (code === 'CHAT_BOOTSTRAP_FAILED') return t('peepal.could_not_open_chat_try_again');
+    if (code === 'CHAT_NOT_READY' || code === 'permission-denied') return t('peepal.chat_not_ready_wait_a_moment');
+    return err?.message || t('peepal.could_not_open_chat');
   }
 
   async function verifyDmChatDoc(chatId, peerUid) {
@@ -272,9 +267,9 @@
       (typeof resolvePersonDisplayName === 'function'
         ? resolvePersonDisplayName({ name, username })
         : '') ||
-      'Someone';
+      tEn('common.someone');
     // Never prefer @username as Baithak title
-    const safeName = /^@/.test(String(displayName).trim()) ? 'Someone' : displayName;
+    const safeName = /^@/.test(String(displayName).trim()) ? tEn('common.someone') : displayName;
 
     const chat = {
       id: chatId,
@@ -394,7 +389,7 @@
             firstMessageAt: Date.now(),
           });
           await db.collection('chats').doc(chatId).collection('messages').add({
-            text: `Shared starter for both of you:\n"${hello}"`,
+            text: tEn('chat.auto.shared_starter', { hello }),
             uid: currentUser.uid,
             name: 'Chaupaal',
             avatar: '🏠',
@@ -422,7 +417,7 @@
       SAMPLE_MESSAGES[chatId] = SAMPLE_MESSAGES[chatId] || [
         {
           from: 'them',
-          text: `🏠 Shared starter for both of you:\n"${hello}"`,
+          text: tEn('chat.auto.shared_starter', { hello }),
           time: 'now',
           avatar: '🏠',
         },
@@ -483,10 +478,10 @@
     if (!declined && !gap) return;
 
     const chips = [];
-    if (declined) chips.push('No worries — another time?');
+    if (declined) chips.push(t('peepal.no_worries_another_time'));
     if (gap) {
-      chips.push('Still up for a chat?');
-      chips.push('No rush — saying hi again');
+      chips.push(t('peepal.still_up_for_a_chat'));
+      chips.push(t('peepal.no_rush_saying_hi_again'));
     }
     if (!chips.length) return;
 

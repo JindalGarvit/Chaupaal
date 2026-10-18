@@ -36,43 +36,43 @@
       .toLowerCase()
       .replace(/^@+/, '');
     if (raw.length > USERNAME_MAX) {
-      return { ok: false, reason: 'too_long', detail: `Max ${USERNAME_MAX} characters` };
+      return { ok: false, reason: 'too_long', detail: t('profile.max_username_max_characters', { USERNAME_MAX }) };
     }
     const u = raw.slice(0, USERNAME_MAX);
     if (!u) {
-      return { ok: false, reason: 'invalid', detail: 'Enter a username' };
+      return { ok: false, reason: 'invalid', detail: t('profile.enter_a_username') };
     }
     if (u.length < USERNAME_MIN) {
-      return { ok: false, reason: 'too_short', detail: `At least ${USERNAME_MIN} characters` };
+      return { ok: false, reason: 'too_short', detail: t('profile.at_least_username_min_characters', { USERNAME_MIN }) };
     }
     if (u.length > USERNAME_MAX) {
-      return { ok: false, reason: 'too_long', detail: `Max ${USERNAME_MAX} characters` };
+      return { ok: false, reason: 'too_long', detail: t('profile.max_username_max_characters', { USERNAME_MAX }) };
     }
     if (INVALID_CHAR_RE.test(u)) {
       return {
         ok: false,
         reason: 'invalid_chars',
-        detail: 'Only letters, numbers, dots, underscores, and hyphens',
+        detail: t('profile.only_letters_numbers_dots_underscores_and'),
       };
     }
     if (!/^[a-z0-9]/.test(u)) {
-      return { ok: false, reason: 'bad_start', detail: 'Must start with a letter or number' };
+      return { ok: false, reason: 'bad_start', detail: t('profile.must_start_with_a_letter_or') };
     }
     if (!/[a-z0-9]$/.test(u)) {
-      return { ok: false, reason: 'bad_end', detail: 'Must end with a letter or number' };
+      return { ok: false, reason: 'bad_end', detail: t('profile.must_end_with_a_letter_or') };
     }
     if (DOUBLE_SEP_RE.test(u)) {
       return {
         ok: false,
         reason: 'double_sep',
-        detail: 'No consecutive dots, underscores, or hyphens',
+        detail: t('profile.no_consecutive_dots_underscores_or_hyphens'),
       };
     }
     if (RESERVED.has(u)) {
-      return { ok: false, reason: 'reserved', detail: 'This handle is reserved' };
+      return { ok: false, reason: 'reserved', detail: t('profile.this_handle_is_reserved') };
     }
     if (!VALID_RE.test(u)) {
-      return { ok: false, reason: 'invalid', detail: 'Invalid username format' };
+      return { ok: false, reason: 'invalid', detail: t('profile.invalid_username_format') };
     }
     return { ok: true, username: u };
   }

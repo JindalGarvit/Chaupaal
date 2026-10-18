@@ -78,10 +78,10 @@
 
   function unlockMessage({ dayExhausted, weekExhausted }) {
     if (weekExhausted) {
-      return `Weekly limit reached — unlocks Monday (${nextMondayLabel()}).`;
+      return t('premium.weekly_limit_reached_unlocks_monday_nextmo', { nextMondayLabel: nextMondayLabel() });
     }
     if (dayExhausted) {
-      return 'Daily limit reached — unlocks tomorrow.';
+      return t('premium.daily_limit_reached_unlocks_tomorrow');
     }
     return '';
   }

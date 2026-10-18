@@ -12,13 +12,13 @@
   const MAX_TAGS = 20;
   const MAX_COLLAB = 3;
   const FILTERS = [
-    { id: 'normal', label: 'Normal', css: 'none' },
-    { id: 'bright', label: 'Bright', css: 'brightness(1.18)' },
-    { id: 'warm', label: 'Warm', css: 'sepia(0.25) saturate(1.15)' },
-    { id: 'cool', label: 'Cool', css: 'hue-rotate(12deg) saturate(0.9)' },
-    { id: 'contrast', label: 'Contrast', css: 'contrast(1.2)' },
-    { id: 'mono', label: 'Mono', css: 'grayscale(1)' },
-    { id: 'fade', label: 'Fade', css: 'contrast(0.85) brightness(1.08)' },
+    { id: 'normal', label: t('duniya.normal'), css: 'none' },
+    { id: 'bright', label: t('duniya.bright'), css: 'brightness(1.18)' },
+    { id: 'warm', label: t('duniya.warm'), css: 'sepia(0.25) saturate(1.15)' },
+    { id: 'cool', label: t('duniya.cool'), css: 'hue-rotate(12deg) saturate(0.9)' },
+    { id: 'contrast', label: t('duniya.contrast'), css: 'contrast(1.2)' },
+    { id: 'mono', label: t('duniya.mono'), css: 'grayscale(1)' },
+    { id: 'fade', label: t('duniya.fade'), css: 'contrast(0.85) brightness(1.08)' },
   ];
 
   const NS = (window.DuniyaCompose = window.DuniyaCompose || {});
@@ -77,7 +77,7 @@
     const cu = typeof currentUser !== 'undefined' ? currentUser : null;
     return {
       uid: cu?.uid || 'me',
-      name: u.name || cu?.displayName || 'You',
+      name: u.name || cu?.displayName || t('common.you'),
       avatar: u.avatar || '🪑',
       photoURL: u.photoURL || cu?.photoURL || null,
       username: u.username || '',
@@ -223,11 +223,11 @@
     host = document.createElement('div');
     host.className = 'duniya-compose';
     host.setAttribute('role', 'dialog');
-    host.setAttribute('aria-label', title || 'New post');
+    host.setAttribute('aria-label', title || t('duniya.new_post'));
     host.innerHTML = `<div class="duniya-compose-bar">
-      <button type="button" data-dc-close aria-label="Close">✕</button>
-      <h2 data-dc-title>${esc(title || 'New post')}</h2>
-      <button type="button" class="dc-share" data-dc-next>Next</button>
+      <button type="button" data-dc-close aria-label="${tHtml('common.close')}">✕</button>
+      <h2 data-dc-title>${esc(title || t('duniya.new_post'))}</h2>
+      <button type="button" class="dc-share" data-dc-next>${tHtml('duniya.next')}</button>
     </div>
     <div class="duniya-compose-body" data-dc-body></div>`;
     device().appendChild(host);
@@ -249,7 +249,7 @@
         host = null;
         layerHandle = null;
         state = null;
-      }, { role: 'dialog', label: title || 'New post' });
+      }, { role: 'dialog', label: title || t('duniya.new_post') });
     } else if (typeof pushNavLayer === 'function') {
       host.dataset.navManaged = '1';
       pushNavLayer(host, closeComposer);
@@ -331,7 +331,7 @@
         needsReattach: false,
       });
     });
-    if (list.length && room <= 0) toast('Up to 10 slides');
+    if (list.length && room <= 0) toast(t('duniya.up_to_10_slides'));
     persistDraft();
   }
 
@@ -339,7 +339,7 @@
     const url = gif?.url || gif?.preview || gif?.previewUrl;
     if (!url || !/^https:\/\//i.test(url)) return;
     if (state.slides.length >= MAX_SLIDES) {
-      toast('Up to 10 slides');
+      toast(t('duniya.up_to_10_slides'));
       return;
     }
     const kind = String(gif?.kind || gif?.type || 'gif').toLowerCase();
@@ -354,7 +354,7 @@
         gifUrl: '',
         crop: { x: 0.5, y: 0.5, scale: 1, rotate: 0 },
         filter: 'normal',
-        alt: gif.title || 'Clip',
+        alt: gif.title || t('duniya.clip'),
         muted: true,
         trimStart: 0,
         trimEnd: 0,
@@ -448,7 +448,7 @@
             : `<img src="${esc(src)}" alt="">`;
         return `<div class="dc-thumb${i === state.index ? ' is-active' : ''}" data-i="${i}" draggable="true">${media}${
           library ? '<span class="dc-thumb-check" aria-hidden="true">✓</span>' : ''
-        }<button type="button" class="dc-thumb-x" data-del="${i}" aria-label="Remove">✕</button></div>`;
+        }<button type="button" class="dc-thumb-x" data-del="${i}" aria-label="${tHtml('duniya.remove')}">✕</button></div>`;
       })
       .join('');
     strip.querySelectorAll('[data-i]').forEach((el) => {
@@ -515,7 +515,7 @@
   function showLibrary() {
     if (!state) return;
     state.screen = 'library';
-    setTitle('New post', 'Next');
+    setTitle(t('duniya.new_post'), t('common.next'));
     syncLibraryNext();
     const el = body();
     el.innerHTML = `<div class="dc-library">
@@ -523,12 +523,12 @@
         <span class="dc-camera-icon" aria-hidden="true">📷</span>
         <span class="dc-camera-label">${tt('duniya_camera', 'Camera')}</span>
       </button>
-      <button type="button" class="dc-gallery-pick" data-act="gallery">${tt('duniya_choose_gallery', 'Choose from gallery')}</button>
+      <button type="button" class="dc-gallery-pick" data-act="gallery">${tt('duniya.duniya_choose_gallery', 'Choose from gallery')}</button>
       <div class="dc-library-grid" data-dc-strip></div>
-      <p class="dc-hint">${tt('duniya_compose_hint', 'Pick photos or videos — up to 10 slides.')}</p>
-      <button type="button" class="dc-advanced-link" data-act="more">${tt('more_options', 'More options')}</button>
+      <p class="dc-hint">${tt('duniya.duniya_compose_hint', 'Pick photos or videos — up to 10 slides.')}</p>
+      <button type="button" class="dc-advanced-link" data-act="more">${tt('duniya.more_options', 'More options')}</button>
       <div class="dc-advanced hidden" data-dc-advanced>
-        <button type="button" class="dc-tile dc-tile--quiet" data-act="text"><span aria-hidden="true">Aa</span>${tt('text_only', 'Text only')}</button>
+        <button type="button" class="dc-tile dc-tile--quiet" data-act="text"><span aria-hidden="true">${tHtml('duniya.aa')}</span>${tt('duniya.text_only', 'Text only')}</button>
         <button type="button" class="dc-tile dc-tile--quiet" data-act="gif"><span aria-hidden="true">GIF</span>GIF</button>
       </div>
     </div>`;
@@ -562,13 +562,13 @@
             ? openGifPicker
             : null;
       if (!openPicker) {
-        toast('GIF picker unavailable');
+        toast(t('duniya.gif_picker_unavailable'));
         return;
       }
       openPicker({
         onSelect: (gif) => {
           if (gif?.emoji && !gif?.url) {
-            toast('Pick a media GIF/sticker for a slide');
+            toast(t('duniya.pick_a_media_gif_sticker_for'));
             return;
           }
           addGifSlide(gif);
@@ -646,7 +646,7 @@
       return;
     }
     state.screen = 'crop';
-    setTitle('Edit', 'Next');
+    setTitle(t('duniya.edit'), t('common.next'));
     const slide = activeSlide();
     await probeMedia(slide);
     const src = slide.localUrl || slide.gifUrl || slide.remote?.media || '';
@@ -664,17 +664,17 @@
       </div>
       <div class="dc-filmstrip" data-dc-strip style="padding:8px 12px;"></div>
       <div class="dc-crop-tools">
-        <button type="button" data-dc-rot>Rotate 90°</button>
-        <button type="button" data-dc-reset>Reset</button>
-        ${slide.type === 'video' ? `<button type="button" data-dc-mute>${slide.muted ? 'Unmute clip' : 'Mute clip'}</button><button type="button" data-dc-poster>Cover frame</button>` : ''}
+        <button type="button" data-dc-rot>${tHtml('duniya.rotate_90')}</button>
+        <button type="button" data-dc-reset>${tHtml('duniya.reset')}</button>
+        ${slide.type === 'video' ? `<button type="button" data-dc-mute>${slide.muted ? tHtml('duniya.unmute_clip') : tHtml('duniya.mute_clip')}</button><button type="button" data-dc-poster>${tHtml('duniya.cover_frame')}</button>` : ''}
         ${FILTERS.map((f) => `<button type="button" class="dc-filter${slide.filter === f.id ? ' is-on' : ''}" data-filter="${f.id}">${esc(f.label)}</button>`).join('')}
       </div>
       ${
         slide.type === 'video'
           ? `<div class="dc-trim">
-              <div class="dc-hint">Trim · max 10 minutes</div>
-              <label>Start <input type="range" min="0" max="${Math.max(1, slide.durationMs)}" value="${slide.trimStart || 0}" data-trim="start"></label>
-              <label>End <input type="range" min="0" max="${Math.max(1, slide.durationMs)}" value="${slide.trimEnd || slide.durationMs}" data-trim="end"></label>
+              <div class="dc-hint">${tHtml('duniya.trim_max_10_minutes')}</div>
+              <label>${tHtml('duniya.start')} <input type="range" min="0" max="${Math.max(1, slide.durationMs)}" value="${slide.trimStart || 0}" data-trim="start"></label>
+              <label>${tHtml('duniya.end')} <input type="range" min="0" max="${Math.max(1, slide.durationMs)}" value="${slide.trimEnd || slide.durationMs}" data-trim="end"></label>
               <div class="dc-hint" data-trim-label></div>
             </div>`
           : ''
@@ -717,10 +717,10 @@
         if (!blob) return;
         slide.posterFile = new File([blob], 'poster.jpg', { type: 'image/jpeg' });
         slide.posterTime = v.currentTime || 0;
-        toast('Cover frame saved');
+        toast(t('duniya.cover_frame_saved'));
       } catch (e) {
         report(e);
-        toast('Could not capture cover');
+        toast(t('duniya.could_not_capture_cover'));
       }
     });
     el.querySelectorAll('[data-filter]').forEach((btn) => {
@@ -768,7 +768,7 @@
             (u) =>
               `<button type="button" class="dc-user-hit" data-uid="${esc(u.uid)}"><strong>${esc(u.name || u.username)}</strong><span style="color:var(--muted);font-size:12px;">@${esc(u.username || '')}</span></button>`
           )
-          .join('') || `<div class="dc-hint" style="padding:8px 16px;">No people found</div>`;
+          .join('') || `<div class="dc-hint" style="padding:8px 16px;">${tHtml('duniya.no_people_found')}</div>`;
         hits.querySelectorAll('.dc-user-hit').forEach((btn) => {
           btn.addEventListener('click', () => {
             const u = list.find((x) => x.uid === btn.dataset.uid);
@@ -790,8 +790,8 @@
     const sheet = document.createElement('div');
     sheet.className = 'duniya-compose';
     sheet.style.zIndex = '90';
-    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x aria-label="Close">✕</button><h2>${esc(title)}</h2><span></span></div>`;
-    const box = searchBox('Search people', (u) => {
+    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x aria-label="${tHtml('common.close')}">✕</button><h2>${esc(title)}</h2><span></span></div>`;
+    const box = searchBox(t('common.search_people'), (u) => {
       onPick(u);
       close();
     }, opts);
@@ -857,7 +857,7 @@
   function showExtras() {
     state.screen = 'extras';
     const edit = state.mode === 'edit';
-    setTitle(edit ? 'Edit post' : 'New post', edit ? 'Save' : 'Share');
+    setTitle(edit ? t('common.edit_post') : t('duniya.new_post'), edit ? t('common.save') : t('common.share'));
     const slide = activeSlide();
     const previewSrc = slide ? slide.localUrl || slide.gifUrl || slide.remote?.media || slide.remote?.thumb || '' : '';
     const el = body();
@@ -865,24 +865,24 @@
       ${
         previewSrc
           ? `<img class="dc-preview-tap" src="${esc(previewSrc)}" alt="" data-dc-preview>`
-          : `<div class="dc-text-hero-edit">${esc(state.caption || 'Text post')}</div>`
+          : `<div class="dc-text-hero-edit">${esc(state.caption || t('duniya.text_post'))}</div>`
       }
       ${state.tagMode && slide && (slide.type === 'image' || slide.type === 'gif') ? `<div class="dc-tag-stage" data-tag-stage></div>` : ''}
       <div class="dc-caption-wrap">
-        <textarea data-dc-caption maxlength="${MAX_CAPTION}" placeholder="${state.slides.length ? 'Write a caption… @mention or #hashtag' : 'Write something… caption is required'}">${esc(state.caption)}</textarea>
+        <textarea data-dc-caption maxlength="${MAX_CAPTION}" placeholder="${state.slides.length ? tHtml('duniya.write_a_caption_mention_or_hashtag') : tHtml('duniya.write_something_caption_is_required')}">${esc(state.caption)}</textarea>
         <div class="dc-counter" data-dc-count></div>
-        ${edit ? '' : `<input data-dc-first placeholder="First comment (optional)" value="${esc(state.firstComment)}" style="width:100%;margin-top:8px;padding:8px 0;border:none;border-top:1px solid var(--line);background:transparent;font-size:13px;">`}
+        ${edit ? '' : `<input data-dc-first placeholder="${tHtml('duniya.first_comment_optional')}" value="${esc(state.firstComment)}" style="width:100%;margin-top:8px;padding:8px 0;border:none;border-top:1px solid var(--line);background:transparent;font-size:13px;">`}
       </div>
       ${edit ? '' : `<div class="dc-filmstrip" data-dc-strip></div>`}
-      <button type="button" class="dc-row" data-row="tags"><span>Tag people<small>${state.taggedPeople.length ? state.taggedPeople.length + ' tagged' : 'Tap the photo'}</small></span>›</button>
-      <button type="button" class="dc-row" data-row="location"><span>Add location<small>${esc(state.location?.placeName || state.location?.label || 'None')}</small></span>›</button>
-      <button type="button" class="dc-row" data-row="music"><span>Add music<small>${esc(state.music?.title || 'None')}</small></span>›</button>
-      <button type="button" class="dc-row" data-row="alt"><span>Alt text<small>Per image</small></span>›</button>
-      <button type="button" class="dc-row" data-row="audience"><span>Audience<small>${state.saveOnly ? 'Save without posting' : 'Everyone'}</small></span>›</button>
-      <p class="dc-audience-note">Saved posts go to your archive, not the feed.</p>
-      <div class="dc-row" data-row="likes"><span>Hide like count</span><button type="button" class="dc-toggle${state.hideLikeCount ? ' is-on' : ''}" data-tog="likes" aria-pressed="${state.hideLikeCount}"></button></div>
-      <div class="dc-row" data-row="comments"><span>Turn comments off</span><button type="button" class="dc-toggle${state.commentsOff ? ' is-on' : ''}" data-tog="comments" aria-pressed="${state.commentsOff}"></button></div>
-      <button type="button" class="dc-row" data-row="collab"><span>Collaborator<small>${state.collabInvites.length ? state.collabInvites.map((u) => u.name || u.username).join(', ') : 'Invite up to 3'}</small></span>›</button>
+      <button type="button" class="dc-row" data-row="tags"><span>${tHtml('duniya.tag_people')}<small>${state.taggedPeople.length ? tHtml('duniya.tagged_count', { count: state.taggedPeople.length }) : tHtml('duniya.tap_the_photo')}</small></span>›</button>
+      <button type="button" class="dc-row" data-row="location"><span>${tHtml('duniya.add_location')}<small>${esc(state.location?.placeName || state.location?.label || t('duniya.none'))}</small></span>›</button>
+      <button type="button" class="dc-row" data-row="music"><span>${tHtml('duniya.add_music')}<small>${esc(state.music?.title || t('duniya.none'))}</small></span>›</button>
+      <button type="button" class="dc-row" data-row="alt"><span>${tHtml('duniya.alt_text')}<small>${tHtml('duniya.per_image')}</small></span>›</button>
+      <button type="button" class="dc-row" data-row="audience"><span>${tHtml('duniya.audience')}<small>${state.saveOnly ? tHtml('duniya.save_without_posting') : tHtml('duniya.everyone')}</small></span>›</button>
+      <p class="dc-audience-note">${tHtml('duniya.saved_posts_go_to_your_archive')}</p>
+      <div class="dc-row" data-row="likes"><span>${tHtml('duniya.hide_like_count')}</span><button type="button" class="dc-toggle${state.hideLikeCount ? ' is-on' : ''}" data-tog="likes" aria-pressed="${state.hideLikeCount}"></button></div>
+      <div class="dc-row" data-row="comments"><span>${tHtml('duniya.turn_comments_off')}</span><button type="button" class="dc-toggle${state.commentsOff ? ' is-on' : ''}" data-tog="comments" aria-pressed="${state.commentsOff}"></button></div>
+      <button type="button" class="dc-row" data-row="collab"><span>${tHtml('duniya.collaborator')}<small>${state.collabInvites.length ? state.collabInvites.map((u) => u.name || u.username).join(', ') : tHtml('duniya.invite_up_to_3')}</small></span>›</button>
       <div class="dc-progress hidden" data-dc-progress><div data-dc-progress-msg></div><div class="dc-progress-bar"><span data-dc-bar></span></div></div>
     `;
     if (!edit) renderFilmstrip(el);
@@ -893,7 +893,7 @@
       count.textContent = n > 3600 ? `${n}/${MAX_CAPTION}` : '';
       state.caption = ta.value;
       const hero = el.querySelector('.dc-text-hero-edit');
-      if (hero) hero.textContent = ta.value || 'Text post';
+      if (hero) hero.textContent = ta.value || t('duniya.text_post');
     };
     ta.addEventListener('input', () => {
       ta.style.height = 'auto';
@@ -913,18 +913,18 @@
     });
     el.querySelector('[data-row="tags"]')?.addEventListener('click', () => {
       if (!slide || (slide.type !== 'image' && slide.type !== 'gif')) {
-        toast('Tag people on a photo');
+        toast(t('duniya.tag_people_on_a_photo'));
         return;
       }
       enterTagMode();
     });
     el.querySelector('[data-row="location"]')?.addEventListener('click', () => {
       if (typeof openLocationComposer !== 'function') {
-        toast('Location unavailable');
+        toast(t('duniya.location_unavailable'));
         return;
       }
       openLocationComposer({
-        title: 'Add location',
+        title: t('duniya.add_location'),
         onSelect: (loc) => {
           state.location = loc;
           persistDraft();
@@ -935,11 +935,11 @@
     el.querySelector('[data-row="music"]')?.addEventListener('click', () => {
       const picker = typeof openSongPicker === 'function' ? openSongPicker : typeof openMusicPicker === 'function' ? openMusicPicker : null;
       if (!picker) {
-        toast('Music picker unavailable');
+        toast(t('duniya.music_picker_unavailable'));
         return;
       }
       picker({
-        title: 'Add music',
+        title: t('duniya.add_music'),
         onSelect: (track) => {
           state.music = track;
           persistDraft();
@@ -967,11 +967,11 @@
     });
     el.querySelector('[data-row="collab"]')?.addEventListener('click', () => {
       if (state.collabInvites.length >= MAX_COLLAB) {
-        toast('Up to 3 collaborators');
+        toast(t('duniya.up_to_3_collaborators'));
         return;
       }
       showUserPicker(
-        'Invite collaborator',
+        t('duniya.invite_collaborator'),
         (u) => {
           if (state.collabInvites.some((x) => x.uid === u.uid)) return;
           state.collabInvites.push({ uid: u.uid, name: u.name, username: u.username });
@@ -990,7 +990,7 @@
     sheet.className = 'duniya-compose';
     sheet.style.zIndex = '90';
     const src = slide.localUrl || slide.gifUrl || slide.remote?.media || '';
-    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x>✕</button><h2>Tag people</h2><button type="button" class="dc-share" data-done>Done</button></div>
+    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x>✕</button><h2>${tHtml('duniya.tag_people')}</h2><button type="button" class="dc-share" data-done>${tHtml('common.done')}</button></div>
       <div class="dc-tag-stage" data-stage style="min-height:280px;">
         <img src="${esc(src)}" alt="" style="width:100%;display:block;">
         <div data-chips></div>
@@ -1014,13 +1014,13 @@
     paintChips();
     sheet.querySelector('[data-stage]').addEventListener('click', (e) => {
       if (state.taggedPeople.length >= MAX_TAGS) {
-        toast('Tag limit reached');
+        toast(t('duniya.tag_limit_reached'));
         return;
       }
       const rect = e.currentTarget.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = (e.clientY - rect.top) / rect.height;
-      showUserPicker('Tag someone', (u) => {
+      showUserPicker(t('duniya.tag_someone'), (u) => {
         if (state.taggedPeople.some((t) => t.uid === u.uid && t.slideIndex === state.index)) return;
         state.taggedPeople.push({
           uid: u.uid,
@@ -1036,7 +1036,7 @@
     });
     sheet.querySelector('[data-x]').addEventListener('click', close);
     sheet.querySelector('[data-done]').addEventListener('click', close);
-    if (typeof openLayer === 'function') openLayer(sheet, close, { role: 'dialog', label: 'Tag people' });
+    if (typeof openLayer === 'function') openLayer(sheet, close, { role: 'dialog', label: t('duniya.tag_people') });
   }
 
   function showAltEditor() {
@@ -1044,15 +1044,15 @@
     const sheet = document.createElement('div');
     sheet.className = 'duniya-compose';
     sheet.style.zIndex = '90';
-    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x>✕</button><h2>Alt text</h2><button type="button" class="dc-share" data-done>Done</button></div>
+    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x>✕</button><h2>${tHtml('duniya.alt_text')}</h2><button type="button" class="dc-share" data-done>${tHtml('common.done')}</button></div>
       <div style="padding:12px 16px;overflow:auto;">
         ${
           imgs
             .map(
               (s, i) =>
-                `<label style="display:block;margin-bottom:14px;font-size:13px;">Slide ${i + 1}<textarea data-alt="${esc(s.id)}" maxlength="200" style="width:100%;min-height:64px;margin-top:6px;border:1.5px solid var(--line);border-radius:10px;padding:8px;">${esc(s.alt || '')}</textarea></label>`
+                `<label style="display:block;margin-bottom:14px;font-size:13px;">${tHtml('duniya.slide_n', { n: i + 1 })}<textarea data-alt="${esc(s.id)}" maxlength="200" style="width:100%;min-height:64px;margin-top:6px;border:1.5px solid var(--line);border-radius:10px;padding:8px;">${esc(s.alt || '')}</textarea></label>`
             )
-            .join('') || '<p class="dc-hint">No image slides</p>'
+            .join('') || '<p class="dc-hint">' + tHtml('duniya.no_image_slides') + '</p>'
         }
       </div>`;
     device().appendChild(sheet);
@@ -1068,7 +1068,7 @@
     };
     sheet.querySelector('[data-x]').addEventListener('click', close);
     sheet.querySelector('[data-done]').addEventListener('click', close);
-    if (typeof openLayer === 'function') openLayer(sheet, close, { role: 'dialog', label: 'Alt text' });
+    if (typeof openLayer === 'function') openLayer(sheet, close, { role: 'dialog', label: t('duniya.alt_text') });
   }
 
   function slideAspect(slide) {
@@ -1126,13 +1126,13 @@
     if (!state) return;
     if (state.screen === 'library' || state.screen === 'picker') {
       if (state.slides.length) showCrop();
-      else toast('Pick at least one photo or video');
+      else toast(t('duniya.pick_at_least_one_photo_or'));
       return;
     }
     if (state.screen === 'crop') {
       const long = state.slides.find((s) => s.type === 'video' && (s.trimEnd || s.durationMs) - (s.trimStart || 0) > MAX_VIDEO_MS);
       if (long) {
-        toast('Trim videos to 10 minutes or less');
+        toast(t('duniya.trim_videos_to_10_minutes_or'));
         return;
       }
       showExtras();
@@ -1155,12 +1155,12 @@
   async function share() {
     const caption = String(state.caption || '').trim();
     if (!state.slides.length && !caption) {
-      toast('Write a caption for a text post');
+      toast(t('duniya.write_a_caption_for_a_text'));
       return;
     }
     const missing = state.slides.filter((s) => s.needsReattach && !s.file && !s.remote && !s.gifUrl);
     if (missing.length) {
-      toast('Re-attach photos that were lost after refresh');
+      toast(t('duniya.re_attach_photos_that_were_lost'));
       return;
     }
     const shareBtn = host.querySelector('[data-dc-next]');
@@ -1173,7 +1173,7 @@
       return;
     }
     shareBtn.disabled = true;
-    if (typeof setButtonLoading === 'function') setButtonLoading(shareBtn, true, state.mode === 'edit' ? 'Saving…' : 'Sharing…');
+    if (typeof setButtonLoading === 'function') setButtonLoading(shareBtn, true, state.mode === 'edit' ? t('common.saving') : t('discovery.sharing'));
     if (progress) progress.classList.remove('hidden');
 
     if (typeof checkRateLimit === 'function') {
@@ -1191,9 +1191,9 @@
       const uploaded = [];
       for (let i = 0; i < state.slides.length; i += 1) {
         const s = state.slides[i];
-        if (msgEl) msgEl.textContent = `Uploading ${i + 1}/${state.slides.length}`;
+        if (msgEl) msgEl.textContent = t('duniya.uploading_n_of', { n: i + 1, total: state.slides.length });
         const remote = await uploadSlide(s, (m, pct) => {
-          if (msgEl) msgEl.textContent = m || `Uploading ${i + 1}/${state.slides.length}`;
+          if (msgEl) msgEl.textContent = m || t('duniya.uploading_n_of', { n: i + 1, total: state.slides.length });
           if (bar && Number.isFinite(pct)) bar.style.width = Math.round(pct) + '%';
         });
         s.remote = remote;
@@ -1230,7 +1230,7 @@
         });
         applyLivePost(data.post);
         draftCtl?.clear?.();
-        toast('Post updated');
+        toast(t('duniya.post_updated'));
         closeComposer();
         if (typeof renderDuniyaFeed === 'function') renderDuniyaFeed();
         if (typeof renderLeharFeed === 'function') renderLeharFeed();
@@ -1267,9 +1267,9 @@
       report(err);
       shareBtn.disabled = false;
       if (typeof setButtonLoading === 'function') setButtonLoading(shareBtn, false);
-      shareBtn.textContent = 'Retry';
-      if (msgEl) msgEl.textContent = typeof friendlyError === 'function' ? friendlyError(err) : err.message || 'Could not post';
-      toast(typeof friendlyError === 'function' ? friendlyError(err) : err.message || 'Could not post — retry');
+      shareBtn.textContent = t('common.retry');
+      if (msgEl) msgEl.textContent = typeof friendlyError === 'function' ? friendlyError(err) : err.message || t('duniya.could_not_post');
+      toast(typeof friendlyError === 'function' ? friendlyError(err) : err.message || t('duniya.could_not_post_retry'));
     } finally {
       if (typeof unlock === 'function') unlock();
     }
@@ -1290,14 +1290,14 @@
 
   function showAfterShare(post) {
     state.screen = 'after';
-    setTitle('Shared', 'Done');
+    setTitle(t('duniya.shared'), t('common.done'));
     const el = body();
     const first = (post.slides && post.slides[0]) || null;
     el.innerHTML = `<div class="dc-after">
-      <h3>${post.archived ? 'Saved' : 'Posted'}</h3>
-      <button type="button" data-act="story">Also add to your story</button>
-      <button type="button" data-act="send">Send to friends</button>
-      <button type="button" data-act="done">Done</button>
+      <h3>${post.archived ? tHtml('common.shortcut_akhbaar_saved') : tHtml('duniya.posted_2')}</h3>
+      <button type="button" data-act="story">${tHtml('duniya.also_add_to_your_story')}</button>
+      <button type="button" data-act="send">${tHtml('duniya.send_to_friends')}</button>
+      <button type="button" data-act="done">${tHtml('common.done')}</button>
     </div>`;
     host.querySelector('[data-dc-next]').onclick = () => closeComposer();
     el.querySelector('[data-act="done"]').addEventListener('click', closeComposer);
@@ -1316,7 +1316,7 @@
           restoryOf: { uid: meUser().uid, name: meUser().name, storyId: post.id },
         });
       } else {
-        toast('Story composer will open when ready');
+        toast(t('duniya.story_composer_will_open_when_ready'));
       }
     });
     el.querySelector('[data-act="send"]').addEventListener('click', () => showSendFriends(post));
@@ -1327,9 +1327,9 @@
     const sheet = document.createElement('div');
     sheet.className = 'duniya-compose';
     sheet.style.zIndex = '90';
-    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x>✕</button><h2>Send to friends</h2><button type="button" class="dc-share" data-send>Send</button></div>
+    sheet.innerHTML = `<div class="duniya-compose-bar"><button type="button" data-x>✕</button><h2>${tHtml('duniya.send_to_friends')}</h2><button type="button" class="dc-share" data-send>${tHtml('common.send')}</button></div>
       <div data-picked class="dc-hint" style="padding:8px 16px;"></div>`;
-    const box = searchBox('Search friends', (u) => {
+    const box = searchBox(t('duniya.search_friends'), (u) => {
       if (picked.some((x) => x.uid === u.uid)) return;
       picked.push(u);
       sheet.querySelector('[data-picked]').textContent = picked.map((x) => x.name || x.username).join(', ');
@@ -1343,7 +1343,7 @@
     sheet.querySelector('[data-x]').addEventListener('click', close);
     sheet.querySelector('[data-send]').addEventListener('click', async () => {
       if (!picked.length) {
-        toast('Pick at least one friend');
+        toast(t('duniya.pick_at_least_one_friend'));
         return;
       }
       try {
@@ -1354,14 +1354,14 @@
           }
         }
         await apiPosts({ action: 'send_post', postId: post.id, uids: picked.map((u) => u.uid) });
-        toast('Sent');
+        toast(t('common.sent'));
         close();
       } catch (e) {
         report(e);
-        toast(typeof friendlyError === 'function' ? friendlyError(e) : e.message || 'Could not send');
+        toast(typeof friendlyError === 'function' ? friendlyError(e) : e.message || t('duniya.could_not_send'));
       }
     });
-    if (typeof openLayer === 'function') openLayer(sheet, close, { role: 'dialog', label: 'Send to friends' });
+    if (typeof openLayer === 'function') openLayer(sheet, close, { role: 'dialog', label: t('duniya.send_to_friends') });
   }
 
   async function open(opts = {}) {
@@ -1375,7 +1375,7 @@
           sessionStorage.setItem('chaupaal_pending_action', 'duniya_compose');
         }
       } catch (e) {}
-      if (typeof showToast === 'function') showToast('Sign in to create');
+      if (typeof showToast === 'function') showToast(t('duniya.sign_in_to_create'));
       if (typeof openAuthSheet === 'function') openAuthSheet('login');
       else if (typeof showAuth === 'function') showAuth();
       return;
@@ -1386,11 +1386,11 @@
       state.editPost = opts.editPost;
       state.mode = 'edit';
       hydrateFromPost(opts.editPost);
-      mountHost('Edit post');
+      mountHost(t('common.edit_post'));
       showExtras();
       return;
     }
-    mountHost(mode === 'text' ? 'Text post' : 'New post');
+    mountHost(mode === 'text' ? t('duniya.text_post') : t('duniya.new_post'));
     try {
       const saved = typeof loadDraft === 'function' ? loadDraft('duniya') : null;
       if (saved) applyDraft(saved);

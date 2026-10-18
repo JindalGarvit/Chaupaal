@@ -5,7 +5,7 @@
   'use strict';
 
   const IDENTITY_REPLY =
-    "I'm Chaupaal — part of the app, here to help you get around, check in, and share feedback. Not a separate human on the other end, but I'm listening.";
+    t('vriksha.i_m_chaupaal_part_of_the');
 
   function isIdentityQuestion(text) {
     const t = String(text || '').toLowerCase();
@@ -88,7 +88,7 @@
       seen.add(uid);
       out.push({
         uid,
-        name: c.name || c.displayName || 'Friend',
+        name: c.name || c.displayName || t('common.friend'),
         avatar: c.avatar || '👤',
         photoURL: c.photoURL || null,
       });
@@ -114,7 +114,7 @@
         const prefill =
           typeof baithakWishMessage === 'function'
             ? baithakWishMessage({ type: wishType, name: peer.name, uid: peer.uid })
-            : `Hey ${peer.name}!`;
+            : t('vriksha.hey_name', { name: peer.name });
         openBaithakWithPrefill({ uid: peer.uid, name: peer.name, avatar: peer.avatar, prefill, type: wishType });
       }
     };
@@ -130,9 +130,9 @@
         )
         .join('');
       return `
-        <p style="margin:0 0 12px;color:var(--muted);font-size:13px;">Who do you want to wish?</p>
-        <div class="chaupaal-wish-peer-list">${rows || '<p style="color:var(--muted);font-size:13px;">No recent chats yet.</p>'}</div>
-        <button type="button" class="btn btn--ghost btn--block" data-wish-search-more style="margin-top:12px;">Search more</button>`;
+        <p style="margin:0 0 12px;color:var(--muted);font-size:13px;">${tHtml('vriksha.who_do_you_want_to_wish')}</p>
+        <div class="chaupaal-wish-peer-list">${rows || '<p style="color:var(--muted);font-size:13px;">' + tHtml('vriksha.no_recent_chats_yet') + '</p>'}</div>
+        <button type="button" class="btn btn--ghost btn--block" data-wish-search-more style="margin-top:12px;">${tHtml('vriksha.search_more')}</button>`;
     };
 
     const wire = (root) => {
@@ -161,7 +161,7 @@
 
     if (typeof openHalfSheet === 'function') {
       openHalfSheet({
-        title: typeof t === 'function' ? t('chaupaal_cmd_wish_title', 'Wish a friend') : 'Wish a friend',
+        title: typeof t === 'function' ? t('chaupaal_cmd_wish_title', 'Wish a friend') : t('common.chaupaal_cmd_wish_title'),
         bodyHtml: renderBody(),
         onMount: wire,
       });
@@ -169,7 +169,7 @@
     }
 
     if (peers[0]) pick(peers[0]);
-    else if (typeof showToast === 'function') showToast('Open Baithak and pick a friend to message.');
+    else if (typeof showToast === 'function') showToast(t('vriksha.open_baithak_and_pick_a_friend'));
   }
 
   function aiFeaturesOnSync() {

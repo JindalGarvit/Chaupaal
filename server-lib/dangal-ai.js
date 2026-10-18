@@ -39,6 +39,13 @@ const COST_BY_TIER = { fast: COST_PER_CALL_USD, balanced: 0.006 };
 const STATS_FLUSH_MS = 20000;
 
 const HOOKS = ['coachExplain', 'commentary', 'generateQuestions', 'generateWordPack', 'botPersona', 'rulesQA', 'rerankGames'];
+/**
+ * Hooks whose answer is read by ONE viewer → asked for in their UI language (cache keyed by lang,
+ * English fallback on a wrong-language answer). Everything else (questions, word packs, bot
+ * personas, rerank codes, room-wide commentary without ctx.lang) is shared → English canonical.
+ */
+const VIEWER_TEXT_HOOKS = new Set(['coachExplain', 'commentary', 'rulesQA']);
+const AiLang = require('../public/src/js/ai/ai-lang.js');
 
 /**
  * Per-hook policy. userCap = per-user daily LLM calls for that hook; share = fraction of
@@ -678,8 +685,8 @@ function createDangalAI(deps) {
     }
   }
 
-  function cacheKey(hook, input) {
-    return crypto.createHash('sha256').update(hook + '|' + JSON.stringify(input || {})).digest('hex');
+  function cacheKey(hook, input, lang) {
+    return crypto.createHash('sha256').update(hook + '|' + (lang || 'en') + '|' + JSON.stringify(input || {})).digest('hex');
   }
   function cacheGet(key) {
     const hit = cache.get(key);
@@ -794,7 +801,8 @@ function createDangalAI(deps) {
         if (!prepared) return fallback(hook, inp, 'no_context');
         inp = prepared;
       }
-      const key = cacheKey(hook, inp);
+      const lang = VIEWER_TEXT_HOOKS.has(hook) ? AiLang.normalize(ctx && ctx.lang) : 'en';
+      const key = cacheKey(hook, inp, lang);
       const cached = cacheGet(key);
       if (cached) {
         bump(hook, 'cacheHits');
@@ -810,7 +818,14 @@ function createDangalAI(deps) {
         bump(hook, 'aiCalls');
         bump(hook, 'costUsd', COST_BY_TIER[policy.tier] || COST_PER_CALL_USD);
         out = await withTimeout(
-          Promise.resolve(callAI({ tier: policy.tier, system: SYSTEM, messages: [{ role: 'user', content: PROMPTS[hook](inp) }], max_tokens: 700, feature: 'dangal_' + hook })),
+          Promise.resolve(
+            callAI(
+              Object.assign(
+                { tier: policy.tier, system: SYSTEM, messages: [{ role: 'user', content: PROMPTS[hook](inp) }], max_tokens: 700, feature: 'dangal_' + hook },
+                VIEWER_TEXT_HOOKS.has(hook) ? { lang, langJson: true } : {}
+              )
+            )
+          ),
           d.timeoutMs || policy.timeoutMs || TIMEOUT_MS
         );
       } catch (e) {
@@ -823,7 +838,7 @@ function createDangalAI(deps) {
         return fallback(hook, inp, 'invalid_output');
       }
       if (FINISH[hook]) data = FINISH[hook](data, inp);
-      cacheSet(key, data);
+      cacheSet(out && out.langFallback ? cacheKey(hook, inp, 'en') : key, data);
       return { data, source: 'ai' };
     }
   }

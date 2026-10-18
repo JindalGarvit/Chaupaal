@@ -81,12 +81,12 @@ function initAkhbaarCatBar() {
         .filter((c) => c.name && c.name !== 'all' && c.name !== 'saathi')
         .slice(0, 8)
         .forEach((cat) => {
-          if (bar.querySelector(`[data-cat="${cat.name}"]`)) return;
+          if ([...bar.querySelectorAll('[data-cat]')].some((el) => el.dataset.cat === cat.name)) return;
           const btn = document.createElement('button');
           btn.className = 'akhbaar-cat-chip';
           btn.dataset.cat = cat.name;
           btn.dataset.catKind = cat.kind || 'user';
-          btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${cat.name}`;
+          btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${optionLabelHtml('akhbaar.cat', cat.name)}`;
           const WARN_DAYS = 10;
           if (cat.kind === 'suggested') {
             const daysSince = (Date.now() - (Number(cat.lastUsedAt) || Date.now())) / 86400000;
@@ -97,11 +97,11 @@ function initAkhbaarCatBar() {
       CategoryPrefs.bindCategoryLongPress(bar);
     } else if (typeof myCategories !== 'undefined' && Array.isArray(myCategories)) {
       myCategories.slice(0, 5).forEach((cat) => {
-        if (bar.querySelector(`[data-cat="${cat.name}"]`)) return;
+        if ([...bar.querySelectorAll('[data-cat]')].some((el) => el.dataset.cat === cat.name)) return;
         const btn = document.createElement('button');
         btn.className = 'akhbaar-cat-chip';
         btn.dataset.cat = cat.name;
-        btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${cat.name}`;
+        btn.innerHTML = `<span class="akhbaar-cat-emoji" aria-hidden="true">${cat.emoji || '📌'}</span> ${optionLabelHtml('akhbaar.cat', cat.name)}`;
         bar.insertBefore(btn, document.getElementById('akhbaarAddCat'));
       });
     }
@@ -175,7 +175,7 @@ function filterReelByCategory(cat) {
     const isMeta =
       !!card.querySelector('.results-card') ||
       !!card.querySelector('.aur-sunao-card') ||
-      (card.querySelector('.q-text') && !tag && card.textContent.includes('Aur Khabar'));
+      !!card.querySelector('[data-akhbaar-meta]');
     if (cat === 'all') {
       card.style.display = '';
       if (tag) visibleQs += 1;
@@ -185,7 +185,7 @@ function filterReelByCategory(cat) {
       card.style.display = 'none';
       return;
     }
-    if (tag && tag.textContent.includes(cat)) {
+    if (tag && (tag.dataset.cat ? tag.dataset.cat === cat : tag.textContent.includes(cat))) {
       card.style.display = '';
       visibleQs += 1;
     } else {
@@ -197,11 +197,11 @@ function filterReelByCategory(cat) {
     empty.id = 'akhbaarCatEmpty';
     empty.className = 'akhbaar-cat-empty';
     empty.innerHTML = `
-      <strong>No questions in this category</strong>
-      <p>Try another chip, or clear the filter.</p>
+      <strong>${tHtml('akhbaar.no_questions_in_this_category')}</strong>
+      <p>${tHtml('akhbaar.try_another_chip_or_clear_the')}</p>
       <div class="akhbaar-cat-empty-actions">
-        <button type="button" class="btn btn--primary" data-akhbaar-clear-cat>Clear filter</button>
-        <button type="button" class="btn btn--ghost" data-akhbaar-back-khabar>Back to Khabar</button>
+        <button type="button" class="btn btn--primary" data-akhbaar-clear-cat>${tHtml('akhbaar.clear_filter')}</button>
+        <button type="button" class="btn btn--ghost" data-akhbaar-back-khabar>${tHtml('akhbaar.back_to_khabar')}</button>
       </div>`;
     stage.prepend(empty);
     empty.querySelector('[data-akhbaar-clear-cat]')?.addEventListener('click', () => {
@@ -226,9 +226,9 @@ function openAkhbaarCatAdd() {
   if (openAddCategoryFlow()) return;
   openHalfSheet?.({
     id: 'akhbaarCatAddSheet',
-    title: 'Add category',
+    title: t('akhbaar.add_category'),
     accent: 'akhbaar',
-    bodyHtml: `<p style="color:var(--muted);font-size:13px;">Loading categories…</p>`,
+    bodyHtml: `<p style="color:var(--muted);font-size:13px;">${tHtml('akhbaar.loading_categories')}</p>`,
   });
 }
 

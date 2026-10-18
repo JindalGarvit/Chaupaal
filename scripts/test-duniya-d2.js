@@ -12,7 +12,7 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, p), 'utf8'));
 
 const duniya = read('public/src/js/features/duniya.js');
 const persist = read('public/src/js/core/social-persistence.js');

@@ -19,6 +19,7 @@ const {
 } = require('./ai-config');
 const anthropicProvider = require('./providers/anthropic');
 const openaiCompatibleProvider = require('./providers/openai-compatible');
+const AiLang = require('../public/src/js/ai/ai-lang.js');
 
 const PROVIDERS = {
   anthropic: anthropicProvider,
@@ -55,6 +56,10 @@ function getProvider(name = AI_PROVIDER) {
  * @param {boolean} [opts.enableWebSearch] - Anthropic only; ignored elsewhere
  * @param {string} [opts.feature]
  * @param {boolean} [opts.bypassKillSwitch]
+ * @param {string} [opts.lang] - UI text for ONE viewer: "Respond in <lang>" is added, the answer is
+ *   checked for that script/language, and a wrong-language answer is retried once in English
+ *   (result.lang = 'en', result.langFallback = true). Omit for shared/stored content (English canonical).
+ * @param {boolean} [opts.langJson] - the answer is JSON: only its string values are checked
  */
 async function callAI(opts = {}) {
   if (!opts.bypassKillSwitch && !isAiFeaturesEnabled()) {
@@ -68,31 +73,47 @@ async function callAI(opts = {}) {
     throw new AiDisabledError(e?.message || 'AI provider unavailable');
   }
   const model = resolveModel({ ...opts, provider: provider.id });
-  let raw;
-  try {
-    raw = await provider.complete({
-      model,
-      messages: opts.messages || [],
-      system: opts.system,
-      max_tokens: opts.max_tokens || 1024,
-      enableWebSearch: opts.enableWebSearch === true,
-    });
-  } catch (e) {
-    if (e?.code === 'AI_NOT_CONFIGURED') {
-      const err = new AiDisabledError(e.message || 'AI not configured');
-      err.code = 'AI_NOT_CONFIGURED';
-      throw err;
+  const lang = opts.lang ? AiLang.normalize(opts.lang) : null;
+
+  async function once(system) {
+    let raw;
+    try {
+      raw = await provider.complete({
+        model,
+        messages: opts.messages || [],
+        system,
+        max_tokens: opts.max_tokens || 1024,
+        enableWebSearch: opts.enableWebSearch === true,
+      });
+    } catch (e) {
+      if (e?.code === 'AI_NOT_CONFIGURED') {
+        const err = new AiDisabledError(e.message || 'AI not configured');
+        err.code = 'AI_NOT_CONFIGURED';
+        throw err;
+      }
+      throw e;
     }
-    throw e;
+    const text = typeof provider.extractText === 'function' ? provider.extractText(raw) : '';
+    return { raw, text };
   }
-  const text = typeof provider.extractText === 'function' ? provider.extractText(raw) : '';
+
+  let out = await once(lang ? AiLang.withLang(opts.system, lang) : opts.system);
+  let usedLang = lang;
+  let langFallback = false;
+  if (lang && lang !== 'en' && !AiLang.validate(out.text, lang, { json: !!opts.langJson }).ok) {
+    out = await once(AiLang.withLang(opts.system, 'en'));
+    usedLang = 'en';
+    langFallback = true;
+  }
   return {
-    text,
-    content: raw?.content || [{ type: 'text', text }],
-    raw,
+    text: out.text,
+    content: out.raw?.content || [{ type: 'text', text: out.text }],
+    raw: out.raw,
     provider: provider.id,
     model,
     feature: opts.feature || null,
+    lang: usedLang,
+    langFallback,
   };
 }
 
@@ -102,4 +123,5 @@ module.exports = {
   AiDisabledError,
   PROVIDERS,
   resolveProviderId,
+  AiLang,
 };

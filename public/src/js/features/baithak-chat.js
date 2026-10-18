@@ -457,7 +457,7 @@ function openChatScreen(chat){
     <div class="duel-ritual-bar" id="duelRitualBar">
       <div>
         <div class="duel-ritual-info">${tHtml('chat.daily_duel_ritual')}</div>
-        <div class="duel-ritual-streak">${chat.duelStreak} day streak with ${chat.name}</div>
+        <div class="duel-ritual-streak">${tHtml('chat.duel_streak_with', { count: chat.duelStreak || 0, name: bidi(chat.name) })}</div>
       </div>
       <button class="duel-ritual-cta" id="startRitualBtn">${tHtml('chat.play_today')}</button>
     </div>`:''}
@@ -1231,7 +1231,7 @@ function renderMsgBubble(m, isGroup){
       };
       try{ localStorage.setItem('chaupaal_challenge_'+att.challengeId, JSON.stringify(window.__pendingMuqabalaChallenges[att.challengeId])); }catch(e){}
     }
-    body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">${tHtml('chat.custom_challenge')}</div><div class="challenge-title">${n} questions · ${secs}s</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">${tHtml('chat.answer')}</button></div>`;
+    body=`<div class="msg-bubble-challenge-inner challenge"><div class="challenge-label">${tHtml('chat.custom_challenge')}</div><div class="challenge-title">${tHtml('chat.challenge_questions_secs', { count: n, secs })}</div><button class="challenge-btn" type="button" data-muqabala-challenge="${cid}">${tHtml('chat.answer')}</button></div>`;
     rich=true;
   } else if(att && att.type==='game_challenge'){
     const myUid=typeof currentUser!=='undefined'?currentUser?.uid:'';

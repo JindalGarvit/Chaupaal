@@ -9,6 +9,15 @@
   const MUTE_KEY = 'chaupaal_duniya_story_muted';
   const NS = (window.DuniyaStory = window.DuniyaStory || {});
 
+/** Sticker prompts are stored in canonical English (server default too); show the viewer's language. */
+const STICKER_DEFAULT_KEYS = { poll: 'duniya.sticker_vote', question: 'duniya.ask_me', quiz: 'duniya.sticker_quiz', slider: 'duniya.sticker_slide', addyours: 'duniya.add_yours', countdown: 'duniya.countdown', link: 'duniya.link' };
+function stickerText(type, value) {
+  const key = STICKER_DEFAULT_KEYS[type];
+  const v = String(value == null ? '' : value).trim();
+  if (!key) return v;
+  if (!v || v === tEn(key)) return t(key);
+  return v;
+}
   function tt(key, fallback) {
     try {
       if (typeof t === 'function') {
@@ -183,38 +192,38 @@
       return `<button type="button" class="${cls} ds-sticker" data-ov="${id}" data-mention="${esc(ov.uid)}" style="${style}">@${esc(ov.name || ov.username)}</button>`;
     }
     if (ov.type === 'link') {
-      return `<button type="button" class="${cls} ds-sticker" data-ov="${id}" data-link="${esc(ov.url)}" style="${style}">${esc(ov.label || 'Link')}</button>`;
+      return `<button type="button" class="${cls} ds-sticker" data-ov="${id}" data-link="${esc(ov.url)}" style="${style}">${esc(stickerText('link', ov.label))}</button>`;
     }
     if (ov.type === 'credit') {
-      return `<div class="${cls} ds-credit" data-ov="${id}" style="${style}">Restory · ${esc(ov.name)}</div>`;
+      return `<div class="${cls} ds-credit" data-ov="${id}" style="${style}">${tHtml('duniya.restory_credit', { name: bidi(ov.name) })}</div>`;
     }
     if (ov.type === 'poll') {
       const optsHtml = (ov.options || [])
         .map((o, i) => `<button type="button" data-poll="${i}">${esc(o)}</button>`)
         .join('');
-      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="poll" style="${style}"><strong>${esc(ov.prompt || 'Vote')}</strong>${optsHtml}</div>`;
+      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="poll" style="${style}"><strong>${esc(stickerText('poll', ov.prompt))}</strong>${optsHtml}</div>`;
     }
     if (ov.type === 'question') {
-      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="question" style="${style}"><strong>${esc(ov.prompt || 'Ask me')}</strong><button type="button" data-ask>Answer</button></div>`;
+      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="question" style="${style}"><strong>${esc(stickerText('question', ov.prompt))}</strong><button type="button" data-ask>${tHtml('duniya.answer')}</button></div>`;
     }
     if (ov.type === 'quiz') {
       const optsHtml = (ov.options || [])
         .map((o, i) => `<button type="button" data-quiz="${i}">${esc(o)}</button>`)
         .join('');
-      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="quiz" style="${style}"><strong>${esc(ov.prompt || 'Quiz')}</strong>${optsHtml}</div>`;
+      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="quiz" style="${style}"><strong>${esc(stickerText('quiz', ov.prompt))}</strong>${optsHtml}</div>`;
     }
     if (ov.type === 'slider') {
-      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="slider" style="${style}"><strong>${esc(ov.emoji || '🔥')} ${esc(ov.prompt || '')}</strong><input type="range" min="0" max="100" value="50" data-slider></div>`;
+      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="slider" style="${style}"><strong>${esc(ov.emoji || '🔥')} ${esc(stickerText('slider', ov.prompt))}</strong><input type="range" min="0" max="100" value="50" data-slider></div>`;
     }
     if (ov.type === 'countdown') {
-      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="countdown" style="${style}"><strong>${esc(ov.title || 'Countdown')}</strong><div data-cd="${Number(ov.targetAt) || 0}">…</div></div>`;
+      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="countdown" style="${style}"><strong>${esc(stickerText('countdown', ov.title))}</strong><div data-cd="${Number(ov.targetAt) || 0}">…</div></div>`;
     }
     if (ov.type === 'addyours') {
       const faces = (opts?.faces || [])
         .slice(0, 5)
         .map((f) => (f.avatar && /^https:/.test(f.avatar) ? `<img src="${esc(f.avatar)}" alt="">` : ''))
         .join('');
-      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="addyours" style="${style}"><strong>${esc(ov.prompt || 'Add yours')}</strong><div class="avatar-stack">${faces}</div><button type="button" data-add-yours>Add yours</button></div>`;
+      return `<div class="${cls} ds-widget" data-ov="${id}" data-kind="addyours" style="${style}"><strong>${esc(stickerText('addyours', ov.prompt))}</strong><div class="avatar-stack">${faces}</div><button type="button" data-add-yours>${tHtml('duniya.add_yours')}</button></div>`;
     }
     if (ov.type === 'music' && opts?.musicHtml) {
       return `<div class="${cls} ds-flying" data-ov="${id}" style="${style}">${opts.musicHtml}</div>`;
@@ -270,7 +279,7 @@
       const tick = () => {
         const d = target - Date.now();
         if (d <= 0) {
-          el.textContent = 'Now';
+          el.textContent = t('duniya.now');
           return;
         }
         const h = Math.floor(d / 3600000);
@@ -341,7 +350,7 @@
       }
     } catch (e) {}
     if (typeof showToast === 'function') {
-      showToast(tt('duniya_create_signin', 'Sign in to create'));
+      showToast(tt('duniya.duniya_create_signin', 'Sign in to create'));
     }
     if (typeof openAuthSheet === 'function') openAuthSheet('login');
     else if (typeof showAuth === 'function') showAuth();
@@ -356,7 +365,7 @@
           </div>
           <button type="button" class="duniya-story-add-badge" data-add aria-label="${esc(tt('duniya_add_story', 'Add story'))}">＋</button>
         </div>
-        <div class="duniya-story-name">${esc(tt('duniya_your_story', 'Your story'))}</div>
+        <div class="duniya-story-name">${esc(tt('duniya.duniya_your_story', 'Your story'))}</div>
       </div>`;
     const selfEl = row.querySelector('[data-self]');
     const goAuth = (intent) => {
@@ -421,7 +430,7 @@
 
     const selfHas = own.filter(isStoryViewable).length > 0;
     const selfAllSeen = selfHas && bundleFullySeen(own);
-    const selfName = tt('duniya_your_story', 'Your story');
+    const selfName = tt('duniya.duniya_your_story', 'Your story');
     const me = typeof userProfile !== 'undefined' ? userProfile : {};
     const myAvatar = me.photoURL || currentUser.photoURL || '';
     const first = (me.name || 'You').split(' ')[0];
@@ -452,7 +461,7 @@
       .join(' ');
 
     const selfHtml = `
-      <div class="${selfClasses}" data-self="1" title="${esc(tt('duniya_story_hold_hint', 'Tap for story · hold for post'))}" aria-label="${esc(tt('duniya_story_hold_hint', 'Tap for story · hold for post'))}">
+      <div class="${selfClasses}" data-self="1" title="${esc(tt('duniya.duniya_story_hold_hint', 'Tap for story · hold for post'))}" aria-label="${esc(tt('duniya.duniya_story_hold_hint', 'Tap for story · hold for post'))}">
         <div class="duniya-story-ring-wrap">
           <div class="duniya-story-ring">
             <div class="duniya-story-avatar">${selfThumb}</div>
@@ -469,7 +478,7 @@
         const displayName =
           (typeof resolvePersonDisplayName === 'function' ? resolvePersonDisplayName(u) : u.name) ||
           u.username ||
-          'Story';
+          t('duniya.story');
         const av =
           typeof renderUserAvatarHtml === 'function' && u.uid && String(u.uid).length > 12
             ? renderUserAvatarHtml(u, { decorative: true })
@@ -483,7 +492,7 @@
               <div class="duniya-story-avatar">${av}</div>
             </div>
           </div>
-          <div class="duniya-story-name">${esc(String(displayName).split(' ')[0] || 'Story')}</div>
+          <div class="duniya-story-name">${esc(String(displayName).split(' ')[0] || t('duniya.story'))}</div>
         </div>`;
       })
       .join('');
@@ -560,7 +569,7 @@
         if (e.target?.closest?.('[data-add]')) return;
         const start = group[firstUnwatchedIndex(group)];
         if (!start || !isStoryViewable(start)) {
-          if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
+          if (typeof showToast === 'function') showToast(tt('duniya.story_unavailable', 'Story unavailable'));
           return;
         }
         openViewer(start, group, { tray: NS._tray });
@@ -586,7 +595,7 @@
 
   function openViewer(story, list, opts) {
     if (!isStoryViewable(story)) {
-      if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
+      if (typeof showToast === 'function') showToast(tt('duniya.story_unavailable', 'Story unavailable'));
       return;
     }
     if (typeof NS.openViewerImpl === 'function') return NS.openViewerImpl(story, list, opts);
@@ -597,7 +606,7 @@
     try {
       const story = typeof getPlatformStory === 'function' ? await getPlatformStory(storyId, 'duniya') : null;
       if (!story || !isStoryViewable(story)) {
-        if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
+        if (typeof showToast === 'function') showToast(tt('duniya.story_unavailable', 'Story unavailable'));
         return;
       }
       document.querySelector('.tab-btn[data-tab="duniya"]')?.click();
@@ -605,7 +614,7 @@
       openViewer(story, bundleTray(feed).find((g) => g[0]?.uid === story.uid) || [story], { tray: bundleTray(feed) });
     } catch (e) {
       report('duniya_story_open', e);
-      if (typeof showToast === 'function') showToast(tt('story_unavailable', 'Story unavailable'));
+      if (typeof showToast === 'function') showToast(tt('duniya.story_unavailable', 'Story unavailable'));
     }
   }
 

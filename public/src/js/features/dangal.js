@@ -120,6 +120,7 @@ function openAIFinder(){
     try{
       const data = await callAI({
           tier:'fast', max_tokens:300, feature:'dangal_matchmaking',
+      lang: typeof aiUiLang==='function'?aiUiLang():undefined, langJson: true,
           system:`You are a matchmaking assistant for Chaupaal, an Indian news quiz app. A user describes their ideal Muqabala opponent. Extract filters and return ONLY JSON: {"region":"...","country":"...","gender":"...","age":"...","category":"...","level":"...","summary":"one friendly sentence about who we will find"}. Use these options - region: ${AI_FILTERS.region.join('/')}, gender: ${AI_FILTERS.gender.join('/')}, age: ${AI_FILTERS.age.join('/')}, category: ${AI_FILTERS.category.join('/')}, level: ${AI_FILTERS.level.join('/')}. If not mentioned use "Any" or "Similar to me".`,
           messages:[{role:"user",content:text}]
         });
@@ -257,6 +258,7 @@ function wirePeepalAskAiTarget(){
     try{
       const data = await callAI({
           tier:'fast', max_tokens:200, feature:'peepal_ai_target',
+      lang: typeof aiUiLang==='function'?aiUiLang():undefined,
           system:`You are a content targeting assistant for Chaupaal, an Indian social news app. Given a question, suggest the most relevant target audience in 1-2 sentences. Be specific and friendly. Consider Indian demographics. Light markdown is OK.`,
           messages:[{role:"user",content:`Question: "${qText||'general question'}". Who should this reach?`}]
         });

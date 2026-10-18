@@ -420,6 +420,8 @@ function renderProfileModal(){
         feature:'profile_icebreakers',
         tier:'fast',
         max_tokens:220,
+        lang: typeof aiUiLang==='function'?aiUiLang():undefined,
+        langJson: true,
         system:'You help fill Chaupaal profile fields. Return JSON {"suggestions":["...","...","..."]} — short conversation-starter style phrases the user can paste. Use only provided profile facts.',
         messages:[{role:'user',content:JSON.stringify({field:fieldKey,profile:mine})}],
       });

@@ -49,7 +49,7 @@ const LANG_CATALOG = [
 const I18N_RETIRED_LANGS = ['gu', 'kn', 'ml', 'pa', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"99db15dd","bn":"67d28fc5","de":"d296c1ab","es":"83fb50f6","fr":"8db63b86","hi":"3ce35139","id":"edcd35e0","ja":"a207ba5b","ko":"3f9d8b1e","mr":"b6a28fa9","pt":"547f3738","ta":"13947ddc","te":"cc60e965","ur":"8dc4245d","zh":"89caf7ee"};
+const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"de5f842e","id":"2775a026","ja":"0673b3d7","ko":"56677136","mr":"43439d48","pt":"19118eeb","ta":"9db41022","te":"11127969","ur":"41de7b19","zh":"e0fda911"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({
@@ -924,7 +924,8 @@ async function translateContent(text, targetLang){
   }catch(e){ return text; }
 }
 
-const CATEGORY_SUGGESTIONS = [
+// Stored by English name (a frozen code) in myCategories; labels: optionLabel('akhbaar.cat', name).
+const CATEGORY_SUGGESTIONS = /* i18n-values: akhbaar.cat */ [
   {emoji:'🏏',name:'Cricket'},{emoji:'🎬',name:'Bollywood'},{emoji:'🍳',name:'Food & Recipes'},
   {emoji:'🚗',name:'Automobiles'},{emoji:'📱',name:'Gadgets'},{emoji:'💰',name:'Personal Finance'},
   {emoji:'🎮',name:'Gaming'},{emoji:'✈️',name:'Travel'},{emoji:'🌿',name:'Environment'},
@@ -962,14 +963,16 @@ function initCategoriesTab(){
   input.addEventListener('input', ()=>{
     const q = input.value.trim().toLowerCase();
     if(!q){ suggestions.classList.remove('show'); return; }
-    const filtered = CATEGORY_SUGGESTIONS.filter(s=>s.name.toLowerCase().includes(q));
+    const fold = (x) => (typeof SearchNormalize !== 'undefined' ? SearchNormalize.fold(x) : String(x).toLowerCase());
+    const fq = fold(q);
+    const filtered = CATEGORY_SUGGESTIONS.filter(s=>fold(s.name).includes(fq) || fold(optionLabel('akhbaar.cat', s.name)).includes(fq));
     const custom = {emoji:getCategoryEmoji(input.value),name:input.value.trim()};
     const items = [...filtered.slice(0,5)];
     if(!filtered.find(f=>f.name.toLowerCase()===q)) items.push({...custom,custom:true});
     suggestions.innerHTML = items.map(s=>`
-      <div class="cat-suggestion-item" data-name="${s.name}" data-emoji="${s.emoji}">
+      <div class="cat-suggestion-item" data-name="${i18nEscape(s.name)}" data-emoji="${s.emoji}">
         <span class="cat-suggestion-emoji">${s.emoji}</span>
-        <span>${s.name}${s.custom?' <span style="font-size:11px;color:var(--muted);">— Custom</span>':''}</span>
+        <span>${s.custom ? tHtml('akhbaar.custom_category', { name: s.name }) : optionLabelHtml('akhbaar.cat', s.name)}</span>
       </div>
     `).join('');
     suggestions.classList.add('show');
@@ -1017,15 +1020,15 @@ function renderMyCatsList(){
       <div class="cat-card-header">
         <div class="cat-card-icon" style="background:${cat.color}22;">${cat.emoji}</div>
         <div>
-          <div class="cat-card-name">${cat.name}</div>
-          <div class="cat-card-meta">AI content • Just added</div>
+          <div class="cat-card-name">${optionLabelHtml('akhbaar.cat', cat.name)}</div>
+          <div class="cat-card-meta">${tHtml('akhbaar.cat_meta_just_added')}</div>
         </div>
-        <button class="cat-card-remove" data-id="${cat.id}">🗑️</button>
+        <button class="cat-card-remove" data-id="${cat.id}" aria-label="${tHtml('common.remove')}">🗑️</button>
       </div>
       <div class="cat-preview-strip">
-        <div class="cat-preview-item"><span class="pi-num">10</span>Sawaal</div>
-        <div class="cat-preview-item"><span class="pi-num">📰</span>Khabar</div>
-        <div class="cat-preview-item"><span class="pi-num">✨</span>AI Pick</div>
+        <div class="cat-preview-item"><span class="pi-num">10</span>${tHtml('peepal.sawaal')}</div>
+        <div class="cat-preview-item"><span class="pi-num">📰</span>${tHtml('peepal.khabar')}</div>
+        <div class="cat-preview-item"><span class="pi-num">✨</span>${tHtml('akhbaar.ai_pick')}</div>
       </div>
     `;
     card.querySelector('.cat-card-remove').addEventListener('click',e=>{e.stopPropagation();removeCategory(cat.id);});

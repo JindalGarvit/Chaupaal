@@ -9,7 +9,7 @@
  * Master kill-switch: isAiFeaturesEnabled() — when false, no network call is made.
  */
 (function () {
-  const AI_DISABLED_MSG = 'AI is temporarily paused while we finish testing. Try again later.';
+  const AI_DISABLED_MSG = t('errors.ai_is_temporarily_paused_while_we');
 
   function extractText(data) {
     if (!data) return '';
@@ -63,6 +63,10 @@
     if (opts.enableWebSearch === true) body.enableWebSearch = true;
     // Optional feature tag for future analytics / cost attribution
     if (opts.feature) body.feature = opts.feature;
+    // UI text for this viewer: the server asks for that language and falls back to English when the
+    // answer comes back in the wrong one (AiLang). Shared/stored content omits lang (English canonical).
+    if (opts.lang) body.lang = typeof AiLang !== 'undefined' ? AiLang.normalize(opts.lang) : String(opts.lang);
+    if (opts.langJson) body.langJson = true;
 
     const headers = { 'Content-Type': 'application/json' };
     try {
@@ -118,7 +122,21 @@
     );
   }
 
+  /** The viewer's UI language for AI UI text (cache keys include it too: aiCacheKey(base)). */
+  function aiUiLang() {
+    try {
+      if (typeof currentLang !== 'undefined' && typeof normalizeLang === 'function') return normalizeLang(currentLang);
+    } catch (e) {}
+    return 'en';
+  }
+  function aiCacheKey(base, lang) {
+    const l = lang || aiUiLang();
+    return typeof AiLang !== 'undefined' ? AiLang.cacheKey(base, l) : String(base) + '::' + l;
+  }
+
   window.callAI = callAI;
+  window.aiUiLang = aiUiLang;
+  window.aiCacheKey = aiCacheKey;
   window.callAnthropic = callAnthropic;
   window.AI_DISABLED_MSG = AI_DISABLED_MSG;
 })();
