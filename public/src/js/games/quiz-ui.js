@@ -23,7 +23,7 @@
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
   const tr = (key, fallback) => (typeof t === 'function' ? t('quiz.' + key, fallback) : fallback);
   const toast = (m) => m && typeof showToast === 'function' && showToast(m);
-  const fmt = (n) => Number(n || 0).toLocaleString();
+  const fmt = (n) => (typeof formatNumber === 'function' ? formatNumber(n || 0) : Number(n || 0).toLocaleString());
   function readJson(k, d) {
     try {
       const v = JSON.parse(localStorage.getItem(k) || 'null');

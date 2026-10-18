@@ -407,7 +407,7 @@ function showNewsSummary(inner,data,idx){
 
 function populateResults(){
   document.getElementById('scoreBig').innerHTML=`${score}<span>/${QUESTIONS.length}</span>`;
-  document.getElementById('resultsDate').textContent=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  document.getElementById('resultsDate').textContent=(typeof formatDate==='function'?formatDate(new Date(),'dayMonth'):new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'}));
   // Update right panel
   const rpScore=document.getElementById('rpYourScore');
   if(rpScore)rpScore.textContent=`${score}/${QUESTIONS.length}`;
@@ -594,7 +594,7 @@ function fillAkhbaarProofSlot(inner,data,idx,wasCorrect){
 function getAkhbaarShareStats(){
   const total=typeof QUESTIONS!=='undefined'?QUESTIONS.length:0;
   const streak=parseInt(document.getElementById('streakNum')?.textContent,10)||0;
-  const dateLabel=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  const dateLabel=(typeof formatDate==='function'?formatDate(new Date(),'dayMonth'):new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'}));
   const live=akhbaarIsLiveSet();
   const brand=live?'Aaj ka Akhbaar':'Sample practice';
   const practiceUrl=`${location.origin}/?tab=akhbaar`;

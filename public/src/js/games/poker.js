@@ -193,7 +193,7 @@
             .map(
               (r, i) => `<button type="button" class="pkr-hist-row" data-h="${i}">
             <span class="pkr-hist-cards">${cardsHtml(r.hole, { size: 'xs' })}</span>
-            <span class="pkr-hist-main"><b>${esc(modeLabel(r.mode))} · #${r.handNo}</b><small>${esc(new Date(r.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</small></span>
+            <span class="pkr-hist-main"><b>${esc(modeLabel(r.mode))} · #${r.handNo}</b><small>${esc(typeof formatDate === 'function' ? formatDate(r.at, 'dayMonth') + ', ' + formatTime(r.at) : new Date(r.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</small></span>
             <span class="pkr-hist-net ${r.net > 0 ? 'is-up' : r.net < 0 ? 'is-down' : ''}">${r.net > 0 ? '+' : ''}${fmt(r.net)}</span></button>`
             )
             .join('')}</div>`

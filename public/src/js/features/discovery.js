@@ -568,7 +568,7 @@ function formatActivityStatus(statusData){
   }
   const rel = typeof formatRelativeTime==='function'
     ? formatRelativeTime(lastSeen)
-    : lastSeen.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    : (typeof formatDate==='function'?formatDate(lastSeen,'dayMonth'):lastSeen.toLocaleDateString('en-IN',{day:'numeric',month:'short'}));
   const when = String(rel || '').replace(/^last seen\s+/i, '');
   return `<span class="chat-presence-line">${tt('presence_last_seen','Last seen')} ${when}</span>`;
 }

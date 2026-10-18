@@ -1237,7 +1237,7 @@ function createDuniyaPost(post, {variant='list'}={}){
   return el;
 }
 
-function formatCount(n){return n>=1000?(n/1000).toFixed(1)+'K':String(n);}
+function formatCount(n){if(typeof formatCompact==='function')return formatCompact(n);return n>=1000?(n/1000).toFixed(1)+'K':String(n);}
 
 async function openDuniyaPostLikers(post){
   const count=Math.max(0, Number(post.likes)||0);

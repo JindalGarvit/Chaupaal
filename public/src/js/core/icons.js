@@ -150,6 +150,11 @@
       '<path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01"/><path d="M22 8h.01"/><path d="M15 2h.01"/><path d="M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.44 1.63h-.38c-.86 0-1.57.6-1.66 1.44a2.9 2.9 0 0 1-3.12 1.96L5.8 11.3"/><path d="M11.5 13.5 8 17"/>',
   };
 
+  const DIRECTIONAL = new Set([
+    'arrow-left', 'arrow-right', 'chevron-left', 'chevron-right', 'chevrons-left', 'chevrons-right',
+    'send', 'reply', 'corner-up-left', 'corner-up-right', 'log-out', 'log-in', 'undo', 'redo', 'share-forward',
+  ]);
+
   /**
    * @param {string} name
    * @param {{ size?: number|string, className?: string, label?: string, strokeWidth?: number }} [opts]
@@ -166,7 +171,8 @@
       return '';
     }
     const size = o.size != null ? o.size : 20;
-    const cls = ['cp-icon', o.className].filter(Boolean).join(' ');
+    // Directional glyphs mirror in RTL (i18n.css .cp-flip-rtl); media / logos / clocks never do.
+    const cls = ['cp-icon', DIRECTIONAL.has(key) ? 'cp-flip-rtl' : '', o.className].filter(Boolean).join(' ');
     const sw = o.strokeWidth != null ? o.strokeWidth : 2;
     const label = o.label ? ` aria-label="${String(o.label).replace(/"/g, '&quot;')}" role="img"` : ' aria-hidden="true"';
     const inner = d.trim().startsWith('<') ? d : `<path d="${d}"/>`;
@@ -215,7 +221,7 @@
     return `<button type="button" class="${cls}"${id} aria-label="${label}"${attrs}>${iconHtml('arrow-left', { size })}</button>`;
   }
 
-  window.Icons = { PATHS, iconHtml, iconForEmpty, hydrateIcons, backButtonHtml };
+  window.Icons = { PATHS, iconHtml, iconForEmpty, hydrateIcons, backButtonHtml, DIRECTIONAL };
   window.iconHtml = iconHtml;
   window.hydrateIcons = hydrateIcons;
   window.backButtonHtml = backButtonHtml;

@@ -544,7 +544,7 @@
   function formatChatTime(at) {
     const t = Number(at) || Date.now();
     try {
-      return new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return typeof formatTime === 'function' ? formatTime(t) : new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     } catch (e) {
       return '';
     }

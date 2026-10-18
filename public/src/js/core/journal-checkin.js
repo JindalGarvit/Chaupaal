@@ -96,6 +96,7 @@
       const [y, m, day] = String(dateStr).split('-').map(Number);
       d = new Date(y, (m || 1) - 1, day || 1);
     } else d = new Date();
+    if (typeof formatDate === 'function') return formatDate(d, 'short');
     const p = istParts(d);
     const yy = String(p.y).slice(-2);
     return `${String(p.d).padStart(2, '0')}-${String(p.m).padStart(2, '0')}-${yy}`;
@@ -108,6 +109,7 @@
       const [y, m, day] = String(dateStr).split('-').map(Number);
       d = new Date(y, (m || 1) - 1, day || 1);
     } else d = new Date();
+    if (typeof formatDate === 'function') return formatDate(d, 'medium');
     const p = istParts(d);
     const month = MONTHS[p.m - 1] || '';
     return `${String(p.d).padStart(2, '0')} ${month} ${p.y}`;
@@ -115,6 +117,7 @@
 
   function formatExpandedTime(createdAtMs) {
     if (!createdAtMs) return '';
+    if (typeof formatTime === 'function') return formatTime(createdAtMs);
     try {
       return new Intl.DateTimeFormat('en-IN', {
         timeZone: 'Asia/Kolkata',
@@ -124,7 +127,7 @@
       }).format(new Date(createdAtMs));
     } catch (e) {
       const d = new Date(createdAtMs);
-      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); // i18n-format fallback
     }
   }
 

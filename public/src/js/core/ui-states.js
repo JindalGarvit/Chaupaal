@@ -42,6 +42,7 @@
   function formatRelativeTime(input, now = Date.now()) {
     const ms = toMillis(input);
     if (ms == null) return typeof input === 'string' ? input : '';
+    if (typeof ChaupaalFormat !== 'undefined') return ChaupaalFormat.formatRelative(ms, { now });
     const diff = Math.max(0, now - ms);
     if (diff < 45 * 1000) return 'Just now';
     if (diff < MINUTE) return 'Just now';
@@ -65,7 +66,7 @@
       return w === 1 ? '1 week ago' : `${w} weeks ago`;
     }
     try {
-      return new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      return new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); // i18n-format fallback
     } catch (e) {
       return '';
     }

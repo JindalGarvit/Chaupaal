@@ -11,6 +11,10 @@
  * Progress + leaderboards + share: solo-hub.js. Legacy keys chaupaal_bb_campaign_level /
  * chaupaal_bb_campaign_best_level / chaupaal_bb_last_mode are still written for older readers.
  */
+function bbFmt(n) {
+  return typeof formatNumber === 'function' ? formatNumber(n || 0) : Number(n || 0).toLocaleString();
+}
+
 function openBrickBreakerModeSheet() {
   const Hub = window.SoloHub;
   const BE = window.BrickEngine;
@@ -23,7 +27,7 @@ function openBrickBreakerModeSheet() {
   const body = `<div class="solo-modes">
     <button type="button" class="solo-mode solo-mode--primary" data-m="campaign"><b>${p.best >= BE.CAMPAIGN_COUNT ? 'Replay level ' + next : 'Play level ' + next}</b><span>Campaign · ${p.best} of ${BE.CAMPAIGN_COUNT} cleared</span></button>
     <button type="button" class="solo-mode" data-m="daily"><b>Daily Challenge</b><span>${ds.done ? 'Played today ✓' : ds.started ? 'Practice' : 'New today'}${st ? ' · 🔥 ' + st : ''}</span></button>
-    <button type="button" class="solo-mode" data-m="endless"><b>Endless</b><span>Wave after wave${endlessBest ? ' · Best ' + endlessBest.toLocaleString() : ''}</span></button>
+    <button type="button" class="solo-mode" data-m="endless"><b>Endless</b><span>Wave after wave${endlessBest ? ' · Best ' + bbFmt(endlessBest) : ''}</span></button>
     <div class="solo-hub-row"><button type="button" class="solo-link" data-m="levels">All levels</button><button type="button" class="solo-link" data-m="rules">How to play</button><button type="button" class="solo-link" data-m="settings">Settings</button></div>
   </div>`;
   const x = Hub.sheet({ title: 'Brick Breaker', bodyHtml: body });
@@ -240,7 +244,7 @@ function openBrickBreaker(opts) {
   function hud() {
     if (!s) return;
     const sc = $('bbScore');
-    if (sc) sc.textContent = s.score.toLocaleString();
+    if (sc) sc.textContent = bbFmt(s.score);
     const lv = $('bbLives');
     if (lv) lv.textContent = '● ' + (s.lives + 1);
     const dp = $('bbDepth');
@@ -478,10 +482,10 @@ function openBrickBreaker(opts) {
     let line;
     if (mode === 'campaign') {
       head = 'Level ' + levelNo;
-      line = (p.stars[levelNo] ? 'Best ' + '★'.repeat(p.stars[levelNo]) + ' ' + (p.bests[levelNo] || 0).toLocaleString() : 'Break every breakable brick') + ' · 3 balls';
+      line = (p.stars[levelNo] ? 'Best ' + '★'.repeat(p.stars[levelNo]) + ' ' + bbFmt((p.bests[levelNo] || 0)) : 'Break every breakable brick') + ' · 3 balls';
     } else if (mode === 'endless') {
       head = 'Endless';
-      line = 'Waves keep coming · 3 balls' + (p.pb.brickbreaker_endless ? ' · Best ' + p.pb.brickbreaker_endless.toLocaleString() : '');
+      line = 'Waves keep coming · 3 balls' + (p.pb.brickbreaker_endless ? ' · Best ' + bbFmt(p.pb.brickbreaker_endless) : '');
     } else {
       head = practice ? 'Daily · practice' : 'Daily Challenge';
       line = practice ? 'Practice — only your first try today counts' : 'Your first try counts · 3 balls · highest score wins';
@@ -536,7 +540,7 @@ function openBrickBreaker(opts) {
         Hub.resultHtml({
           title: won ? `Level ${levelNo} cleared` : 'Out of balls',
           stars: won ? stars : null,
-          lines: [`<b>${score.toLocaleString()}</b> points`, won && score > prevBest && prevBest ? 'New best for this level' : ''],
+          lines: [`<b>${bbFmt(score)}</b> points`, won && score > prevBest && prevBest ? 'New best for this level' : ''],
           status: beat,
           primary: won ? (levelNo < BE.CAMPAIGN_COUNT ? 'Next level' : 'Replay') : 'Try again',
           secondary: won ? 'Replay' : 'Levels',
@@ -547,7 +551,7 @@ function openBrickBreaker(opts) {
       Hub.wireResult(el, {
         primary: () => restart(won && levelNo < BE.CAMPAIGN_COUNT ? levelNo + 1 : levelNo),
         secondary: () => (won ? restart(levelNo) : (close(), openBrickBreakerLevels())),
-        share: () => Hub.share(GAME, { title: 'Level ' + levelNo, line: `${'★'.repeat(stars)} ${score.toLocaleString()} pts`, score, params: { lv: levelNo } }),
+        share: () => Hub.share(GAME, { title: 'Level ' + levelNo, line: `${'★'.repeat(stars)} ${bbFmt(score)} pts`, score, params: { lv: levelNo } }),
         board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'level', levelNo), { title: 'Level ' + levelNo }),
         close: () => (close(), openBrickBreakerModeSheet()),
       });
@@ -573,7 +577,7 @@ function openBrickBreaker(opts) {
       const el = showPanel(
         Hub.resultHtml({
           title: 'Game over',
-          lines: [`<b>${score.toLocaleString()}</b> points`, `Reached wave ${wave + 1}`, score > prev && prev ? 'New personal best' : ''],
+          lines: [`<b>${bbFmt(score)}</b> points`, `Reached wave ${wave + 1}`, score > prev && prev ? 'New personal best' : ''],
           primary: 'Play again',
           share: score > 0,
           board: true,
@@ -581,7 +585,7 @@ function openBrickBreaker(opts) {
       );
       Hub.wireResult(el, {
         primary: () => restart(0),
-        share: () => Hub.share(GAME, { title: 'Endless', line: `${score.toLocaleString()} pts · wave ${wave + 1}`, score, params: { mode: 'endless' } }),
+        share: () => Hub.share(GAME, { title: 'Endless', line: `${bbFmt(score)} pts · wave ${wave + 1}`, score, params: { mode: 'endless' } }),
         board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'endless'), { title: 'Endless' }),
         close: () => (close(), openBrickBreakerModeSheet()),
       });
@@ -598,7 +602,7 @@ function openBrickBreaker(opts) {
     const el = showPanel(
       Hub.resultHtml({
         title: practice ? 'Daily · practice' : 'Daily Challenge',
-        lines: [`<b>${score.toLocaleString()}</b> points`, s.status === 'cleared' ? 'Level cleared' : 'Out of balls', `🔥 ${Hub.streak(GAME)} day streak`],
+        lines: [`<b>${bbFmt(score)}</b> points`, s.status === 'cleared' ? 'Level cleared' : 'Out of balls', `🔥 ${Hub.streak(GAME)} day streak`],
         primary: 'Practice again',
         share: true,
         board: true,
@@ -609,7 +613,7 @@ function openBrickBreaker(opts) {
         close();
         openBrickBreaker({ mode: 'daily', practice: true });
       },
-      share: () => Hub.share(GAME, { title: 'Daily ' + Core.dayKeyOf(dayNo), line: score.toLocaleString() + ' pts', score, params: { mode: 'daily' } }),
+      share: () => Hub.share(GAME, { title: 'Daily ' + Core.dayKeyOf(dayNo), line: bbFmt(score) + ' pts', score, params: { mode: 'daily' } }),
       board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'daily', dayNo), { title: 'Brick Breaker Daily' }),
       close: () => (close(), openBrickBreakerModeSheet()),
     });
@@ -619,7 +623,7 @@ function openBrickBreaker(opts) {
       return;
     }
     if (Hub.signedIn()) n.textContent = 'Checking your score…';
-    const res = await Hub.finishDaily(GAME, run, { score, line: score.toLocaleString() + ' pts' });
+    const res = await Hub.finishDaily(GAME, run, { score, line: bbFmt(score) + ' pts' });
     note = Hub.submitNote(res.scored ? res : { ranked: false, reason: 'practice' });
     if (n.isConnected) n.textContent = note;
     const lines = el.querySelectorAll('.solo-res-line');

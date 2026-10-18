@@ -568,16 +568,16 @@
 
   function pickerHonestyBadge(liveCapable) {
     if (liveCapable) {
-      return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(229,57,53,0.12);color:#C62828;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Live</span>';
+      return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(229,57,53,0.12);color:#C62828;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Live</span>';
     }
-    return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Practice</span>';
+    return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Practice</span>';
   }
 
   function pickerPracticeBadge(kind) {
     if (kind === 'solo') {
-      return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Solo</span>';
+      return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Solo</span>';
     }
-    return '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:rgba(201,162,39,0.18);color:#8D6E00;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">vs AI</span>';
+    return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(201,162,39,0.18);color:#8D6E00;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">vs AI</span>';
   }
 
   /**
@@ -725,7 +725,7 @@
             '<div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">' +
             '<button data-i="' +
             i +
-            '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
+            '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:start;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
             '<span class="dangal-picker-mark" style="flex-shrink:0;">' +
             (typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 28 }) : g.emoji || '🎮') +
             '</span>' +
@@ -751,7 +751,7 @@
             '<div class="dangal-picker-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">' +
             '<button data-i="' +
             i +
-            '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
+            '" type="button" style="flex:1;padding:13px 14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;text-align:start;display:flex;align-items:center;gap:12px;cursor:pointer;">' +
             '<span class="dangal-picker-mark" style="flex-shrink:0;">' +
             (typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 28 }) : g.emoji || '🎮') +
             '</span>' +

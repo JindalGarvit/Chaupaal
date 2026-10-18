@@ -561,7 +561,7 @@ function wirePeepalAttachments(sheet){
     }catch(e){
       pendingPeepalAttachment={type:'link',url,title:url};
     }
-    previewArea.innerHTML=`<a class="peepal-link-card" href="${url}" target="_blank"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${pendingPeepalAttachment.title}</div><div class="peepal-link-url">${url}</div></div></a><button class="peepal-attach-remove" style="position:relative;top:-44px;left:auto;margin-left:auto;display:block;" id="removeAttach">✕</button>`;
+    previewArea.innerHTML=`<a class="peepal-link-card" href="${url}" target="_blank"><div class="peepal-link-thumb">🔗</div><div class="peepal-link-info"><div class="peepal-link-title">${pendingPeepalAttachment.title}</div><div class="peepal-link-url">${url}</div></div></a><button class="peepal-attach-remove" style="position:relative;top:-44px;inset-inline-start:auto;margin-inline-start:auto;display:block;" id="removeAttach">✕</button>`;
     document.getElementById('removeAttach').addEventListener('click',()=>{pendingPeepalAttachment=null;previewArea.innerHTML='';});
   });
 }

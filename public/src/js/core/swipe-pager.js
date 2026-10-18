@@ -48,9 +48,14 @@
     });
     root.appendChild(dots);
 
+    /** +1 LTR, −1 RTL — the flex track lays pages out from the reading start, so the offset flips. */
+    function dirSign() {
+      return typeof isRtl === 'function' && isRtl() ? -1 : 1;
+    }
+
     function paint(animate) {
       track.style.transition = animate === false ? 'none' : '';
-      track.style.transform = `translate3d(${-index * 100}%,0,0)`;
+      track.style.transform = `translate3d(${-index * 100 * dirSign()}%,0,0)`;
       dots.querySelectorAll('.cp-swipe-pager-dot').forEach((d, i) => {
         d.classList.toggle('is-active', i === index);
       });
@@ -82,8 +87,9 @@
 
     function resist(dx) {
       if (!edgeBounce) return dx;
-      const atStart = index === 0 && dx > 0;
-      const atEnd = index === pages.length - 1 && dx < 0;
+      const logical = dx * dirSign();
+      const atStart = index === 0 && logical > 0;
+      const atEnd = index === pages.length - 1 && logical < 0;
       if (atStart || atEnd) return dx * EDGE_RESIST;
       return dx;
     }
@@ -142,7 +148,7 @@
       lastT = performance.now();
       const w = Math.max(1, root.clientWidth);
       const pct = (resist(dx) / w) * 100;
-      track.style.transform = `translate3d(${-index * 100 + pct}%,0,0)`;
+      track.style.transform = `translate3d(${-index * 100 * dirSign() + pct}%,0,0)`;
     }
 
     function onPointerUp(e) {
@@ -159,7 +165,7 @@
         const flick = velocity > VELOCITY_FLICK && Math.abs(dx) > 18;
         const crossed = Math.abs(dx) > MOVE_THRESHOLD;
         if (flick || crossed) {
-          goTo(index + (dx < 0 ? 1 : -1));
+          goTo(index + (dx < 0 ? 1 : -1) * dirSign());
         } else {
           paint(true);
         }

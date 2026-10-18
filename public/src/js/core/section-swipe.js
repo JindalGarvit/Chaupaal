@@ -85,7 +85,9 @@
         const dx = (e.changedTouches[0]?.clientX || 0) - sx;
         locked = null;
         if (Math.abs(dx) < threshold) return;
-        opts?.onSwipe?.(dx < 0 ? 1 : -1, dx);
+        // "Next" is where reading goes: leftwards in LTR, rightwards in RTL.
+        const rtl = typeof isRtl === 'function' && isRtl();
+        opts?.onSwipe?.((dx < 0 ? 1 : -1) * (rtl ? -1 : 1), dx);
       },
       { passive: true }
     );

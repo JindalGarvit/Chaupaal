@@ -1,0 +1,88 @@
+/* ===================== Global L1 — scripts, RTL, text expansion =====================
+ * Font stacks: Latin (Inter / Space Grotesk) first so mixed Latin text keeps the brand look; then the
+ * platform fonts for the script (iOS/macOS · Windows · Android/Linux); then the lazy web font alias
+ * (i18n-layout.js, local() first) only as a last resort.
+ */
+
+:root:lang(hi), :root:lang(mr) {
+  --font-script: 'Kohinoor Devanagari', 'Devanagari Sangam MN', 'Nirmala UI', 'Mangal', 'CP Devanagari';
+}
+:root:lang(bn) { --font-script: 'Kohinoor Bangla', 'Bangla Sangam MN', 'Nirmala UI', 'Vrinda', 'CP Bengali'; }
+:root:lang(ta) { --font-script: 'Tamil Sangam MN', 'Nirmala UI', 'Latha', 'CP Tamil'; }
+:root:lang(te) { --font-script: 'Kohinoor Telugu', 'Telugu Sangam MN', 'Nirmala UI', 'Gautami', 'CP Telugu'; }
+:root:lang(ar) { --font-script: 'SF Arabic', 'Geeza Pro', 'Segoe UI', 'Tahoma', 'CP Arabic'; }
+/* Urdu reads in Nastaliq; Naskh Arabic fonts are only the fallback. */
+:root:lang(ur) { --font-script: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', 'CP Nastaliq', 'Geeza Pro', 'Segoe UI'; }
+:root:lang(ja) { --font-script: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'CP JP'; }
+:root:lang(ko) { --font-script: 'Apple SD Gothic Neo', 'Malgun Gothic', 'CP KR'; }
+:root:lang(zh) { --font-script: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'CP SC'; }
+
+:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(ar), :lang(ur), :lang(ja), :lang(ko), :lang(zh)) {
+  --font-ui: 'Inter', var(--font-script), system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', var(--font-script), 'Inter', system-ui, sans-serif;
+}
+
+/* Taller lines for scripts with stacked marks / tall ascenders; none of them use letter-spacing. */
+:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(ar)) body { line-height: 1.6; }
+:root:lang(ur) body { line-height: 2; }
+:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(ar), :lang(ur)) :is(body, body *) {
+  letter-spacing: normal !important;
+}
+:root:is(:lang(ar), :lang(ur)) :is([class*="label"], [class*="eyebrow"], [class*="kicker"]) { text-transform: none; }
+
+/* CJK: break per the language's rules; Korean keeps words whole. */
+:root:is(:lang(ja), :lang(zh)) body { line-break: strict; word-break: normal; overflow-wrap: anywhere; }
+:root:lang(ko) body { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* ── Mixed content: user names, @handles, numbers, URLs keep their own direction ── */
+bdi,
+.cp-bidi,
+:is(.peepal-user-name, .duniya-post-name, .duniya-user-name, .chat-name, .chat-header-name, .msg-sender,
+  .comment-author, .notif-panel-item strong, .rp-lb-name, [data-handle], .username, .handle) {
+  unicode-bidi: isolate;
+}
+/* Paragraph direction from the text itself (Arabic message in an English UI and vice versa). */
+:is(textarea, input[type="text"], input[type="search"], input:not([type]), .msg-text, .msg-bubble-text,
+  .comment-text, .peepal-question-text, .duniya-post-caption, .duniya-caption, .chat-preview, [dir="auto"]) {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* ── Directional icons mirror in RTL; media, logos, clocks, boards and cards never do ── */
+/* Text arrows (←) flip as a whole; SVG arrows already carry .cp-flip-rtl (never flip both).
+   ‹ › « » are Unicode bidi-mirrored and flip on their own — don't add them here. */
+[dir="rtl"] :is(.cp-flip-rtl, .game-back-btn:not(:has(svg)), .cp-back-btn > svg:not(.cp-flip-rtl), #chatBack > svg:not(.cp-flip-rtl)) {
+  transform: scaleX(-1);
+}
+
+/* ── Games: the board is a board — layout and physics stay LTR; menus/sheets/score text follow RTL ── */
+[dir="rtl"] :is(canvas,
+  .game-board, .chess-board, .chess2-board, .ld-board, .ludo-board, .sl-board, .snakes-board, .snakes-grid,
+  .ttt-grid, .tt-board, .tt-grid, .kk-board, .kk-grid, .sf-grid, .cr-board, .cr-canvas, .pc-carrom-field,
+  .bd-board, .bd-court, .cs-court, .cs-rally-court, .pen-board, .pen-canvas, .sc-canvas, .scribble-canvas,
+  .rw-sports-pitch, .rw-sc-pitch, .tb-board, .tb-grid, .tb-ticket, .pc-ticket, .pkr-board, .pkr-replay-board,
+  .bl-hand, .bl-fan, .pc-hand, .pc-rummy-hand, .pkr-hand, .pkr-seat-hand, .rm-hand, .tp-hand, .uno-hand, .on-hand,
+  .media-picker-grid, .cp-media-controls, [data-ltr]) {
+  direction: ltr;
+}
+
+/* ── Text expansion: labels tolerate +40% (wrap or truncate — never overflow at 360px) ── */
+:is(.btn, button.btn, .day0-fork-card, .settings-link-text, .toggle-label, .toggle-desc) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+:is(.dangal-filter-chip, .akhbaar-cat-chip, .peepal-nudge-chip, .peepal-intent-chip, .cp-lang-chip, .khoj-chip,
+  .baithak-chip, .duniya-chip, [class$="-chip"]) {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bottom-tabs .tab-btn { min-width: 0; }
+.bottom-tabs .tab-btn :is(.tab-label, span:not([class*="icon"]):not([class*="light"]):not([class*="dot"])) {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

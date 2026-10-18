@@ -49,7 +49,8 @@ function loadI18n(opts) {
     console: o.console || { log() {}, warn() {}, error() {} },
     localStorage: o.localStorage || memoryStorage(o.storage),
     navigator: { languages: o.languages || ['en-US'], language: (o.languages || ['en-US'])[0] },
-    location: { hostname: 'test' },
+    location: { hostname: 'test', search: o.search || '' },
+    URLSearchParams,
     Intl: FakeIntl,
     CustomEvent: class {
       constructor(type, init) {
@@ -89,6 +90,8 @@ function loadI18n(opts) {
   vm.runInContext(read('public/src/i18n/legacy-keys.js'), ctx, { filename: 'legacy-keys.js' });
   vm.runInContext(read('public/src/js/core/i18n.js'), ctx, { filename: 'i18n.js' });
   if (o.region !== false) vm.runInContext(read('public/src/js/core/region.js'), ctx, { filename: 'region.js' });
+  if (o.format !== false) vm.runInContext(read('public/src/js/core/i18n-format.js'), ctx, { filename: 'i18n-format.js' });
+  if (o.icons) vm.runInContext(read('public/src/js/core/icons.js'), ctx, { filename: 'icons.js' });
   ctx.fetchLog = fetchLog;
   ctx.events = events;
   ctx.html = html;

@@ -80,7 +80,7 @@
 .mehfil-overlay.mehfil-has-youtube .mehfil-stage-rest,
 .mehfil-overlay.mehfil-has-music .mehfil-stage-rest{display:none !important;}
 .mehfil-host-chip{
-  position:absolute;top:8px;left:12px;z-index:3;font-size:11px;font-weight:600;
+  position:absolute;top:8px;inset-inline-start:12px;z-index:3;font-size:11px;font-weight:600;
   padding:4px 10px;border-radius:999px;
   background:color-mix(in srgb, #000 45%, transparent);
 }
@@ -107,7 +107,7 @@
   .mehfil-chat-shimmer{animation:none !important;}
 }
 .mehfil-chat-strip{
-  position:absolute;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));
+  position:absolute;inset-inline-start:12px;inset-inline-end:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));
   z-index:8;border-radius:var(--r-card);
   background:color-mix(in srgb, var(--call-surface) 88%, transparent);
   backdrop-filter:blur(12px);
@@ -124,7 +124,7 @@
 .mehfil-chat-strip.is-expanded{max-height:min(42vh, 300px);}
 .mehfil-chat-peek{
   display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;
-  border:none;background:transparent;color:inherit;cursor:pointer;text-align:left;
+  border:none;background:transparent;color:inherit;cursor:pointer;text-align:start;
   min-height:44px;
 }
 .mehfil-chat-peek:focus-visible{outline:2px solid var(--gold);outline-offset:-2px;}
@@ -159,7 +159,7 @@
   max-width:100%;
 }
 .mehfil-chat-line.is-me{flex-direction:row-reverse;opacity:1;}
-.mehfil-chat-line.is-me .mehfil-chat-body{align-items:flex-end;text-align:right;}
+.mehfil-chat-line.is-me .mehfil-chat-body{align-items:flex-end;text-align:end;}
 .mehfil-chat-line.is-me .mehfil-chat-meta{flex-direction:row-reverse;}
 .mehfil-chat-line.is-system{
   display:block;text-align:center;opacity:.7;font-size:11px;padding:2px 0;
@@ -194,7 +194,7 @@
   z-index:4;opacity:.35;pointer-events:none;
 }
 .mehfil-alone-float{
-  position:absolute;top:calc(88px + env(safe-area-inset-top,0px));right:12px;z-index:6;max-width:240px;
+  position:absolute;top:calc(88px + env(safe-area-inset-top,0px));inset-inline-end:12px;z-index:6;max-width:240px;
   padding:12px;border-radius:var(--r-card);
   background:color-mix(in srgb, var(--call-surface) 92%, transparent);
   border:1px solid color-mix(in srgb, var(--call-chrome-fg) 12%, transparent);
@@ -218,7 +218,7 @@
   .mehfil-chat-strip.is-expanded{max-height:min(38dvh, 300px);}
 }
 .mehfil-busy-banner{
-  position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:12px;right:12px;z-index:170;
+  position:absolute;top:calc(12px + env(safe-area-inset-top,0px));inset-inline-start:12px;inset-inline-end:12px;z-index:170;
   display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--r-card);
   background:color-mix(in srgb, var(--call-surface) 94%, #000);color:var(--call-chrome-fg);
   font-size:12px;box-shadow:var(--shadow-lg);
@@ -228,7 +228,7 @@
   min-height:44px;
 }
 .mehfil-immersive-exit{
-  position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;z-index:20;
+  position:absolute;top:calc(12px + env(safe-area-inset-top,0px));inset-inline-end:12px;z-index:20;
   min-height:44px;min-width:44px;padding:0 14px;border-radius:999px;border:none;
   background:color-mix(in srgb, var(--call-surface) 90%, #000);color:var(--call-chrome-fg);
   font-weight:700;font-size:12px;cursor:pointer;
@@ -246,7 +246,7 @@
   max-height:28px;opacity:.75;
 }
 .mehfil-overlay.mehfil-immersive .mehfil-top::after{
-  content:'';position:absolute;left:0;right:0;bottom:-28px;height:28px;pointer-events:auto;
+  content:'';position:absolute;inset-inline-start:0;inset-inline-end:0;bottom:-28px;height:28px;pointer-events:auto;
 }
 /* Chaupaal light — neutral Gathered light, not cream parchment */
 .mehfil-overlay.mehfil-theme--light{

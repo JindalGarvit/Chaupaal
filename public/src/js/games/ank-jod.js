@@ -1694,7 +1694,7 @@
     if (parts.length !== 3) return key;
     const d = new Date(parts[0], parts[1] - 1, parts[2]);
     try {
-      return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+      return typeof formatDate === 'function' ? formatDate(d, 'weekdayShort') : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
     } catch (err) {
       return key;
     }

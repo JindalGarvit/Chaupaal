@@ -54,6 +54,10 @@
     const num = Math.round(Number(n) || 0);
     const cur = o.currency || accountCache?.currency || subCache?.currency || 'INR';
     const sym = o.symbol || subCache?.pricing?.symbol || accountCache?.fiatSymbol || '₹';
+    // Locale-formatted in the amount's own currency — the region never converts a stored value.
+    if (typeof formatCurrency === 'function' && !o.symbol) {
+      return o.cmLabel ? `${formatNumber(num, { maximumFractionDigits: 0 })} CM` : formatCurrency(num, cur);
+    }
     try {
       const formatted = new Intl.NumberFormat(undefined, {
         style: 'decimal',
@@ -279,7 +283,7 @@
               ? `<div class="cm-tier-card${tier === 'pradhan' ? ' is-active' : ''}">
               <div class="cm-tier-name">${tt('tier_pradhan', 'Pradhan')}</div>
               <div class="cm-tier-price">${formatAmount(pricing.pradhan, { cmLabel: true })} / mo</div>
-              ${tier === 'pradhan' && sub.activeUntil ? `<div class="cm-tier-renew">${new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
+              ${tier === 'pradhan' && sub.activeUntil ? `<div class="cm-tier-renew">${typeof formatDate === 'function' ? formatDate(sub.activeUntil, 'medium') : new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
               ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="pradhan">${tt('membership_subscribe', 'Subscribe')}</button>`}
             </div>`
               : ''
@@ -287,7 +291,7 @@
           <div class="cm-tier-card${tier === 'sarpanch' ? ' is-active' : ''}">
             <div class="cm-tier-name">${tt('tier_sarpanch', 'Sarpanch')}</div>
             <div class="cm-tier-price">${formatAmount(pricing.sarpanch, { cmLabel: true })} / mo</div>
-            ${tier === 'sarpanch' && sub.activeUntil ? `<div class="cm-tier-renew">${new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
+            ${tier === 'sarpanch' && sub.activeUntil ? `<div class="cm-tier-renew">${typeof formatDate === 'function' ? formatDate(sub.activeUntil, 'medium') : new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
             ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="sarpanch">${tier === 'pradhan' && !isPro ? tt('membership_upgrade', 'Upgrade to Sarpanch') : tt('membership_subscribe', 'Subscribe')}</button>`}
           </div>
         </div>
@@ -361,7 +365,7 @@
         <div class="cm-balance-hero">
           <div class="cm-balance-label">${tt('money_balance', 'Balance')}</div>
           <div class="cm-balance-value">${formatAmount(bal, { cmLabel: true })}</div>
-          <div class="cm-balance-fiat">1 Chaupaal Money = ${sym}1 in your region (${cur})</div>
+          <div class="cm-balance-fiat">1 Chaupaal Money = ${typeof formatCurrency === 'function' ? formatCurrency(1, cur) : sym + '1'} in your region (${cur})</div>
         </div>
         ${teen ? `<p class="cm-teen-note">${tt('teen_purchase_block', 'Ask a parent or turn off Teen Mode to purchase.')}</p>` : `<button type="button" class="btn btn--primary btn--block" data-acct-topup>${tt('money_add', 'Add money')}</button>`}
         <button type="button" class="btn btn--block" data-acct-membership>${tt('membership_title', 'Membership (Pradhan / Sarpanch)')}</button>
@@ -372,8 +376,9 @@
               ? txs
                   .map((tx) => {
                     const sign = Number(tx.amount) >= 0 ? '+' : '';
-                    const when = tx.at ? new Date(tx.at).toLocaleString() : '';
-                    return `<li><span>${tx.reason || tx.type || ''}</span><span>${sign}${tx.amount} CM</span><time>${when}</time></li>`;
+                    const when = tx.at ? (typeof formatDate === 'function' ? formatDate(tx.at, 'datetime') : new Date(tx.at).toLocaleString()) : '';
+                    const amt = typeof formatNumber === 'function' ? formatNumber(tx.amount) : tx.amount;
+                    return `<li><span>${tx.reason || tx.type || ''}</span><span>${sign}${amt} CM</span><time>${when}</time></li>`;
                   })
                   .join('')
               : `<li class="cm-tx-empty">${tt('money_no_tx', 'No activity yet')}</li>`

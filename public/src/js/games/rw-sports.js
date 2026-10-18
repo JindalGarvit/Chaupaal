@@ -180,7 +180,7 @@
     return list
       .map((e, i) => {
         const tag = e.won === true ? tr('hist.won', 'Won') : e.tied ? tr('hist.tied', 'Tied') : e.won === false ? tr('hist.lost', 'Lost') : '—';
-        const when = new Date(e.at || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const when = typeof formatDate === 'function' ? formatDate(e.at || Date.now(), 'dayMonth') : new Date(e.at || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         const fmt = C && C.FORMATS[e.format] ? C.FORMATS[e.format].label : '';
         return `<button type="button" class="sc-hist-row" data-sc-hist="${i}">
           <span class="sc-hist-tag sc-hist-tag--${e.won === true ? 'w' : e.won === false ? 'l' : 't'}">${esc(tag)}</span>

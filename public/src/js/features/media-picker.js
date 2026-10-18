@@ -196,6 +196,7 @@
     const n = Number(sec);
     if (!Number.isFinite(n) || n <= 0) return '';
     if (n < 60) return `${Math.round(n)}s`;
+    if (window.ChaupaalFormat) return window.ChaupaalFormat.formatDuration(n);
     return `${Math.floor(n / 60)}:${String(Math.round(n % 60)).padStart(2, '0')}`;
   }
 

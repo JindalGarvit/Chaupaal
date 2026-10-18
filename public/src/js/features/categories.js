@@ -1631,7 +1631,7 @@ function renderPeepalOptions(q){
     if(q.format==='open'){
       if(q.answered)return`
         <div style="font-size:13px;color:var(--muted);padding:4px 0;">You shared your response ✓ · ${q.totalResponses||0} responses</div>
-        ${q.myTypedAnswer?`<div style="font-size:13px;color:var(--ink);background:var(--cream);border-radius:10px;padding:8px 12px;margin-top:6px;border-left:3px solid var(--red);">${escPeepalText('"'+q.myTypedAnswer+'"')}</div>`:''}
+        ${q.myTypedAnswer?`<div style="font-size:13px;color:var(--ink);background:var(--cream);border-radius:10px;padding:8px 12px;margin-top:6px;border-inline-start:3px solid var(--red);">${escPeepalText('"'+q.myTypedAnswer+'"')}</div>`:''}
       `;
       return`
         <textarea class="peepal-open-input" placeholder="Share your thoughts..." id="open_${q.id}" rows="2" style="resize:none;min-height:60px;"></textarea>

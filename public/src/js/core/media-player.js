@@ -14,6 +14,7 @@
 
   function formatTime(sec) {
     if (!Number.isFinite(sec) || sec < 0) return '0:00';
+    if (typeof formatDuration === 'function') return formatDuration(sec);
     const s = Math.floor(sec % 60);
     const m = Math.floor(sec / 60);
     return m + ':' + String(s).padStart(2, '0');

@@ -81,7 +81,7 @@
   position:absolute;width:10px;height:10px;border-radius:50%;
   border:2px solid var(--presence-ring);
   background:var(--presence-online);
-  right:0;bottom:0;box-sizing:border-box;
+  inset-inline-end:0;bottom:0;box-sizing:border-box;
   box-shadow:0 0 0 1px rgba(28,27,31,0.06);
 }
 .presence-dot--mehfil{background:var(--presence-mehfil);}
@@ -94,10 +94,10 @@
   display:flex;flex-direction:row-reverse;align-items:center;
 }
 .avatar-stack > *{
-  margin-left:-10px;border:2px solid var(--presence-ring);
+  margin-inline-start:-10px;border:2px solid var(--presence-ring);
   border-radius:50%;box-shadow:var(--elev-1);
 }
-.avatar-stack > *:last-child{margin-left:0;}
+.avatar-stack > *:last-child{margin-inline-start:0;}
 /* Stacking only intended for Mehfil / group headers */
 .mehfil-stage .avatar-stack,
 .chat-header .avatar-stack,

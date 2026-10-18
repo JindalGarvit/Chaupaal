@@ -289,13 +289,17 @@
     let startY = 0;
     let active = false;
     let dx = 0;
+    // Back comes from the reading-start edge: left in LTR, right in RTL.
+    let sign = 1;
 
     el.addEventListener(
       'touchstart',
       (e) => {
         if (e.touches.length !== 1) return;
         const t = e.touches[0];
-        if (t.clientX > 28) return; // left edge only
+        sign = typeof isRtl === 'function' && isRtl() ? -1 : 1;
+        const fromEdge = sign === 1 ? t.clientX : (window.innerWidth || 0) - t.clientX;
+        if (fromEdge > 28) return; // start edge only
         startX = t.clientX;
         startY = t.clientY;
         active = true;
@@ -316,9 +320,9 @@
           el.style.transform = '';
           return;
         }
-        dx = Math.max(0, adx);
+        dx = Math.max(0, adx * sign);
         el.style.transition = 'none';
-        el.style.transform = `translateX(${dx}px)`;
+        el.style.transform = `translateX(${dx * sign}px)`;
       },
       { passive: true }
     );

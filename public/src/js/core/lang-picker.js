@@ -198,6 +198,27 @@
     const rv = document.getElementById('regionPickerValue');
     const R = regionApi();
     if (rv && R) rv.textContent = R.countryName(R.getRegion().country, curLang());
+    // Western digits: only offered where the locale's own digits aren't 0–9 (ar-SA, mr, bn …).
+    const row = document.getElementById('westernDigitsRow');
+    const F = typeof ChaupaalFormat !== 'undefined' ? ChaupaalFormat : null;
+    if (row && F) {
+      row.hidden = !F.localeUsesNativeDigits(F.baseLocale());
+      const box = document.getElementById('toggleWesternDigits');
+      if (box) box.checked = F.getDigitsPref() === 'latn';
+    }
+  }
+
+  function wireDigits() {
+    const box = document.getElementById('toggleWesternDigits');
+    if (!box || box.dataset.wired === '1') return;
+    box.dataset.wired = '1';
+    box.addEventListener('change', () => {
+      const F = typeof ChaupaalFormat !== 'undefined' ? ChaupaalFormat : null;
+      if (!F) return;
+      const v = box.checked ? 'latn' : '';
+      F.setDigitsPref(v);
+      if (typeof i18nProfileWrite === 'function') i18nProfileWrite({ digits: v || null });
+    });
   }
 
   /** Onboarding chip: "Language: English · Change". */
@@ -246,6 +267,7 @@
     document.getElementById('langPickerBtn')?.addEventListener('click', () => openLanguagePicker());
     document.getElementById('contentLangsBtn')?.addEventListener('click', () => openContentLangsPicker());
     document.getElementById('regionPickerBtn')?.addEventListener('click', () => openRegionPicker());
+    wireDigits();
     refreshSettings();
     ['chaupaal:lang-changed', 'chaupaal:content-langs-changed', 'chaupaal:region-changed'].forEach((ev) =>
       document.addEventListener(ev, refreshSettings)

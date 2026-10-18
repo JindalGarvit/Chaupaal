@@ -340,7 +340,7 @@ function buildWrapData(){
   thisMonth.forEach(h=>{ if(h.topCat) catCounts[h.topCat]=(catCounts[h.topCat]||0)+1; });
   const topCat=Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'GK';
   const accuracy=totalQ>0?Math.round((totalCorrect/totalQ)*100):0;
-  return {totalQ,totalCorrect,accuracy,streak,topCat,month:now.toLocaleString('en-IN',{month:'long'})};
+  return {totalQ,totalCorrect,accuracy,streak,topCat,month:(typeof formatDate==='function'?formatDate(now,'month'):now.toLocaleString('en-IN',{month:'long'}))};
 }
 
 function recordPlaySession(correct,total,topCat){

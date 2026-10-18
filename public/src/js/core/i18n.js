@@ -303,13 +303,84 @@ function i18nLookup(key, lang) {
 }
 
 function i18nRender(key, vars, fallback, mode) {
-  const lang = normalizeLang(typeof currentLang !== 'undefined' ? currentLang : 'en');
+  const lang = i18nPseudo ? 'en' : normalizeLang(typeof currentLang !== 'undefined' ? currentLang : 'en');
   const hit = i18nLookup(key, lang);
-  if (hit) return i18nFormat(hit.v, vars, getLangEntry(hit.code).html, mode);
-  if (fallback) return i18nFormat(fallback, vars, 'en', mode);
+  if (hit) return pseudoize(i18nFormat(hit.v, vars, getLangEntry(hit.code).html, mode), mode);
+  if (fallback) return pseudoize(i18nFormat(fallback, vars, 'en', mode), mode);
   i18nDevWarn(String(key));
   return mode === 'html' ? i18nEscape(key) : String(key);
 }
+
+// ─── pseudo-locales (dev/test only — never in LANG_CATALOG / the picker) ────
+/**
+ * en-XA "accented + 40% longer" and ar-XB "pseudo-RTL" sit on top of English: every string that
+ * went through t() is transformed, so plain English left on screen is a hard-coded string, and
+ * clipping shows where +40% text would overflow. Turn on with ?pseudo=en-XA | ar-XB (sticky for the
+ * device), off with ?pseudo=off, or setPseudoLocale() from the console.
+ */
+const I18N_PSEUDO_LOCALES = ['en-XA', 'ar-XB'];
+const I18N_PSEUDO_LS = 'chaupaal_pseudo_locale';
+const I18N_ACCENTS = {
+  a: 'á', b: 'ƀ', c: 'ç', d: 'ð', e: 'é', f: 'ƒ', g: 'ĝ', h: 'ĥ', i: 'î', j: 'ĵ', k: 'ķ', l: 'ļ', m: 'ɱ',
+  n: 'ñ', o: 'ö', p: 'þ', q: 'ǫ', r: 'ŕ', s: 'š', t: 'ţ', u: 'û', v: 'ṽ', w: 'ŵ', x: 'ẋ', y: 'ý', z: 'ž',
+  A: 'Å', B: 'Ɓ', C: 'Ç', D: 'Ð', E: 'É', F: 'Ƒ', G: 'Ĝ', H: 'Ĥ', I: 'Î', J: 'Ĵ', K: 'Ķ', L: 'Ļ', M: 'Ṁ',
+  N: 'Ñ', O: 'Ö', P: 'Þ', Q: 'Ǫ', R: 'Ŕ', S: 'Š', T: 'Ţ', U: 'Û', V: 'Ṽ', W: 'Ŵ', X: 'Ẋ', Y: 'Ý', Z: 'Ž',
+};
+let i18nPseudo = null;
+
+function i18nAccent(s) {
+  return s.replace(/[A-Za-z]/g, (c) => I18N_ACCENTS[c] || c);
+}
+
+function pseudoize(s, mode) {
+  if (!i18nPseudo || !s) return s;
+  if (i18nPseudo === 'ar-XB') return '\u200F\u202E' + s + '\u202C\u200F';
+  // Accent text only — never inside HTML tags or entities.
+  const accented = mode === 'html' ? s.replace(/(<[^>]*>|&[#\w]+;)|([^<&]+)/g, (m, tag, text) => tag || i18nAccent(text)) : i18nAccent(s);
+  const visible = s.replace(/<[^>]*>/g, '').length;
+  return '[' + accented + ' ' + '·'.repeat(Math.max(1, Math.ceil(visible * 0.4))) + ']';
+}
+
+function isPseudoLocale() {
+  return !!i18nPseudo;
+}
+
+function getPseudoLocale() {
+  return i18nPseudo;
+}
+
+function setPseudoLocale(code) {
+  i18nPseudo = I18N_PSEUDO_LOCALES.includes(code) ? code : null;
+  try {
+    if (i18nPseudo) localStorage.setItem(I18N_PSEUDO_LS, i18nPseudo);
+    else localStorage.removeItem(I18N_PSEUDO_LS);
+  } catch (e) {}
+  applyDocumentLang(typeof currentLang !== 'undefined' ? currentLang : 'en');
+  if (typeof applyChromeI18n === 'function') {
+    try {
+      applyChromeI18n();
+    } catch (e) {}
+  }
+  i18nEmit('chaupaal:lang-changed', { lang: typeof currentLang !== 'undefined' ? currentLang : 'en', pseudo: i18nPseudo });
+  return i18nPseudo;
+}
+
+function readPseudoFlag() {
+  try {
+    const q = typeof location !== 'undefined' && location.search ? new URLSearchParams(location.search).get('pseudo') : null;
+    if (q != null) {
+      const v = I18N_PSEUDO_LOCALES.find((p) => p.toLowerCase() === String(q).toLowerCase()) || null;
+      if (v) localStorage.setItem(I18N_PSEUDO_LS, v);
+      else localStorage.removeItem(I18N_PSEUDO_LS);
+      return v;
+    }
+    const s = localStorage.getItem(I18N_PSEUDO_LS);
+    return I18N_PSEUDO_LOCALES.includes(s) ? s : null;
+  } catch (e) {
+    return null;
+  }
+}
+i18nPseudo = readPseudoFlag();
 
 /** Resolve UI string: selected lang → English → optional string fallback → key. Plain text. */
 function t(key, vars = {}) {
@@ -391,9 +462,22 @@ function loadLangPack(code) {
 function applyDocumentLang(code) {
   try {
     const e = getLangEntry(code);
-    document.documentElement.lang = e.html || e.code;
-    document.documentElement.dir = e.dir === 'rtl' ? 'rtl' : 'ltr';
+    const pseudo = i18nPseudo;
+    document.documentElement.lang = pseudo || e.html || e.code;
+    document.documentElement.dir = pseudo === 'ar-XB' || (!pseudo && e.dir === 'rtl') ? 'rtl' : 'ltr';
   } catch (err) {}
+  try {
+    if (typeof ChaupaalFonts !== 'undefined' && ChaupaalFonts.ensureForLang) ChaupaalFonts.ensureForLang(code);
+  } catch (err) {}
+}
+
+/** True when the UI is laid out right-to-left (ar, ur, pseudo ar-XB). Gestures read this. */
+function isRtl() {
+  try {
+    return document.documentElement.dir === 'rtl';
+  } catch (e) {
+    return false;
+  }
 }
 
 function i18nProfileWrite(fields) {
@@ -531,6 +615,9 @@ function hydrateLocaleFromProfile(profile) {
     if (explicit) writes.contentLangs = getContentLangs();
   }
   try {
+    if ((p.digits === 'latn' || p.digits === null) && typeof ChaupaalFormat !== 'undefined') ChaupaalFormat.setDigitsPref(p.digits || '');
+  } catch (e) {}
+  try {
     if (typeof ChaupaalRegion !== 'undefined' && ChaupaalRegion.hydrateFromProfile) {
       Object.assign(writes, ChaupaalRegion.hydrateFromProfile(p) || {});
     }
@@ -597,6 +684,11 @@ if (typeof window !== 'undefined') {
     hydrateLocaleFromProfile,
     tHtml,
     tn,
+    isRtl,
+    isPseudoLocale,
+    getPseudoLocale,
+    setPseudoLocale,
+    I18N_PSEUDO_LOCALES,
   });
 }
 

@@ -314,7 +314,7 @@
   function valueHtml(game, r) {
     if (gid(game) === 'ankjod') return esc(fmtMs(r.ms)) + (r.hints ? ` <small>+${r.hints} ${r.hints === 1 ? 'hint' : 'hints'}</small>` : '');
     const stars = r.stars ? ` <small class="solo-stars">${'★'.repeat(r.stars)}</small>` : '';
-    return esc(Number(r.score || 0).toLocaleString()) + stars;
+    return esc((typeof formatNumber === 'function' ? formatNumber(r.score || 0) : Number(r.score || 0).toLocaleString())) + stars;
   }
   function rowsHtml(game, rows, empty) {
     if (!rows || !rows.length) return `<div class="solo-empty">${esc(empty)}</div>`;
@@ -462,7 +462,7 @@
   function targetHtml(ctx) {
     if (!ctx || ctx.source !== 'challenge') return '';
     const p = ctx.params || {};
-    const target = p.label || (Number.isFinite(ctx.beatScore) ? Number(ctx.beatScore).toLocaleString() : '');
+    const target = p.label || (Number.isFinite(ctx.beatScore) ? (typeof formatNumber === 'function' ? formatNumber(ctx.beatScore) : Number(ctx.beatScore).toLocaleString()) : '');
     if (!target) return '';
     const who = ctx.challenger ? esc(ctx.challenger) : esc(tr('yourFriend', 'your friend'));
     return `<div class="solo-target">🎯 ${esc(tr('beat', 'Beat'))} ${who}: <b>${esc(target)}</b></div>`;

@@ -90,9 +90,9 @@
   width:28px;height:28px;border-radius:50%;
   background:var(--cream);border:2px solid var(--white);
   display:inline-flex;align-items:center;justify-content:center;
-  margin-left:-8px;color:var(--muted);
+  margin-inline-start:-8px;color:var(--muted);
 }
-.auth-proof-avatars .auth-proof-avatar:first-child{ margin-left:0; }
+.auth-proof-avatars .auth-proof-avatar:first-child{ margin-inline-start:0; }
 .auth-proof-avatars .cp-icon{ width:14px; height:14px; }
 .modal-btn{
   display:inline-flex;

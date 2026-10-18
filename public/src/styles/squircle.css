@@ -250,8 +250,8 @@ textarea.auth-input,
 }
 /* Shared half-sheet — grabber resize mid/tall; drag past floor dismisses */
 .cp-half-sheet.archive-overlay {
-  left: 0;
-  right: 0;
+  inset-inline-start:0;
+  inset-inline-end:0;
   bottom: 0;
   top: auto;
   width: 100%;
@@ -330,7 +330,7 @@ textarea.auth-input,
 }
 .cp-perf-pill strong {
   display: block;
-  font-family: var(--font-display, 'Space Grotesk', sans-serif);
+  font-family: var(--font-display, var(--font-display));
   font-size: 18px;
   color: var(--ink);
   word-break: break-word;
@@ -404,7 +404,7 @@ textarea.auth-input,
   background: var(--surface-sunken, var(--cream));
   font-size: 12px;
 }
-.cp-perf-elo strong { font-family: var(--font-display, 'Space Grotesk', sans-serif); }
+.cp-perf-elo strong { font-family: var(--font-display, var(--font-display)); }
 .cp-challenge-pick {
   text-align: center;
   padding: 8px 4px 4px;
@@ -413,7 +413,7 @@ textarea.auth-input,
 .cp-challenge-pick .cp-challenge-icon .dangal-game-mark-wrap { margin: 0 auto; }
 .cp-challenge-pick h3 {
   margin: 0 0 4px;
-  font-family: var(--font-display, 'Space Grotesk', sans-serif);
+  font-family: var(--font-display, var(--font-display));
   font-size: 18px;
 }
 .cp-challenge-pick p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
@@ -424,7 +424,7 @@ textarea.auth-input,
   align-items: center;
   gap: 12px;
   width: 100%;
-  text-align: left;
+  text-align:start;
   padding: 12px 10px;
   border: 0;
   border-radius: var(--r-control, 14px);
@@ -440,7 +440,7 @@ textarea.auth-input,
   align-items: center;
   gap: 12px;
   width: 100%;
-  text-align: left;
+  text-align:start;
   padding: 12px 10px;
   border: 0;
   border-radius: var(--r-control, 14px);

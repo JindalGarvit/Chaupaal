@@ -1501,7 +1501,7 @@ function showMuqabalaResult(overlay,myScore,oppScore,oppName,mode,philosophicalA
         if(el){
           el.hidden = false;
           el.style.cssText = 'margin:0 16px 12px;padding:10px 12px;border-radius:12px;background:var(--cream);font-size:13px;';
-          el.innerHTML = `Couldn’t update chips <button type="button" id="muqChipRetry" class="muqabala-entry-alt game-tap-target" style="display:inline;margin-left:8px;padding:4px 8px;">Retry</button>`;
+          el.innerHTML = `Couldn’t update chips <button type="button" id="muqChipRetry" class="muqabala-entry-alt game-tap-target" style="display:inline;margin-inline-start:8px;padding:4px 8px;">Retry</button>`;
           el.querySelector('#muqChipRetry')?.addEventListener('click',()=>{ settleMuqabalaChips(); });
         }
         return settle;

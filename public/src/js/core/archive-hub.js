@@ -260,7 +260,7 @@
     if (!ms) return '';
     if (typeof formatRelativeTime === 'function') return formatRelativeTime(ms);
     try {
-      return new Date(ms).toLocaleDateString();
+      return typeof formatDate === 'function' ? formatDate(ms, 'medium') : new Date(ms).toLocaleDateString();
     } catch (e) {
       return '';
     }

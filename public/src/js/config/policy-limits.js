@@ -73,7 +73,7 @@
     const day = x.getDay();
     const add = day === 0 ? 1 : 8 - day;
     x.setDate(x.getDate() + add);
-    return x.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    return typeof formatDate === 'function' ? formatDate(x, 'weekday') : x.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   }
 
   function unlockMessage({ dayExhausted, weekExhausted }) {

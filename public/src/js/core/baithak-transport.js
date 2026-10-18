@@ -49,7 +49,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
         div.innerHTML=renderMsgBubble({
           from:mine?'me':'them',
           text:m.deletedForEveryone ? '' : m.text,
-          time:m.ts?new Date(m.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
+          time:m.ts?(typeof formatTime==='function'?formatTime(m.ts):new Date(m.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})):'',
           avatar:isChaupaalMsg?(m.avatar||'🏠'):(m.avatar||'👤'),
           name:m.name||(isChaupaalMsg?'Chaupaal':undefined),
           profileType:m.profileType||null,
@@ -101,7 +101,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
     div.innerHTML=renderMsgBubble({
       from:mine?'me':'them',
       text:m.deletedForEveryone ? '' : m.text,
-      time:m.ts?.toDate?new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
+      time:m.ts?.toDate?(typeof formatTime==='function'?formatTime(m.ts.toDate()):new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})):'',
       avatar:isChaupaalMsg ? (m.avatar || '🏠') : (m.avatar||'👤'),
       name:displayName || (isChaupaalMsg ? 'Chaupaal' : undefined),
       profileType:m.profileType||null,
@@ -302,7 +302,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
             div.innerHTML=renderMsgBubble({
               from:mine?'me':'them',
               text:m.text,
-              time:m.ts?.toDate?new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'',
+              time:m.ts?.toDate?(typeof formatTime==='function'?formatTime(m.ts.toDate()):new Date(m.ts.toDate()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})):'',
               avatar:m.avatar||'👤',
               name:m.name,
               profileType:m.profileType||null,

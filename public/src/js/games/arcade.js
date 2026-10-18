@@ -32,7 +32,7 @@ function openTipTap(ctx) {
   ];
   const SP = TT.SP;
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  const fmt = (n) => Number(n || 0).toLocaleString();
+  const fmt = (n) => (typeof formatNumber === 'function' ? formatNumber(n || 0) : Number(n || 0).toLocaleString());
 
   let settings = Hub.settings(GAME);
   let T = timings();
