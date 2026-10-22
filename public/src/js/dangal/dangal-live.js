@@ -96,9 +96,7 @@
       (document.querySelector('.device') || document.body).appendChild(el);
     }
     const P = Policy();
-    const t = typeof window.t === 'function' ? window.t : null;
-    const label = (t && t('dangal.reconnecting')) || 'Opponent reconnecting';
-    el.textContent = label + ' · ' + (P ? P.countdownText(msLeft) : Math.ceil(msLeft / 1000) + 's');
+    el.textContent = t('dangal.opponent_reconnecting_time', { time: P ? P.countdownText(msLeft) : Math.ceil(msLeft / 1000) + 's' });
   }
 
   function liveNotice(msg) {
@@ -281,7 +279,7 @@
       if (houseNoticed || !R) return;
       houseNoticed = true;
       const house = R.nonDefault(gameType, val.variants);
-      if (house.length) liveNotice('House rules: ' + house.map((h) => h.text).join(' · '));
+      if (house.length) liveNotice(t('dangal.house_rules_value', { value: house.map((h) => h.text).join(' · ') }));
     }
 
     function bumpPresence(online) {
@@ -298,8 +296,8 @@
       role = 'spectator';
       liveNotice(
         reason === 'version'
-          ? 'Chaupaal updated — refresh to keep playing this match'
-          : 'This match is open on another device — watching here'
+          ? t('dangal.chaupaal_updated_refresh_to_keep_playing')
+          : t('dangal.this_match_is_open_on_another')
       );
       if (typeof o.onSpectator === 'function') {
         try {
@@ -617,7 +615,7 @@
           if (val && val.status === 'void' && !voidNoticed) {
             voidNoticed = true;
             reconnectBanner(false);
-            liveNotice('Both players left — match void, stakes returned');
+            liveNotice(t('dangal.both_players_left_match_void_stakes'));
           }
           o.onSnap(val, api);
           if (val && me && !partyOn && !detached && val.status === 'playing') reportPresence(presenceInfo(val));
@@ -679,17 +677,17 @@
   /** Chrome subtitle helper — Practice vs Live honesty */
   function modeChromeLabel(liveOn, practiceLabel, optsLabel) {
     if (liveOn) {
-      if (optsLabel && optsLabel.party) return 'Live party';
-      return 'Live 1v1';
+      if (optsLabel && optsLabel.party) return t('dangal.live_party');
+      return t('dangal.classics.live_1v1');
     }
-    if (optsLabel && optsLabel.solo) return 'Practice · Solo';
+    if (optsLabel && optsLabel.solo) return t('dangal.practice_solo');
     const launch =
       typeof window !== 'undefined' && window.__dangalLaunchCtx ? window.__dangalLaunchCtx : null;
-    if (launch && launch.practiceKind === 'solo' && !practiceLabel) return 'Practice · Solo';
-    if (!practiceLabel) return 'Practice vs AI';
+    if (launch && launch.practiceKind === 'solo' && !practiceLabel) return t('dangal.practice_solo');
+    if (!practiceLabel) return t('dangal.practice_vs_ai');
     const pl = String(practiceLabel);
-    if (/^solo$/i.test(pl)) return 'Practice · Solo';
-    return 'Practice · ' + pl;
+    if (/^solo$/i.test(pl)) return t('dangal.practice_solo');
+    return t('dangal.practice_pl', { pl });
   }
 
   /** Confirm leave; forfeit Live match if still playing. Returns true if left. */
@@ -700,14 +698,14 @@
     const party = !!(o.party || (o.liveHandle && o.liveHandle.party));
     if (typeof confirmLeaveGame === 'function') {
       const ok = await confirmLeaveGame({
-        title: o.title || 'Leave game?',
+        title: o.title || t('dangal.leave_game'),
         body:
           live && playing
             ? o.forfeitBody ||
               (party
-                ? 'You’ll leave this party — the match continues if 2+ players remain.'
-                : 'Leaving now counts as a forfeit for your opponent.')
-            : o.body || 'This run will end.',
+                ? t('dangal.you_ll_leave_this_party_the')
+                : t('dangal.leaving_now_counts_as_a_forfeit'))
+            : o.body || t('dangal.classics.this_run_will_end'),
       });
       if (!ok) return false;
     }

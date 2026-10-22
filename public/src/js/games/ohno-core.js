@@ -7,6 +7,32 @@
  * Wilds are 'W' (wild) and 'F' (wild draw four). The chosen colour lives in `st.color`.
  * Hands and the draw pile live only in the full state; publicView() never includes them.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.OhNoCore = factory();
@@ -14,7 +40,7 @@
   'use strict';
 
   const COLORS = ['r', 'y', 'g', 'b'];
-  const COLOR_LABEL = { r: 'Red', y: 'Yellow', g: 'Green', b: 'Blue' };
+  const COLOR_LABEL = { r: gtx('games.uno.red', 'Red'), y: gtx('games.uno.yellow', 'Yellow'), g: gtx('games.uno.green', 'Green'), b: gtx('games.uno.blue', 'Blue') };
   const COLOR_HEX = { r: '#D94F3D', y: '#F2C12E', g: '#2E9E6A', b: '#2F7BD6' };
   /** Colour-blind mode: a shape per colour so colour is never the only cue. */
   const COLOR_SHAPE = { r: 'circle', y: 'square', g: 'triangle', b: 'diamond' };
@@ -104,7 +130,7 @@
       settings: mergeSettings(settings),
       seats: list.map((p) => ({
         id: String(p.id),
-        name: String(p.name || (p.bot ? 'Bot' : 'Player')).slice(0, 32),
+        name: String(p.name || (p.bot ? gtx('games.uno.bot', 'Bot') : gtx('dangal.party.player', 'Player'))).slice(0, 32),
         bot: !!p.bot,
         level: LEVELS.indexOf(p.level) >= 0 ? p.level : 'normal',
         persona: p.persona === 'bluffer' ? 'bluffer' : 'honest',
@@ -657,8 +683,8 @@
   const CALL_CHANCE = { easy: 0.7, normal: 0.92, smart: 1 };
   const CATCH_CHANCE = { easy: 0.2, normal: 0.5, smart: 0.92 };
   const PERSONAS = {
-    honest: { name: 'Honest', style: { aggression: 0.5, bluff: 0, speed: 0.6, chattiness: 0.3 } },
-    bluffer: { name: 'Bluffer', style: { aggression: 0.7, bluff: 0.6, speed: 0.6, chattiness: 0.4 } },
+    honest: { name: gtx('games.uno.honest', 'Honest'), style: { aggression: 0.5, bluff: 0, speed: 0.6, chattiness: 0.3 } },
+    bluffer: { name: gtx('games.uno.bluffer', 'Bluffer'), style: { aggression: 0.7, bluff: 0.6, speed: 0.6, chattiness: 0.4 } },
   };
 
   function colorCounts(hand) {

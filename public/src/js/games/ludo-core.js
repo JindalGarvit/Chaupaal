@@ -9,6 +9,32 @@
  * Dice values always come from the caller (server CSPRNG in Live, seeded RNG in practice):
  * the core never rolls and never weights anything.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.LudoCore = factory();
@@ -16,7 +42,7 @@
   'use strict';
 
   const COLORS = ['red', 'green', 'yellow', 'blue'];
-  const COLOR_LABEL = { red: 'Red', green: 'Green', yellow: 'Yellow', blue: 'Blue' };
+  const COLOR_LABEL = { red: gtx('games.ludo.red', 'Red'), green: gtx('games.ludo.green', 'Green'), yellow: gtx('games.ludo.yellow', 'Yellow'), blue: gtx('games.ludo.blue', 'Blue') };
   /** Colour-blind-safe palette (Okabe–Ito) + a shape marker per colour. */
   const COLOR_HEX = { red: '#D55E00', green: '#009E73', yellow: '#F0E442', blue: '#0072B2' };
   const SHAPES = { red: 'circle', green: 'triangle', yellow: 'square', blue: 'diamond' };
@@ -79,7 +105,7 @@
     const colors = colorsFor(list.length);
     const seats = list.map((p, i) => ({
       id: String(p.id),
-      name: String(p.name || (p.bot ? 'Bot' : 'Player')).slice(0, 32),
+      name: String(p.name || (p.bot ? gtx('games.ludo.bot', 'Bot') : gtx('games.ludo.player', 'Player'))).slice(0, 32),
       color: colors[i],
       bot: !!p.bot,
       level: LEVELS.indexOf(p.level) >= 0 ? p.level : 'normal',

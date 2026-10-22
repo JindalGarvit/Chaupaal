@@ -9,12 +9,45 @@
  *                                         search over the P1 rulebook → "Not covered by these rules"
  *   TIPS / pickTip / numbersGrounded      post-game tips (≥10 per game) built only from match stats
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.DangalAssist = api;
 })(typeof self !== 'undefined' ? self : this, function (root) {
   'use strict';
+
+  /** A daily mode exists in the reader's language (content-locales manifest; Shabd Five daily is en/hi only). */
+  function dailyHere(id) {
+    const CL = (root && root.DangalContentLocales) || (typeof module === 'object' && module.exports ? require('./content-locales.js') : null);
+    const lang = root && typeof root.currentLang !== 'undefined' ? root.currentLang : 'en';
+    return !CL || CL.modeAvailable(id, 'daily', lang);
+  }
 
   function Rules() {
     if (typeof module === 'object' && module.exports && typeof require === 'function') return require('./dangal-rules.js');
@@ -29,31 +62,31 @@
    * minutes [typical, long] · adult = chip tables are 18+ · party = Party Hub title.
    */
   const CATALOG = [
-    { id: 'tiptap', name: 'Tip Tap', min: 1, max: 1, solo: true, minutes: [3, 5], daily: true, keys: ['match 3', 'match three', 'puzzle', 'swap tiles', 'casual'] },
-    { id: 'brickbreaker', name: 'Brick Breaker', min: 1, max: 1, solo: true, minutes: [3, 8], daily: true, keys: ['breakout', 'arcade', 'paddle', 'ball', 'bricks'] },
-    { id: 'ankjod', name: 'Kakuro', min: 1, max: 1, solo: true, minutes: [5, 20], daily: true, keys: ['kakuro', 'number puzzle', 'sums', 'maths puzzle', 'math puzzle', 'cross sums', 'logic puzzle', 'daily puzzle'] },
-    { id: 'wordguess', name: 'Shabd Five', min: 1, max: 1, solo: true, minutes: [3, 5], daily: true, keys: ['shabd', 'word game', 'daily word', 'daily word game', 'five letter', '5 letter word', 'word puzzle', 'guess the word'] },
-    { id: 'chess', name: 'Chess', min: 2, max: 2, bots: true, together: true, remote: true, minutes: [10, 30], keys: ['chess', 'checkmate', 'chess960', 'board game', 'strategy'] },
-    { id: 'ttt', name: 'Tic-Tac-Toe', min: 2, max: 2, bots: true, together: true, remote: true, minutes: [2, 5], keys: ['tic tac toe', 'noughts and crosses', 'xo', 'x and o', 'ultimate tic tac toe'] },
-    { id: 'snakes', name: 'Snakes & Ladders', min: 2, max: 6, bots: true, together: true, remote: true, minutes: [10, 15], keys: ['snakes and ladders', 'snakes ladders', 'dice', 'board game', 'moksha'] },
-    { id: 'ludo', name: 'Ludo', min: 2, max: 4, bots: true, together: true, remote: true, minutes: [15, 30], keys: ['ludo', 'board game', 'dice', 'tokens', 'pachisi'] },
-    { id: 'uno', name: 'Oh No!', min: 2, max: 10, bots: true, remote: true, minutes: [10, 20], keys: ['oh no', 'shedding card game', 'colour card game', 'color card game', 'card game', 'draw two', 'wild card'] },
-    { id: 'scribble', name: 'Scribble', min: 2, max: 12, remote: true, minutes: [10, 20], keys: ['draw and guess', 'drawing game', 'doodle', 'sketch', 'draw'] },
-    { id: 'quiz', name: 'Quiz Muqabala', min: 1, max: 50, bots: true, remote: true, together: true, minutes: [5, 10], daily: true, keys: ['quiz', 'trivia', 'general knowledge', 'daily quiz', 'questions', 'muqabala'] },
-    { id: 'carrom', name: 'Carrom', min: 2, max: 4, bots: true, together: true, remote: true, minutes: [10, 25], keys: ['carrom', 'striker', 'board game', 'flick'] },
-    { id: 'poker', name: 'Texas Hold’em', min: 2, max: 9, bots: true, remote: true, minutes: [20, 45], adult: true, keys: ['poker', 'texas holdem', 'texas hold em', 'holdem', 'hold em', 'cards with friends', 'card game'] },
-    { id: 'teenpatti', name: 'Teen Patti', min: 3, max: 7, bots: true, remote: true, minutes: [10, 20], adult: true, keys: ['teen patti', '3 patti', 'three cards', 'flush', 'card game'] },
-    { id: 'rummy', name: 'Rummy', min: 2, max: 6, bots: true, remote: true, minutes: [10, 25], keys: ['rummy', 'gin rummy', '13 card rummy', 'card game', 'melds'] },
-    { id: 'bluff', name: 'Bluff', min: 3, max: 8, bots: true, together: true, remote: true, minutes: [10, 20], keys: ['bluff', 'cheat', 'i doubt it', 'card game', 'lying game'] },
-    { id: 'tambola', name: 'Tambola', min: 2, max: 100, sweet: [8, 100], together: true, remote: true, party: true, minutes: [15, 30], keys: ['tambola', 'housie', 'bingo', 'numbers', '90 ball', '75 ball'] },
-    { id: 'streetcricket', name: 'Street Cricket', min: 1, max: 2, bots: true, remote: true, minutes: [5, 20], keys: ['cricket', 'street cricket', 'gully cricket', 'bat', 'bowl', 'sports'] },
-    { id: 'badminton', name: 'Badminton', min: 1, max: 4, bots: true, remote: true, minutes: [5, 15], keys: ['badminton', 'shuttle', 'racket', 'smash', 'sports'] },
-    { id: 'penalty', name: 'Penalty Shootout', min: 1, max: 2, bots: true, remote: true, minutes: [2, 5], keys: ['penalty', 'penalties', 'football', 'soccer', 'shootout', 'goalkeeper', 'sports'] },
-    { id: 'imposter', name: 'Imposter', min: 3, max: 12, sweet: [4, 8], together: true, remote: true, party: true, minutes: [10, 20], keys: ['imposter', 'impostor', 'spy', 'undercover', 'word party', 'who is faking', 'party game'] },
-    { id: 'rajamantri', name: 'Raja Mantri Chor Sipahi', min: 4, max: 8, sweet: [4, 6], together: true, remote: true, party: true, minutes: [10, 15], keys: ['raja mantri', 'chor sipahi', 'rmcs', 'king minister thief soldier', 'chits', 'party game'] },
-    { id: 'charades', name: 'Charades', min: 4, max: 16, sweet: [6, 12], together: true, remote: true, party: true, minutes: [15, 30], keys: ['charades', 'dumb charades', 'act it out', 'acting game', 'mime', 'party game'] },
-    { id: 'mostlikely', name: 'Most Likely To', min: 2, max: 16, sweet: [4, 10], together: true, remote: true, party: true, minutes: [10, 20], keys: ['most likely to', 'would you rather', 'never have i ever', 'icebreaker', 'party game'] },
-    { id: 'werewolf', name: 'Werewolf', min: 5, max: 16, sweet: [7, 12], together: true, remote: true, party: true, minutes: [20, 40], keys: ['werewolf', 'mafia', 'social deduction', 'hidden roles', 'party game'] },
+    { id: 'tiptap', name: gtx('dangal.solo.tip_tap', 'Tip Tap'), min: 1, max: 1, solo: true, minutes: [3, 5], daily: true, keys: ['match 3', 'match three', 'puzzle', 'swap tiles', 'casual'] },
+    { id: 'brickbreaker', name: gtx('dangal.brick_breaker', 'Brick Breaker'), min: 1, max: 1, solo: true, minutes: [3, 8], daily: true, keys: ['breakout', 'arcade', 'paddle', 'ball', 'bricks'] },
+    { id: 'ankjod', name: gtx('dangal.kakuro', 'Kakuro'), min: 1, max: 1, solo: true, minutes: [5, 20], daily: true, keys: ['kakuro', 'number puzzle', 'sums', 'maths puzzle', 'math puzzle', 'cross sums', 'logic puzzle', 'daily puzzle'] },
+    { id: 'wordguess', name: gtx('dangal.shabd_five', 'Shabd Five'), min: 1, max: 1, solo: true, minutes: [3, 5], daily: true, keys: ['shabd', 'word game', 'daily word', 'daily word game', 'five letter', '5 letter word', 'word puzzle', 'guess the word'] },
+    { id: 'chess', name: gtx('common.chess', 'Chess'), min: 2, max: 2, bots: true, together: true, remote: true, minutes: [10, 30], keys: ['chess', 'checkmate', 'chess960', 'board game', 'strategy'] },
+    { id: 'ttt', name: gtx('dangal.tic_tac_toe', 'Tic-Tac-Toe'), min: 2, max: 2, bots: true, together: true, remote: true, minutes: [2, 5], keys: ['tic tac toe', 'noughts and crosses', 'xo', 'x and o', 'ultimate tic tac toe'] },
+    { id: 'snakes', name: gtx('dangal.snakes_ladders', 'Snakes & Ladders'), min: 2, max: 6, bots: true, together: true, remote: true, minutes: [10, 15], keys: ['snakes and ladders', 'snakes ladders', 'dice', 'board game', 'moksha'] },
+    { id: 'ludo', name: gtx('dangal.ludo', 'Ludo'), min: 2, max: 4, bots: true, together: true, remote: true, minutes: [15, 30], keys: ['ludo', 'board game', 'dice', 'tokens', 'pachisi'] },
+    { id: 'uno', name: gtx('dangal.oh_no', 'Oh No!'), min: 2, max: 10, bots: true, remote: true, minutes: [10, 20], keys: ['oh no', 'shedding card game', 'colour card game', 'color card game', 'card game', 'draw two', 'wild card'] },
+    { id: 'scribble', name: gtx('dangal.scribble', 'Scribble'), min: 2, max: 12, remote: true, minutes: [10, 20], keys: ['draw and guess', 'drawing game', 'doodle', 'sketch', 'draw'] },
+    { id: 'quiz', name: gtx('common.quiz_muqabala', 'Quiz Muqabala'), min: 1, max: 50, bots: true, remote: true, together: true, minutes: [5, 10], daily: true, keys: ['quiz', 'trivia', 'general knowledge', 'daily quiz', 'questions', 'muqabala'] },
+    { id: 'carrom', name: gtx('dangal.classics.carrom', 'Carrom'), min: 2, max: 4, bots: true, together: true, remote: true, minutes: [10, 25], keys: ['carrom', 'striker', 'board game', 'flick'] },
+    { id: 'poker', name: gtx('dangal.texas_hold_em_2', 'Texas Hold’em'), min: 2, max: 9, bots: true, remote: true, minutes: [20, 45], adult: true, keys: ['poker', 'texas holdem', 'texas hold em', 'holdem', 'hold em', 'cards with friends', 'card game'] },
+    { id: 'teenpatti', name: gtx('dangal.classics.teen_patti', 'Teen Patti'), min: 3, max: 7, bots: true, remote: true, minutes: [10, 20], adult: true, keys: ['teen patti', '3 patti', 'three cards', 'flush', 'card game'] },
+    { id: 'rummy', name: gtx('dangal.classics.rummy', 'Rummy'), min: 2, max: 6, bots: true, remote: true, minutes: [10, 25], keys: ['rummy', 'gin rummy', '13 card rummy', 'card game', 'melds'] },
+    { id: 'bluff', name: gtx('dangal.classics.bluff', 'Bluff'), min: 3, max: 8, bots: true, together: true, remote: true, minutes: [10, 20], keys: ['bluff', 'cheat', 'i doubt it', 'card game', 'lying game'] },
+    { id: 'tambola', name: gtx('dangal.classics.tambola', 'Tambola'), min: 2, max: 100, sweet: [8, 100], together: true, remote: true, party: true, minutes: [15, 30], keys: ['tambola', 'housie', 'bingo', 'numbers', '90 ball', '75 ball'] },
+    { id: 'streetcricket', name: gtx('dangal.street_cricket', 'Street Cricket'), min: 1, max: 2, bots: true, remote: true, minutes: [5, 20], keys: ['cricket', 'street cricket', 'gully cricket', 'bat', 'bowl', 'sports'] },
+    { id: 'badminton', name: gtx('dangal.badminton', 'Badminton'), min: 1, max: 4, bots: true, remote: true, minutes: [5, 15], keys: ['badminton', 'shuttle', 'racket', 'smash', 'sports'] },
+    { id: 'penalty', name: gtx('dangal.penalty_shootout', 'Penalty Shootout'), min: 1, max: 2, bots: true, remote: true, minutes: [2, 5], keys: ['penalty', 'penalties', 'football', 'soccer', 'shootout', 'goalkeeper', 'sports'] },
+    { id: 'imposter', name: gtx('dangal.party.imposter', 'Imposter'), min: 3, max: 12, sweet: [4, 8], together: true, remote: true, party: true, minutes: [10, 20], keys: ['imposter', 'impostor', 'spy', 'undercover', 'word party', 'who is faking', 'party game'] },
+    { id: 'rajamantri', name: gtx('dangal.party.raja_mantri_chor_sipahi', 'Raja Mantri Chor Sipahi'), min: 4, max: 8, sweet: [4, 6], together: true, remote: true, party: true, minutes: [10, 15], keys: ['raja mantri', 'chor sipahi', 'rmcs', 'king minister thief soldier', 'chits', 'party game'] },
+    { id: 'charades', name: gtx('dangal.party.charades', 'Charades'), min: 4, max: 16, sweet: [6, 12], together: true, remote: true, party: true, minutes: [15, 30], keys: ['charades', 'dumb charades', 'act it out', 'acting game', 'mime', 'party game'] },
+    { id: 'mostlikely', name: gtx('dangal.party.most_likely_to', 'Most Likely To'), min: 2, max: 16, sweet: [4, 10], together: true, remote: true, party: true, minutes: [10, 20], keys: ['most likely to', 'would you rather', 'never have i ever', 'icebreaker', 'party game'] },
+    { id: 'werewolf', name: gtx('dangal.party.werewolf', 'Werewolf'), min: 5, max: 16, sweet: [7, 12], together: true, remote: true, party: true, minutes: [20, 40], keys: ['werewolf', 'mafia', 'social deduction', 'hidden roles', 'party game'] },
   ];
   const IDS = CATALOG.map((g) => g.id);
   const BY_ID = {};
@@ -92,9 +125,10 @@
     if (BY_ID[k]) return k;
     return ALIASES[k] || ALIASES[String(id || '').toLowerCase()] || k;
   }
+  /** Display name in the reader's language (dangal.game_name.<id>; origin/brand titles stay as they are). */
   function gameName(id) {
     const g = BY_ID[canonId(id)];
-    return g ? g.name : String(id || '');
+    return g ? gtx('dangal.identity.' + g.id + '.label', g.name) : String(id || '');
   }
 
   // ---------------------------------------------------------------- search (Khoj / intents)
@@ -186,10 +220,10 @@
       if (solo) {
         if (g.solo) {
           score += 22;
-          reasons.push(g.daily ? 'A quick solo game with a daily puzzle' : 'Made for playing solo');
+          reasons.push(g.daily && dailyHere(g.id) ? gtx('dangal.a_quick_solo_game_with_a', 'A quick solo game with a daily puzzle') : gtx('dangal.made_for_playing_solo', 'Made for playing solo'));
         } else {
           score += 8;
-          reasons.push('Practice against a labelled bot');
+          reasons.push(gtx('dangal.practice_against_a_labelled_bot', 'Practice against a labelled bot'));
         }
       } else {
         const [lo, hi] = g.sweet || [g.min, g.max];
@@ -201,32 +235,32 @@
         if (where === 'together') {
           if (g.together) {
             score += 10;
-            reasons.push('Great for ' + players + ' people in the same room');
+            reasons.push(gtx('dangal.great_for_players_people_in_the', 'Great for {{players}} people in the same room', { players }));
           } else {
             score -= 10;
-            reasons.push('Everyone plays on their own phone');
+            reasons.push(gtx('dangal.everyone_plays_on_their_own_phone', 'Everyone plays on their own phone'));
           }
         } else if (where === 'remote') {
           score += 6;
-          reasons.push('Great for ' + players + ' people on separate phones');
-        } else reasons.push('Great for ' + players + ' people');
+          reasons.push(gtx('dangal.great_for_players_people_on_separate', 'Great for {{players}} people on separate phones', { players }));
+        } else reasons.push(gtx('dangal.great_for_players_people', 'Great for {{players}} people', { players }));
       }
       if (minutes) {
         if (g.minutes[0] > minutes) score -= 25;
         else {
           score += 8;
-          if (g.minutes[1] <= minutes) reasons.push('Fits in ' + minutes + ' minutes');
+          if (g.minutes[1] <= minutes) reasons.push(gtx('dangal.fits_in_minutes_minutes', 'Fits in {{minutes}} minutes', { minutes }));
         }
       }
       const r = recent.indexOf(g.id);
       if (r === 0) {
         score -= 14;
-        reasons.push('You just played this');
+        reasons.push(gtx('dangal.you_just_played_this', 'You just played this'));
       } else if (r > 0) score -= 4;
       else if (recent.length) score += 4; // variety nudges the order; no reason line (it would sit on every row)
       if (friends && g.remote && !solo) {
         score += 6;
-        reasons.push(friends === 1 ? 'A friend is online' : friends + ' friends are online');
+        reasons.push(friends === 1 ? gtx('dangal.a_friend_is_online', 'A friend is online') : gtx('dangal.friends_friends_are_online', '{{friends}} friends are online', { friends }));
       }
       out.push({ id: g.id, name: g.name, score, reason: reasons.slice(0, 2).join(' · '), order: i });
     });
@@ -236,11 +270,11 @@
 
   // ---------------------------------------------------------------- rules FAQ + answers
 
-  const NOT_COVERED = 'Not covered by these rules.';
+  const NOT_COVERED = gtx('dangal.not_covered_by_these_rules', 'Not covered by these rules.');
   const q = (question, answer, section) => ({ q: question, a: answer, s: section });
 
   /** Curated FAQ — every answer restates that game's P1 rule text (dangal-rules.js); `s` = its section. */
-  const FAQ = {
+  const FAQ = /* i18n-catalog: games.{id}.faq */ {
     tiptap: [
       q('What happens if a swap makes no match?', 'The tiles slide back and no move is used — a swap only counts if it lines up 3 or more.', 'Moves'),
       q('How do I make a special tile?', 'Match 4 in a row for a Line, an L or T shape for a Bomb, and 5 in a row for a Prism.', 'Specials'),
@@ -422,8 +456,20 @@
     ],
   };
 
+  /** FAQ in the reader's language (games.<id>.faq.<n>.q|a); qEn / aEn keep the English for matching. */
+  function faqFor(id) {
+    const gid = canonId(id);
+    return (FAQ[gid] || []).map((f, i) => ({
+      q: gtx('games.' + gid + '.faq.' + (i + 1) + '.q', f.q),
+      a: gtx('games.' + gid + '.faq.' + (i + 1) + '.a', f.a),
+      s: f.s,
+      qEn: f.q,
+      aEn: f.a,
+    }));
+  }
+
   const STOP = new Set(
-    'a an the is are was were be been do does did can could would should will i me my we you your it its of to in on at for with and or if then than what when where which who whom why how this that these those there here as by from about into any some all much many more most so not no yes up out get got have has had game play playing rule rules happen happens please tell explain'.split(' ')
+    gtx('dangal.a_an_the_is_are_was', 'a an the is are was were be been do does did can could would should will i me my we you your it its of to in on at for with and or if then than what when where which who whom why how this that these those there here as by from about into any some all much many more most so not no yes up out get got have has had game play playing rule rules happen happens please tell explain').split(' ')
   );
   const SYN = { win: 'won', winning: 'won', wins: 'won', castle: 'castling', castles: 'castling', points: 'score', point: 'score', scoring: 'score', scored: 'score', scores: 'score', time: 'clock', timer: 'clock', chips: 'chip', money: 'chip', cash: 'chip', dice: 'roll', die: 'roll', rolling: 'roll', rolled: 'roll', bots: 'bot', ai: 'bot', guesses: 'guess', guessing: 'guess', draws: 'draw', drawn: 'draw' };
   function stem(w) {
@@ -433,8 +479,18 @@
     else if (x.length > 3 && /s$/.test(x) && !/ss$/.test(x)) x = x.slice(0, -1);
     return SYN[x] || x;
   }
+  /** Letters in any script (a Hindi or Japanese question still has words to match). */
+  function foldWords(s) {
+    return String(s == null ? '' : s)
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[’'`]/g, '')
+      .replace(/&/g, ' and ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  }
   function tokens(s) {
-    return norm(s)
+    return foldWords(s)
       .split(' ')
       .filter((w) => w && !STOP.has(w))
       .map(stem);
@@ -464,12 +520,12 @@
   function rulesPassages(id, variants) {
     const g = rulesOf(id);
     if (!g) return [];
-    const out = [{ id: 'G', h: 'Glance', body: g.glance.join('. ') + '.' }];
+    const out = [{ id: 'G', h: gtx('dangal.assist.glance', 'At a glance'), body: g.glance.join('. ') + '.' }];
     g.rules.forEach((r, i) => out.push({ id: 'R' + (i + 1), h: r.h, body: r.body }));
     (FAQ[canonId(id)] || []).forEach((f, i) => out.push({ id: 'F' + (i + 1), h: f.s, body: f.q + ' ' + f.a }));
     const house = houseLines(id, variants);
-    out.push({ id: 'H', h: 'House rules', body: house.length ? 'House rules in this game: ' + house.join('; ') + '.' : 'No house rules — this game uses the default rules.' });
-    out.push({ id: 'S', h: 'Rule source', body: g.ruleset.source + (g.ruleset.simplified ? ' (simplified rules).' : '.') });
+    out.push({ id: 'H', h: gtx('dangal.assist.house_rules', 'House rules'), body: house.length ? gtx('dangal.house_rules_in_this_game_house', 'House rules in this game: {{house}}.', { house: house.join('; ') }) : gtx('dangal.assist.no_house_rules', 'No house rules — this game uses the default rules.') });
+    out.push({ id: 'S', h: gtx('dangal.rule_source', 'Rule source'), body: g.ruleset.simplified ? gtx('dangal.assist.rule_source_simplified', '{{source}} (simplified rules).', { source: g.ruleset.source }) : gtx('dangal.assist.rule_source_line', '{{source}}.', { source: g.ruleset.source }) });
     return out;
   }
 
@@ -495,16 +551,21 @@
     const gid = canonId(id);
     const g = rulesOf(gid);
     const qt = tokens(question);
-    const faq = FAQ[gid] || [];
+    const faq = faqFor(gid);
     if (!g || !qt.length) return { answer: NOT_COVERED, section: '', source: 'none', notCovered: true, suggest: faq.slice(0, 3).map((f) => f.q) };
     if (/\bhouse\b/.test(norm(question))) {
       const house = houseLines(gid, variants);
-      return { answer: house.length ? 'House rules in this game: ' + house.join('; ') + '.' : 'No house rules — this game uses the default rules.', section: 'House rules', source: 'house', notCovered: false };
+      return {
+        answer: house.length ? gtx('dangal.assist.house_rules_list', 'House rules in this game: {{list}}.', { list: house.join('; ') }) : gtx('dangal.assist.no_house_rules', 'No house rules — this game uses the default rules.'),
+        section: gtx('dangal.assist.house_rules', 'House rules'),
+        source: 'house',
+        notCovered: false,
+      };
     }
     let bestF = null;
     let bestFs = 0;
     faq.forEach((f) => {
-      const s = overlap(qt, f.q) * 2 + overlap(qt, f.a) * 0.5;
+      const s = Math.max(overlap(qt, f.q), overlap(qt, f.qEn)) * 2 + Math.max(overlap(qt, f.a), overlap(qt, f.aEn)) * 0.5;
       if (s > bestFs) {
         bestFs = s;
         bestF = f;
@@ -551,7 +612,7 @@
    * Tip library. Conditional tips (when(stats) → true) are checked in order; numbers in their text come
    * only from the stats. Generic tips (when null, no digits) are picked by a stable hash.
    */
-  const TIPS = {
+  const TIPS = /* i18n-catalog: games.{id}.tip */ {
     tiptap: [
       T('tt_moves_left', (s) => s.won && has(s, 'movesLeft') && n(s, 'movesLeft') >= 5, (s) => 'You finished with ' + s.movesLeft + ' moves to spare — every leftover move turns into bonus points, so going for stars pays.'),
       T('tt_close', (s) => !s.won && has(s, 'movesLeft') && n(s, 'movesLeft') === 0, () => 'So close! Next time, save a special for your last few moves — a combo can finish a goal in one go.'),
@@ -779,12 +840,12 @@
         ok = !!t.when(s);
       } catch (e) {}
       if (!ok) continue;
-      const text = t.text(s);
-      if (numbersGrounded(text, s)) return { id: t.id, text, grounded: true };
+      const en = t.text(s);
+      if (numbersGrounded(en, s)) return { id: t.id, text: gtx('games.' + gid + '.tip.' + t.id, en, s), grounded: true };
     }
     const generic = list.filter((t) => !t.when);
     const g = generic[hashStr(gid + ':' + (seed != null ? seed : JSON.stringify(s))) % generic.length];
-    return { id: g.id, text: g.text(s), grounded: false };
+    return { id: g.id, text: gtx('games.' + gid + '.tip.' + g.id, g.text(s), s), grounded: false };
   }
 
   /**
@@ -808,6 +869,7 @@
     isRetired,
     recommend,
     FAQ,
+    faqFor,
     NOT_COVERED,
     answerRules,
     rulesPassages,

@@ -10,7 +10,7 @@
   'use strict';
 
   const GAME = 'penalty';
-  const LABEL = 'Penalty Shootout';
+  const LABEL = t('dangal.identity.penalty.label');
   const KEY_SETTINGS = 'chaupaal_penalty_settings';
   const KEY_NAMES = 'chaupaal_penalty_names';
   const KEY_MUTED = 'chaupaal_penalty_muted';
@@ -25,8 +25,22 @@
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('penalty.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.penalty.' + key, p || fallback) : fill(fallback, p);
   }
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
@@ -433,7 +447,7 @@
       roundRect(ctx, -k * 0.2, -k * 0.5, k * 0.4, k * 0.46, k * 0.06);
       paintKit(ctx, look.kickKit, -k * 0.2, -k * 0.5, k * 0.4, k * 0.46);
       ctx.fillStyle = look.kickKit.pattern === 'solid' ? look.kickKit.secondary : shade(look.kickKit.primary, -0.45);
-      ctx.font = `800 ${Math.round(k * 0.17)}px "Space Grotesk", system-ui, sans-serif`;
+      ctx.font = t('games.penalty.800_round_px_space_grotesk_system', { round: Math.round(k * 0.17) });
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('10', 0, -k * 0.27);
@@ -548,7 +562,7 @@
       ctx.save();
       ctx.translate(G.cx, G.top + G.gh * 0.45);
       ctx.scale(s, s);
-      ctx.font = `900 ${Math.round(G.gw * 0.12)}px "Space Grotesk", system-ui, sans-serif`;
+      ctx.font = t('games.penalty.900_round_px_space_grotesk_system', { round: Math.round(G.gw * 0.12) });
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.lineWidth = 6;
@@ -1079,7 +1093,7 @@
     if (typeof prepareGameOverlay === 'function') prepareGameOverlay(overlay, { theme: 'dark', gameId: GAME });
     if (window.GameUI && typeof GameUI.attachHowTo === 'function') {
       try {
-        GameUI.attachHowTo(overlay.querySelector('.game-chrome-right') || overlay, { gameId: GAME, title: tr('howto.title', 'How to play ' + LABEL) });
+        GameUI.attachHowTo(overlay.querySelector('.game-chrome-right') || overlay, { gameId: GAME, title: tr('howto.title', 'How to play {{game}}', { game: LABEL }) });
       } catch (e) {}
     }
     const alive = () => (gs ? gs.alive() : overlay.isConnected);
@@ -1137,8 +1151,8 @@
     const meta = st.over
       ? tr('board.final', 'Full time')
       : st.sudden
-        ? tr('board.sudden', 'Sudden death') + ' · ' + tr('board.round', 'round') + ' ' + (st.round - st.bestOf)
-        : tr('board.kick', 'Kick') + ' ' + st.round + ' / ' + st.bestOf;
+        ? tr('sudden_death_round_value', 'Sudden death · round {{value}}', { value: (st.round - st.bestOf) })
+        : tr('kick_round_bestof', 'Kick {{round}} / {{bestOf}}', { round: st.round, bestOf: st.bestOf });
     return row('A') + row('B') + `<div class="pen-board-meta">${esc(meta)}</div>`;
   }
 
@@ -1262,7 +1276,7 @@
     const view = openMatchShell({
       mode: ai ? 'practice' : 'pass',
       source: cfg.source || 'manch',
-      subtitle: ai ? tr('sub.ai', 'vs AI') + ' · ' + levelName[cfg.level] : tr('sub.pass', 'Pass & Play'),
+      subtitle: ai ? tr('vs_ai_levelname', 'vs AI · {{levelName}}', { levelName: levelName[cfg.level] }) : tr('sub.pass', 'Pass & Play'),
       matchId: GAME + '_' + (ai ? 'ai' : 'pp') + '_' + Date.now(),
       skipEconomyReport: !ai,
       onBack: async () => {
@@ -1324,13 +1338,13 @@
         return;
       }
       control = mountKick(view, {
-        title: sideName(kicker) + ' — ' + tr('turn.kick', 'your kick'),
+        title: tr('name_your_kick', '{{name}} — your kick', { name: (typeof bidi === 'function' ? bidi(sideName(kicker)) : sideName(kicker)) }),
         label: sideName(kicker),
         onShoot: (kick) => {
           view.pitch.reset();
           passCover(view, sideName(keeper), sideName(kicker), () => {
             control = mountDive(view, {
-              title: sideName(keeper) + ' — ' + tr('turn.save', 'you’re in goal'),
+              title: tr('name_youre_in_goal', '{{name}} — you’re in goal', { name: (typeof bidi === 'function' ? bidi(sideName(keeper)) : sideName(keeper)) }),
               label: sideName(keeper),
               onDive: (dive) => resolve(kicker, kick, dive),
             });
@@ -1360,8 +1374,8 @@
       const moments = [];
       const humanSides = ai ? [human] : ['A', 'B'];
       humanSides.forEach((s) => {
-        if (C.cleanSheet(so, s)) moments.push('🧤 ' + tr('moment.cleanSheet', 'Clean sheet') + (ai ? '' : ' — ' + sideName(s)));
-        if (records.some((r) => r.side === s && r.panenka)) moments.push('🥄 ' + tr('moment.panenka', 'Panenka') + (ai ? '' : ' — ' + sideName(s)));
+        if (C.cleanSheet(so, s)) moments.push(tr('clean_sheet_value', '🧤 Clean sheet{{value}}', { value: (ai ? '' : ' — ' + sideName(s)) }));
+        if (records.some((r) => r.side === s && r.panenka)) moments.push(tr('panenka_value', '🥄 Panenka{{value}}', { value: (ai ? '' : ' — ' + sideName(s)) }));
       });
       if (st.round > st.bestOf) moments.push('⚡ ' + tr('moment.sudden', 'Decided in sudden death'));
       let title;
@@ -1379,7 +1393,7 @@
         else if (typeof recordDangalSession === 'function') recordDangalSession(GAME, { won, difficulty: cfg.level });
         sfx(won ? 'ui.win' : 'ui.lose');
       } else {
-        title = sideName(st.winner) + ' ' + tr('result.wins', 'wins!');
+        title = tr('name_wins', '{{name}} wins!', { name: (typeof bidi === 'function' ? bidi(sideName(st.winner)) : sideName(st.winner)) });
         if (typeof recordDangalSession === 'function') recordDangalSession(GAME, { mode: 'pass' });
         sfx('ui.win');
       }
@@ -1422,8 +1436,8 @@
     view.cover.innerHTML = `<div class="pen-cover-card">
       <div class="pen-cover-lead">${esc(tr('pass.lead', 'Kick locked in. Pass the phone to'))}</div>
       <div class="pen-cover-name">${esc(keeperName)}</div>
-      <div class="pen-cover-sub">${esc(kickerName + ', ' + tr('pass.sub', 'look away while they pick a dive'))}</div>
-      <button type="button" class="pen-btn pen-btn--primary" data-ready>${esc(tr('pass.ready', 'I’m') + ' ' + keeperName + ' — ' + tr('pass.go', 'ready'))}</button>
+      <div class="pen-cover-sub">${esc(tr('kickername_look_away_while_they_pick_a', '{{kickerName}}, look away while they pick a dive', { kickerName }))}</div>
+      <button type="button" class="pen-btn pen-btn--primary" data-ready>${esc(tr('im_name_ready', 'I’m {{name}} — ready', { name: (typeof bidi === 'function' ? bidi(keeperName) : keeperName) }))}</button>
     </div>`;
     view.cover.querySelector('[data-ready]').addEventListener('click', () => {
       view.cover.hidden = true;
@@ -1512,7 +1526,7 @@
             body:
               pub.status === 'waiting'
                 ? tr('leave.cancelBody', 'No chips move.')
-                : tr('leave.liveBody', 'Leaving now gives your opponent the win') + (pub.stake ? ' ' + tr('leave.andChips', 'and your staked chips.') : '.'),
+                : tr('leaving_now_gives_your_opponent_the_win', 'Leaving now gives your opponent the win{{value}}', { value: (pub.stake ? ' ' + tr('leave.andChips', 'and your staked chips.') : '.') }),
           });
           if (!go) return;
         }
@@ -1542,7 +1556,7 @@
     function subtitle() {
       if (!pub) return;
       const sub = view.overlay.querySelector('.game-chrome-subtitle');
-      const bits = [tr('sub.live', 'Live'), tr('sub.bestOf', 'Best of') + ' ' + pub.bestOf];
+      const bits = [tr('sub.live', 'Live'), tr('best_of_bestof', 'Best of {{bestOf}}', { bestOf: pub.bestOf })];
       if (pub.stake) bits.push('⚡' + pub.stake);
       if (sub) sub.textContent = bits.join(' · ');
     }
@@ -1575,8 +1589,8 @@
       view.pitch.reset();
       const mins = Math.max(0, Math.ceil((pub.deadline - serverNow()) / 60000));
       view.controls.innerHTML = `<div class="pen-wait">
-        <div class="pen-prompt">${esc(tr('live.waiting', 'Waiting for') + ' ' + oppName())}</div>
-        <div class="pen-hint">${esc(tr('live.waitingSub', 'They have') + ' ' + mins + ' ' + tr('live.min', 'min to accept. No chips move if they don’t.'))}</div>
+        <div class="pen-prompt">${esc(tr('waiting_for_name_2', 'Waiting for {{name}}', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }))}</div>
+        <div class="pen-hint">${esc(tr('they_have_mins_min_to_accept_no', 'They have {{mins}} min to accept. No chips move if they don’t.', { mins }))}</div>
         <button type="button" class="pen-btn pen-btn--ghost" data-cancel>${esc(tr('live.cancel', 'Cancel challenge'))}</button>
       </div>`;
       view.controls.querySelector('[data-cancel]').addEventListener('click', () => {
@@ -1613,13 +1627,13 @@
       const key = turn.kickNo + ':' + role + ':' + (locked ? 'L' : 'O');
       if (mounted === key) {
         const st = view.controls.querySelector('[data-opp-state]');
-        if (st) st.textContent = oppReady ? oppName() + ' ' + tr('live.oppLocked', 'has locked in') : oppName() + ' ' + tr('live.oppThinking', 'is choosing…');
+        if (st) st.textContent = oppReady ? tr('name_has_locked_in', '{{name}} has locked in', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }) : tr('name_is_choosing', '{{name}} is choosing…', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) });
         return;
       }
       unmount();
       mounted = key;
       const foot = `${clockHtml()}<div class="pen-opp-state" data-opp-state>${esc(
-        oppReady ? oppName() + ' ' + tr('live.oppLocked', 'has locked in') : oppName() + ' ' + tr('live.oppThinking', 'is choosing…')
+        oppReady ? tr('name_has_locked_in', '{{name}} has locked in', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }) : tr('name_is_choosing', '{{name}} is choosing…', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) })
       )}</div>`;
       if (locked) {
         view.pitch.reset();
@@ -1674,7 +1688,7 @@
           animating = true;
           unmount();
           view.controls.innerHTML = `<div class="pen-hint pen-hint--center">${esc(
-            (k.auto && (k.auto.kick || k.auto.dive) ? tr('live.autoPick', 'Clock ran out — random pick') + ' · ' : '') + tr('tapSkip', 'Tap the goal to skip')
+            tr('value_tap_the_goal_to_skip', '{{value}}Tap the goal to skip', { value: (k.auto && (k.auto.kick || k.auto.dive) ? tr('live.autoPick', 'Clock ran out — random pick') + ' · ' : '') })
           )}</div>`;
           paintBoard(kicks.slice(0, i), k.kicker === pub.playerA ? 'A' : 'B');
           view.pitch.setLook({ kickKit: kitOf(pub.kits[k.kicker]), keepKit: kitOf(pub.kits[k.keeper]), gloves: k.keeper === me ? s.gloves : C.GLOVES[2] });
@@ -1694,7 +1708,7 @@
       if (!st) return pub.status === 'over' ? `<div class="pen-settle-line">${esc(tr('live.settling', 'Settling chips…'))}</div>` : '';
       const bits = [];
       bits.push((st.chipDelta >= 0 ? '+' : '') + st.chipDelta + ' ' + tr('chips', 'chips'));
-      if (st.eloDelta) bits.push(tr('rating', 'Rating') + ' ' + (st.eloDelta > 0 ? '+' : '') + st.eloDelta);
+      if (st.eloDelta) bits.push(tr('rating_value_elodelta', 'Rating {{value}}{{eloDelta}}', { value: (st.eloDelta > 0 ? '+' : ''), eloDelta: st.eloDelta }));
       return `<div class="pen-settle-line">⚡ ${esc(bits.join(' · '))}</div><div class="pen-settle-note">${esc(tr('live.virtual', 'Virtual chips only'))}</div>`;
     }
 
@@ -1724,11 +1738,11 @@
       const reasonLine =
         pub.reason === 'left'
           ? won
-            ? oppName() + ' ' + tr('live.oppLeft', 'left — you win by forfeit')
+            ? tr('name_left_you_win_by_forfeit', '{{name}} left — you win by forfeit', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) })
             : tr('live.youLeft', 'You left the match')
           : pub.reason === 'disconnect'
             ? won
-              ? oppName() + ' ' + tr('live.oppDropped', 'didn’t come back — you win by forfeit')
+              ? tr('name_didnt_come_back_you_win_by', '{{name}} didn’t come back — you win by forfeit', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) })
               : tr('live.youDropped', 'You were disconnected too long')
             : '';
       const st = C.shootoutStatus(so);
@@ -1744,7 +1758,7 @@
         so,
         names: names(),
         kits: kitsAB(),
-        title: won ? tr('result.win', 'You win!') : oppName() + ' ' + tr('result.wins', 'wins!'),
+        title: won ? tr('result.win', 'You win!') : tr('name_wins', '{{name}} wins!', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }),
         subtitle: reasonLine || st.scoreA + '–' + st.scoreB + (st.round > st.bestOf ? ' · ' + tr('result.afterSudden', 'after sudden death') : ''),
         moments,
         settleHtml: settleLine(),
@@ -1773,10 +1787,10 @@
       if (!btn || !pub) return;
       const r = pub.rematch || {};
       if (rematchAsked || r[me]) {
-        btn.textContent = tr('rematch.waiting', 'Waiting for') + ' ' + oppName() + '…';
+        btn.textContent = tr('waiting_for_name', 'Waiting for {{name}}…', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) });
         btn.disabled = true;
       } else if (r[opp]) {
-        btn.textContent = oppName() + ' ' + tr('rematch.wants', 'wants a rematch — accept');
+        btn.textContent = tr('name_wants_a_rematch_accept', '{{name}} wants a rematch — accept', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) });
       }
       if (pub.nextMatchId && (rematchAsked || r[me])) switchToRematch(pub.nextMatchId);
     }
@@ -1807,7 +1821,7 @@
 
     function renderVoid() {
       unmount();
-      const reason = pub.reason === 'no_show' ? oppName() + ' ' + tr('live.noShow', 'didn’t join in time') : tr('live.cancelled', 'Challenge cancelled');
+      const reason = pub.reason === 'no_show' ? tr('name_didnt_join_in_time', '{{name}} didn’t join in time', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }) : tr('live.cancelled', 'Challenge cancelled');
       view.controls.innerHTML = `<div class="pen-wait">
         <div class="pen-prompt">${esc(reason)}</div>
         <div class="pen-hint">${esc(tr('live.noChips', 'No chips moved.'))}</div>
@@ -1837,7 +1851,7 @@
       if (!pub || pub.status !== 'playing') return banner(view, '');
       if (oppOnline()) return banner(view, '');
       const leftMs = Math.max(0, RECONNECT_MS - oppGoneFor());
-      banner(view, oppName() + ' ' + tr('live.reconnecting', 'lost connection — waiting') + ' ' + Math.ceil(leftMs / 1000) + 's');
+      banner(view, tr('name_lost_connection_waiting_value_s', '{{name}} lost connection — waiting {{value}}s', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()), value: Math.ceil(leftMs / 1000) }));
     }
 
     function loop() {
@@ -2006,14 +2020,14 @@
       <div class="pk-modes">
         <button type="button" class="pk-mode pk-mode--primary" data-go="ai">
           <span class="pk-mode-title">${esc(tr('home.ai', 'Play vs AI'))}</span>
-          <span class="pk-mode-sub">${esc(levelLabel(s.difficulty) + ' · ' + tr('sub.bestOf', 'Best of') + ' ' + s.bestOf)}</span>
+          <span class="pk-mode-sub">${esc(tr('label_best_of_bestof', '{{label}} · Best of {{bestOf}}', { label: levelLabel(s.difficulty), bestOf: s.bestOf }))}</span>
         </button>
         <button type="button" class="pk-mode" data-go="friend">
           <span class="pk-mode-title">${esc(tr('home.friend', 'Play a friend'))}</span>
           <span class="pk-mode-sub">${esc(tr('home.friendSub', 'Same phone, challenge, or find an opponent'))}</span>
         </button>
         <button type="button" class="pk-link" data-go="settings">${esc(tr('home.settings', 'Settings'))}</button>
-        ${rec.w + rec.l ? `<div class="pen-record">${esc(tr('home.record', 'vs AI') + ': ' + rec.w + 'W · ' + rec.l + 'L')}</div>` : ''}
+        ${rec.w + rec.l ? `<div class="pen-record">${esc(tr('vs_ai_w_w_l_l', 'vs AI: {{w}}W · {{l}}L', { w: rec.w, l: rec.l }))}</div>` : ''}
       </div>
     </div>`);
     shell.body.querySelector('[data-go="ai"]').addEventListener('click', () => Kit().closeThen(shell, () => startAiQuick()));
@@ -2027,7 +2041,7 @@
       kind: 'ai',
       level: s.difficulty,
       bestOf: s.bestOf,
-      names: { A: tr('you', 'You'), B: tr('ai', 'AI') + ' · ' + levelLabel(s.difficulty) },
+      names: { A: tr('you', 'You'), B: tr('ai_label', 'AI · {{label}}', { label: levelLabel(s.difficulty) }) },
       kits: { A: s.kitA, B: s.kitB },
       gloves: s.gloves,
       source: source || 'manch',
@@ -2179,7 +2193,7 @@
     const K = Kit();
     if (!signedInOrPrompt()) return;
     if (typeof openFriendPickerSheet !== 'function') return toast(tr('err.friends', 'Friends aren’t available right now'));
-    const f = await openFriendPickerSheet({ title: tr('challenge.title', 'Challenge · ' + LABEL), subtitle: tr('challenge.sub', 'Live 1v1 · virtual chips only') });
+    const f = await openFriendPickerSheet({ title: tr('challenge.title', 'Challenge · {{game}}', { game: LABEL }), subtitle: tr('challenge.sub', 'Live 1v1 · virtual chips only') });
     if (!f) return;
     const uid = f.uid || f.id || '';
     if (!persistable(uid)) return toast(tr('err.opp', 'Pick a real opponent'));
@@ -2194,7 +2208,7 @@
     const chatId = f.chatId || f.firestoreId || '';
     if (typeof sendChallengeCard === 'function' && chatId) {
       try {
-        await sendChallengeCard(uid, GAME, { chatId, matchId: mid, stake, mode: tr('sub.bestOf', 'Best of') + ' ' + s.bestOf });
+        await sendChallengeCard(uid, GAME, { chatId, matchId: mid, stake, mode: tr('best_of_bestof', 'Best of {{bestOf}}', { bestOf: s.bestOf }) });
       } catch (e) {}
     }
     const go = () =>
@@ -2257,7 +2271,7 @@
   function launch(opts) {
     const o = opts || {};
     if (!Core()) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     const chat = o.chat || null;
@@ -2285,7 +2299,7 @@
     registerGame({
       id: 'penalty',
       name: LABEL,
-      desc: 'Five kicks each, then sudden death — shoot and save',
+      desc: t('games.penalty.five_kicks_each_then_sudden_death'),
       icon: '⚽',
       gameType: 'dual',
       genre: 'rw_sports',
@@ -2298,7 +2312,7 @@
       ownHome: true,
       order: 22,
       meta: {
-        core: 'penalty-core.js (outcome model + standard shootout order, shared with the server)',
+        core: t('games.penalty.penalty_core_js_outcome_model_standard'),
         live: 'penalty_kick → server-lib/penalty-engine.js; kick + dive stay server-side until both are in',
       },
       launch: openGame,

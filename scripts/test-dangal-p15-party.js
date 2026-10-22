@@ -25,7 +25,8 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const { readWithCopy } = require('./lib/i18n-source');
+const read = (p) => readWithCopy(p);
 const clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
 const DEVANAGARI = /[\u0900-\u097F]/;
 
@@ -564,12 +565,13 @@ const errCode = async (p) => {
     const mlUi = read('public/src/js/games/mostlikely.js');
     const rmUi = read('public/src/js/games/rajamantri.js');
     assert(!/English \+ हिंदी/.test(imposterUi) && /hiReader\(\)\s*\?/.test(imposterUi), 'Imposter: the “English + Hindi” toggle is gone for non-Hindi readers');
-    assert(/return isHi\(\) \? `<button type="button" class="ml-lang"/.test(mlUi) && /isHi\(\) \? '<div class="ml-defence-hi">/.test(mlUi), 'Most Likely: A/अ toggle + Hindi defence line only for Hindi readers');
+    assert(/return isHi\(\) && hiUi\('toggle'\) \? `<button type="button" class="ml-lang"/.test(mlUi) && /isHi\(\) && hiUi\('defence'\) \? `<div class="ml-defence-hi">/.test(mlUi) && !DEVANAGARI.test(mlUi), 'Most Likely: A/अ toggle + Hindi defence line only for Hindi readers (from hi locale data)');
+    assert(MlPacks.uiText('hi', 'toggle') && !MlPacks.uiText('fr', 'toggle'), 'Most Likely: script toggle ships with the hi content overlay only');
     assert(/r\.en \+ ' · ' \+ r\.gloss/.test(rmUi) && /King/.test(rmUi) && /Minister/.test(rmUi), 'RMCS keeps its name with English role subtitles (Raja · King …) and an English how-to');
     const RM = require(path.join(root, 'public/src/js/games/rajamantri-core.js'));
     assert(['raja', 'mantri', 'chor', 'sipahi'].every((r) => /^[A-Z][a-z]+$/.test(RM.ROLES[r].gloss)) && RM.ROLES.raja.gloss === 'King' && RM.ROLES.chor.gloss === 'Thief', 'RMCS role glosses: King / Minister / Thief / Soldier');
-    assert(/const LABEL = 'Charades'/.test(read('public/src/js/games/charades.js')) && !/Dumb Charades/.test(read('public/src/js/games/charades.js') + read('public/src/js/dangal/design-system.js')), 'Charades uses its global name');
-    assert(/const LABEL = 'Werewolf'/.test(read('public/src/js/games/werewolf.js')), 'Werewolf stays English');
+    assert(/const LABEL = t\('dangal\.identity\.charades\.label'\)/.test(read('public/src/js/games/charades.js')) && /"dangal\.identity\.charades\.label": "Charades"/.test(read('public/src/i18n/en.js')) && !/Dumb Charades/.test(read('public/src/js/games/charades.js') + read('public/src/js/dangal/design-system.js')), 'Charades uses its global name');
+    assert(/const LABEL = t\('dangal\.identity\.werewolf\.label'\)/.test(read('public/src/js/games/werewolf.js')) && /"dangal\.identity\.werewolf\.label": "Werewolf"/.test(read('public/src/i18n/en.js')), 'Werewolf stays English');
 
     // Kindness (the person-facing filter) across the global core; teen-safe across every pack.
     const flags = (t) => MlCore.kindnessFlags(t);

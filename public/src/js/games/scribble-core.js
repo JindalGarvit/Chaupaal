@@ -13,10 +13,36 @@
  * Canvas: the drawer streams op batches ({ o: [ops] }) to RTDB; replay() folds them into the visible
  * stroke groups (undo / redo / clear aware) so late joiners and reconnects redraw the same picture.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('../dangal/word-safety.js'));
-  else root.ScribbleCore = factory(root.WordSafety);
-})(typeof self !== 'undefined' ? self : this, function (WordSafety) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('../dangal/word-safety.js'), require('../core/search-normalize.js'));
+  else root.ScribbleCore = factory(root.WordSafety, root.SearchNormalize);
+})(typeof self !== 'undefined' ? self : this, function (WordSafety, SN) {
   'use strict';
 
   const MIN_PLAYERS = 2;
@@ -28,18 +54,18 @@
   const CANVAS_H = 600;
 
   const PACKS = [
-    { id: 'everyday', name: 'Everyday objects' },
-    { id: 'animals', name: 'Animals' },
-    { id: 'food', name: 'Food' },
-    { id: 'actions', name: 'Actions' },
-    { id: 'places', name: 'Places' },
-    { id: 'movies', name: 'Movies & TV' },
-    { id: 'sports', name: 'Sports' },
-    { id: 'nature', name: 'Nature' },
-    { id: 'tech', name: 'Tech' },
-    { id: 'hardmode', name: 'Hard mode' },
-    { id: 'bollywood', name: 'Bollywood', regional: true },
-    { id: 'cricket', name: 'Cricket', regional: true },
+    { id: 'everyday', name: gtx('games.scribble.everyday_objects', 'Everyday objects') },
+    { id: 'animals', name: gtx('games.scribble.animals', 'Animals') },
+    { id: 'food', name: gtx('common.food', 'Food') },
+    { id: 'actions', name: gtx('games.scribble.actions', 'Actions') },
+    { id: 'places', name: gtx('games.scribble.places', 'Places') },
+    { id: 'movies', name: gtx('games.scribble.movies_tv', 'Movies & TV') },
+    { id: 'sports', name: gtx('common.sports', 'Sports') },
+    { id: 'nature', name: gtx('games.scribble.nature', 'Nature') },
+    { id: 'tech', name: gtx('common.tech', 'Tech') },
+    { id: 'hardmode', name: gtx('games.scribble.hard_mode', 'Hard mode') },
+    { id: 'bollywood', name: gtx('games.scribble.bollywood', 'Bollywood'), regional: true },
+    { id: 'cricket', name: gtx('games.scribble.cricket', 'Cricket'), regional: true },
   ];
   const PACK_IDS = PACKS.map((p) => p.id);
   const DEFAULT_PACKS = ['everyday', 'animals', 'food', 'actions', 'places', 'movies', 'sports', 'nature', 'tech'];
@@ -98,17 +124,20 @@
       customWords: custom,
       customOnly: !!r.customOnly && custom.length >= 10,
       aiTheme: r.aiTheme ? String(r.aiTheme).replace(/[<>]/g, '').slice(0, 40) : '',
+      contentLang: /^[a-z]{2,3}$/.test(String(r.contentLang || '').toLowerCase().split('-')[0]) ? String(r.contentLang).toLowerCase().split('-')[0] : '',
     };
   }
 
   // ---------------------------------------------------------------- guessing
 
-  const normGuess = (s) =>
-    String(s == null ? '' : s)
-      .toLowerCase()
+  /** Comparison key: L4 fold, Latin accents dropped, letters / digits / marks of every script kept. */
+  const normGuess = (s) => {
+    const raw = String(s == null ? '' : s);
+    return (SN && SN.fold ? SN.fold(raw) : raw.toLowerCase())
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '');
+      .replace(/[^\p{L}\p{N}\p{M}]/gu, '');
+  };
 
   function editDistance(a, b, cap) {
     const lim = cap == null ? Infinity : cap;
@@ -207,7 +236,7 @@
 
   function newGame(players, settings) {
     const set = mergeSettings(settings);
-    const list = (players || []).map((p) => ({ id: String(p.id), name: String(p.name || 'Player').slice(0, 32) }));
+    const list = (players || []).map((p) => ({ id: String(p.id), name: String(p.name || gtx('games.scribble.player', 'Player')).slice(0, 32) }));
     const scores = {};
     list.forEach((p) => (scores[p.id] = 0));
     return {
@@ -260,7 +289,7 @@
   function addPlayer(st, p) {
     const id = String(p.id);
     if (st.players.some((x) => x.id === id)) return false;
-    st.players.push({ id, name: String(p.name || 'Player').slice(0, 32) });
+    st.players.push({ id, name: String(p.name || gtx('games.scribble.player', 'Player')).slice(0, 32) });
     if (st.order.indexOf(id) < 0) st.order.push(id);
     if (!(id in st.scores)) st.scores[id] = 0;
     sys(st, 'joined', id);
@@ -321,19 +350,19 @@
   function guess(st, uid, text, now, eligible) {
     const raw = String(text == null ? '' : text).replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, MAX_TEXT);
     if (!raw) return { error: 'empty' };
-    if (WordSafety && WordSafety.isBlocked(raw)) return { error: 'blocked', reason: 'Keep it friendly — that message wasn’t sent' };
+    if (WordSafety && WordSafety.isBlocked(raw)) return { error: 'blocked', reason: gtx('games.scribble.keep_it_friendly_that_message_wasn', 'Keep it friendly — that message wasn’t sent') };
     if (!st.players.some((p) => p.id === uid) || st.kicked[uid]) return { error: 'not_player' };
     const drawing = st.phase === 'draw' && st.word;
     if (!drawing) {
       if (st.phase === 'pick' && uid === st.drawer && (st.choices || []).some((w) => revealsWord(raw, w))) {
-        return { error: 'word_blocked', reason: 'No giving away the word!' };
+        return { error: 'word_blocked', reason: gtx('games.scribble.no_giving_away_the_word', 'No giving away the word!') };
       }
       say(st, uid, 'msg', raw);
       return {};
     }
     const knows = uid === st.drawer || !!st.guessed[uid];
     if (knows) {
-      if (revealsWord(raw, st.word)) return { error: 'word_blocked', reason: 'No giving away the word!' };
+      if (revealsWord(raw, st.word)) return { error: 'word_blocked', reason: gtx('games.scribble.no_giving_away_the_word', 'No giving away the word!') };
       say(st, uid, 'msg', raw);
       return {};
     }

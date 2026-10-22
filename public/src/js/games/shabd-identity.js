@@ -4,7 +4,23 @@
 (function (g) {
   'use strict';
 
-  const tr = (key, fallback) => (typeof g.t === 'function' ? g.t('shabd.' + key, fallback) : fallback);
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  const tr = (key, fallback, params) => {
+    const p = isolateNames(params);
+    return typeof g.t === 'function' ? g.t('games.wordguess.' + key, p || fallback) : fill(fallback, p);
+  };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   function getShabdGloss(word) {
@@ -14,7 +30,7 @@
     return line ? String(line).trim().slice(0, 80) : '';
   }
 
-  const WIN = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
+  const WIN = /* i18n-copy */ [t('games.wordguess.genius'), t('games.wordguess.magnificent'), t('games.wordguess.impressive'), t('games.wordguess.splendid'), t('games.wordguess.great'), t('games.wordguess.phew')];
   function shabdWinTitle(guesses) {
     const n = Math.max(1, Math.min(6, Number(guesses) || 6));
     return tr('win' + n, WIN[n - 1]);
@@ -29,7 +45,7 @@
     const mode = o.mode || (o.daily === false ? 'practice' : 'daily');
     const gloss = getShabdGloss(word);
     const title = won ? shabdWinTitle(guesses) : tr('lose', 'Out of guesses');
-    const wordLine = tr('wordWas', 'The word was') + ' ' + word + (o.hard ? ' · ' + tr('hard', 'Hard') : '');
+    const wordLine = tr('the_word_was_word_value', 'The word was {{word}}{{value}}', { word, value: (o.hard ? ' · ' + tr('hard', 'Hard') : '') });
     let voice;
     if (won) voice = guesses <= 2 ? tr('voiceFast', 'Lightning read.') : guesses <= 4 ? tr('voiceMid', 'Nicely solved.') : tr('voiceLate', 'Clutch finish.');
     else voice = mode === 'daily' ? tr('voiceDailyLose', 'A fresh puzzle arrives at midnight.') : tr('voicePracticeLose', 'Try another — practice makes perfect.');

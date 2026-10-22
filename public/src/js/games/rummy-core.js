@@ -31,6 +31,32 @@
  * target (100) wins; Classic scoring adds 100 game bonus + 25 per hand won, doubled on a shutout.
  * Optional Big Gin: all 11 cards melded after drawing, +31.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.RummyCore = factory();
@@ -41,7 +67,7 @@
   const SUITS = 'SHDC';
   const SUIT_SYMBOLS = { S: '♠', H: '♥', D: '♦', C: '♣' };
   const SUIT_NAMES = { S: 'spades', H: 'hearts', D: 'diamonds', C: 'clubs' };
-  const RANK_NAMES = ['', 'Ace', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King'];
+  const RANK_NAMES = /* i18n-copy */ ['', gtx('games.rummy.ace', 'Ace'), gtx('games.rummy.two', 'Two'), gtx('games.rummy.three', 'Three'), gtx('games.rummy.four', 'Four'), gtx('games.rummy.five', 'Five'), gtx('games.rummy.six', 'Six'), gtx('games.rummy.seven', 'Seven'), gtx('games.rummy.eight', 'Eight'), gtx('games.rummy.nine', 'Nine'), gtx('games.rummy.ten', 'Ten'), gtx('games.rummy.jack', 'Jack'), gtx('games.rummy.queen', 'Queen'), gtx('games.rummy.king', 'King')];
   const RANK_SHORT = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
   const MODES = ['13', 'gin'];
@@ -91,11 +117,11 @@
   }
 
   function cardLabel(c) {
-    if (isPrinted(c)) return 'Joker';
+    if (isPrinted(c)) return gtx('games.rummy.joker', 'Joker');
     return RANK_SHORT[rankOf(c)] + SUIT_SYMBOLS[suitOf(c)];
   }
   function cardName(c) {
-    if (isPrinted(c)) return 'Joker';
+    if (isPrinted(c)) return gtx('games.rummy.joker', 'Joker');
     return RANK_NAMES[rankOf(c)] + ' of ' + SUIT_NAMES[suitOf(c)];
   }
 
@@ -197,10 +223,10 @@
     return 'invalid';
   }
 
-  const GROUP_LABELS = { pure: 'Pure sequence ✓', impure: 'Impure sequence', set: 'Set', invalid: 'Invalid' };
-  const GIN_LABELS = { pure: 'Run', impure: 'Run', set: 'Set', invalid: 'Deadwood' };
+  const GROUP_LABELS = { pure: gtx('games.rummy.pure_sequence', 'Pure sequence ✓'), impure: gtx('games.rummy.impure_sequence', 'Impure sequence'), set: gtx('games.rummy.set', 'Set'), invalid: gtx('games.rummy.invalid', 'Invalid') };
+  const GIN_LABELS = { pure: gtx('games.rummy.run', 'Run'), impure: gtx('games.rummy.run', 'Run'), set: gtx('games.rummy.set', 'Set'), invalid: gtx('games.rummy.deadwood', 'Deadwood') };
   function groupLabel(kind, gin) {
-    return (gin ? GIN_LABELS : GROUP_LABELS)[kind] || 'Invalid';
+    return (gin ? GIN_LABELS : GROUP_LABELS)[kind] || gtx('games.rummy.invalid', 'Invalid');
   }
 
   /**
@@ -481,10 +507,10 @@
 
   function formatLabel(set) {
     const s = mergeSettings(set);
-    if (s.mode === 'gin') return 'Gin Rummy · to ' + s.target;
-    if (s.format === 'pool') return 'Pool ' + s.pool;
-    if (s.format === 'deals') return 'Deals · best of ' + s.deals;
-    return 'Points Rummy';
+    if (s.mode === 'gin') return gtx('games.rummy.gin_rummy_to_target', 'Gin Rummy · to {{target}}', { target: s.target });
+    if (s.format === 'pool') return gtx('games.rummy.pool_pool', 'Pool {{pool}}', { pool: s.pool });
+    if (s.format === 'deals') return gtx('games.rummy.deals_best_of_deals', 'Deals · best of {{deals}}', { deals: s.deals });
+    return gtx('games.rummy.points', 'Points Rummy');
   }
 
   /** Does this table move virtual chips? (bots at the table always make it friendly) */
@@ -509,7 +535,7 @@
     st.log.push({ no: st.seq, seat, msg });
     if (st.log.length > LOG_MAX) st.log.splice(0, st.log.length - LOG_MAX);
   }
-  const nameOf = (st, i) => (st.seats[i] ? st.seats[i].name : 'Player');
+  const nameOf = (st, i) => (st.seats[i] ? st.seats[i].name : gtx('dangal.party.player', 'Player'));
 
   /**
    * @param {{id:string,name:string,bot?:boolean,level?:string}[]} players seat order
@@ -529,7 +555,7 @@
       set: { pool: set.pool, deals: set.deals, knock: set.knock, target: set.target, scoring: set.scoring, bigGin: set.bigGin },
       seats: players.map((p) => ({
         id: String(p.id),
-        name: String(p.name || 'Player').slice(0, 40),
+        name: String(p.name || gtx('dangal.party.player', 'Player')).slice(0, 40),
         bot: !!p.bot,
         level: p.bot ? (LEVELS.indexOf(p.level) >= 0 ? p.level : 'normal') : null,
         score: start,
@@ -1074,7 +1100,7 @@
       defender: { groups: os.groups, dead: oDead, laid, points: oPts },
     };
     d.phase = 'done';
-    const how = { gin: 'went Gin', biggin: 'went Big Gin', knock: 'knocked', undercut: 'was undercut' }[res];
+    const how = { gin: gtx('games.rummy.wentGin', 'went Gin'), biggin: gtx('games.rummy.wentBigGin', 'went Big Gin'), knock: 'knocked', undercut: gtx('games.rummy.wasUndercut', 'was undercut') }[res];
     log(st, k, nameOf(st, k) + ' ' + how + ' · ' + nameOf(st, winner) + ' +' + pts);
     if (st.seats[winner].score >= st.set.target) endGin(st, winner);
   }
@@ -1595,33 +1621,33 @@
     const L = cardLabel;
     switch (m.kind) {
       case 'open':
-        return 'Turn ' + m.turn + ': picking the open ' + L(m.card) + ' would have saved about ' + m.impact + ' points.';
+        return gtx('games.rummy.turn_turn_picking_the_open_l', 'Turn {{turn}}: picking the open {{L}} would have saved about {{impact}} points.', { turn: m.turn, L: L(m.card), impact: m.impact });
       case 'discard':
-        return 'Turn ' + m.turn + ': throwing ' + L(m.better) + ' instead of ' + L(m.card) + ' keeps ' + m.impact + ' more points off your count.';
+        return gtx('games.rummy.turn_turn_throwing_l_instead_of', 'Turn {{turn}}: throwing {{L}} instead of {{L2}} keeps {{impact}} more points off your count.', { turn: m.turn, L: L(m.better), L2: L(m.card), impact: m.impact });
       case 'joker':
-        return 'Turn ' + m.turn + ': you threw a joker (' + L(m.card) + ') — keep jokers, they fill any gap.';
+        return gtx('games.rummy.turn_turn_you_threw_a_joker', 'Turn {{turn}}: you threw a joker ({{value}}) — keep jokers, they fill any gap.', { turn: m.turn, value: L(m.card) });
       case 'declare':
-        return 'Turn ' + m.turn + ': you had a valid show — put ' + L(m.card) + ' on Finish and declare.';
+        return gtx('games.rummy.turn_turn_you_had_a_valid', 'Turn {{turn}}: you had a valid show — put {{L}} on Finish and declare.', { turn: m.turn, L: L(m.card) });
       case 'drop':
-        return 'Turn ' + m.turn + ': dropping cost ' + m.cost + ' but your hand was only ' + m.pts + ' points.';
+        return gtx('games.rummy.turn_turn_dropping_cost_cost_but', 'Turn {{turn}}: dropping cost {{cost}} but your hand was only {{pts}} points.', { turn: m.turn, cost: m.cost, pts: m.pts });
       case 'meld':
-        return 'Your final grouping left ' + m.impact + ' extra points — tap Auto-sort before you submit.';
+        return gtx('games.rummy.your_final_grouping_left_impact_extra', 'Your final grouping left {{impact}} extra points — tap Auto-sort before you submit.', { impact: m.impact });
       case 'wrong':
         return m.reason === 'no_pure'
-          ? 'Wrong show: a valid hand needs a pure sequence (no jokers) first.'
+          ? gtx('games.rummy.wrong_show_a_valid_hand_needs', 'Wrong show: a valid hand needs a pure sequence (no jokers) first.')
           : m.reason === 'no_second'
-            ? 'Wrong show: you need a second sequence as well as the pure one.'
-            : 'Wrong show: one of your groups wasn’t a valid sequence or set.';
+            ? gtx('games.rummy.wrong_show_you_need_a_second', 'Wrong show: you need a second sequence as well as the pure one.')
+            : gtx('games.rummy.wrong_show_one_of_your_groups', 'Wrong show: one of your groups wasn’t a valid sequence or set.');
       case 'fed':
-        return 'Turn ' + m.turn + ': ' + m.who + ' picked up your ' + L(m.card) + ' — watch what opponents collect.';
+        return gtx('games.rummy.turn_turn_who_picked_up_your', 'Turn {{turn}}: {{who}} picked up your {{L}} — watch what opponents collect.', { turn: m.turn, who: m.who, L: L(m.card) });
       case 'gin_open':
-        return 'Turn ' + m.turn + ': taking ' + L(m.card) + ' would have cut your deadwood by ' + m.impact + '.';
+        return gtx('games.rummy.turn_turn_taking_l_would_have', 'Turn {{turn}}: taking {{L}} would have cut your deadwood by {{impact}}.', { turn: m.turn, L: L(m.card), impact: m.impact });
       case 'gin_discard':
-        return 'Turn ' + m.turn + ': throwing ' + L(m.better) + ' instead of ' + L(m.card) + ' leaves ' + m.impact + ' less deadwood.';
+        return gtx('games.rummy.turn_turn_throwing_l_instead_of_2', 'Turn {{turn}}: throwing {{L}} instead of {{L2}} leaves {{impact}} less deadwood.', { turn: m.turn, L: L(m.better), L2: L(m.card), impact: m.impact });
       case 'gin_knock':
-        return 'Turn ' + m.turn + ': you could have knocked with ' + m.dead + ' deadwood by throwing ' + L(m.card) + '.';
+        return gtx('games.rummy.turn_turn_you_could_have_knocked', 'Turn {{turn}}: you could have knocked with {{dead}} deadwood by throwing {{L}}.', { turn: m.turn, dead: m.dead, L: L(m.card) });
       case 'gin_gin':
-        return 'Turn ' + m.turn + ': you had Gin — throw ' + L(m.card) + ' and knock for the ' + GIN_BONUS + ' bonus.';
+        return gtx('games.rummy.turn_turn_you_had_gin_throw', 'Turn {{turn}}: you had Gin — throw {{L}} and knock for the {{GIN_BONUS}} bonus.', { turn: m.turn, L: L(m.card), GIN_BONUS });
       default:
         return '';
     }
@@ -1646,12 +1672,12 @@
     const tips = top.map(coachTip).filter(Boolean).map((t) => t.slice(0, 120));
     const unit = c.gin ? 'deadwood' : 'points';
     let text;
-    if (!top.length) text = c.won ? 'Clean hand — no costly slips. Nicely played.' : 'No big mistakes this hand — the cards ran against you.';
+    if (!top.length) text = c.won ? gtx('games.rummy.clean_hand_no_costly_slips_nicely', 'Clean hand — no costly slips. Nicely played.') : gtx('games.rummy.no_big_mistakes_this_hand_the', 'No big mistakes this hand — the cards ran against you.');
     else {
       const total = top.reduce((a, m) => a + m.impact, 0);
-      text = (c.won ? 'You won, but ' : '') + top.length + (top.length === 1 ? ' decision' : ' decisions') + ' cost about ' + total + ' ' + unit + '. Biggest: ' + tips[0];
+      text = gtx(c.won ? 'games.rummy.coach_cost_won' : 'games.rummy.coach_cost', (c.won ? 'You won, but ' : '') + top.length + (top.length === 1 ? ' decision' : ' decisions') + ' cost about ' + total + ' ' + unit + '. Biggest: ' + tips[0], { count: top.length, total, unit, tip: tips[0] });
     }
-    if (c.points != null && !c.won && !c.gin) text = 'You finished on ' + c.points + ' points. ' + text;
+    if (c.points != null && !c.won && !c.gin) text = gtx('games.rummy.you_finished_on_points_points_text', 'You finished on {{points}} points. {{text}}', { points: c.points, text });
     return { text: text.slice(0, 280), tips, allowedCards: allowed, mistakes: top };
   }
 

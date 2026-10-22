@@ -14,10 +14,24 @@
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('ludo.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
   }
-  const LABEL = 'Ludo';
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.ludo.' + key, p || fallback) : fill(fallback, p);
+  }
+  const LABEL = t('dangal.identity.ludo.label');
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
   }
@@ -47,7 +61,7 @@
   }
   function rulesLine(s) {
     const h = houseRules(s);
-    return h.length ? tr('houseRules', 'House rules') + ': ' + h.length : tr('standard', 'Standard rules');
+    return h.length ? tr('house_rules_length', 'House rules: {{length}}', { length: h.length }) : tr('standard', 'Standard rules');
   }
 
   function houseRulesHtml(s) {
@@ -130,7 +144,7 @@
         el.dataset.token = ti;
         el.style.setProperty('--tok', L.COLOR_HEX[s.color]);
         el.innerHTML = K.shapeSvg(L.SHAPES[s.color], L.COLOR_HEX[s.color], 22);
-        el.setAttribute('aria-label', L.COLOR_LABEL[s.color] + ' ' + tr('token', 'token') + ' ' + (ti + 1));
+        el.setAttribute('aria-label', tr('color_label_token_value', '{{COLOR_LABEL}} token {{value}}', { COLOR_LABEL: L.COLOR_LABEL[s.color], value: (ti + 1) }));
         tokensEl.appendChild(el);
         tokenEls[si + ':' + ti] = el;
       })
@@ -193,8 +207,8 @@
       if (st.over) return tr('over', 'Game over');
       const seat = st.seats[st.turn];
       if (myTurn()) {
-        if (st.phase === 'roll') return mySeatsNow().length > 1 && !o.live ? seat.name + ' — ' + tr('rollNow', 'roll the die') : tr('yourRoll', 'Your turn — roll the die');
-        return tr('pickToken', 'Rolled') + ' ' + st.dice + ' · ' + tr('pickToken2', 'tap a highlighted token');
+        if (st.phase === 'roll') return mySeatsNow().length > 1 && !o.live ? tr('name_roll_the_die', '{{name}} — roll the die', { name: (typeof bidi === 'function' ? bidi(seat.name) : seat.name) }) : tr('yourRoll', 'Your turn — roll the die');
+        return tr('rolled_dice_tap_a_highlighted_token', 'Rolled {{dice}} · tap a highlighted token', { dice: st.dice });
       }
       return seat.name + (seat.bot ? ' (' + tr('bot', 'Bot') + ')' : '') + ' — ' + (st.phase === 'move' ? tr('moving', 'moving') : tr('rolling', 'to roll'));
     }
@@ -267,7 +281,7 @@
           await K.animateDie(dieHost, e.value);
           const lbl = dieHost.querySelector('.cl-die-label');
           if (lbl) lbl.textContent = name + ' · ' + e.value;
-          setBanner(name + ' ' + tr('rolled', 'rolled') + ' ' + e.value);
+          setBanner(tr('name_rolled_value', '{{name}} rolled {{value}}', { name, value: e.value }));
           await K.sleep(K.ms(260));
         } else if (e.type === 'move') {
           const color = g.st.seats[e.seat].color;
@@ -284,12 +298,12 @@
             e.captures.forEach((cp) => (g.disp[cp.seat][cp.token] = L.BASE));
             await K.sleep(K.ms(120));
             placeTokens();
-            setBanner(name + ' ' + tr('captured', 'captured a token!'), 'capture');
+            setBanner(tr('name_captured_a_token', '{{name}} captured a token!', { name }), 'capture');
             await K.sleep(K.ms(420));
           }
           if (e.to === L.HOME) {
             K.fx('home');
-            setBanner(name + ' ' + tr('tokenHome', 'brought a token home'));
+            setBanner(tr('name_brought_a_token_home', '{{name}} brought a token home', { name }));
             await K.sleep(K.ms(300));
           }
         } else if (e.type === 'triple_six') {
@@ -297,7 +311,7 @@
           setBanner(tr('tripleSix', 'Three 6s in a row — turn lost'), 'warn');
           await K.sleep(K.ms(900));
         } else if (e.type === 'no_move') {
-          setBanner(name + ' — ' + tr('noMove', 'no move possible'));
+          setBanner(tr('name_no_move_possible', '{{name}} — no move possible', { name }));
           await K.sleep(K.ms(seat && seat.bot ? 350 : 650));
         } else if (e.type === 'bonus') {
           setBanner(name + ' — ' + (e.why === 'six' ? tr('bonusSix', 'rolled a 6, roll again') : e.why === 'capture' ? tr('bonusCapture', 'capture bonus roll') : tr('bonusHome', 'home bonus roll')));
@@ -306,7 +320,7 @@
           toast(name + ' — ' + (e.reason === 'afk' ? tr('takeoverAfk', 'a bot took over after missed turns') : tr('takeoverLeft', 'left; a bot is playing the seat')));
         } else if (e.type === 'finished') {
           K.fx('home');
-          setBanner(name + ' ' + tr('finished', 'finished') + ' ' + K.placeLabel(e.place), 'good');
+          setBanner(tr('name_finished_label', '{{name}} finished {{label}}', { name, label: K.placeLabel(e.place) }), 'good');
           await K.sleep(K.ms(600));
         }
       }
@@ -407,11 +421,11 @@
     const K = Kit();
     const L = Core();
     const s = loadSetup();
-    if (kind === 'pass') s.seats = s.seats.map((x, i) => ({ kind: 'human', name: x.kind === 'human' && x.name ? x.name : i === 0 ? myDisplayName() : tr('player', 'Player') + ' ' + (i + 1) }));
+    if (kind === 'pass') s.seats = s.seats.map((x, i) => ({ kind: 'human', name: x.kind === 'human' && x.name ? x.name : i === 0 ? myDisplayName() : tr('player_n', 'Player {{n}}', { n: (i + 1) }) }));
     else s.seats = s.seats.map((x, i) => (i === 0 ? { kind: 'human', name: myDisplayName() } : x));
     const seatView = () => {
       const colors = L.colorsFor(s.count);
-      return s.seats.slice(0, s.count).map((x, i) => ({ kind: x.kind, name: x.kind === 'bot' ? tr('bot', 'Bot') : x.name || tr('player', 'Player') + ' ' + (i + 1), color: L.COLOR_HEX[colors[i]], shape: L.SHAPES[colors[i]] }));
+      return s.seats.slice(0, s.count).map((x, i) => ({ kind: x.kind, name: x.kind === 'bot' ? tr('bot', 'Bot') : x.name || tr('player_n', 'Player {{n}}', { n: (i + 1) }), color: L.COLOR_HEX[colors[i]], shape: L.SHAPES[colors[i]] }));
     };
     K.openSheet({
       title: kind === 'pass' ? tr('passTitle', 'Pass & Play') : tr('botsTitle', 'Play vs bots'),
@@ -435,7 +449,7 @@
           el.querySelectorAll('[data-seat-kind]').forEach((sel) =>
             sel.addEventListener('change', () => {
               const i = Number(sel.dataset.seatKind);
-              s.seats[i] = { kind: sel.value, name: sel.value === 'human' ? tr('player', 'Player') + ' ' + (i + 1) : '' };
+              s.seats[i] = { kind: sel.value, name: sel.value === 'human' ? tr('player_n', 'Player {{n}}', { n: (i + 1) }) : '' };
               paintSeats();
             })
           );
@@ -471,8 +485,8 @@
     let botN = 0;
     const players = seats.map((x, i) =>
       x.kind === 'bot'
-        ? { id: 'b' + i, name: tr('bot', 'Bot') + ' ' + ++botN + ' · ' + C.levelLabel(setup.level), bot: true, level: setup.level }
-        : { id: 'p' + i, name: x.name || (i === 0 ? myDisplayName() : tr('player', 'Player') + ' ' + (i + 1)) }
+        ? { id: 'b' + i, name: tr('bot_value_label', 'Bot {{value}} · {{label}}', { value: ++botN, label: C.levelLabel(setup.level) }), bot: true, level: setup.level }
+        : { id: 'p' + i, name: x.name || (i === 0 ? myDisplayName() : tr('player_n', 'Player {{n}}', { n: (i + 1) })) }
     );
     if (!players.some((p) => !p.bot)) players[0] = { id: 'p0', name: myDisplayName() };
     const st = L.newGame(players, setup.rules);
@@ -540,7 +554,7 @@
           } else C.fx('win');
         }
         const win = st.seats[st.ranking[0]];
-        const teamLine = st.settings.teams ? (st.winnerTeam === 0 ? tr('teamA', 'Team A') : tr('teamB', 'Team B')) + ' ' + tr('wins', 'wins!') : win.name + ' ' + tr('wins', 'wins!');
+        const teamLine = st.settings.teams ? tr('value_wins', '{{value}} wins!', { value: (st.winnerTeam === 0 ? tr('teamA', 'Team A') : tr('teamB', 'Team B')) }) : tr('name_wins', '{{name}} wins!', { name: (typeof bidi === 'function' ? bidi(win.name) : win.name) });
         el.innerHTML = `<div class="cl-result">
           <div class="cl-result-title">${esc(teamLine)}</div>
           ${rankingHtml(shown)}
@@ -566,7 +580,7 @@
   function lobbySummary(ctrl) {
     const s = (ctrl.view.pub && ctrl.view.pub.settings) || {};
     const bits = [rulesLine(Core().mergeSettings(s))];
-    if (s.bots) bits.push(s.bots + ' ' + (s.bots === 1 ? tr('botOne', 'bot') : tr('botMany', 'bots')) + ' · ' + CK().levelLabel(s.botLevel));
+    if (s.bots) bits.push(tr('bots_label', '{bots, plural, one {# bot} other {# bots}} · {{label}}', { bots: s.bots, label: CK().levelLabel(s.botLevel) }));
     bits.push(CK().stakeLabel(Number(s.stake) || 0));
     return bits.join(' · ');
   }
@@ -606,11 +620,11 @@
     const s = pub.settings || {};
     const bots = Math.max(0, Math.min(Number(s.bots) || 0, 4 - players.length));
     const rows = players.map(
-      (p) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${p.id === pub.host ? '<span class="pk-badge">Host</span>' : ''}${
-        p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''
+      (p) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${p.id === pub.host ? '<span class="pk-badge">' + tHtml('games.ludo.host') + '</span>' : ''}${
+        p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">' + tHtml('games.ludo.you') + '</span>' : ''
       }</div>`
     );
-    for (let i = 0; i < bots; i++) rows.push(`<div class="pk-lobby-row is-bot"><span class="pk-dot is-online"></span><span>🤖 ${esc(tr('bot', 'Bot') + ' ' + (i + 1) + ' · ' + CK().levelLabel(s.botLevel))}</span></div>`);
+    for (let i = 0; i < bots; i++) rows.push(`<div class="pk-lobby-row is-bot"><span class="pk-dot is-online"></span><span>🤖 ${esc(tr('bot_n_label', 'Bot {{n}} · {{label}}', { n: (i + 1), label: CK().levelLabel(s.botLevel) }))}</span></div>`);
     const house = houseRules(Core().mergeSettings(s));
     return `<div class="pk-lobby-list">${rows.join('')}</div>${
       house.length ? `<div class="cl-house"><div class="cl-sub">${esc(tr('houseRulesInGame', 'House rules in this game'))}</div><ul>${house.map((h) => '<li>' + esc(h) + '</li>').join('')}</ul></div>` : ''
@@ -675,7 +689,7 @@
           return `<span class="cl-rank-chips ${r.chipDelta > 0 ? 'is-up' : 'is-down'}">${r.chipDelta > 0 ? '+' : ''}${r.chipDelta}</span>`;
         };
         const win = shown.seats[shown.ranking[0]];
-        const line = shown.settings.teams ? (shown.winnerTeam === 0 ? tr('teamA', 'Team A') : tr('teamB', 'Team B')) + ' ' + tr('wins', 'wins!') : win.name + ' ' + tr('wins', 'wins!');
+        const line = shown.settings.teams ? tr('value_wins', '{{value}} wins!', { value: (shown.winnerTeam === 0 ? tr('teamA', 'Team A') : tr('teamB', 'Team B')) }) : tr('name_wins', '{{name}} wins!', { name: (typeof bidi === 'function' ? bidi(win.name) : win.name) });
         el.innerHTML = `<div class="cl-result"><div class="cl-result-title">${esc(line)}</div>${rankingHtml(shown, (s) => chip(s))}${Kit().roomResultActions(ctrl, {
           nextLabel: tr('rematch', 'Rematch'),
           waitLabel: tr('waitRematch', 'Waiting for the host to start a rematch…'),
@@ -725,7 +739,7 @@
       <div class="pk-modes">
         <button type="button" class="pk-mode pk-mode--primary" data-go="bots">
           <span class="pk-mode-title">${esc(tr('botsTitle', 'Play vs bots'))}</span>
-          <span class="pk-mode-sub">${esc(setup.count + ' ' + tr('players', 'players') + ' · ' + CK().levelLabel(setup.level) + ' · ' + rulesLine(setup.rules))}</span>
+          <span class="pk-mode-sub">${esc(tr('players_label_rulesline', '{count, plural, one {# player} other {# players}} · {{label}} · {{rulesLine}}', { count: setup.count, label: CK().levelLabel(setup.level), rulesLine: rulesLine(setup.rules) }))}</span>
         </button>
         <button type="button" class="pk-mode" data-go="friends">
           <span class="pk-mode-title">${esc(tr('friendsTitle', 'Play with friends'))}</span>
@@ -777,8 +791,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'ludo',
-      name: 'Ludo',
-      desc: '2–4 players · house rules · bots · Live rooms with server dice',
+      name: t('games.ludo.ludo'),
+      desc: t('games.ludo.2_4_players_house_rules_bots'),
       icon: '🎲',
       ratingKey: 'ludo',
       gameType: 'multiplayer',
@@ -791,7 +805,7 @@
       ownHome: true,
       order: 30,
       meta: {
-        core: 'ludo-core.js (standard rules + house-rule toggles + bots, shared with the server)',
+        core: t('games.ludo.ludo_core_js_standard_rules_house'),
         live: 'party_room → server-lib/classics-rooms.js; server CSPRNG dice, bot takeover, placement chips',
       },
       launch: openGame,

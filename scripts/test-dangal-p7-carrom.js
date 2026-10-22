@@ -823,7 +823,7 @@ function fakeRtdb() {
   assert(!/\{ id: 'carrom', name:/.test(pc) && !/window\.openCarrom = openCarrom/.test(pc), 'old party-classics Carrom no longer registered');
   const ui = read('public/src/js/games/carrom-ui.js');
   assert(/id: 'carrom'/.test(ui) && /ratingKey: 'carrom'/.test(ui) && /registerPartyGame\(GAME/.test(ui) && /window\.openCarrom/.test(ui), 'carrom-ui registers the game, the party room and window.openCarrom');
-  assert(/t\('carrom\.' \+ key/.test(ui), 'copy goes through i18n (carrom.*)');
+  assert(/t\('games\.carrom\.' \+ key/.test(ui), 'copy goes through i18n (carrom.*)');
   const Rules = require(path.join(root, 'public/src/js/dangal/dangal-rules.js'));
   const cr = Rules.get ? Rules.get('carrom') : null;
   assert(cr && cr.ruleset.source === 'Rules based on the ICF Laws of Carrom' && !cr.ruleset.simplified && cr.variants.some((v) => v.key === 'variant'), 'Rules sheet: ICF attribution, variants, full rulebook');

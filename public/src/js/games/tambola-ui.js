@@ -12,7 +12,7 @@
   'use strict';
 
   const GAME = 'tambola';
-  const LABEL = 'Tambola';
+  const LABEL = t('games.tambola.tambola90');
   const SETUP_KEY = 'chaupaal_tambola_setup';
   const PREFS_KEY = 'chaupaal_tambola_prefs';
   const CALLER_KEY = 'chaupaal_tambola_caller';
@@ -21,8 +21,22 @@
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('tambola.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.tambola.' + key, p || fallback) : fill(fallback, p);
   }
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function toast(msg) {
@@ -68,20 +82,25 @@
     writeJson(PREFS_KEY, p);
   }
   function lang() {
-    const l = (typeof currentLanguage === 'function' && currentLanguage()) || document.documentElement.lang || navigator.language || 'en';
-    return String(l);
+    const raw = typeof currentLang !== 'undefined' ? currentLang : 'en';
+    return String(typeof normalizeLang === 'function' ? normalizeLang(raw) : raw);
   }
+  /** Traditional calls are English-only flavour (content-locales: tambola.traditional) — hidden elsewhere. */
+  function tradAvailable() {
+    const C = window.DangalContentLocales;
+    return C ? C.flavourVisible('tambola.traditional', lang()) : /^en/i.test(lang());
+  }
+  const tradOn = () => prefs().traditional && tradAvailable();
   /** Caller voice (Web Speech API): English by default; other locales read the number in their own voice. */
   function speak(n, variant, force) {
     const p = prefs();
     if (!force && !p.voice) return;
     if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return;
     const l = lang();
-    const english = /^en/i.test(l);
-    const text = Core().callText(n, variant, english && p.traditional);
+    const text = Core().callText(n, variant, tradAvailable() && p.traditional);
     try {
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = l;
+      u.lang = typeof getTtsLang === 'function' ? getTtsLang(l) : l;
       u.rate = 0.95;
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(u);
@@ -185,8 +204,8 @@
       if (st.over) return tr('gameOver', 'Game over');
       const bits = [st.variant === '75' ? tr('bingo75', '75-ball Bingo') : tr('tambola90', 'Tambola')];
       bits.push(st.count + '/' + st.total);
-      if (st.players > 1) bits.push(st.players + ' ' + tr('players', 'players'));
-      if (st.mode !== 'fun' && st.pot) bits.push(tr('pot', 'Pot') + ' ⚡' + st.pot);
+      if (st.players > 1) bits.push(tr('players_2', '{players, plural, one {# player} other {# players}}', { players: st.players }));
+      if (st.mode !== 'fun' && st.pot) bits.push(tr('pot_pot', 'Pot ⚡{{pot}}', { pot: st.pot }));
       return bits.join(' · ');
     }
 
@@ -211,8 +230,8 @@
             index: t,
             marks: marksFor(t),
             called,
-            title: vm.tickets.length > 1 ? tr('ticket', 'Ticket') + ' ' + (t + 1) : '',
-            blocked: some.length ? tr('blockedFor', 'Blocked for') + ': ' + some.join(', ') : '',
+            title: vm.tickets.length > 1 ? tr('ticket_value', 'Ticket {{value}}', { value: (t + 1) }) : '',
+            blocked: some.length ? tr('blocked_for_join', 'Blocked for: {{join}}', { join: some.join(', ') }) : '',
             readOnly: autoDaub() || vm.st.over || allBlocked,
           });
         })
@@ -232,7 +251,7 @@
         .map((p) => {
           const tie = p.status === 'won' && Date.now() - (p.firstAtLocal || 0) < Core().TIE_MS;
           const can = vm.me >= 0 && vm.tickets.length && !st.over && (Core().claimable(st, p) || tie) && !p.winners.some((w) => w.seat === vm.me);
-          const worth = st.mode === 'fun' ? p.share + ' ' + tr('pts', 'pts') : '⚡' + Math.floor((st.pot * (p.share || 0)) / weight);
+          const worth = st.mode === 'fun' ? tr('share_pts', '{{share}} pts', { share: p.share }) : '⚡' + Math.floor((st.pot * (p.share || 0)) / weight);
           const allBlocked = vm.tickets.length && vm.tickets.every((g, t) => blockedFor(t, p.key));
           const ready = can && vm.tickets.some((g, t) => !blockedFor(t, p.key) && Core().prizeDone(st.variant, p.key, Core().unpack(g), [...marksFor(t)], st.mask));
           const right = p.winners.length
@@ -357,9 +376,9 @@
           .map((e) => {
             const who = e.s === vm.me ? tr('you', 'You') : e.name;
             const lab = (vm.st.prizes.find((x) => x.key === e.key) || {}).label || e.key;
-            if (e.k === 'bogey') return who + ': ' + tr('bogeyOn', 'bogey on') + ' ' + lab;
-            if (e.k === 'tie') return who + ' ' + tr('sharesW', 'shares') + ' ' + lab;
-            return who + ' ' + tr('winsW', 'wins') + ' ' + lab;
+            if (e.k === 'bogey') return tr('name_bogey_on_lab', '{{name}}: bogey on {{lab}}', { name: (typeof bidi === 'function' ? bidi(who) : who), lab });
+            if (e.k === 'tie') return tr('name_shares_lab', '{{name}} shares {{lab}}', { name: (typeof bidi === 'function' ? bidi(who) : who), lab });
+            return tr('name_wins_lab', '{{name}} wins {{lab}}', { name: (typeof bidi === 'function' ? bidi(who) : who), lab });
           })
           .join(' · ');
         el.appendChild(p);
@@ -403,9 +422,8 @@
       title: tr('prefs', 'Sound and marking'),
       bodyHtml: `<div class="cl-setup">
         <div class="cl-sub">${esc(tr('voice', 'Caller voice'))}</div>${K.segHtml('voice', p.voice ? 1 : 0, [[1, tr('on', 'On')], [0, tr('off', 'Off')]])}
-        <div class="cl-sub">${esc(tr('traditional', 'Traditional calls'))}</div>${K.segHtml('traditional', p.traditional ? 1 : 0, [[0, tr('plain', 'Numbers only')], [1, tr('tradEx', '“Two little ducks, 22”')]])}
+        ${tradAvailable() ? `<div class="cl-sub">${esc(tr('traditional', 'Traditional calls'))}</div>${K.segHtml('traditional', p.traditional ? 1 : 0, [[0, tr('plain', 'Numbers only')], [1, tr('tradEx', '“Two little ducks, 22”')]])}` : ''}
         <div class="cl-sub">${esc(tr('marking', 'Marking'))}</div>${K.segHtml('autoDaub', p.autoDaub ? 1 : 0, [[0, tr('tapMark', 'Tap to mark')], [1, tr('autoMark', 'Auto-mark')]])}
-        <p class="cl-note">${esc(tr('prefsNote', 'Traditional calls are in English; other languages read the number.'))}</p>
         <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${esc(tr('done', 'Done'))}</button>
       </div>`,
       onMount(el, close) {
@@ -441,7 +459,7 @@
     const shell = K.openShell({
       gameId: GAME,
       title: LABEL,
-      subtitle: tr('practice', 'Practice') + ' · ' + (s.variant === '75' ? tr('bingo75', '75-ball Bingo') : tr('tambola90', 'Tambola')),
+      subtitle: tr('practice_value', 'Practice · {{value}}', { value: (s.variant === '75' ? tr('bingo75', '75-ball Bingo') : tr('tambola90', 'Tambola')) }),
       confirmLeave: () => !st.over && st.called.length > 3,
       leaveBody: tr('leaveLocal', 'This practice game will end.'),
       onClose: () => {
@@ -516,7 +534,7 @@
           if (typeof recordGameResult === 'function') recordGameResult(GAME, mine > 0, false, { mode: 'practice', variant: s.variant });
         }
         const won = st.prizes.filter((p) => p.winners.some((w) => w.seat === 0)).map((p) => p.label);
-        el.innerHTML = `<div class="cl-result"><div class="rm-result-line">${esc(won.length ? tr('youWonList', 'You won') + ': ' + won.join(', ') : tr('noPrize', 'No prize this time'))}</div>
+        el.innerHTML = `<div class="cl-result"><div class="rm-result-line">${esc(won.length ? tr('you_won_join', 'You won: {{join}}', { join: won.join(', ') }) : tr('noPrize', 'No prize this time'))}</div>
           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${esc(tr('again', 'Play again'))}</button>
           <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-home>${esc(tr('changeGame', 'Change game'))}</button></div></div>`;
         el.querySelector('[data-again]').addEventListener('click', () => K.closeThen(shell, () => startLocal(s)));
@@ -541,7 +559,7 @@
   }
 
   function maskHtml(mask) {
-    let h = '<div class="tb-mask" role="group" aria-label="Custom pattern">';
+    let h = '<div class="tb-mask" role="group" aria-label="' + tHtml('games.tambola.custom_pattern') + '">';
     for (let i = 0; i < 25; i++) h += `<button type="button" class="tb-mask-c${(mask >>> i) & 1 || i === 12 ? ' is-on' : ''}${i === 12 ? ' is-free' : ''}" data-mask="${i}" ${i === 12 ? 'disabled' : ''}>${i === 12 ? '★' : ''}</button>`;
     return h + '</div>';
   }
@@ -558,7 +576,7 @@
     s.shares = Object.assign({}, s.shares || {});
     s.mask = Number(s.mask) || 0x1f;
     const body = () => `<div class="cl-setup">
-        <div class="cl-sub">${esc(tr('gameT', 'Game'))}</div>${K.segHtml('variant', s.variant, [['90', tr('tambola90', '90-ball Tambola')], ['75', tr('bingo75', '75-ball Bingo')]])}
+        <div class="cl-sub">${esc(tr('gameT', 'Game'))}</div>${K.segHtml('variant', s.variant, [['90', tr('tambola90_90_ball_tambola', '90-ball Tambola')], ['75', tr('bingo75', '75-ball Bingo')]])}
         <div class="cl-sub">${esc(tr('paceT', 'Seconds between numbers'))}</div>${K.segHtml('pace', s.pace, Core().PACES.map((p) => [p, p + 's']))}
         ${o.live ? '' : `<div class="cl-sub">${esc(tr('ticketsT', 'Your tickets'))}</div>${K.segHtml('tickets', s.tickets || 1, [[1, '1'], [2, '2'], [3, '3'], [6, '6']])}`}
         <div class="cl-sub">${esc(tr('prizesT', 'Prizes'))}</div>
@@ -631,10 +649,10 @@
   const isPublic = (ctrl) => !!(ctrl.view.pub && ctrl.view.pub.table && ctrl.view.pub.table.public);
   function lobbySummary(ctrl) {
     const s = roomSettings(ctrl);
-    if (isPublic(ctrl)) return tr('publicSum', 'Public table') + ' · ⚡' + ((ctrl.view.pub.table || {}).price || s.price) + ' ' + tr('aTicket', 'a ticket') + ' · 18+';
-    const bits = [s.variant === '75' ? tr('bingo75', '75-ball Bingo') : tr('tambola90', 'Tambola'), s.pace + 's', arr(s.prizes).length + ' ' + tr('prizesW', 'prizes')];
-    bits.push(s.mode === 'table' ? tr('tableChips', 'Table chips') + ' ' + s.price : tr('fun', 'Just for fun'));
-    if (Number(s.bots) > 0) bits.push(s.bots + ' ' + tr('botsW', 'bots'));
+    if (isPublic(ctrl)) return tr('public_table_value_a_ticket_18', 'Public table · ⚡{{value}} a ticket · 18+', { value: (ctrl.view.pub.table || {}).price || s.price });
+    const bits = [s.variant === '75' ? tr('bingo75', '75-ball Bingo') : tr('tambola90', 'Tambola'), s.pace + 's', tr('prizes', '{length, plural, one {# prize} other {# prizes}}', { length: arr(s.prizes).length })];
+    bits.push(s.mode === 'table' ? tr('table_chips_price', 'Table chips {{price}}', { price: s.price }) : tr('fun', 'Just for fun'));
+    if (Number(s.bots) > 0) bits.push(tr('bots', '{bots, plural, one {# bot} other {# bots}}', { bots: s.bots }));
     return bits.join(' · ');
   }
   function canStart(ctrl, players) {
@@ -693,7 +711,7 @@
   function hydratePub(raw) {
     return Core().hydratePublic(clone(raw || {}));
   }
-  const LIVE_ERRORS = ['SLOW_DOWN', 'BLOCKED', 'NOT_YET', 'TAKEN', 'ALREADY_WON', 'NO_TICKET', 'NO_PRIZE', 'LEFT', 'NOT_SEATED', 'OVER', 'FIXED', 'AUTO_START', 'INSUFFICIENT_CHIPS'];
+  const LIVE_ERRORS = ['SLOW_DOWN', t('dangal.party.blocked'), 'NOT_YET', 'TAKEN', 'ALREADY_WON', 'NO_TICKET', 'NO_PRIZE', 'LEFT', 'NOT_SEATED', 'OVER', 'FIXED', 'AUTO_START', 'INSUFFICIENT_CHIPS'];
   function errorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
     if (LIVE_ERRORS.indexOf(code) >= 0 && e.message) return e.message;
@@ -776,7 +794,7 @@
     }
     const bits = [];
     const won = vm.st.prizes.filter((p) => p.winners.some((w) => w.seat === vm.me)).map((p) => p.label);
-    bits.push(`<div class="rm-result-line">${esc(won.length ? tr('youWonList', 'You won') + ': ' + won.join(', ') : vm.me >= 0 ? tr('noPrize', 'No prize this time') : tr('gameOver', 'Game over'))}</div>`);
+    bits.push(`<div class="rm-result-line">${esc(won.length ? tr('you_won_join', 'You won: {{join}}', { join: won.join(', ') }) : vm.me >= 0 ? tr('noPrize', 'No prize this time') : tr('gameOver', 'Game over'))}</div>`);
     if (r && r.chipDelta) bits.push(`<div class="cl-result-chips ${r.chipDelta > 0 ? 'is-up' : 'is-down'}">${r.chipDelta > 0 ? '+' : ''}${r.chipDelta} ${esc(tr('chips', 'virtual chips'))}</div>`);
     else if (mine && vm.st.mode === 'table') bits.push(`<div class="cl-result-chips ${mine.net >= 0 ? 'is-up' : 'is-down'}">${mine.net >= 0 ? '+' : ''}${mine.net} ${esc(tr('tableChipsShort', 'table chips'))}</div>`);
     else if (mine && mine.points) bits.push(`<p class="cl-note">${mine.win} ${esc(tr('pts', 'pts'))}</p>`);
@@ -796,7 +814,7 @@
     }
     el.innerHTML = `<div class="cl-result">${bits.join('')}
       ${Kit().roomResultActions(ctrl, { nextLabel: tr('newGame', 'New game'), waitLabel: tr('waitNew', 'Waiting for the host…') })}</div>`;
-    Kit().wireRoomResultActions(ctrl, el, { nextOp: 'start', onShare: () => CK().shareWin(GAME, LABEL, won.length ? tr('shareWon', 'I won') + ' ' + won.join(', ') : tr('shareDone', 'Tambola game done')) });
+    Kit().wireRoomResultActions(ctrl, el, { nextOp: 'start', onShare: () => CK().shareWin(GAME, LABEL, won.length ? tr('i_won_join', 'I won {{join}}', { join: won.join(', ') }) : tr('shareDone', 'Tambola game done')) });
   }
 
   function openRoom(code, opts) {
@@ -833,7 +851,7 @@
     adultOk().then(async (ok) => {
       if (!ok) return;
       try {
-        const res = await K.roomCall(GAME, 'quick', { price, name: K.myName() || 'Player' });
+        const res = await K.roomCall(GAME, 'quick', { price, name: K.myName() || t('dangal.party.player') });
         openRoom(res.code, {});
       } catch (e) {
         toast(errorText(e) || tr('publicFail', 'Couldn’t find a table — try again'));
@@ -949,7 +967,7 @@
     function paint() {
       const last = c.called[c.called.length - 1];
       const label = last ? (c.variant === '75' ? Core().letter75(last) + ' ' + last : String(last)) : '—';
-      const trad = last && c.variant === '90' && prefs().traditional ? Core().CALLS[last] || '' : '';
+      const trad = last && c.variant === '90' && tradOn() ? Core().CALLS[last] || '' : '';
       const body = shell.render(`<div class="pk-page tb-page tb-caller">
         <div class="tb-now"><div class="tb-ball tb-ball--xl">${esc(label)}</div>${trad ? `<div class="tb-trad">${esc(trad)}</div>` : ''}
           <div class="tb-recent">${c.called.slice(-6, -1).reverse().map((n) => `<span>${n}</span>`).join('')}</div>
@@ -1022,7 +1040,7 @@
         <div class="cl-sub">${esc(tr('byCode', 'Ticket code'))}</div>
         <form data-code-form class="tb-check-row"><input class="pk-input" data-code placeholder="${esc(tr('codeEx', 'e.g. K3F9Q-4.2'))}" autocomplete="off" autocapitalize="characters" aria-label="${esc(tr('byCode', 'Ticket code'))}"><button type="submit" class="pk-btn pk-btn--primary">${esc(tr('check', 'Check'))}</button></form>
         <div class="cl-sub">${esc(tr('byNumbers', 'Or type the numbers claimed'))}</div>
-        <form data-num-form class="tb-check-row"><input class="pk-input" data-nums inputmode="numeric" placeholder="${esc(tr('numsEx', 'e.g. 4 17 33 61 85'))}" aria-label="${esc(tr('byNumbers', 'Numbers'))}"><button type="submit" class="pk-btn pk-btn--primary">${esc(tr('check', 'Check'))}</button></form>
+        <form data-num-form class="tb-check-row"><input class="pk-input" data-nums inputmode="numeric" placeholder="${esc(tr('numsEx', 'e.g. 4 17 33 61 85'))}" aria-label="${esc(tr('byNumbers_numbers', 'Numbers'))}"><button type="submit" class="pk-btn pk-btn--primary">${esc(tr('check', 'Check'))}</button></form>
         <div data-out aria-live="polite"></div>
       </div>`,
       onMount(el) {
@@ -1066,16 +1084,9 @@
       for (let r = 0; r < g.length / rowLen; r++) h += '<tr>' + g.slice(r * rowLen, r * rowLen + rowLen).map((n, j) => cell(n, r * rowLen + j)).join('') + '</tr>';
       return h + '</table>';
     };
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Tambola tickets</title><style>
-      body{font-family:system-ui,sans-serif;margin:12mm;color:#111}
-      .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6mm}
-      .t{border:1.5px solid #111;border-radius:3mm;padding:2mm;break-inside:avoid}
-      .c{display:flex;justify-content:space-between;font-size:9pt;margin-bottom:1mm}
-      table{width:100%;border-collapse:collapse;table-layout:fixed}
-      td,th{border:1px solid #444;text-align:center;font-weight:700;font-size:12pt;height:${c.variant === '75' ? 9 : 8}mm}
-      td:empty{background:#eee}.f{font-size:7pt}.h th{background:#111;color:#fff}
-      @media print{body{margin:8mm}}
-    </style></head><body><div class="grid">${tickets.map((x) => `<div class="t"><div class="c"><b>Chaupaal · ${c.variant === '75' ? 'Bingo' : 'Tambola'}</b><span>${x.code}</span></div>${tbl(x.g)}</div>`).join('')}</div></body></html>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${tHtml('games.tambola.tambola_tickets')}</title><style>
+      ${tHtml('games.tambola.body_font_family_system_ui_sans', { value: c.variant === '75' ? 9 : 8 })}
+    </style></head><body><div class="grid">${tickets.map((x) => `<div class="t"><div class="c"><b>Chaupaal · ${c.variant === '75' ? tHtml('games.tambola.bingo') : tHtml('games.tambola.tambola90')}</b><span>${x.code}</span></div>${tbl(x.g)}</div>`).join('')}</div></body></html>`;
   }
 
   function openPrintSheet(c, save) {
@@ -1136,7 +1147,7 @@
       g.fillStyle = '#111';
       g.font = 'bold 13px system-ui, sans-serif';
       g.textAlign = 'left';
-      g.fillText('Chaupaal · ' + (c.variant === '75' ? 'Bingo' : 'Tambola'), pad, y0 + 14);
+      g.fillText(t('games.tambola.chaupaal') + ' ' + (c.variant === '75' ? t('games.tambola.bingo') : t('games.tambola.tambola90')), pad, y0 + 14);
       g.textAlign = 'right';
       g.fillText(Core().ticketCode(c.printSeed, 0, k), pad + tw, y0 + 14);
       let top = y0 + 22;
@@ -1159,7 +1170,7 @@
         g.strokeRect(x + 0.5, y + 0.5, cs, cs);
         g.fillStyle = '#111';
         g.textAlign = 'center';
-        g.font = 'bold ' + Math.round(cs * 0.42) + 'px system-ui, sans-serif';
+        g.font = t('games.tambola.bold_value_px_system_ui_sans', { value: Math.round(cs * 0.42) });
         const text = c.variant === '75' && i === 12 ? '★' : n ? String(n) : '';
         g.fillText(text, x + cs / 2, y + cs * 0.64);
       });
@@ -1169,7 +1180,7 @@
       const file = new File([blob], 'tambola-tickets.png', { type: 'image/png' });
       try {
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Tambola tickets', text: tr('shareText', 'Your Tambola tickets — keep the code to check a win.') });
+          await navigator.share({ files: [file], title: t('games.tambola.tambola_tickets'), text: tr('shareText', 'Your Tambola tickets — keep the code to check a win.') });
           return;
         }
       } catch (e) {
@@ -1251,8 +1262,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'tambola',
-      name: 'Tambola',
-      desc: 'Housie & 75-ball Bingo · 2 to 100+ · Caller mode',
+      name: t('games.tambola.tambola90'),
+      desc: t('games.tambola.housie_75_ball_bingo_2_to'),
       icon: '🎫',
       gameType: 'dual',
       genre: 'party',
@@ -1263,7 +1274,7 @@
       ownHome: true,
       order: 30,
       meta: {
-        core: 'tambola-core.js (strips of 6, 75-ball cards, prizes, claims / ties / bogeys, calls — shared with the server)',
+        core: t('games.tambola.tambola_core_js_strips_of_6'),
         live: 'party_room → server-lib/tambola-engine.js; server draws, tickets in private secrets, claim validation, public chip tables',
       },
       launch: openGame,

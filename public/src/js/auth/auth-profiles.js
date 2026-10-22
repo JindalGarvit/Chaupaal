@@ -368,8 +368,8 @@
           await refreshChromeAfterSwitch();
           if (typeof showToast === 'function') {
             showToast(
-              typeof t === 'function'
-                ? t('auth_switched_account', { username: slot.username || slot.name || 'account' })
+              slot.username || slot.name
+                ? t('auth.switched_to_user', { username: typeof bidi === 'function' ? bidi(slot.username || slot.name) : slot.username || slot.name })
                 : t('auth.switched_account_2')
             );
           }

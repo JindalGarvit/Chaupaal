@@ -18,7 +18,7 @@
 const acorn = require('acorn');
 const walk = require('acorn-walk');
 
-const T_FUNCS = new Set(['t', 'tt', 'tr', 'tx', 'txv', 'tn', 'tHtml', 'htt', 'i18nT', 'ptrLabel', 'tLabel', 'optionLabel', 'optionLabelHtml', 'tv', 'tEn']);
+const T_FUNCS = new Set(['t', 'tt', 'tr', 'tx', 'txv', 'tn', 'tHtml', 'htt', 'i18nT', 'ptrLabel', 'tLabel', 'optionLabel', 'optionLabelHtml', 'tv', 'tEn', 'gtx']);
 const LOG_CALLS = new Set(['log', 'warn', 'error', 'info', 'debug', 'trace', 'reportClientError', 'trackEvent', 'trackSignal', 'logEvent', 'captureException', 'debugLog', 'gtag', 'track']);
 const NONUI_METHODS = new Set([
   'querySelector', 'querySelectorAll', 'getElementById', 'getElementsByClassName', 'closest', 'matches',
@@ -115,7 +115,9 @@ function classify(src, isCopy) {
   const copyMarks = [];
   comments.forEach((c) => {
     if (/i18n-ignore/.test(c.value)) ignoredLines.add(c.loc.start.line);
-    if (/i18n-values/.test(c.value)) valueMarks.push(c.end);
+    // i18n-catalog: English source for catalog keys (scripts/i18n-catalog.js), read through gtx() at use.
+    // i18n-en-only: English-only flavour that is never shown in other languages (e.g. traditional Tambola calls).
+    if (/i18n-values|i18n-catalog|i18n-en-only/.test(c.value)) valueMarks.push(c.end);
     if (/i18n-copy/.test(c.value)) copyMarks.push(c.end);
   });
   const findings = [];
@@ -209,6 +211,15 @@ function classify(src, isCopy) {
       }
       case 'Property': {
         if (p.key === child && !p.computed) return { role: 'skip' };
+        // Params of t()/tHtml()/gtx() are rendered inside the sentence — copy whatever the key is called.
+        {
+          const pi = ancestors.lastIndexOf(p);
+          const obj = ancestors[pi - 1];
+          const callNode = ancestors[pi - 2];
+          if (obj && obj.type === 'ObjectExpression' && callNode && callNode.type === 'CallExpression' && T_FUNCS.has(calleeName(callNode)) && callNode.arguments.indexOf(obj) > 0) {
+            return { role: 'label', concat, html };
+          }
+        }
         const k = p.key && (p.key.name || p.key.value);
         if (LABEL_KEYS.has(k)) return { role: 'label', concat, html };
         if (/^(id|key|type|kind|mode|icon|emoji|class|className|cls|tab|section|surface|action|event|route|path|url|href|src|value|code|field|name|slug|tag|variant|accent|color|status|state|role|feature|source|transform|easing|fill|transition|animation|keywords|synonyms|aliases|phrases|terms|tags|stopwords|prompt|system)$/i.test(k)) return { role: 'skip' };
@@ -228,7 +239,7 @@ function classify(src, isCopy) {
         if (marked(ancestors, valueMarks)) return { role: 'skip' };
         const gp = grand;
         // Match terms / codes stay codes even inside an i18n-copy block (sample users' interests).
-        if (gp && gp.type === 'Property' && /^(keywords|synonyms|aliases|terms|tags|stopwords|interests|reasons_codes)$/i.test(String(gp.key.name || gp.key.value))) return { role: 'skip' };
+        if (gp && gp.type === 'Property' && /^(keywords|synonyms|aliases|terms|tags|stopwords|interests|reasons_codes|keys)$/i.test(String(gp.key.name || gp.key.value))) return { role: 'skip' };
         if (marked(ancestors, copyMarks)) return { role: 'copy', concat, html };
         // Option lists: { key, options: [...] } and profileField(label, key, type, ph, [...])
         if (gp && gp.type === 'Property' && (gp.key.name || gp.key.value) === 'options') return { role: 'skip' };

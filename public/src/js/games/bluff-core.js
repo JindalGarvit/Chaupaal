@@ -17,6 +17,32 @@
  *
  * Card ids: rank char + suit + deck ('AS1', 'TD2'); jokers 'X1' … 'X4'.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.BluffCore = factory();
@@ -25,8 +51,8 @@
 
   const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'];
   const RANK_LABELS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-  const RANK_NAMES = ['Aces', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes', 'Sevens', 'Eights', 'Nines', 'Tens', 'Jacks', 'Queens', 'Kings'];
-  const RANK_ONE = ['Ace', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King'];
+  const RANK_NAMES = /* i18n-copy */ [gtx('games.bluff.aces', 'Aces'), gtx('games.bluff.twos', 'Twos'), gtx('games.bluff.threes', 'Threes'), gtx('games.bluff.fours', 'Fours'), gtx('games.bluff.fives', 'Fives'), gtx('games.bluff.sixes', 'Sixes'), gtx('games.bluff.sevens', 'Sevens'), gtx('games.bluff.eights', 'Eights'), gtx('games.bluff.nines', 'Nines'), gtx('games.bluff.tens', 'Tens'), gtx('games.bluff.jacks', 'Jacks'), gtx('games.bluff.queens', 'Queens'), gtx('games.bluff.kings', 'Kings')];
+  const RANK_ONE = /* i18n-copy */ [gtx('games.bluff.ace', 'Ace'), gtx('games.bluff.two', 'Two'), gtx('games.bluff.three', 'Three'), gtx('games.bluff.four', 'Four'), gtx('games.bluff.five', 'Five'), gtx('games.bluff.six', 'Six'), gtx('games.bluff.seven', 'Seven'), gtx('games.bluff.eight', 'Eight'), gtx('games.bluff.nine', 'Nine'), gtx('games.bluff.ten', 'Ten'), gtx('games.bluff.jack', 'Jack'), gtx('games.bluff.queen', 'Queen'), gtx('games.bluff.king', 'King')];
   const SUITS = ['S', 'H', 'D', 'C'];
   const SUIT_SYMBOLS = { S: '♠', H: '♥', D: '♦', C: '♣' };
   const STYLES = ['sequence', 'follow'];
@@ -127,7 +153,7 @@
       placements: set.placements,
       seats: players.map((p) => ({
         id: String(p.id),
-        name: String(p.name || 'Player'),
+        name: String(p.name || gtx('dangal.party.player', 'Player')),
         bot: !!p.bot,
         level: p.bot ? (LEVELS.indexOf(p.level) >= 0 ? p.level : 'normal') : '',
         place: 0,
@@ -722,7 +748,7 @@
   }
 
   function cardLabel(c) {
-    if (isJoker(c)) return 'Joker';
+    if (isJoker(c)) return gtx('games.bluff.joker', 'Joker');
     return RANK_LABELS[rankOf(c)] + SUIT_SYMBOLS[suitOf(c)];
   }
   function claimText(n, r) {

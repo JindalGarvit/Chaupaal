@@ -10,7 +10,7 @@
   'use strict';
 
   const GAME = 'poker';
-  const LABEL = "Texas Hold'em";
+  const LABEL = t('dangal.identity.poker.label');
   const KEY_SETTINGS = 'chaupaal_poker_settings';
   const KEY_HISTORY = 'chaupaal_poker_history';
   const HISTORY_MAX = 20;
@@ -18,15 +18,29 @@
   const PRACTICE_BLINDS = [10, 20];
   const ACTION_MS = window.DangalLivePolicy ? window.DangalLivePolicy.policyFor('poker').turnMs : 20000;
   const BIG_WIN_BB = 20;
-  const BOT_NAMES = ['Ava', 'Leo', 'Maya', 'Kai', 'Zoe', 'Omar', 'Nina', 'Sam', 'Iris', 'Theo'];
+  const BOT_NAMES = ['Ava', 'Leo', 'Maya', 'Kai', 'Zoe', 'Omar', 'Nina', 'Sam', 'Iris', 'Theo']; // i18n-ignore (codes / names)
 
   const Core = () => window.PokerCore;
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('poker.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.poker.' + key, p || fallback) : fill(fallback, p);
   }
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
@@ -154,27 +168,27 @@
     const amt = e.to || e.amt;
     switch (e.a) {
       case 'sb':
-        return name + ' ' + tr('log.sb', 'posts small blind') + ' ' + fmt(e.amt);
+        return tr('name_posts_small_blind_amt', '{{name}} posts small blind {{amt}}', { name, amt: fmt(e.amt) });
       case 'bb':
-        return name + ' ' + tr('log.bb', 'posts big blind') + ' ' + fmt(e.amt);
+        return tr('name_posts_big_blind_amt', '{{name}} posts big blind {{amt}}', { name, amt: fmt(e.amt) });
       case 'post':
-        return name + ' ' + tr('log.post', 'posts') + ' ' + fmt(e.amt);
+        return tr('name_posts_amt', '{{name}} posts {{amt}}', { name, amt: fmt(e.amt) });
       case 'dead':
-        return name + ' ' + tr('log.dead', 'posts a dead blind') + ' ' + fmt(e.amt);
+        return tr('name_posts_a_dead_blind_amt', '{{name}} posts a dead blind {{amt}}', { name, amt: fmt(e.amt) });
       case 'fold':
-        return name + ' ' + tr('log.fold', 'folds');
+        return tr('name_folds', '{{name}} folds', { name });
       case 'check':
-        return name + ' ' + tr('log.check', 'checks');
+        return tr('name_checks', '{{name}} checks', { name });
       case 'call':
-        return name + ' ' + tr('log.call', 'calls') + ' ' + fmt(e.amt);
+        return tr('name_calls_amt', '{{name}} calls {{amt}}', { name, amt: fmt(e.amt) });
       case 'bet':
-        return name + ' ' + tr('log.bet', 'bets') + ' ' + fmt(amt);
+        return tr('name_bets_amt', '{{name}} bets {{amt}}', { name, amt: fmt(amt) });
       case 'raise':
-        return name + ' ' + tr('log.raise', 'raises to') + ' ' + fmt(amt);
+        return tr('name_raises_to_amt', '{{name}} raises to {{amt}}', { name, amt: fmt(amt) });
       case 'allin':
-        return name + ' ' + tr('log.allin', 'is all-in for') + ' ' + fmt(amt);
+        return tr('name_is_all_in_for_amt', '{{name}} is all-in for {{amt}}', { name, amt: fmt(amt) });
       case 'return':
-        return fmt(e.amt) + ' ' + tr('log.return', 'returned to') + ' ' + name;
+        return tr('amt_returned_to_name', '{{amt}} returned to {{name}}', { amt: fmt(e.amt), name });
       default:
         return '';
     }
@@ -225,12 +239,12 @@
     const endLines = [];
     Object.keys(rec.winnings || {}).forEach((i) => {
       const who = Number(i) === rec.me ? tr('you', 'You') : (rec.players[i] || {}).name;
-      endLines.push(who + ' ' + tr('log.wins', 'wins') + ' ' + fmt(rec.winnings[i]) + (rec.names[i] ? ' — ' + rec.names[i] : ''));
+      endLines.push(tr('name_wins_winnings_value', '{{name}} wins {{winnings}}{{value}}', { name: (typeof bidi === 'function' ? bidi(who) : who), winnings: fmt(rec.winnings[i]), value: (rec.names[i] ? ' — ' + rec.names[i] : '') }));
     });
     steps.push({ board: rec.board.slice(), text: endLines.join(' · ') || tr('log.end', 'Hand over'), end: true });
     let k = 0;
     Kit().openSheet({
-      title: tr('replay.title', 'Replay') + ' · #' + rec.handNo,
+      title: tr('replay_handno', 'Replay · #{{handNo}}', { handNo: rec.handNo }),
       bodyHtml: '<div data-replay></div>',
       onMount(el) {
         const host = el.querySelector('[data-replay]');
@@ -320,7 +334,7 @@
       const tag = s.win ? '+' + fmt(s.win) : s.out ? s.outLabel || tr('seat.out', 'Sitting out') : s.allIn ? tr('seat.allin', 'All-in') : s.last || '';
       return `<div class="${cls.join(' ')}" style="left:${p.x.toFixed(1)}%;top:${p.y.toFixed(1)}%">
           ${cards ? `<div class="pkr-seat-cards">${cards}</div>` : ''}
-          <div class="pkr-seat-plate">${s.button ? '<span class="pkr-dealer" aria-label="Dealer">D</span>' : ''}
+          <div class="pkr-seat-plate">${s.button ? '<span class="pkr-dealer" aria-label="' + tHtml('games.poker.dealer') + '">D</span>' : ''}
             <div class="pkr-seat-name">${esc(s.me ? tr('you', 'You') : s.name)}</div>
             <div class="pkr-seat-stack">${fmt(s.stack)}</div>
             ${s.turn ? '<div class="pkr-clock"><span data-clock></span></div>' : ''}</div>
@@ -351,7 +365,7 @@
       if (raiseOpen && L.canRaise) {
         const step = Math.max(1, vm.bb || 1);
         const isAll = raiseTo >= L.maxTo;
-        const label = isAll ? tr('act.allin', 'All-in') + ' ' + fmt(L.maxTo) : (L.isBet ? tr('act.bet', 'Bet') : tr('act.raiseTo', 'Raise to')) + ' ' + fmt(raiseTo);
+        const label = isAll ? tr('all_in_maxto', 'All-in {{maxTo}}', { maxTo: fmt(L.maxTo) }) : (L.isBet ? tr('act.bet', 'Bet') : tr('act.raiseTo', 'Raise to')) + ' ' + fmt(raiseTo);
         return `<div class="pkr-raise">
           <div class="pkr-raise-presets">
             <button type="button" class="pkr-chip-btn" data-preset="0.5">½ ${esc(tr('act.pot', 'pot'))}</button>
@@ -364,7 +378,7 @@
             <button type="button" class="pkr-act pkr-act--primary" data-raise-go>${esc(label)}</button>
           </div></div>`;
       }
-      const callLabel = L.canCheck ? tr('act.check', 'Check') : L.allInIsCall ? tr('act.allin', 'All-in') + ' ' + fmt(L.call) : tr('act.call', 'Call') + ' ' + fmt(L.call);
+      const callLabel = L.canCheck ? tr('act.check', 'Check') : L.allInIsCall ? tr('all_in_call', 'All-in {{call}}', { call: fmt(L.call) }) : tr('call_call', 'Call {{call}}', { call: fmt(L.call) });
       return `<div class="pkr-bar">
         ${L.canCall ? `<button type="button" class="pkr-act pkr-act--fold" data-act="fold">${esc(tr('act.fold', 'Fold'))}</button>` : ''}
         <button type="button" class="pkr-act" data-act="${L.canCheck ? 'check' : 'call'}">${esc(callLabel)}</button>
@@ -403,7 +417,7 @@
         const go = box.querySelector('[data-raise-go]');
         const relabel = () => {
           const isAll = raiseTo >= L.maxTo;
-          go.textContent = isAll ? tr('act.allin', 'All-in') + ' ' + fmt(L.maxTo) : (L.isBet ? tr('act.bet', 'Bet') : tr('act.raiseTo', 'Raise to')) + ' ' + fmt(raiseTo);
+          go.textContent = isAll ? tr('all_in_maxto', 'All-in {{maxTo}}', { maxTo: fmt(L.maxTo) }) : (L.isBet ? tr('act.bet', 'Bet') : tr('act.raiseTo', 'Raise to')) + ' ' + fmt(raiseTo);
         };
         slider.addEventListener('input', () => {
           let v = Number(slider.value);
@@ -448,7 +462,7 @@
       root.querySelector('[data-seats]').innerHTML = vm.seats
         .map((s, k) => seatHtml(s, bySeat ? (((s.seatNo - anchor) % n) + n) % n : (k - anchor + n) % n, n))
         .join('');
-      root.querySelector('[data-pot]').textContent = vm.pot > 0 ? tr('pot', 'Pot') + ' ' + fmt(vm.pot) : '';
+      root.querySelector('[data-pot]').textContent = vm.pot > 0 ? tr('pot_pot', 'Pot {{pot}}', { pot: fmt(vm.pot) }) : '';
       const board = vm.board || [];
       root.querySelector('[data-board]').innerHTML = board.length
         ? cardsHtml(board, { size: 'md' }) + '<span class="pkr-card pkr-card--md pkr-card--slot"></span>'.repeat(5 - board.length)
@@ -527,7 +541,7 @@
     const level = (cfg && cfg.level) || s.bots;
     const names = BOT_NAMES.slice().sort(() => Math.random() - 0.5);
     const players = [{ id: 'me', name: myName(), seat: 0, stack: PRACTICE_STACK, level: null }];
-    for (let i = 1; i < n; i++) players.push({ id: 'bot' + i, name: '🤖 ' + names[i - 1] + ' · ' + levelLabel(level) + ' Bot', seat: i, stack: PRACTICE_STACK, level });
+    for (let i = 1; i < n; i++) players.push({ id: 'bot' + i, name: t('games.poker.value_levellabel_bot', { value: names[i - 1], levelLabel: levelLabel(level) }), seat: i, stack: PRACTICE_STACK, level });
     let button = Math.floor(Math.random() * n) - 1;
     let handNo = 0;
     let h = null;
@@ -536,7 +550,7 @@
     const shell = K.openShell({
       gameId: GAME,
       title: LABEL,
-      subtitle: tr('sub.practice', 'Practice · vs bots') + ' · ' + fmt(PRACTICE_BLINDS[0]) + '/' + fmt(PRACTICE_BLINDS[1]),
+      subtitle: tr('practice_vs_bots_practice_blinds_practice_blinds2', 'Practice · vs bots · {{PRACTICE_BLINDS}}/{{PRACTICE_BLINDS2}}', { PRACTICE_BLINDS: fmt(PRACTICE_BLINDS[0]), PRACTICE_BLINDS2: fmt(PRACTICE_BLINDS[1]) }),
       confirmLeave: () => true,
       leaveBody: tr('leave.practice', 'Practice chips don’t carry over.'),
       onClose: () => {
@@ -638,8 +652,8 @@
         meFolded: h.players[meI].folded,
         helper: st.helper,
         legal: L,
-        waitText: h.done ? '' : h.players[meI].folded ? tr('wait.folded', 'You folded — watching the hand') : turnName + ' ' + tr('wait.thinking', 'is thinking…'),
-        status: tr('hand', 'Hand') + ' #' + h.handNo + (h.street !== 'done' ? ' · ' + ({ preflop: tr('st.preflop', 'Pre-flop'), flop: tr('st.flop', 'Flop'), turn: tr('st.turn', 'Turn'), river: tr('st.river', 'River') }[h.street] || '') : ''),
+        waitText: h.done ? '' : h.players[meI].folded ? tr('wait.folded', 'You folded — watching the hand') : tr('name_is_thinking', '{{name}} is thinking…', { name: (typeof bidi === 'function' ? bidi(turnName) : turnName) }),
+        status: tr('hand_handno_value', 'Hand #{{handNo}}{{value}}', { handNo: h.handNo, value: (h.street !== 'done' ? ' · ' + ({ preflop: tr('st.preflop', 'Pre-flop'), flop: tr('st.flop', 'Flop'), turn: tr('st.turn', 'Turn'), river: tr('st.river', 'River') }[h.street] || '') : '') }),
         resultHtml: h.done ? resultLine(pub, 'me') : '',
       });
     }
@@ -681,7 +695,7 @@
         meFolded: h.players.find((p) => p.id === 'me').folded,
         helper: settings().helper,
         legal: null,
-        status: tr('hand', 'Hand') + ' #' + h.handNo,
+        status: tr('hand_handno', 'Hand #{{handNo}}', { handNo: h.handNo }),
         resultHtml: resultLine(pub, 'me'),
       };
     }
@@ -692,7 +706,7 @@
         Object.assign({}, pub ? lastVm(pub) : { seats: [], board: [], pot: 0 }, {
           resultHtml: esc(tr('bust', 'Out of chips')),
           actionsHtml: `<div class="pkr-bar"><button type="button" class="pkr-act" data-leave>${esc(tr('leave', 'Leave'))}</button>
-            <button type="button" class="pkr-act pkr-act--primary" data-rebuy>${esc(tr('rebuyPractice', 'Rebuy') + ' ' + fmt(PRACTICE_STACK))}</button></div>`,
+            <button type="button" class="pkr-act pkr-act--primary" data-rebuy>${esc(tr('rebuy_practice_stack', 'Rebuy {{PRACTICE_STACK}}', { PRACTICE_STACK: fmt(PRACTICE_STACK) }))}</button></div>`,
           wireActions(box) {
             box.querySelector('[data-rebuy]').addEventListener('click', () => {
               players[0].stack = PRACTICE_STACK;
@@ -818,7 +832,7 @@
       if (!pub || !seat || pub.status === 'closed' || pub.status === 'finished') return shell.close();
       const body =
         pub.kind === 'quick'
-          ? tr('leave.quick', 'Your stack goes back to your wallet') + (inHand() ? ' ' + tr('leave.afterHand', 'when this hand ends.') : '.')
+          ? tr('your_stack_goes_back_to_your_wallet', 'Your stack goes back to your wallet{{value}}', { value: (inHand() ? ' ' + tr('leave.afterHand', 'when this hand ends.') : '.') })
           : pub.kind === 'sng'
             ? pub.status === 'waiting'
               ? tr('leave.sngWait', 'You’ll be unregistered and get your buy-in back.')
@@ -881,15 +895,15 @@
       const rows = [];
       if (pub.kind === 'friends') rows.push(['invite', tr('menu.invite', 'Invite friends')]);
       if (seat && pub.kind === 'quick' && pub.settings && seat.stack + (seat.pendingTopup || 0) < pub.settings.max) rows.push(['topup', tr('menu.topup', 'Add chips')]);
-      if (seat && pub.kind === 'friends' && seat.stack === 0) rows.push(['rebuy', tr('menu.rebuy', 'Rebuy') + ' ' + fmt(pub.settings.stack)]);
+      if (seat && pub.kind === 'friends' && seat.stack === 0) rows.push(['rebuy', tr('rebuy_stack', 'Rebuy {{stack}}', { stack: fmt(pub.settings.stack) })]);
       if (seat && pub.kind !== 'sng') rows.push(seat.sittingOut || seat.sitOutNext ? ['sitin', tr('menu.sitIn', 'Sit back in')] : ['sitout', tr('menu.sitOut', 'Sit out next hand')]);
       if (host && pub.status !== 'closed') rows.push(['settings', tr('menu.settings', 'Table settings')]);
-      rows.push(['helper', tr('set.helper', 'Beginner helper') + ': ' + (settings().helper ? tr('on', 'On') : tr('off', 'Off'))]);
+      rows.push(['helper', tr('beginner_helper_value', 'Beginner helper: {{value}}', { value: (settings().helper ? tr('on', 'On') : tr('off', 'Off')) })]);
       rows.push(['history', tr('hist.title', 'Hand history')]);
       if (host && pub.status !== 'closed') rows.push(['end', tr('menu.end', 'Close the table')]);
       rows.push(['leave', tr('menu.leave', 'Leave table')]);
       K.openSheet({
-        title: pub.kind === 'friends' ? tr('menu.friendsTitle', 'Friends table') + ' · ' + pub.code : modeLabel(pub.kind),
+        title: pub.kind === 'friends' ? tr('friends_table_code', 'Friends table · {{code}}', { code: pub.code }) : modeLabel(pub.kind),
         bodyHtml: `<div class="pkr-menu">${rows.map(([k, l]) => `<button type="button" class="pkr-menu-row${k === 'leave' || k === 'end' ? ' is-danger' : ''}" data-m="${k}">${esc(l)}</button>`).join('')}</div>`,
         onMount(el, close) {
           el.querySelectorAll('[data-m]').forEach((b) =>
@@ -985,7 +999,7 @@
       if (!pub) return '';
       const bl = pub.blinds || pub.settings;
       const bits = [modeLabel(pub.kind), fmt(bl.sb) + '/' + fmt(bl.bb)];
-      if (pub.kind === 'sng' && pub.status === 'playing') bits.push(tr('sng.level', 'Level') + ' ' + (((pub.blinds && pub.blinds.level) || 0) + 1));
+      if (pub.kind === 'sng' && pub.status === 'playing') bits.push(tr('level_value', 'Level {{value}}', { value: (((pub.blinds && pub.blinds.level) || 0) + 1) }));
       if (pub.kind === 'friends') bits.push(pub.code);
       return bits.join(' · ');
     }
@@ -996,7 +1010,7 @@
       if (pub.kind === 'sng') {
         return {
           html: `<div class="pkr-wait-card"><div class="pkr-wait-title">${esc(tr('sng.waiting', 'Waiting for players'))} · ${n}/${cap}</div>
-            <div class="pkr-note">${esc(tr('sng.starts', 'Starts as soon as the table is full. Top') + ' ' + pub.sng.payouts.length + ' ' + tr('sng.paid', 'paid:') + ' ' + pub.sng.payouts.map(fmt).join(' / '))}</div>
+            <div class="pkr-note">${esc(tr('starts_as_soon_as_the_table_is', 'Starts as soon as the table is full. Top {{length}} paid: {{join}}', { length: pub.sng.payouts.length, join: pub.sng.payouts.map(fmt).join(' / ') }))}</div>
             <button type="button" class="pkr-act pkr-act--ghost" data-unreg>${esc(tr('sng.unregister', 'Unregister'))}</button></div>`,
           wire(box) {
             box.querySelector('[data-unreg]')?.addEventListener('click', async () => {
@@ -1101,7 +1115,7 @@
       } else if (!L) {
         if (seat.stack === 0 && (!dealtHand || dealtHand.done || meI < 0) && pub.kind !== 'sng') {
           vm.actionsHtml = `<div class="pkr-bar"><button type="button" class="pkr-act" data-leave>${esc(tr('menu.leave', 'Leave table'))}</button>
-            <button type="button" class="pkr-act pkr-act--primary" data-add>${esc(pub.kind === 'friends' ? tr('menu.rebuy', 'Rebuy') + ' ' + fmt(pub.settings.stack) : tr('menu.topup', 'Add chips'))}</button></div>`;
+            <button type="button" class="pkr-act pkr-act--primary" data-add>${esc(pub.kind === 'friends' ? tr('rebuy_stack', 'Rebuy {{stack}}', { stack: fmt(pub.settings.stack) }) : tr('menu.topup', 'Add chips'))}</button></div>`;
           vm.wireActions = (box) => {
             box.querySelector('[data-add]').addEventListener('click', () => (pub.kind === 'friends' ? simple('rebuy') : openTopUp()));
             box.querySelector('[data-leave]').addEventListener('click', onBack);
@@ -1127,12 +1141,12 @@
         } else if (dealtHand && meI < 0) {
           vm.waitText = tr('wait.nextHand', 'You’re in from the next hand');
         } else {
-          vm.waitText = turnName ? turnName + ' ' + tr('wait.thinking', 'is thinking…') : tr('wait.next', 'Next hand coming up…');
+          vm.waitText = turnName ? tr('name_is_thinking', '{{name}} is thinking…', { name: (typeof bidi === 'function' ? bidi(turnName) : turnName) }) : tr('wait.next', 'Next hand coming up…');
         }
       }
       if (seat && pub.kind === 'sng' && pub.status === 'playing' && seat.stack === 0 && (!dealtHand || dealtHand.done)) {
         const place = pub.sng && pub.sng.finish && pub.sng.finish[me];
-        vm.actionsHtml = `<div class="pkr-wait-card"><div class="pkr-wait-title">${esc(tr('sng.out', 'You finished') + (place ? ' #' + place : ''))}</div>
+        vm.actionsHtml = `<div class="pkr-wait-card"><div class="pkr-wait-title">${esc(tr('you_finished_value', 'You finished{{value}}', { value: (place ? ' #' + place : '') }))}</div>
           <div class="pkr-bar"><button type="button" class="pkr-act pkr-act--primary" data-home>${esc(tr('backHome', 'Back to lobby'))}</button></div></div>`;
         vm.wireActions = (box) => box.querySelector('[data-home]').addEventListener('click', () => K.closeThen(shell, openHome));
       }
@@ -1156,13 +1170,13 @@
         pot: 0,
         status: statusLine(),
         resultHtml: place
-          ? `<div class="pkr-sng-place">${esc(place === 1 ? tr('sng.won', 'You won the Sit & Go!') : tr('sng.finished', 'You finished') + ' #' + place)}</div>${prize ? `<div class="pkr-sng-prize">+${fmt(prize)} ${esc(tr('chips', 'chips'))}</div>` : ''}`
+          ? `<div class="pkr-sng-place">${esc(place === 1 ? tr('sng.won', 'You won the Sit & Go!') : tr('you_finished_place', 'You finished #{{place}}', { place }))}</div>${prize ? `<div class="pkr-sng-prize">+${fmt(prize)} ${esc(tr('chips', 'chips'))}</div>` : ''}`
           : esc(tr('sng.over', 'This Sit & Go is over')),
         actionsHtml: `<div class="pkr-bar">${place === 1 ? `<button type="button" class="pkr-act" data-share>${esc(tr('share', 'Share'))}</button>` : ''}
           <button type="button" class="pkr-act pkr-act--primary" data-home>${esc(tr('backHome', 'Back to lobby'))}</button></div>`,
         wireActions(box) {
           box.querySelector('[data-home]').addEventListener('click', () => K.closeThen(shell, openHome));
-          box.querySelector('[data-share]')?.addEventListener('click', () => K.shareLine(GAME, LABEL, tr('sng.shareLine', 'Won a Sit & Go') + ' · +' + fmt(prize) + ' ' + tr('chips', 'chips')));
+          box.querySelector('[data-share]')?.addEventListener('click', () => K.shareLine(GAME, LABEL, tr('won_a_sit_go_prize_chips', 'Won a Sit & Go · +{{prize}} chips', { prize: fmt(prize) })));
         },
       });
     }
@@ -1308,9 +1322,9 @@
               ${K.segHtml('tier', state.tier, C.TIERS.map((x) => [x.id, x.label]))}</div>
             <div class="pkr-buyin"><div class="pkr-buyin-label">${esc(tr('quick.buyin', 'Buy-in'))}</div><div class="pkr-buyin-amt" data-amt>${fmt(amount)}</div>
               <input type="range" class="pkr-slider" data-slider min="${tier.min}" max="${Math.max(tier.min, cap)}" step="${tier.bb}" value="${amount}" ${can ? '' : 'disabled'} aria-label="${esc(tr('quick.buyin', 'Buy-in'))}">
-              <div class="pkr-note">${esc(fmt(tier.min) + ' – ' + fmt(tier.max) + ' · ' + tr('quick.seats', '6 seats · leave any time between hands'))}</div>
-              ${balance != null ? `<div class="pkr-note">${esc(tr('wallet', 'Wallet') + ': ' + fmt(balance) + ' ' + tr('chips', 'chips'))}</div>` : ''}
-              ${can ? '' : `<div class="pkr-note is-warn">${esc(tr('quick.short', 'You need at least') + ' ' + fmt(tier.min) + ' ' + tr('chips', 'chips') + ' ' + tr('quick.shortTail', 'for this table'))}</div>`}</div>
+              <div class="pkr-note">${esc(tr('min_max_6_seats_leave_any_time', '{{min}} – {{max}} · 6 seats · leave any time between hands', { min: fmt(tier.min), max: fmt(tier.max) }))}</div>
+              ${balance != null ? `<div class="pkr-note">${esc(tr('wallet_balance_chips', 'Wallet: {{balance}} chips', { balance: fmt(balance) }))}</div>` : ''}
+              ${can ? '' : `<div class="pkr-note is-warn">${esc(tr('you_need_at_least_min_chips_for', 'You need at least {{min}} chips for this table', { min: fmt(tier.min) }))}</div>`}</div>
             <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go ${can ? '' : 'disabled'}>${esc(tr('quick.go', 'Sit down'))}</button>
             <p class="pkr-note">${esc(tr('virtual', 'Virtual chips only — they can’t be bought or cashed out.'))}</p>`;
           K.wireSegs(host, state, () => {
@@ -1354,14 +1368,14 @@
           const pay = C.sngPayouts(state.size, C.SNG.buyIn);
           const can = balance == null || balance >= C.SNG.buyIn;
           host.innerHTML = `<div class="pk-field"><div class="pk-field-label">${esc(tr('sng.players', 'Players'))}</div>
-              ${K.segHtml('size', state.size, C.SNG.sizes.map((s) => [s, s + ' ' + tr('sng.seats', 'players')]))}</div>
+              ${K.segHtml('size', state.size, C.SNG.sizes.map((s) => [s, tr('players', '{s, plural, one {# player} other {# players}}', { s })]))}</div>
             <div class="pkr-sng-facts">
               <div><span>${esc(tr('sng.buyin', 'Buy-in'))}</span><b>${fmt(C.SNG.buyIn)}</b></div>
               <div><span>${esc(tr('sng.stack', 'Starting stack'))}</span><b>${fmt(C.SNG.stack)}</b></div>
               <div><span>${esc(tr('sng.blinds', 'Blinds up every'))}</span><b>${Math.round(C.SNG.levelMs / 60000)} ${esc(tr('min', 'min'))}</b></div>
               <div><span>${esc(tr('sng.prizes', 'Prizes'))}</span><b>${pay.map(fmt).join(' / ')}</b></div>
             </div>
-            ${balance != null ? `<div class="pkr-note">${esc(tr('wallet', 'Wallet') + ': ' + fmt(balance) + ' ' + tr('chips', 'chips'))}</div>` : ''}
+            ${balance != null ? `<div class="pkr-note">${esc(tr('wallet_balance_chips', 'Wallet: {{balance}} chips', { balance: fmt(balance) }))}</div>` : ''}
             <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go ${can ? '' : 'disabled'}>${esc(tr('sng.go', 'Register'))}</button>
             <p class="pkr-note">${esc(tr('sng.note', 'Starts when the table fills. Unregister before it starts for a full refund.'))}</p>`;
           K.wireSegs(host, state, paint);
@@ -1392,7 +1406,7 @@
       <div class="pk-field"><div class="pk-field-label">${esc(tr('friends.stack', 'Starting stack'))}</div>
         ${K.segHtml('stack', st.stack, C.FRIENDS_STACKS.map((s) => [s, fmt(s)]))}</div>
       <div class="pk-field"><div class="pk-field-label">${esc(tr('friends.timer', 'Blinds double every'))}</div>
-        ${K.segHtml('blindMinutes', st.blindMinutes, C.FRIENDS_TIMERS.map((m) => [m, m ? m + ' ' + tr('min', 'min') : tr('friends.never', 'Never')]))}</div>
+        ${K.segHtml('blindMinutes', st.blindMinutes, C.FRIENDS_TIMERS.map((m) => [m, m ? tr('m_min', '{{m}} min', { m }) : tr('friends.never', 'Never')]))}</div>
       <div class="pk-field"><div class="pk-field-label">${esc(tr('friends.seats', 'Seats'))}</div>
         <div class="pkr-seg-scroll">${K.segHtml('seats', st.seats, seatOpts)}</div></div>`;
   }
@@ -1510,7 +1524,7 @@
 
   function openHome() {
     const K = Kit();
-    if (!K || !Core()) return toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+    if (!K || !Core()) return toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
     if (home && !home.closed) home.close();
     const s = settings();
     const shell = K.openShell({ gameId: GAME, title: LABEL, subtitle: tr('home.sub', 'Cards') });
@@ -1526,7 +1540,7 @@
       <div class="pk-modes">
         <button type="button" class="pk-mode pk-mode--primary" data-go="practice">
           <span class="pk-mode-title">${esc(tr('home.practice', 'Practice vs bots'))}</span>
-          <span class="pk-mode-sub">${esc(s.seats + ' ' + tr('home.players', 'players') + ' · ' + levelLabel(s.bots) + ' · ' + tr('home.noChips', 'no wallet chips'))}</span>
+          <span class="pk-mode-sub">${esc(tr('players_label_no_wallet_chips', '{seats, plural, one {# player} other {# players}} · {{label}} · no wallet chips', { seats: s.seats, label: levelLabel(s.bots) }))}</span>
         </button>
         <button type="button" class="pk-mode" data-go="live">
           <span class="pk-mode-title">${esc(tr('home.live', 'Play live'))}</span>
@@ -1563,7 +1577,7 @@
     host.innerHTML = tables
       .map(
         (tb) => `<button type="button" class="pkr-return" data-table="${esc(tb.tableId)}">
-        <span><b>${esc(tr('return.title', 'You’re seated at a table'))}</b><small>${esc(modeLabel(tb.kind) + (tb.stack ? ' · ' + fmt(tb.stack) + ' ' + tr('chips', 'chips') : ''))}</small></span>
+        <span><b>${esc(tr('return.title', 'You’re seated at a table'))}</b><small>${esc(modeLabel(tb.kind) + (tb.stack ? tr('chips_2', ' · {stack, plural, one {# chip} other {# chips}}', { stack: fmt(tb.stack) }) : ''))}</small></span>
         <span class="pkr-return-go">${esc(tr('return.go', 'Return'))} ›</span></button>`
       )
       .join('');
@@ -1597,7 +1611,7 @@
   async function launch(opts) {
     const o = opts || {};
     if (!Core() || !Kit()) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     if (!(await ensureAdult())) return;
@@ -1618,7 +1632,7 @@
     registerGame({
       id: 'poker',
       name: LABEL,
-      desc: 'No-Limit Hold’em — practice vs bots, quick tables, Sit & Go, friends',
+      desc: t('games.poker.no_limit_hold_em_practice_vs'),
       icon: '♠',
       gameType: 'multiplayer',
       genre: 'cards',
@@ -1630,7 +1644,7 @@
       ownHome: true,
       order: 32,
       meta: {
-        core: 'poker-core.js (evaluator, betting, side pots, bots — shared with the server)',
+        core: t('games.poker.poker_core_js_evaluator_betting_side'),
         live: 'poker_table → server-lib/poker-engine.js; CSPRNG deal, hole cards owner-only, server timers + settlement',
       },
       launch: openGame,

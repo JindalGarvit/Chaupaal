@@ -12,6 +12,32 @@
  * Move accuracy  = 103.1668 · e^(−0.04354 · loss%) − 3.1669, clamped 0–100; game accuracy = mean.
  * Brilliant flag = a best move that sacrifices material (N/B/R/Q left en prise) while not already winning.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./chess-core.js'));
   else root.ChessReview = factory(root.ChessCore);
@@ -20,7 +46,7 @@
 
   const MATE = 30000;
   const THRESHOLDS = { best: 0.01, good: 0.05, inaccuracy: 0.1, mistake: 0.2 };
-  const LABELS = { best: 'Best', good: 'Good', inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder' };
+  const LABELS = { best: gtx('games.chess.best', 'Best'), good: gtx('common.opt.feedback.good', 'Good'), inaccuracy: gtx('games.chess.inaccuracy', 'Inaccuracy'), mistake: gtx('games.chess.mistake', 'Mistake'), blunder: gtx('games.chess.blunder', 'Blunder') };
   const PIECE_NAMES = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
   const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 
@@ -51,8 +77,8 @@
   }
 
   function evalText(cpWhite) {
-    if (cpWhite >= 9000) return 'White mates';
-    if (cpWhite <= -9000) return 'Black mates';
+    if (cpWhite >= 9000) return gtx('games.chess.white_mates', 'White mates');
+    if (cpWhite <= -9000) return gtx('games.chess.black_mates', 'Black mates');
     const v = (cpWhite / 100).toFixed(1);
     return cpWhite > 0 ? '+' + v : v;
   }
@@ -181,22 +207,24 @@
   /** Deterministic coach line from engine facts (works with AI off). */
   function coachFallback(m) {
     const tips = [];
-    if (m.bestSan && m.cls !== 'best') tips.push('Engine line: ' + (m.pvSan.slice(0, 4).join(' ') || m.bestSan));
-    tips.push('Evaluation after the move: ' + m.evalAfter);
+    if (m.bestSan && m.cls !== 'best') tips.push(gtx('games.chess.engine_line_value', 'Engine line: {{value}}', { value: m.pvSan.slice(0, 4).join(' ') || m.bestSan }));
+    tips.push(gtx('games.chess.evaluation_after_the_move_evalafter', 'Evaluation after the move: {{evalAfter}}', { evalAfter: m.evalAfter }));
     let text;
-    if (m.brilliant) text = `Brilliant! ${m.san} gives up material and it is still the best move.`;
+    if (m.brilliant) text = gtx('games.chess.brilliant_san_gives_up_material_and', 'Brilliant! {{san}} gives up material and it is still the best move.', { san: m.san });
     else if (m.cls === 'best') {
-      text = m.mateBefore > 0 ? `${m.san} keeps the forced mate going (mate in ${m.mateBefore}).` : `${m.san} is the engine's top choice.`;
+      text = m.mateBefore > 0 ? gtx('games.chess.san_keeps_the_forced_mate_going', '{{san}} keeps the forced mate going (mate in {{mateBefore}}).', { san: m.san, mateBefore: m.mateBefore }) : gtx('games.chess.san_is_the_engine_s_top', '{{san}} is the engine\'s top choice.', { san: m.san });
     } else if (m.mateBefore > 0 && m.bestSan) {
-      text = `Missed mate in ${m.mateBefore}: ${m.bestSan} wins by force.`;
+      text = gtx('games.chess.missed_mate_in_matebefore_bestsan_wins', 'Missed mate in {{mateBefore}}: {{bestSan}} wins by force.', { mateBefore: m.mateBefore, bestSan: m.bestSan });
     } else if (m.mateAfter > 0 && m.replySan) {
-      text = `${m.san} allows mate in ${m.mateAfter} after ${m.replySan}.` + (m.bestSan ? ` ${m.bestSan} was safer.` : '');
+      text = gtx('games.chess.san_allows_mate_in_mateafter_after', '{{san}} allows mate in {{mateAfter}} after {{replySan}}.{{value}}', { san: m.san, mateAfter: m.mateAfter, replySan: m.replySan, value: m.bestSan ? gtx('games.chess.bestsan_was_safer', ' {{bestSan}} was safer.', { bestSan: m.bestSan }) : '' });
     } else if ((m.cls === 'mistake' || m.cls === 'blunder') && m.replyCaptured && VALUE[m.replyCaptured] >= 3) {
-      text = `This loses the ${PIECE_NAMES[m.replyCaptured]} after ${m.replySan}.` + (m.bestSan ? ` ${m.bestSan} was better.` : '');
+      text = gtx('games.chess.this_loses_the_value_after_replysan', 'This loses the {{value}} after {{replySan}}.{{value2}}', { value: PIECE_NAMES[m.replyCaptured], replySan: m.replySan, value2: m.bestSan ? gtx('games.chess.bestsan_was_better', ' {{bestSan}} was better.', { bestSan: m.bestSan }) : '' });
     } else if (m.cls === 'good') {
-      text = m.bestSan ? `${m.san} is fine; ${m.bestSan} was slightly better.` : `${m.san} is a good move.`;
+      text = m.bestSan ? `${m.san} is fine; ${m.bestSan} was slightly better.` : gtx('games.chess.san_is_a_good_move', '{{san}} is a good move.', { san: m.san });
     } else {
-      text = `${LABELS[m.cls]}. ` + (m.bestSan ? `${m.bestSan} was stronger (${m.evalAfter} after this move).` : `Evaluation: ${m.evalAfter}.`);
+      text = m.bestSan
+        ? gtx('games.chess.review_better', `${LABELS[m.cls]}. ${m.bestSan} was stronger (${m.evalAfter} after this move).`, { label: LABELS[m.cls], best: m.bestSan, eval: m.evalAfter })
+        : gtx('games.chess.review_eval', `${LABELS[m.cls]}. Evaluation: ${m.evalAfter}.`, { label: LABELS[m.cls], eval: m.evalAfter });
     }
     return { text: text.slice(0, 280), tips: tips.slice(0, 3) };
   }

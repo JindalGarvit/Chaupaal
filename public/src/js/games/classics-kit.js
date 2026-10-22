@@ -15,8 +15,22 @@
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
   const Kit = () => window.PartyKit;
 
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('classics.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('dangal.classics.' + key, p || fallback) : fill(fallback, p);
   }
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
@@ -162,8 +176,8 @@
   /** Dice button: tap to roll when it's your turn. */
   function diceHtml(o) {
     const v = o.value || 0;
-    const label = o.canRoll ? tr('roll', 'Roll') : v ? tr('rolled', 'Rolled') + ' ' + v : o.waitLabel || '';
-    return `<button type="button" class="cl-die${o.canRoll ? ' is-ready' : ''}" data-roll ${o.canRoll ? '' : 'disabled'} aria-label="${esc(o.canRoll ? tr('rollDie', 'Roll the die') : v ? tr('rolled', 'Rolled') + ' ' + v : tr('die', 'Die'))}">
+    const label = o.canRoll ? tr('roll', 'Roll') : v ? tr('rolled_v', 'Rolled {{v}}', { v }) : o.waitLabel || '';
+    return `<button type="button" class="cl-die${o.canRoll ? ' is-ready' : ''}" data-roll ${o.canRoll ? '' : 'disabled'} aria-label="${esc(o.canRoll ? tr('rollDie', 'Roll the die') : v ? tr('rolled_v', 'Rolled {{v}}', { v }) : tr('die', 'Die'))}">
       <span class="cl-die-art" data-die-art>${v ? dieFaceSvg(v) : dieFaceSvg(o.idle || 6)}</span>
       <span class="cl-die-label">${esc(label)}</span>
     </button>`;
@@ -303,13 +317,13 @@
 
   const STAKES = [0, 10, 25, 50, 100];
   function stakeLabel(n) {
-    return n ? '⚡' + n + ' ' + tr('chips', 'virtual chips') : tr('friendly', 'Friendly (no chips)');
+    return n ? tr('n_virtual_chips', '⚡{{n}} virtual chips', { n }) : tr('friendly', 'Friendly (no chips)');
   }
   function levelLabel(level) {
     return { easy: tr('lvl.easy', 'Easy'), normal: tr('lvl.normal', 'Normal'), smart: tr('lvl.smart', 'Smart'), medium: tr('lvl.medium', 'Medium'), hard: tr('lvl.hard', 'Hard'), unbeatable: tr('lvl.unbeatable', 'Unbeatable') }[level] || level;
   }
   function placeLabel(n) {
-    return n === 1 ? tr('place.1', '1st') : n === 2 ? tr('place.2', '2nd') : n === 3 ? tr('place.3', '3rd') : n + tr('place.th', 'th');
+    return tr('place_ordinal', '{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}', { n });
   }
   function shareWin(game, label, line) {
     const K = Kit();

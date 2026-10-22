@@ -6,6 +6,32 @@
  * A kick is { x, y, power } (aim point + power 0..1); a dive is { x, y, t } (dive point +
  * timing 0 = early … 1 = late). resolveKick(kick, dive, seed) is deterministic.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.PenaltyCore = factory();
@@ -55,14 +81,14 @@
 
   /** Fictional colourways only — no clubs, crests or national kits. */
   const KITS = [
-    { id: 'crimson', name: 'Crimson', primary: '#D32F2F', secondary: '#FFFFFF', pattern: 'solid' },
-    { id: 'royal', name: 'Royal', primary: '#1E4DB7', secondary: '#FFFFFF', pattern: 'stripes' },
-    { id: 'emerald', name: 'Emerald', primary: '#1B8A4B', secondary: '#F5F5F5', pattern: 'hoops' },
-    { id: 'sunburst', name: 'Sunburst', primary: '#F9B200', secondary: '#1A1A1A', pattern: 'halves' },
-    { id: 'midnight', name: 'Midnight', primary: '#1B1F3B', secondary: '#7FD1FF', pattern: 'sash' },
-    { id: 'tangerine', name: 'Tangerine', primary: '#FF6F00', secondary: '#FFFFFF', pattern: 'solid' },
-    { id: 'violet', name: 'Violet', primary: '#6A3DC8', secondary: '#FFD54F', pattern: 'stripes' },
-    { id: 'ice', name: 'Ice', primary: '#E8F4FA', secondary: '#0D47A1', pattern: 'hoops' },
+    { id: 'crimson', name: gtx('games.penalty.crimson', 'Crimson'), primary: '#D32F2F', secondary: '#FFFFFF', pattern: 'solid' },
+    { id: 'royal', name: gtx('games.penalty.royal', 'Royal'), primary: '#1E4DB7', secondary: '#FFFFFF', pattern: 'stripes' },
+    { id: 'emerald', name: gtx('games.penalty.emerald', 'Emerald'), primary: '#1B8A4B', secondary: '#F5F5F5', pattern: 'hoops' },
+    { id: 'sunburst', name: gtx('games.penalty.sunburst', 'Sunburst'), primary: '#F9B200', secondary: '#1A1A1A', pattern: 'halves' },
+    { id: 'midnight', name: gtx('games.penalty.midnight', 'Midnight'), primary: '#1B1F3B', secondary: '#7FD1FF', pattern: 'sash' },
+    { id: 'tangerine', name: gtx('games.penalty.tangerine', 'Tangerine'), primary: '#FF6F00', secondary: '#FFFFFF', pattern: 'solid' },
+    { id: 'violet', name: gtx('games.penalty.violet', 'Violet'), primary: '#6A3DC8', secondary: '#FFD54F', pattern: 'stripes' },
+    { id: 'ice', name: gtx('games.penalty.ice', 'Ice'), primary: '#E8F4FA', secondary: '#0D47A1', pattern: 'hoops' },
   ];
   const GLOVES = ['#C6FF00', '#FF4081', '#00E5FF', '#FFFFFF', '#FF9100'];
 
@@ -268,19 +294,7 @@
     const st = shootoutStatus(so);
     const n = names || {};
     return (
-      'Penalty Shootout · ' +
-      (n.A || 'A') +
-      ' ' +
-      st.scoreA +
-      '–' +
-      st.scoreB +
-      ' ' +
-      (n.B || 'B') +
-      (st.round > st.bestOf ? ' (sudden death)' : '') +
-      '\n' +
-      dots(so, 'A', { noPad: true }).join('') +
-      '\n' +
-      dots(so, 'B', { noPad: true }).join('')
+      gtx('games.penalty.penalty_shootout_value_scorea_scoreb_value', 'Penalty Shootout · {{value}} {{scoreA}}–{{scoreB}} {{value2}}{{value3}}\n{{value4}}\n{{value5}}', { value: n.A || 'A', scoreA: st.scoreA, scoreB: st.scoreB, value2: n.B || 'B', value3: st.round > st.bestOf ? gtx('games.penalty.sudden_death', ' (sudden death)') : '', value4: dots(so, 'A', { noPad: true }).join(''), value5: dots(so, 'B', { noPad: true }).join('') })
     );
   }
   function cleanSheet(so, side) {

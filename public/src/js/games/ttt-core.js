@@ -2,6 +2,32 @@
  * TttCore — Classic 3×3 and Ultimate (9×9) Tic-Tac-Toe rules + bots. Unrated everywhere.
  * UMD: client play, party-room server adapter and tests share this file.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.TttCore = factory();
@@ -231,7 +257,7 @@
   function newMatch(mode, players) {
     const m = mode === 'ultimate' ? 'ultimate' : 'classic';
     const p = (players || []).slice(0, 2);
-    const st = { game: 'ttt', v: 1, mode: m, seats: p.map((x, i) => ({ id: String(x.id), name: String(x.name || 'Player').slice(0, 32), mark: i === 0 ? 'X' : 'O', bot: !!x.bot, level: x.level || '', afk: 0 })), over: false, winner: null, result: null, seq: 0 };
+    const st = { game: 'ttt', v: 1, mode: m, seats: p.map((x, i) => ({ id: String(x.id), name: String(x.name || gtx('dangal.party.player', 'Player')).slice(0, 32), mark: i === 0 ? 'X' : 'O', bot: !!x.bot, level: x.level || '', afk: 0 })), over: false, winner: null, result: null, seq: 0 };
     if (m === 'classic') {
       st.cells = Array(9).fill('');
       st.turn = 'X';

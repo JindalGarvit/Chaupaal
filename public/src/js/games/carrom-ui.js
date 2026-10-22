@@ -8,7 +8,7 @@
   'use strict';
 
   const GAME = 'carrom';
-  const LABEL = 'Carrom';
+  const LABEL = t('games.carrom.carrom');
   const SETUP_KEY = 'chaupaal_carrom_setup';
   const PREFS_KEY = 'chaupaal_carrom_prefs';
   const COACH_KEY = 'chaupaal_carrom_coach';
@@ -18,8 +18,22 @@
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('carrom.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.carrom.' + key, p || fallback) : fill(fallback, p);
   }
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function toast(msg) {
@@ -757,7 +771,7 @@
         return `<div class="cr-team${turnTeam === T ? ' is-turn' : ''}"><span class="cr-dot cr-dot--${c}" aria-label="${esc(colorName(c))}"></span><span class="cr-team-names">${names}</span><b class="cr-team-score">${st.scores[T]}</b></div>`;
       };
       const target = st.variant === 'freestyle' ? C.FREE_TARGET : st.variant === 'quick' ? null : C.GAME_POINTS;
-      const mid = o.practice ? tr('freePlay', 'Free play') : st.variant === 'quick' ? tr('oneBoard', 'One board') : tr('board', 'Board') + ' ' + b.no + (st.variant === 'freestyle' ? '' : '/' + C.GAME_BOARDS + (st.extra ? ' +' : '')) + (target ? ' · ' + tr('to', 'to') + ' ' + target : '');
+      const mid = o.practice ? tr('freePlay', 'Free play') : st.variant === 'quick' ? tr('oneBoard', 'One board') : tr('board_no_value_value2', 'Board {{no}}{{value}}{{value2}}', { no: b.no, value: (st.variant === 'freestyle' ? '' : '/' + C.GAME_BOARDS + (st.extra ? ' +' : '')), value2: (target ? tr('to_target', ' · to {{target}}', { target }) : '') });
       const me = mySeat();
       let banner = st.note || '';
       let tone = '';
@@ -765,10 +779,10 @@
         tone = 'end';
       } else if (me >= 0 && st.phase === 'shot') {
         tone = 'you';
-        banner = (o.mine(st).length > 1 ? st.seats[me].name + ' — ' : '') + (b.broken ? tr('yourShot', 'Your shot') : tr('yourBreak', 'Your break') + (b.tries ? ' · ' + tr('try', 'try') + ' ' + (b.tries + 1) + '/3' : ''));
+        banner = (o.mine(st).length > 1 ? st.seats[me].name + ' — ' : '') + (b.broken ? tr('yourShot', 'Your shot') : tr('your_break_value', 'Your break{{value}}', { value: (b.tries ? tr('try_value_3', ' · try {{value}}/3', { value: (b.tries + 1) }) : '') }));
       } else if (me >= 0 && st.phase === 'place') {
         tone = 'you';
-        banner = (o.mine(st).length > 1 ? st.seats[me].name + ' — ' : '') + tr('placeDue', 'Place the due: tap inside the outer circle');
+        banner = tr('value_place_the_due_tap_inside_the', '{{value}}Place the due: tap inside the outer circle', { value: (o.mine(st).length > 1 ? st.seats[me].name + ' — ' : '') });
       }
       const q = b.queen;
       const queenChip =
@@ -820,7 +834,7 @@
           <button type="button" class="pk-btn pk-btn--ghost" data-fine aria-expanded="false">${esc(tr('fine', 'Fine-tune'))}</button>
         </div>
         <div class="cr-fine" data-fine-box hidden>
-          <div class="cr-fine-group"><span>${esc(tr('position', 'Position'))}</span><button type="button" class="pk-chip" data-n="x:-10" aria-label="${esc(tr('left', 'Left'))}">◀</button><button type="button" class="pk-chip" data-n="x:10" aria-label="${esc(tr('right', 'Right'))}">▶</button></div>
+          <div class="cr-fine-group"><span>${esc(tr('position_position', 'Position'))}</span><button type="button" class="pk-chip" data-n="x:-10" aria-label="${esc(tr('left', 'Left'))}">◀</button><button type="button" class="pk-chip" data-n="x:10" aria-label="${esc(tr('right', 'Right'))}">▶</button></div>
           <div class="cr-fine-group"><span>${esc(tr('angle', 'Angle'))}</span><button type="button" class="pk-chip" data-n="a:-25" aria-label="${esc(tr('turnLeft', 'Turn left'))}">↺</button><button type="button" class="pk-chip" data-n="a:25" aria-label="${esc(tr('turnRight', 'Turn right'))}">↻</button></div>
           <div class="cr-fine-group"><span>${esc(tr('power', 'Power'))}</span><button type="button" class="pk-chip" data-n="p:-20">−</button><button type="button" class="pk-chip" data-n="p:20">+</button></div>
         </div>
@@ -833,7 +847,7 @@
       const fill = ctlEl.querySelector('[data-power]');
       if (fill) fill.style.width = Math.round(a.power / 10) + '%';
       const lab = ctlEl.querySelector('[data-power-label]');
-      if (lab) lab.textContent = tr('power', 'Power') + ' ' + Math.round(a.power / 10) + '%';
+      if (lab) lab.textContent = tr('power_value', 'Power {{value}}%', { value: Math.round(a.power / 10) });
       const sl = ctlEl.querySelector('[data-slide]');
       if (sl && document.activeElement !== sl) sl.value = a.x;
       const btn = ctlEl.querySelector('[data-shoot]');
@@ -913,14 +927,14 @@
       footEl.innerHTML = '';
       if (st.phase === 'boardOver' && !st.over) {
         const last = st.boards[st.boards.length - 1];
-        const line = last ? (last.winner == null ? tr('boardDrawn', 'Board over') : Core().teamName(st, last.winner) + ' ' + tr('takeBoard', 'take the board') + ' +' + last.pts) : '';
+        const line = last ? (last.winner == null ? tr('boardDrawn', 'Board over') : tr('name_take_the_board_pts', '{{name}} take the board +{{pts}}', { name: (typeof bidi === 'function' ? bidi(Core().teamName(st, last.winner)) : Core().teamName(st, last.winner)), pts: last.pts })) : '';
         footEl.innerHTML = `<div class="cr-boardover"><div class="cr-boardover-line">${esc(line)}</div>
           <div class="pk-row">${o.onNextBoard ? `<button type="button" class="pk-btn pk-btn--primary" data-nextboard>${esc(tr('nextBoard', 'Next board'))}</button>` : `<span class="cr-wait">${esc(tr('nextSoon', 'Next board in a moment…'))}</span>`}
           ${st.board.best ? `<button type="button" class="pk-btn pk-btn--ghost" data-replay>${esc(tr('replay', 'Replay best shot'))}</button>` : ''}
           <button type="button" class="pk-btn pk-btn--ghost" data-shareboard>${esc(tr('share', 'Share'))}</button></div></div>`;
         footEl.querySelector('[data-nextboard]')?.addEventListener('click', () => o.onNextBoard());
         footEl.querySelector('[data-replay]')?.addEventListener('click', () => replay(st.board.best));
-        footEl.querySelector('[data-shareboard]')?.addEventListener('click', () => CK().shareWin(GAME, LABEL, line + ' · ' + tr('board', 'Board') + ' ' + (last ? last.no : '')));
+        footEl.querySelector('[data-shareboard]')?.addEventListener('click', () => CK().shareWin(GAME, LABEL, tr('line_board_value', '{{line}} · Board {{value}}', { line, value: (last ? last.no : '') })));
       }
       if (o.footer) {
         const box = document.createElement('div');
@@ -1063,20 +1077,20 @@
     const rng = CK().seededRng(CK().newSeed());
     const me = (K && K.myName()) || tr('you', 'You');
     let players;
-    if (vsBot) players = [{ id: 'p0', name: me }, { id: 'bot', name: tr('bot', 'Bot') + ' · ' + CK().levelLabel(o.level), bot: true, level: o.level }];
+    if (vsBot) players = [{ id: 'p0', name: me }, { id: 'bot', name: tr('bot_label', 'Bot · {{label}}', { label: CK().levelLabel(o.level) }), bot: true, level: o.level }];
     else if (practice) players = [{ id: 'p0', name: me }, { id: 'p1', name: tr('practice', 'Practice') }];
-    else if (Number(o.players) === 4) players = [1, 2, 3, 4].map((n) => ({ id: 'p' + n, name: tr('player', 'Player') + ' ' + n }));
+    else if (Number(o.players) === 4) players = [1, 2, 3, 4].map((n) => ({ id: 'p' + n, name: tr('player_n', 'Player {{n}}', { n }) }));
     else players = [{ id: 'p1', name: tr('player', 'Player') + ' 1' }, { id: 'p2', name: tr('player', 'Player') + ' 2' }];
     let breaker = 0;
     if (vsBot) breaker = o.youBreak === 'you' ? 0 : o.youBreak === 'bot' ? 1 : rng() < 0.5 ? 0 : 1;
     else if (!practice) breaker = Math.floor(rng() * players.length);
     let st = C.newGame(players, { variant, breaker });
-    if (!practice) st.note = players[breaker].name + ' ' + tr('breaksWhite', 'won the toss and breaks with white.');
+    if (!practice) st.note = tr('name_won_the_toss_and_breaks_with', '{{name}} won the toss and breaks with white.', { name: (typeof bidi === 'function' ? bidi(players[breaker].name) : players[breaker].name) });
     else st.note = tr('practiceNote', 'Practice: shoot freely. Arrange moves men; the full path preview is on.');
     let botTimer = null;
     let recorded = false;
     let arranging = false;
-    const title = practice ? tr('practice', 'Practice') : vsBot ? tr('vsBot', 'vs Bot') + ' · ' + CK().levelLabel(o.level) : tr('pass', 'Pass & Play');
+    const title = practice ? tr('practice', 'Practice') : vsBot ? tr('vs_bot_label', 'vs Bot · {{label}}', { label: CK().levelLabel(o.level) }) : tr('pass', 'Pass & Play');
     const shell = K.openShell({
       gameId: GAME,
       title: LABEL,
@@ -1186,7 +1200,7 @@
         el.querySelector('[data-again]').addEventListener('click', () => K.closeThen(shell, () => startLocal(o)));
         el.querySelector('[data-home]').addEventListener('click', () => K.closeThen(shell, () => openHome({})));
         el.querySelector('[data-best]')?.addEventListener('click', extra.replayBest);
-        el.querySelector('[data-share]').addEventListener('click', () => CK().shareWin(GAME, LABEL, line + ' · ' + variantLabel(variant) + (vsBot ? ' vs ' + CK().levelLabel(o.level) + ' ' + tr('botLower', 'bot') : '')));
+        el.querySelector('[data-share]').addEventListener('click', () => CK().shareWin(GAME, LABEL, line + ' · ' + variantLabel(variant) + (vsBot ? tr('vs_label_bot', ' vs {{label}} bot', { label: CK().levelLabel(o.level) }) : '')));
       },
       menu: () => [
         { label: tr('rules', 'Rules'), run: () => openRules(variant, Number(o.players) === 4 ? 'doubles' : 'singles') },
@@ -1235,7 +1249,7 @@
     const score = st.scores[0] + '–' + st.scores[1];
     const how = st.result === 'left' ? ' · ' + tr('oppLeft', 'opponent left') : st.result === 'resign' ? ' · ' + tr('resigned', 'resignation') : st.result === 'afk' ? ' · ' + tr('timeouts', 'timeouts') : '';
     if (meTeam != null) return (st.winner === meTeam ? tr('youWin', 'You win') : tr('youLose', 'You lose')) + ' ' + score + how;
-    return C.teamName(st, st.winner) + ' ' + tr('win', 'win') + ' ' + score + how;
+    return tr('name_win_score_how', '{{name}} win {{score}}{{how}}', { name: (typeof bidi === 'function' ? bidi(C.teamName(st, st.winner)) : C.teamName(st, st.winner)), score, how });
   }
 
   function openRules(variant, mode) {
@@ -1265,7 +1279,7 @@
     const s = loadSetup();
     const levels = Core().LEVELS.map((l) => [l, CK().levelLabel(l)]);
     K.openSheet({
-      title: kind === 'bot' ? tr('vsBot', 'Play vs bot') : tr('pass', 'Pass & Play'),
+      title: kind === 'bot' ? tr('vsBot_play_vs_bot', 'Play vs bot') : tr('pass', 'Pass & Play'),
       bodyHtml: `<div class="cl-setup">
         <div class="cl-sub">${esc(tr('rulesLabel', 'Rules'))}</div>
         <div data-v>${K.segHtml('variant', s.variant, Core().VARIANTS.map((v) => [v, variantLabel(v)]))}</div>
@@ -1331,7 +1345,7 @@
     const players = ctrl.players();
     const partnerOpts = [0, 1, 2].map((i) => {
       const p = players[i + 1];
-      return [i, p ? p.name : tr('botSeat', 'Bot seat') + ' ' + (i + 1)];
+      return [i, p ? p.name : tr('bot_seat_n', 'Bot seat {{n}}', { n: (i + 1) })];
     });
     K.openSheet({
       title: tr('roomSettings', 'Room settings'),
@@ -1441,9 +1455,9 @@
   function canStart(ctrl, players) {
     const s = roomSettings(ctrl);
     if (s.mode === 'doubles') {
-      if (s.quick && players.length < 4 && !ctrl.fillOk) return { ok: false, label: tr('findingTeam', 'Finding players…') + ' ' + players.length + '/4' };
+      if (s.quick && players.length < 4 && !ctrl.fillOk) return { ok: false, label: tr('finding_players_length_4', 'Finding players… {{length}}/4', { length: players.length }) };
       const bots = Math.max(0, 4 - players.length);
-      return { ok: true, label: bots ? tr('startBots', 'Start — bots fill') + ' ' + bots : tr('start', 'Start') };
+      return { ok: true, label: bots ? tr('start_bots_fill_bots', 'Start — bots fill {{bots}}', { bots }) : tr('start', 'Start') };
     }
     if (players.length < 2) return { ok: false, label: s.quick ? tr('finding', 'Finding an opponent…') : tr('waitFriend', 'Waiting for your opponent to join') };
     if (players.length > 2) return { ok: false, label: tr('tooMany', 'Singles is 1v1 — switch to doubles') };
@@ -1475,7 +1489,7 @@
           const players = ctrl.players();
           const need = s.mode === 'doubles' ? 4 : 2;
           const sec = body.querySelector('.pk-section');
-          if (sec) sec.textContent = tr('inRoom', 'In the room') + ' · ' + players.length + '/' + need;
+          if (sec) sec.textContent = tr('in_the_room_length_need', 'In the room · {{length}}/{{need}}', { length: players.length, need });
           if (!s.quick || !ctrl.isHost()) return;
           if (players.length >= need && !ctrl.autoStarted) {
             ctrl.autoStarted = true;
@@ -1532,7 +1546,7 @@
         return;
       }
       try {
-        const r = await Kit().roomCall(GAME, 'quick', { mode, name: Kit().myName() || 'Player' });
+        const r = await Kit().roomCall(GAME, 'quick', { mode, name: Kit().myName() || t('games.carrom.player') });
         if (r.matched && r.code && r.code !== ctrl.view.code && ctrl.players().length < 2) {
           clearInterval(ctrl.queueTimer);
           ctrl.queueTimer = null;
@@ -1547,7 +1561,7 @@
     const K = Kit();
     if (!K.requireSignIn()) return;
     try {
-      const r = await K.roomCall(GAME, 'quick', { mode, name: K.myName() || 'Player' });
+      const r = await K.roomCall(GAME, 'quick', { mode, name: K.myName() || t('games.carrom.player') });
       return openRoom(r.code, { join: !!r.matched });
     } catch (e) {
       toast(tr('quickFail', 'Couldn’t start matchmaking — try again'));
@@ -1598,7 +1612,7 @@
         <div class="pk-hero-sub">${esc(tr('tag', 'Flick, pocket, cover the Queen. Rules based on the ICF Laws of Carrom.'))}</div>
       </div>
       <div class="pk-modes">
-        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('vsBot', 'Play vs bot'))}</span><span class="pk-mode-sub">${esc(variantLabel(s.variant) + ' · ' + CK().levelLabel(s.level))}</span></button>
+        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('vsBot_play_vs_bot', 'Play vs bot'))}</span><span class="pk-mode-sub">${esc(variantLabel(s.variant) + ' · ' + CK().levelLabel(s.level))}</span></button>
         <button type="button" class="pk-mode" data-go="online"><span class="pk-mode-title">${esc(tr('online', 'Play online'))}</span><span class="pk-mode-sub">${esc(tr('onlineSub', 'Quick match or friends · 1v1 rated · 2v2'))}</span></button>
         <button type="button" class="pk-mode" data-go="pass"><span class="pk-mode-title">${esc(tr('pass', 'Pass & Play'))}</span><span class="pk-mode-sub">${esc(tr('passSub', '2 or 4 players, one phone'))}</span></button>
         <div class="cl-home-links">
@@ -1638,8 +1652,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'carrom',
-      name: 'Carrom',
-      desc: 'ICF rules · bots · Live 1v1 rated · 2v2',
+      name: t('games.carrom.carrom'),
+      desc: t('games.carrom.icf_rules_bots_live_1v1_rated'),
       icon: '🪙',
       ratingKey: 'carrom',
       gameType: 'dual',
@@ -1651,7 +1665,7 @@
       ownHome: true,
       order: 31,
       meta: {
-        core: 'carrom-physics.js (deterministic, shared with the server) + carrom-core.js (ICF rules, bots)',
+        core: t('games.carrom.carrom_physics_js_deterministic_shared_wit'),
         live: 'party_room → server-lib/carrom-engine.js; server-simulated strokes, singles rated, doubles 2v2',
       },
       launch: openGame,

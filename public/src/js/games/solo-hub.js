@@ -14,7 +14,7 @@
   'use strict';
 
   const Core = () => window.SoloCore;
-  const LABEL = { tiptap: 'Tip Tap', brickbreaker: 'Brick Breaker', ankjod: 'Kakuro' };
+  const LABEL = { tiptap: t('dangal.solo.tip_tap'), brickbreaker: t('dangal.solo.brick_breaker'), ankjod: t('dangal.solo.kakuro') };
   const ICON = { tiptap: '🍬', brickbreaker: '🧱', ankjod: '🔢' };
   const LEVEL_CAP = { tiptap: 150, brickbreaker: 60, ankjod: 10000 };
   const DEFAULTS = { sound: true, haptics: true, reducedMotion: false, hints: true, colorblind: false, timer: true, sensitivity: 1, errors: 'mistake' };
@@ -34,7 +34,23 @@
 
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  const tr = (key, fallback) => (typeof t === 'function' ? t('solo.' + key, fallback) : fallback);
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  const tr = (key, fallback, params) => {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('dangal.solo.' + key, p || fallback) : fill(fallback, p);
+  };
   const toast = (m) => typeof showToast === 'function' && showToast(m);
   function readJson(k, d) {
     try {
@@ -154,12 +170,12 @@
   }
 
   const SETTING_LABELS = {
-    sound: ['Sound', 'Sound effects'],
-    haptics: ['Vibration', 'Haptic taps on supported phones'],
-    reducedMotion: ['Reduce motion', 'Fewer animations and no screen shake'],
-    hints: ['Idle hints', 'Show a possible move after a few seconds'],
-    colorblind: ['Colour-blind shapes', 'Add a shape to every colour'],
-    timer: ['Show timer', 'Hide it if the clock stresses you out'],
+    sound: /* i18n-copy */ [t('dangal.solo.sound'), t('dangal.solo.sound_effects')],
+    haptics: /* i18n-copy */ [t('dangal.solo.vibration'), t('dangal.solo.haptic_taps_on_supported_phones')],
+    reducedMotion: /* i18n-copy */ [t('dangal.solo.reduce_motion'), t('dangal.solo.fewer_animations_and_no_screen_shake')],
+    hints: /* i18n-copy */ [t('dangal.solo.idle_hints'), t('dangal.solo.show_a_possible_move_after_a')],
+    colorblind: /* i18n-copy */ [t('dangal.solo.colour_blind_shapes'), t('dangal.solo.add_a_shape_to_every_colour')],
+    timer: /* i18n-copy */ [t('dangal.solo.show_timer'), t('dangal.solo.hide_it_if_the_clock_stresses')],
   };
 
   /** fields: keys from SETTING_LABELS plus 'errors' (Kakuro) and 'sensitivity' (Brick Breaker). */
@@ -169,18 +185,18 @@
       .map((k) => {
         if (k === 'errors') {
           const opts = [
-            ['off', 'Off'],
-            ['mistake', 'As I go'],
-            ['check', 'On Check'],
+            ['off', t('dangal.solo.off')],
+            /* i18n-copy */ ['mistake', t('dangal.solo.as_i_go')],
+            /* i18n-copy */ ['check', t('dangal.solo.on_check')],
           ];
           return `<div class="solo-set-row solo-set-row--seg"><div><b>${esc(tr('errors', 'Mark mistakes'))}</b><span>${esc(tr('errorsSub', 'When wrong digits turn red'))}</span></div>
             <div class="solo-seg" data-set="errors">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${s.errors === v ? 'is-on' : ''}">${esc(l)}</button>`).join('')}</div></div>`;
         }
         if (k === 'sensitivity') {
           const opts = [
-            [0.75, 'Low'],
-            [1, 'Normal'],
-            [1.5, 'High'],
+            /* i18n-copy */ [0.75, t('dangal.solo.low')],
+            /* i18n-copy */ [1, t('dangal.solo.normal')],
+            /* i18n-copy */ [1.5, t('dangal.solo.high')],
           ];
           return `<div class="solo-set-row solo-set-row--seg"><div><b>${esc(tr('sensitivity', 'Paddle sensitivity'))}</b><span>${esc(tr('sensitivitySub', 'How far the paddle moves per finger move'))}</span></div>
             <div class="solo-seg" data-set="sensitivity">${opts.map(([v, l]) => `<button type="button" data-v="${v}" class="${Number(s.sensitivity) === v ? 'is-on' : ''}">${esc(l)}</button>`).join('')}</div></div>`;
@@ -385,7 +401,7 @@
     if (!chatId) return false;
     try {
       await sendRealtimeMessage(chatId, text, false, null, att);
-      toast(tr('sent', 'Sent to') + ' ' + (friend.name || tr('yourFriend', 'your friend')));
+      toast(tr('sent_to_value', 'Sent to {{value}}', { value: friend.name || tr('yourFriend', 'your friend') }));
       return true;
     } catch (e) {
       toast(tr('sendFailed', 'Couldn’t send — try again'));
@@ -479,7 +495,7 @@
     const status = o.status ? `<div class="solo-res-status">${esc(o.status)}</div>` : '';
     return `<div class="solo-res">
       <div class="solo-res-title">${esc(o.title || '')}</div>
-      ${o.stars != null ? `<div class="solo-res-stars" aria-label="${o.stars} of 3 stars">${[1, 2, 3].map((k) => `<span class="${k <= o.stars ? 'is-on' : ''}">★</span>`).join('')}</div>` : ''}
+      ${o.stars != null ? `<div class="solo-res-stars" aria-label="${tHtml('dangal.solo.stars_of_three', { n: o.stars })}">${[1, 2, 3].map((k) => `<span class="${k <= o.stars ? 'is-on' : ''}">★</span>`).join('')}</div>` : ''}
       ${lines}${status}
       <div class="solo-actions">
         ${o.primary ? `<button type="button" class="solo-btn solo-btn--primary" data-res="primary">${esc(o.primary)}</button>` : ''}

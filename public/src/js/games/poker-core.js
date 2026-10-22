@@ -6,6 +6,32 @@
  * A hand object holds every hole card — only the server (or the local Practice table) ever has
  * one; clients get publicHand(), which carries nobody's cards except hands shown at showdown.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.PokerCore = factory();
@@ -15,22 +41,22 @@
   const RANKS = '23456789TJQKA';
   const SUITS = 'shdc';
   const SUIT_SYMBOLS = ['♠', '♥', '♦', '♣'];
-  const RANK_NAMES = ['Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King', 'Ace'];
-  const RANK_PLURAL = ['Twos', 'Threes', 'Fours', 'Fives', 'Sixes', 'Sevens', 'Eights', 'Nines', 'Tens', 'Jacks', 'Queens', 'Kings', 'Aces'];
-  const CATEGORIES = ['High card', 'Pair', 'Two pair', 'Three of a kind', 'Straight', 'Flush', 'Full house', 'Four of a kind', 'Straight flush'];
+  const RANK_NAMES = /* i18n-copy */ [gtx('games.poker.two', 'Two'), gtx('games.poker.three', 'Three'), gtx('games.poker.four', 'Four'), gtx('games.poker.five', 'Five'), gtx('games.poker.six', 'Six'), gtx('games.poker.seven', 'Seven'), gtx('games.poker.eight', 'Eight'), gtx('games.poker.nine', 'Nine'), gtx('games.poker.ten', 'Ten'), gtx('games.poker.jack', 'Jack'), gtx('games.poker.queen', 'Queen'), gtx('games.poker.king', 'King'), gtx('games.poker.ace', 'Ace')];
+  const RANK_PLURAL = /* i18n-copy */ [gtx('games.poker.twos', 'Twos'), gtx('games.poker.threes', 'Threes'), gtx('games.poker.fours', 'Fours'), gtx('games.poker.fives', 'Fives'), gtx('games.poker.sixes', 'Sixes'), gtx('games.poker.sevens', 'Sevens'), gtx('games.poker.eights', 'Eights'), gtx('games.poker.nines', 'Nines'), gtx('games.poker.tens', 'Tens'), gtx('games.poker.jacks', 'Jacks'), gtx('games.poker.queens', 'Queens'), gtx('games.poker.kings', 'Kings'), gtx('games.poker.aces', 'Aces')];
+  const CATEGORIES = /* i18n-copy */ [gtx('games.poker.high_card', 'High card'), gtx('games.poker.pair', 'Pair'), gtx('games.poker.two_pair', 'Two pair'), gtx('games.poker.three_of_a_kind', 'Three of a kind'), gtx('games.poker.straight', 'Straight'), gtx('games.poker.flush', 'Flush'), gtx('games.poker.full_house', 'Full house'), gtx('games.poker.four_of_a_kind', 'Four of a kind'), gtx('games.poker.straight_flush', 'Straight flush')];
 
   /** Best to worst, for the rankings sheet. */
   const RANKINGS = [
-    { name: 'Royal flush', example: ['As', 'Ks', 'Qs', 'Js', 'Ts'], desc: 'A-K-Q-J-10, all one suit' },
-    { name: 'Straight flush', example: ['9h', '8h', '7h', '6h', '5h'], desc: 'Five in a row, all one suit' },
-    { name: 'Four of a kind', example: ['Qs', 'Qh', 'Qd', 'Qc', '7s'], desc: 'Four cards of one rank' },
-    { name: 'Full house', example: ['Kh', 'Kd', 'Ks', '5c', '5h'], desc: 'Three of a kind plus a pair' },
-    { name: 'Flush', example: ['Ad', 'Jd', '8d', '6d', '2d'], desc: 'Any five of one suit' },
-    { name: 'Straight', example: ['Tc', '9d', '8h', '7s', '6c'], desc: 'Five in a row (A-2-3-4-5 is the lowest)' },
-    { name: 'Three of a kind', example: ['7c', '7d', '7h', 'Ks', '2d'], desc: 'Three cards of one rank' },
-    { name: 'Two pair', example: ['Js', 'Jc', '4d', '4h', 'As'], desc: 'Two different pairs' },
-    { name: 'Pair', example: ['Th', 'Td', 'Ks', '8c', '3d'], desc: 'Two cards of one rank' },
-    { name: 'High card', example: ['Ac', 'Qd', '9s', '6h', '3c'], desc: 'None of the above — highest card plays' },
+    { name: 'Royal flush', example: ['As', 'Ks', 'Qs', 'Js', 'Ts'], desc: 'A-K-Q-J-10, all one suit' }, // i18n-ignore (codes / names)
+    { name: gtx('games.poker.straight_flush', 'Straight flush'), example: ['9h', '8h', '7h', '6h', '5h'], desc: gtx('games.poker.five_in_a_row_all_one', 'Five in a row, all one suit') },
+    { name: 'Four of a kind', example: ['Qs', 'Qh', 'Qd', 'Qc', '7s'], desc: 'Four cards of one rank' }, // i18n-ignore (codes / names)
+    { name: 'Full house', example: ['Kh', 'Kd', 'Ks', '5c', '5h'], desc: 'Three of a kind plus a pair' }, // i18n-ignore (codes / names)
+    { name: 'Flush', example: ['Ad', 'Jd', '8d', '6d', '2d'], desc: 'Any five of one suit' }, // i18n-ignore (codes / names)
+    { name: 'Straight', example: ['Tc', '9d', '8h', '7s', '6c'], desc: 'Five in a row (A-2-3-4-5 is the lowest)' }, // i18n-ignore (codes / names)
+    { name: 'Three of a kind', example: ['7c', '7d', '7h', 'Ks', '2d'], desc: 'Three cards of one rank' }, // i18n-ignore (codes / names)
+    { name: 'Two pair', example: ['Js', 'Jc', '4d', '4h', 'As'], desc: 'Two different pairs' }, // i18n-ignore (codes / names)
+    { name: 'Pair', example: ['Th', 'Td', 'Ks', '8c', '3d'], desc: 'Two cards of one rank' }, // i18n-ignore (codes / names)
+    { name: 'High card', example: ['Ac', 'Qd', '9s', '6h', '3c'], desc: 'None of the above — highest card plays' }, // i18n-ignore (codes / names)
   ];
 
   const MAX_SEATS = 9;
@@ -171,21 +197,21 @@
     const t = ev.tb;
     switch (ev.cat) {
       case 8:
-        return t[0] === 12 ? 'Royal flush' : 'Straight flush, ' + RANK_NAMES[t[0]] + ' high';
+        return t[0] === 12 ? gtx('games.poker.royal_flush', 'Royal flush') : gtx('games.poker.straight_flush_value_high', 'Straight flush, {{value}} high', { value: RANK_NAMES[t[0]] });
       case 7:
-        return 'Four of a kind, ' + RANK_PLURAL[t[0]];
+        return gtx('games.poker.four_of_a_kind_value', 'Four of a kind, {{value}}', { value: RANK_PLURAL[t[0]] });
       case 6:
-        return 'Full house, ' + RANK_PLURAL[t[0]] + ' full of ' + RANK_PLURAL[t[1]];
+        return gtx('games.poker.full_house_value_full_of_value2', 'Full house, {{value}} full of {{value2}}', { value: RANK_PLURAL[t[0]], value2: RANK_PLURAL[t[1]] });
       case 5:
-        return 'Flush, ' + RANK_NAMES[t[0]] + ' high';
+        return gtx('games.poker.flush_value_high', 'Flush, {{value}} high', { value: RANK_NAMES[t[0]] });
       case 4:
-        return 'Straight, ' + RANK_NAMES[t[0]] + ' high';
+        return gtx('games.poker.straight_value_high', 'Straight, {{value}} high', { value: RANK_NAMES[t[0]] });
       case 3:
-        return 'Three of a kind, ' + RANK_PLURAL[t[0]];
+        return gtx('games.poker.three_of_a_kind_value', 'Three of a kind, {{value}}', { value: RANK_PLURAL[t[0]] });
       case 2:
-        return 'Two pair, ' + RANK_PLURAL[t[0]] + ' and ' + RANK_PLURAL[t[1]];
+        return gtx('games.poker.two_pair_value_and_value2', 'Two pair, {{value}} and {{value2}}', { value: RANK_PLURAL[t[0]], value2: RANK_PLURAL[t[1]] });
       case 1:
-        return 'Pair of ' + RANK_PLURAL[t[0]];
+        return gtx('games.poker.pair_of_value', 'Pair of {{value}}', { value: RANK_PLURAL[t[0]] });
       default:
         return RANK_NAMES[t[0]] + ' high';
     }
@@ -221,7 +247,7 @@
       tb: best.tb,
       best: bestCards,
       name: handName(best),
-      category: best.cat === 8 && best.tb[0] === 12 ? 'Royal flush' : CATEGORIES[best.cat],
+      category: best.cat === 8 && best.tb[0] === 12 ? gtx('games.poker.royal_flush', 'Royal flush') : CATEGORIES[best.cat],
       royal: best.cat === 8 && best.tb[0] === 12,
     };
   }
@@ -294,7 +320,7 @@
     if (b.length < 3) {
       const r0 = rankOf(hole[0]);
       const r1 = rankOf(hole[1]);
-      if (r0 === r1) return { name: 'Pair of ' + RANK_PLURAL[r0], cat: 1 };
+      if (r0 === r1) return { name: gtx('games.poker.pair_of_value', 'Pair of {{value}}', { value: RANK_PLURAL[r0] }), cat: 1 };
       return { name: RANK_NAMES[Math.max(r0, r1)] + ' high', cat: 0 };
     }
     const ev = evaluate(hole.concat(b));
@@ -382,7 +408,7 @@
   function createHand(o) {
     const players = (o.players || []).map((p, i) => ({
       id: String(p.id),
-      name: String(p.name || 'Player'),
+      name: String(p.name || gtx('games.poker.player', 'Player')),
       seat: p.seat == null ? i : p.seat,
       stack: Math.max(0, Math.floor(Number(p.stack) || 0)),
       start: Math.max(0, Math.floor(Number(p.stack) || 0)),
@@ -980,13 +1006,28 @@
   function shareText(o) {
     const amt = formatChips(o.amount);
     const hand = o.handName ? ' with ' + (/^[AEIOU]/.test(o.handName) ? 'an ' : 'a ') + o.handName.replace(/^./, (c) => c.toLowerCase()) : '';
-    return 'Won ' + amt + ' chips' + hand + " — Texas Hold'em on Chaupaal";
+    return gtx('games.poker.won_amt_chips_hand_texas_hold', 'Won {{amt}} chips{{hand}} — Texas Hold\'em on Chaupaal', { amt, hand });
   }
 
   function actionLabel(last) {
     if (!last) return '';
-    const amt = last.amt ? ' ' + formatChips(last.amt) : '';
-    return { fold: 'Fold', check: 'Check', call: 'Call' + amt, bet: 'Bet' + amt, raise: 'Raise to' + amt, allin: 'All-in' + amt }[last.a] || '';
+    const amt = last.amt ? formatChips(last.amt) : '';
+    switch (last.a) {
+      case 'fold':
+        return gtx('games.poker.action.fold', 'Fold');
+      case 'check':
+        return gtx('games.poker.action.check', 'Check');
+      case 'call':
+        return amt ? gtx('games.poker.action.call_amt', 'Call {{amt}}', { amt }) : gtx('games.poker.action.call', 'Call');
+      case 'bet':
+        return amt ? gtx('games.poker.action.bet_amt', 'Bet {{amt}}', { amt }) : gtx('games.poker.action.bet', 'Bet');
+      case 'raise':
+        return amt ? gtx('games.poker.action.raise_amt', 'Raise to {{amt}}', { amt }) : gtx('games.poker.action.raise', 'Raise');
+      case 'allin':
+        return amt ? gtx('games.poker.action.allin_amt', 'All-in {{amt}}', { amt }) : gtx('games.poker.action.allin', 'All-in');
+      default:
+        return '';
+    }
   }
 
   return {

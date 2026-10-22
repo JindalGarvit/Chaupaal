@@ -12,11 +12,11 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').readWithCopy(p);
 
 const ds = read('public/src/js/dangal/design-system.js');
-const court = read('public/src/js/games/court-sports.js');
-const gameUi = read('public/src/js/games/game-ui.js');
+const court = require('./lib/i18n-source').readWithCopy('public/src/js/games/court-sports.js');
+const gameUi = require('./lib/i18n-source').readWithCopy('public/src/js/games/game-ui.js');
 const registry = read('public/src/js/games/game-registry.js');
 const rw = read('public/src/js/games/rw-sports.js');
 const conventions = read('CONVENTIONS.md');

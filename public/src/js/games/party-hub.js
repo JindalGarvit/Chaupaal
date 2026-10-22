@@ -11,7 +11,7 @@
   'use strict';
 
   const GAME = 'partyhub';
-  const LABEL = 'Party night';
+  const LABEL = t('dangal.identity.partyhub.label');
   const GROUPS_KEY = 'pk_party_groups';
   const GROUPS_MAX = 6;
 
@@ -26,10 +26,10 @@
   function ready(fn) {
     return function () {
       const args = arguments;
-      if (!Kit()) return toast('Party games are loading — try again');
+      if (!Kit()) return toast(t('dangal.party.party_games_are_loading_try_again'));
       return Kit()
         .ensureGameData(GAME)
-        .then(() => fn.apply(null, args), () => toast('Couldn’t load Party night — check your connection'));
+        .then(() => fn.apply(null, args), () => toast(t('dangal.party.couldn_t_load_party_night_check')));
     };
   }
 
@@ -53,7 +53,7 @@
     try {
       localStorage.setItem(GROUPS_KEY, JSON.stringify(list.slice(0, GROUPS_MAX)));
     } catch (e) {}
-    toast('Group saved — find it under Party night');
+    toast(t('dangal.party.group_saved_find_it_under_party'));
   }
   function forgetGroup(i) {
     const list = savedGroups();
@@ -70,7 +70,7 @@
     const DA = window.DangalAssist;
     if (!DA || count < 2) return '';
     const top = DA.recommend({ players: count, where, partyOnly: true, limit: 8 }).find((g) => Core().GAME_IDS.indexOf(g.id) >= 0);
-    return top ? `<div class="ph-suggest" role="note">Suggested: <strong>${esc(top.name)}</strong> — ${esc(top.reason)}</div>` : '';
+    return top ? `<div class="ph-suggest" role="note">${tHtml('dangal.party.suggested')} <strong>${esc(top.name)}</strong> — ${esc(top.reason)}</div>` : '';
   }
 
   function gameCardsHtml(o) {
@@ -80,8 +80,8 @@
         const tooFew = o.count < g.min;
         const n = counts[g.id] || 0;
         const mine = o.myVote === g.id;
-        const note = tooFew ? 'Needs ' + g.min + '+' : o.count > g.max ? 'Up to ' + g.max + ' · others sit out' : g.min + '–' + g.max + ' players';
-        return `<button type="button" role="listitem" class="ph-game${mine ? ' is-on' : ''}" data-game="${g.id}" ${tooFew ? 'disabled aria-disabled="true"' : ''}
+        const note = tooFew ? t('dangal.party.needs_value', { value: g.min }) : o.count > g.max ? t('dangal.party.up_to_value_others_sit_out', { value: g.max }) : g.min + '–' + g.max + ' players';
+        return `<button type="button" role="listitem" class="ph-game${mine ? ' is-on' : ''}" data-game="${g.id}" ${tooFew ? 'disabled aria-disabled="true"' /* i18n-ignore */ : ''}
           aria-label="${esc(g.label + '. ' + g.blurb + '. ' + note + (n ? '. ' + n + (n === 1 ? ' vote' : ' votes') : ''))}">
           <span class="ph-game-mark" aria-hidden="true">${typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 32 }) : g.icon}</span>
           <span class="ph-game-name">${esc(g.label)}</span>
@@ -95,21 +95,21 @@
   function scoreboardHtml(rows, history, opts) {
     const o = opts || {};
     if (!history || !history.length) {
-      return `<div class="ph-board ph-board--empty"><div class="pk-section">Tonight’s scoreboard</div><div class="pk-sub">Finish a game to get on the board.</div></div>`;
+      return `<div class="ph-board ph-board--empty"><div class="pk-section">${tHtml('dangal.party.tonight_s_scoreboard')}</div><div class="pk-sub">${tHtml('dangal.party.finish_a_game_to_get_on')}</div></div>`;
     }
     return `<div class="ph-board">
-      <div class="pk-section">Tonight’s scoreboard · ${history.length} ${history.length === 1 ? 'game' : 'games'}</div>
+      <div class="pk-section">${tHtml('dangal.party.tonights_scoreboard_games', { historyCount: history.length })}</div>
       <ol class="ph-rows">${rows
         .map(
           (r, i) => `<li class="ph-row${r.id === o.me ? ' is-me' : ''}">
           <span class="ph-rank">${i + 1}</span>${Kit().identityHtml(o.seatOf ? o.seatOf(r.id) : i, r.name)}
-          <span class="ph-name">${esc(r.name)}${r.id === o.me ? ' <small>(you)</small>' : ''}</span>
-          <span class="ph-pts">${r.pts}<small> pts</small></span>
+          <span class="ph-name">${esc(r.name)}${r.id === o.me ? ' <small>' + tHtml('dangal.party.you') + '</small>' : ''}</span>
+          <span class="ph-pts">${r.pts}<small> ${tHtml('dangal.party.pts')}</small></span>
         </li>`
         )
         .join('')}</ol>
-      <details class="ph-how"><summary>How points work</summary>
-        <p>Each game gives placings, not raw scores: 1st 5 pts · 2nd 3 · 3rd 2 · everyone else who played 1. Ties share the better place. Team games (Charades, Werewolf) put the whole winning side 1st and the other side 2nd. If nobody pulls ahead, everyone gets 1.</p>
+      <details class="ph-how"><summary>${tHtml('dangal.party.how_points_work')}</summary>
+        <p>${tHtml('dangal.party.each_game_gives_placings_not_raw')}</p>
       </details>
     </div>`;
   }
@@ -118,12 +118,12 @@
     const top = rows.slice(0, 3);
     const medals = ['🥇', '🥈', '🥉'];
     const games = (history || []).map((h) => (Core().gameInfo(h.game) || { label: h.game }).label);
-    return `<div class="ph-endcard" role="group" aria-label="End of the night">
-      <div class="ph-end-title">That’s the night!</div>
+    return `<div class="ph-endcard" role="group" aria-label="${tHtml('dangal.party.end_of_the_night')}">
+      <div class="ph-end-title">${tHtml('dangal.party.that_s_the_night')}</div>
       <div class="ph-end-line">${esc(Core().shareLine(rows, history))}</div>
       <div class="ph-podium">${top
         .filter((r) => r.pts > 0)
-        .map((r, i) => `<div class="ph-podium-slot"><span aria-hidden="true">${medals[i]}</span><strong>${esc(r.name)}</strong><small>${r.pts} pts</small></div>`)
+        .map((r, i) => `<div class="ph-podium-slot"><span aria-hidden="true">${medals[i]}</span><strong>${esc(r.name)}</strong><small>${tHtml('dangal.pts_count', { count: r.pts })}</small></div>`)
         .join('')}</div>
       ${games.length ? `<div class="ph-end-games">${games.map(esc).join(' · ')}</div>` : ''}
     </div>`;
@@ -135,10 +135,10 @@
 
   function askSaveGroup(names) {
     Kit().openSheet({
-      title: 'Save this group',
-      bodyHtml: `<input class="pk-input" data-group-name maxlength="30" placeholder="Name (e.g. Friday crew)" aria-label="Group name">
+      title: t('dangal.party.save_this_group'),
+      bodyHtml: `<input class="pk-input" data-group-name maxlength="30" placeholder="${tHtml('dangal.party.name_e_g_friday_crew')}" aria-label="${tHtml('dangal.party.group_name')}">
         <div class="pk-sub">${esc(Core().cleanNames(names).join(', '))}</div>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Save</button>`,
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.save')}</button>`,
       onMount(sheet, close) {
         sheet.querySelector('[data-save]').addEventListener('click', () => {
           saveGroup(names, sheet.querySelector('[data-group-name]').value);
@@ -154,7 +154,7 @@
     const c = ctx || {};
     if (c.code) return openRoom(c.code, { join: true });
     if (c.chat && (c.source === 'chat_group' || c.isGroup)) return createHub({ chat: c.chat });
-    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'One group, many games', confirmLeave: () => false });
+    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: t('dangal.party.one_group_many_games'), confirmLeave: () => false });
     renderHome(shell);
   }
 
@@ -163,23 +163,23 @@
     const body = shell.render(`<div class="pk-page pk-home ph-home">
       <div class="pk-hero">
         <div class="pk-hero-mark" aria-hidden="true">🎉</div>
-        <div class="pk-hero-title">Party night</div>
-        <div class="pk-hero-sub">Play game after game with the same group. Tonight’s scoreboard keeps count.</div>
+        <div class="pk-hero-title">${tHtml('dangal.party.party_night')}</div>
+        <div class="pk-hero-sub">${tHtml('dangal.party.play_game_after_game_with_the')}</div>
       </div>
       <div class="pk-modes">
         <button type="button" class="pk-mode pk-mode--primary" data-mode="pass">
-          <span class="pk-mode-title">Pass &amp; Play</span><span class="pk-mode-sub">One phone, works offline</span>
+          <span class="pk-mode-title">${tHtml('dangal.party.pass_play')}</span><span class="pk-mode-sub">${tHtml('dangal.party.one_phone_works_offline')}</span>
         </button>
         <button type="button" class="pk-mode" data-mode="room">
-          <span class="pk-mode-title">Play with friends</span><span class="pk-mode-sub">Everyone on their own phone</span>
+          <span class="pk-mode-title">${tHtml('dangal.party.play_with_friends')}</span><span class="pk-mode-sub">${tHtml('dangal.party.everyone_on_their_own_phone')}</span>
         </button>
-        <button type="button" class="pk-link" data-mode="join">Have a party code? Join</button>
+        <button type="button" class="pk-link" data-mode="join">${tHtml('dangal.party.have_a_party_code_join')}</button>
       </div>
       ${
         groups.length
-          ? `<div class="pk-section">Play again with</div>${groups
+          ? `<div class="pk-section">${tHtml('dangal.party.play_again_with')}</div>${groups
               .map(
-                (g, i) => `<div class="ph-group-row"><button type="button" class="pk-row-btn" data-group="${i}">${esc(g.name)} <small>· ${g.names.length}</small></button><button type="button" class="pk-link" data-forget="${i}" aria-label="Forget ${esc(g.name)}">Forget</button></div>`
+                (g, i) => `<div class="ph-group-row"><button type="button" class="pk-row-btn" data-group="${i}">${esc(g.name)} <small>· ${g.names.length}</small></button><button type="button" class="pk-link" data-forget="${i}" aria-label="${tHtml('dangal.party.forget_name', { name: g.name })}">${tHtml('dangal.party.forget')}</button></div>`
               )
               .join('')}`
           : ''
@@ -195,8 +195,8 @@
         Kit().openSheet({
           title: g.name,
           bodyHtml: `<div class="pk-sub">${esc(g.names.join(', '))}</div>
-            <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-g="pass">Pass &amp; Play on this phone</button>
-            <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-g="room">Everyone on their own phone</button>`,
+            <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-g="pass">${tHtml('dangal.party.pass_play_on_this_phone')}</button>
+            <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-g="room">${tHtml('dangal.party.everyone_on_their_own_phone')}</button>`,
           onMount(sheet, close) {
             sheet.querySelector('[data-g="pass"]').addEventListener('click', () => {
               close();
@@ -221,15 +221,15 @@
   function openJoin() {
     if (!Kit().requireSignIn()) return;
     Kit().openSheet({
-      title: 'Join a party',
-      bodyHtml: `<input class="pk-input pk-input--code" data-code maxlength="6" placeholder="PARTY CODE" autocapitalize="characters" autocomplete="off" enterkeyhint="go" aria-label="Party code">
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-join>Join</button>`,
+      title: t('dangal.party.join_a_party'),
+      bodyHtml: `<input class="pk-input pk-input--code" data-code maxlength="6" placeholder="${tHtml('dangal.party.party_code')}" autocapitalize="characters" autocomplete="off" enterkeyhint="go" aria-label="${tHtml('dangal.party.party_code_2')}">
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-join>${tHtml('dangal.party.join')}</button>`,
       onMount(sheet, close) {
         const input = sheet.querySelector('[data-code]');
         setTimeout(() => input.focus(), 50);
         const go = () => {
           const code = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (code.length !== 6) return toast('Party codes are 6 letters and numbers');
+          if (code.length !== 6) return toast(t('dangal.party.party_codes_are_6_letters_and'));
           close();
           openRoom(code, { join: true });
         };
@@ -245,18 +245,18 @@
   async function createHub(o) {
     const opts = o || {};
     if (!Kit().requireSignIn()) return;
-    if (navigator.onLine === false) return toast('You’re offline — Pass & Play works without internet');
+    if (navigator.onLine === false) return toast(t('dangal.party.you_re_offline_pass_play_works'));
     try {
       const chatId = opts.chat ? opts.chat.firestoreId || opts.chat.id : '';
-      const res = await Kit().roomCall(GAME, 'create', { name: Kit().myName() || 'Host', chatId: chatId && chatId !== 'ai' ? chatId : '' });
+      const res = await Kit().roomCall(GAME, 'create', { name: Kit().myName() || t('dangal.party.host'), settings: { contentLang: Kit().uiContentLang ? Kit().uiContentLang() : 'en' }, chatId: chatId && chatId !== 'ai' ? chatId : '' });
       if (opts.chat && chatId && chatId !== 'ai') {
         const sent = await Kit().postInviteToChat(opts.chat, GAME, res.code, LABEL);
-        if (sent) toast('Invite posted in the chat');
+        if (sent) toast(t('dangal.party.invite_posted_in_the_chat'));
       }
       await openRoom(res.code, {});
       if (opts.invite) Kit().inviteFriends(GAME, res.code, LABEL);
     } catch (e) {
-      toast(Kit().roomErrorText(e) || 'Couldn’t start a party');
+      toast(Kit().roomErrorText(e) || t('dangal.party.couldn_t_start_a_party'));
     }
   }
 
@@ -265,10 +265,10 @@
     if (!Kit().requireSignIn()) return null;
     if (o.join) {
       try {
-        const res = await Kit().roomCall(GAME, 'join', { code, name: Kit().myName() || 'Player' });
-        if (res.joined && res.nextGame) toast('You’re in — you’ll join the next game');
+        const res = await Kit().roomCall(GAME, 'join', { code, name: Kit().myName() || t('dangal.party.player') });
+        if (res.joined && res.nextGame) toast(t('dangal.party.you_re_in_you_ll_join'));
       } catch (e) {
-        toast(Kit().roomErrorText(e) || 'Couldn’t join that party');
+        toast(Kit().roomErrorText(e) || t('dangal.party.couldn_t_join_that_party'));
         return null;
       }
     }
@@ -279,7 +279,7 @@
     const shell = Kit().openShell({
       gameId: GAME,
       title: LABEL,
-      subtitle: 'Party ' + code,
+      subtitle: t('dangal.party.party_code_3', { code }),
       confirmLeave: () => false,
       onClose: () => {
         if (conn) conn.stop();
@@ -302,10 +302,10 @@
       },
     });
     if (!conn) {
-      shell.render('<div class="pk-empty">Can’t reach the party right now. Try again in a moment.</div>');
+      shell.render('<div class="pk-empty">' + tHtml('dangal.party.can_t_reach_the_party_right') + '</div>');
       return shell;
     }
-    shell.render('<div class="pk-empty">Joining the party…</div>');
+    shell.render('<div class="pk-empty">' + tHtml('dangal.party.joining_the_party') + '</div>');
 
     const me = Kit().myUid();
     const act = async (op, args) => {
@@ -314,7 +314,7 @@
       try {
         return (await conn.op(op, args)) || {};
       } catch (e) {
-        toast(Kit().roomErrorText(e) || 'Something went wrong');
+        toast(Kit().roomErrorText(e) || t('common.something_went_wrong'));
         return null;
       } finally {
         view.busy = false;
@@ -345,7 +345,7 @@
 
     function message(text) {
       shell
-        .render(`<div class="pk-empty">${esc(text)}<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>Done</button></div>`)
+        .render(`<div class="pk-empty">${esc(text)}<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>${tHtml('common.done')}</button></div>`)
         ?.querySelector('[data-close]')
         ?.addEventListener('click', () => shell.close());
     }
@@ -364,10 +364,10 @@
     function paint() {
       if (shell.closed) return;
       const pub = view.pub;
-      if (!pub) return message('This party isn’t available any more.');
+      if (!pub) return message(t('dangal.party.this_party_isn_t_available_any'));
       const players = pub.players || {};
       if (pub.status === 'closed') return renderEnded();
-      if (!players[me] || players[me].left) return message('You’re no longer in this party.');
+      if (!players[me] || players[me].left) return message(t('dangal.party.you_re_no_longer_in_this'));
       const onlineCount = members().filter((p) => online(p.id)).length;
       const key = JSON.stringify([pub.rev, pub.host, pub.current, onlineCount, pub.settings, pub.votes]);
       if (key === view.key) return;
@@ -386,57 +386,58 @@
         const info = Core().gameInfo(cur.game) || { label: cur.game };
         const seated = (cur.seated || []).indexOf(me) >= 0;
         stage = `<div class="ph-now" aria-live="polite">
-          <div class="ph-now-label">${cur.status === 'live' ? 'Now playing' : 'Starting…'}</div>
+          <div class="ph-now-label">${cur.status === 'live' ? tHtml('dangal.party.now_playing') : tHtml('dangal.party.starting')}</div>
           <div class="ph-now-game">${esc(info.label)}</div>
           ${
             cur.status !== 'live'
               ? ''
               : seated
-                ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-open-game>Open the game</button>'
-                : `<div class="pk-sub">${(cur.out || []).indexOf(me) >= 0 && players[me].joinedAt <= cur.at ? 'Sitting this one out — you’re first in next time.' : 'You’ll join the next game.'}</div>`
+                ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-open-game>' + tHtml('dangal.party.open_the_game') + '</button>'
+                : `<div class="pk-sub">${(cur.out || []).indexOf(me) >= 0 && players[me].joinedAt <= cur.at ? tHtml('dangal.party.sitting_this_one_out_you_re') : tHtml('dangal.party.you_ll_join_the_next_game')}</div>`
           }
-          ${isHost && cur.status === 'live' ? '<button type="button" class="pk-link" data-back>End this game · back to the party</button>' : ''}
+          ${isHost && cur.status === 'live' ? '<button type="button" class="pk-link" data-back>' + tHtml('dangal.party.end_this_game_back_to_the') + '</button>' : ''}
         </div>`;
       } else if (isHost) {
-        stage = `<div class="pk-section">${settings.pickBy === 'vote' ? 'Group vote — start the top pick or choose one' : 'Pick the next game'}</div>
+        stage = `<div class="pk-section">${settings.pickBy === 'vote' ? tHtml('dangal.party.group_vote_start_the_top_pick') : tHtml('dangal.party.pick_the_next_game')}</div>
           ${gameCardsHtml({ count: onlineCount, votes, myVote: null, where: 'remote' })}
-          ${settings.pickBy === 'vote' && Object.keys(votes).length ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start-vote>Start the top pick</button>' : ''}`;
+          ${settings.pickBy === 'vote' && Object.keys(votes).length ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start-vote>' + tHtml('dangal.party.start_the_top_pick') + '</button>' : ''}`;
       } else if (settings.pickBy === 'vote') {
-        stage = `<div class="pk-section">Vote for the next game</div>${gameCardsHtml({ count: onlineCount, votes, myVote: (pub.votes || {})[me], where: 'remote' })}`;
+        stage = `<div class="pk-section">${tHtml('dangal.party.vote_for_the_next_game')}</div>${gameCardsHtml({ count: onlineCount, votes, myVote: (pub.votes || {})[me], where: 'remote' })}`;
       } else {
-        stage = '<div class="pk-wait">The host is picking the next game…</div>';
+        stage = '<div class="pk-wait">' + tHtml('dangal.party.the_host_is_picking_the_next') + '</div>';
       }
       const hist = histOf(pub);
       const body = shell.render(`<div class="pk-page ph-room">
         <div class="ph-code-row">
-          <div><div class="pk-code-label">Party code</div><div class="pk-code pk-code--sm" aria-label="Party code ${esc(code)}">${esc(code)}</div></div>
+          <div><div class="pk-code-label">${tHtml('dangal.party.party_code_2')}</div><div class="pk-code pk-code--sm" aria-label="${tHtml('dangal.party.party_code_value', { code })}">${esc(code)}</div></div>
           <div class="pk-row">
-            <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-            <button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite</button>
+            <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+            <button type="button" class="pk-btn pk-btn--ghost" data-invite>${tHtml('common.invite')}</button>
           </div>
         </div>
         ${stage}
         ${scoreboardHtml(rows(), hist, { me, seatOf })}
         <details class="ph-more">
-          <summary>Group · ${list.length}/${Core().MAX_HUB}</summary>
+          <summary>${tHtml('dangal.party.group_listcount_value', { listCount: list.length, value: Core().MAX_HUB })}</summary>
           <div class="pk-lobby-list">${list
             .map(
               (p) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span>${Kit().identityHtml(p.seat || 0, p.name)}<span>${esc(p.name)}</span>${
-                p.id === pub.host ? '<span class="pk-badge">Host</span>' : ''
-              }${p.id === me ? '<span class="pk-badge pk-badge--me">You</span>' : ''}${
-                isHost && p.id !== me ? `<button type="button" class="pk-link ph-remove" data-remove="${esc(p.id)}" aria-label="Remove ${esc(p.name)}">Remove</button>` : ''
+                p.id === pub.host ? '<span class="pk-badge">' + tHtml('dangal.party.host') + '</span>' : ''
+              }${p.id === me ? '<span class="pk-badge pk-badge--me">' + tHtml('common.you') + '</span>' : ''}${
+                isHost && p.id !== me ? `<button type="button" class="pk-link ph-remove" data-remove="${esc(p.id)}" aria-label="${tHtml('dangal.party.remove_name', { name: p.name })}">${tHtml('common.remove')}</button>` : ''
               }</div>`
             )
             .join('')}</div>
           ${
             isHost
-              ? `<div class="pk-field"><div class="pk-field-label">Who picks the next game</div>${Kit().segHtml('pickBy', settings.pickBy, [['host', 'Host'], ['vote', 'Group vote']])}</div>`
+              ? `<div class="pk-field"><div class="pk-field-label">${tHtml('dangal.party.who_picks_the_next_game')}</div>${Kit().segHtml('pickBy', settings.pickBy, /* i18n-copy */ [['host', t('dangal.party.host')], ['vote', t('dangal.party.group_vote')]])}</div>`
               : ''
           }
-          <button type="button" class="pk-link" data-save-group>Save this group</button>
+          ${Kit().contentLangRowHtml && window.DangalContentLocales ? Kit().contentLangRowHtml(DangalContentLocales.PARTY_WORD_GAMES, settings, isHost) : ''}
+          <button type="button" class="pk-link" data-save-group>${tHtml('dangal.party.save_this_group')}</button>
         </details>
-        ${hist.length ? '<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-share-night>Share tonight’s scoreboard</button>' : ''}
-        <button type="button" class="pk-link" data-leave>${isHost ? 'End the party' : 'Leave the party'}</button>
+        ${hist.length ? '<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-share-night>' + tHtml('dangal.party.share_tonight_s_scoreboard') + '</button>' : ''}
+        <button type="button" class="pk-link" data-leave>${isHost ? tHtml('dangal.party.end_the_party') : tHtml('dangal.party.leave_the_party')}</button>
       </div>`);
       paintPresence();
       body.querySelector('[data-share]').addEventListener('click', () => Kit().shareRoom(GAME, code, LABEL));
@@ -454,18 +455,19 @@
       );
       body.querySelectorAll('[data-remove]').forEach((b) =>
         b.addEventListener('click', async () => {
-          const who = (players[b.dataset.remove] || {}).name || 'this player';
-          const go = typeof confirmLeaveGame === 'function' ? await confirmLeaveGame({ title: 'Remove ' + who + '?', body: 'They leave the party and any game in progress.' }) : true;
+          const who = (players[b.dataset.remove] || {}).name || t('dangal.party.this_player');
+          const go = typeof confirmLeaveGame === 'function' ? await confirmLeaveGame({ title: t('dangal.party.remove_who', { who }), body: t('dangal.party.they_leave_the_party_and_any') }) : true;
           if (go) act('remove', { target: b.dataset.remove });
         })
       );
       const seg = body.querySelector('[data-seg="pickBy"]');
       if (seg) Kit().wireSegs(seg.parentNode, settings, (k, v) => act('settings', { settings: { pickBy: v } }));
+      body.querySelector('[data-content-lang]')?.addEventListener('click', () => isHost && Kit().pickContentLang(DangalContentLocales.PARTY_WORD_GAMES, settings, (next) => act('settings', { settings: { contentLang: next } })));
       body.querySelector('[data-save-group]').addEventListener('click', () => askSaveGroup(list.map((p) => p.name)));
       body.querySelector('[data-share-night]')?.addEventListener('click', () => shareNight(rows(), hist));
       body.querySelector('[data-leave]').addEventListener('click', async () => {
         if (isHost) {
-          const go = typeof confirmLeaveGame === 'function' ? await confirmLeaveGame({ title: 'End the party?', body: 'Everyone sees the final scoreboard.' }) : true;
+          const go = typeof confirmLeaveGame === 'function' ? await confirmLeaveGame({ title: t('dangal.party.end_the_party_2'), body: t('dangal.party.everyone_sees_the_final_scoreboard') }) : true;
           if (!go) return;
           await act('end');
           return;
@@ -490,9 +492,9 @@
       const body = shell.render(`<div class="pk-page ph-room ph-ended">
         ${endCardHtml(r, hist)}
         ${scoreboardHtml(r, hist, { me, seatOf })}
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-share-night>Share the night</button>
-        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-save-group>Save this group</button>
-        <button type="button" class="pk-link" data-close>Done</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-share-night>${tHtml('dangal.party.share_the_night')}</button>
+        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-save-group>${tHtml('dangal.party.save_this_group')}</button>
+        <button type="button" class="pk-link" data-close>${tHtml('common.done')}</button>
       </div>`);
       body.querySelector('[data-share-night]').addEventListener('click', () => shareNight(r, hist));
       body.querySelector('[data-save-group]').addEventListener('click', () => askSaveGroup(names));
@@ -513,7 +515,7 @@
       await Kit().roomCall(GAME, 'back', { code });
       return true;
     } catch (e) {
-      toast(Kit().roomErrorText(e) || 'Couldn’t go back to the party');
+      toast(Kit().roomErrorText(e) || t('dangal.party.couldn_t_go_back_to_the'));
       return false;
     }
   }
@@ -533,14 +535,14 @@
     Object.keys((pub && pub.players) || {}).forEach((id) => (names[id] = pub.players[id].name));
     const board = pub ? scoreboardHtml(Core().standings(pub.tonight || {}, names, histOf(pub)), histOf(pub), { me: Kit().myUid() }) : '';
     Kit().openSheet({
-      title: 'Party night',
+      title: t('dangal.party.party_night'),
       bodyHtml: `${board}
         ${
           isHost
-            ? '<div class="pk-sub">Going back ends this game for everyone and adds its placings to tonight’s scoreboard.</div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-back>Back to the party</button>'
+            ? '<div class="pk-sub">' + tHtml('dangal.party.going_back_ends_this_game_for') + '</div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-back>' + tHtml('dangal.party.back_to_the_party') + '</button>'
             : ''
         }
-        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-keep>Keep playing</button>`,
+        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-keep>${tHtml('dangal.party.keep_playing')}</button>`,
       onMount(sheet, close) {
         sheet.querySelector('[data-keep]').addEventListener('click', close);
         sheet.querySelector('[data-back]')?.addEventListener('click', async () => {
@@ -561,20 +563,20 @@
       renderPassNight(existing);
       return;
     }
-    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Pass & Play', confirmLeave: () => false });
+    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: t('dangal.party.pass_play'), confirmLeave: () => false });
     if (Kit().passNight()) renderPassNight(shell);
     else renderPassSetup(shell);
   }
 
   function renderPassSetup(shell) {
-    shell.setSubtitle('Pass & Play');
+    shell.setSubtitle(t('dangal.party.pass_play'));
     const night = Kit().passNight();
     const names = night ? night.players : [Kit().myName() || '', '', ''];
     const body = shell.render(`<div class="pk-page ph-setup">
-      <div class="pk-title">Who’s here tonight?</div>
-      <div class="pk-sub">Same names carry into every game.</div>
+      <div class="pk-title">${tHtml('dangal.party.who_s_here_tonight')}</div>
+      <div class="pk-sub">${tHtml('dangal.party.same_names_carry_into_every_game')}</div>
       <div data-editor></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${night ? 'Save players' : 'Start the night'}</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${night ? tHtml('dangal.party.save_players') : tHtml('dangal.party.start_the_night')}</button>
     </div>`);
     if (night) shell.setBack(() => renderPassNight(shell));
     const editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), { names, min: 3, max: Core().MAX_HUB });
@@ -603,22 +605,22 @@
     shell.passNight = true;
     const night = commitPass();
     if (!night) return renderPassSetup(shell);
-    shell.setSubtitle('Pass & Play · ' + night.players.length + ' players');
+    shell.setSubtitle(t('dangal.party.pass_play_playerscount_players', { playersCount: night.players.length }));
     const names = {};
     night.players.forEach((n) => (names[n] = n));
     const rows = Core().standings(night.tonight, names, night.history);
     const seatOf = (id) => Math.max(0, night.players.indexOf(id));
     const body = shell.render(`<div class="pk-page ph-room">
-      <div class="pk-section">Pick the next game</div>
+      <div class="pk-section">${tHtml('dangal.party.pick_the_next_game')}</div>
       ${gameCardsHtml({ count: night.players.length, where: 'together' })}
       ${scoreboardHtml(rows, night.history, { seatOf })}
       <details class="ph-more">
-        <summary>Players · ${night.players.length}</summary>
+        <summary>${tHtml('dangal.party.players_playerscount', { playersCount: night.players.length })}</summary>
         <div class="pk-sub">${esc(night.players.join(', '))}</div>
-        <button type="button" class="pk-link" data-edit>Change players</button>
-        <button type="button" class="pk-link" data-save-group>Save this group</button>
+        <button type="button" class="pk-link" data-edit>${tHtml('dangal.party.change_players')}</button>
+        <button type="button" class="pk-link" data-save-group>${tHtml('dangal.party.save_this_group')}</button>
       </details>
-      <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-end>End the night</button>
+      <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-end>${tHtml('dangal.party.end_the_night')}</button>
     </div>`);
     body.querySelectorAll('[data-game]').forEach((b) => b.addEventListener('click', () => launchPass(b.dataset.game)));
     body.querySelector('[data-edit]').addEventListener('click', () => renderPassSetup(shell));
@@ -628,7 +630,7 @@
 
   function launchPass(game) {
     const g = typeof getGame === 'function' ? getGame(game) : null;
-    if (!g || typeof g.launch !== 'function') return toast('That game is still loading — try again');
+    if (!g || typeof g.launch !== 'function') return toast(t('dangal.party.that_game_is_still_loading_try'));
     g.launch({ source: 'partyhub_pass', mode: 'pass' });
   }
 
@@ -641,10 +643,10 @@
     const body = shell.render(`<div class="pk-page ph-room ph-ended">
       ${endCardHtml(rows, night.history)}
       ${scoreboardHtml(rows, night.history, { seatOf: (id) => Math.max(0, night.players.indexOf(id)) })}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-share-night>Share the night</button>
-      <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-save-group>Save this group</button>
-      <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-finish>Finish · clear tonight</button>
-      <button type="button" class="pk-link" data-resume>Keep playing</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-share-night>${tHtml('dangal.party.share_the_night')}</button>
+      <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-save-group>${tHtml('dangal.party.save_this_group')}</button>
+      <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-finish>${tHtml('dangal.party.finish_clear_tonight')}</button>
+      <button type="button" class="pk-link" data-resume>${tHtml('dangal.party.keep_playing')}</button>
     </div>`);
     shell.setBack(() => renderPassNight(shell));
     body.querySelector('[data-share-night]').addEventListener('click', () => shareNight(rows, night.history));

@@ -9,7 +9,7 @@
   'use strict';
 
   // [eco, name, moves]
-  const LINES = [
+  const LINES = /* i18n-values: games.chess.opening */ [
     ['A00', 'Polish Opening', 'b4'],
     ['A00', 'Grob Opening', 'g4'],
     ['A00', 'Van Geet Opening', 'Nc3'],
@@ -188,6 +188,10 @@
         }
       }
       if (ok && (!best || row.moves.length > best.plies)) best = { eco: row.eco, name: row.name, plies: row.moves.length };
+    }
+    if (best) {
+      best.nameEn = best.name;
+      if (typeof optionLabel === 'function') best.name = optionLabel('games.chess.opening', best.name);
     }
     return best;
   }

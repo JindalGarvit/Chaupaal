@@ -5,17 +5,17 @@
   'use strict';
 
   const ACHIEVEMENTS = {
-    first_game: { label: 'Pehla Qadam', desc: 'Play your first Dangal game', chips: 100, icon: '🎮' },
-    first_win: { label: 'Pehli Jeet', desc: 'Win your first game', chips: 150, icon: '🏆' },
-    ten_games: { label: 'Khiladi', desc: 'Play 10 Dangal games', chips: 250, icon: '🎯' },
-    fifty_games: { label: 'Ustaad', desc: 'Play 50 Dangal games', chips: 500, icon: '⭐' },
-    hundred_games: { label: 'Dangal Guru', desc: 'Play 100 Dangal games', chips: 1000, icon: '🌟' },
-    won_stake: { label: 'Raazi Tha', desc: 'Win a chip-staked game', chips: 100, icon: '🎰' },
-    chess_first_win: { label: 'Pehli Chaal', desc: 'Win your first chess game', chips: 150, icon: '♟' },
-    penalty_clean_sheet: { label: 'Clean Sheet', desc: 'Win a penalty shootout without conceding', chips: 150, icon: '🧤' },
-    penalty_panenka: { label: 'Panenka', desc: 'Score a soft chip down the middle', chips: 150, icon: '🥄' },
-    poker_royal_flush: { label: 'Royal Flush', desc: 'Make a royal flush at Texas Hold’em', chips: 250, icon: '👑' },
-    poker_bluff_master: { label: 'Bluff Master', desc: 'Win 10 pots without a showdown at public tables', chips: 200, icon: '🃏' },
+    first_game: { label: t('dangal.pehla_qadam'), desc: t('dangal.play_your_first_dangal_game'), chips: 100, icon: '🎮' },
+    first_win: { label: t('dangal.pehli_jeet'), desc: t('dangal.win_your_first_game'), chips: 150, icon: '🏆' },
+    ten_games: { label: t('dangal.khiladi'), desc: t('dangal.play_10_dangal_games'), chips: 250, icon: '🎯' },
+    fifty_games: { label: t('dangal.ustaad'), desc: t('dangal.play_50_dangal_games'), chips: 500, icon: '⭐' },
+    hundred_games: { label: t('dangal.dangal_guru'), desc: t('dangal.play_100_dangal_games'), chips: 1000, icon: '🌟' },
+    won_stake: { label: t('dangal.raazi_tha'), desc: t('dangal.win_a_chip_staked_game'), chips: 100, icon: '🎰' },
+    chess_first_win: { label: t('dangal.pehli_chaal'), desc: t('dangal.win_your_first_chess_game'), chips: 150, icon: '♟' },
+    penalty_clean_sheet: { label: t('dangal.clean_sheet'), desc: t('dangal.win_a_penalty_shootout_without_conceding'), chips: 150, icon: '🧤' },
+    penalty_panenka: { label: t('dangal.panenka'), desc: t('dangal.score_a_soft_chip_down_the'), chips: 150, icon: '🥄' },
+    poker_royal_flush: { label: t('dangal.royal_flush'), desc: t('dangal.make_a_royal_flush_at_texas'), chips: 250, icon: '👑' },
+    poker_bluff_master: { label: t('dangal.bluff_master'), desc: t('dangal.win_10_pots_without_a_showdown'), chips: 200, icon: '🃏' },
   };
 
   function showAchievementToast(ach) {

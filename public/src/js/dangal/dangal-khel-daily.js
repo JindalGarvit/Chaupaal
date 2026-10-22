@@ -82,7 +82,7 @@
         key: 'fav_play',
         gameId: favPlay,
         kind: 'play',
-        label: ranked[0] && ranked[0].id === favPlay ? 'Your usual · play ' + m.name : 'Play ' + m.name,
+        label: ranked[0] && ranked[0].id === favPlay ? t('dangal.your_usual_play_name', { name: m.name }) : t('dangal.play_name', { name: m.name }),
         icon: m.icon,
         done: false,
       });
@@ -94,7 +94,7 @@
         key: 'fav_win',
         gameId: favWin,
         kind: 'win',
-        label: 'Win a round of ' + m.name,
+        label: t('dangal.win_a_round_of_name', { name: m.name }),
         icon: m.icon,
         done: false,
       });
@@ -107,7 +107,7 @@
         key: 'discover',
         gameId: discover,
         kind: 'play',
-        label: 'Try something else · ' + m.name,
+        label: t('dangal.try_something_else_name', { name: m.name }),
         icon: m.icon,
         done: false,
       });
@@ -119,7 +119,7 @@
         key: 'gotd',
         gameId: gotd,
         kind: 'play',
-        label: 'Featured today · ' + m.name,
+        label: t('dangal.featured_today_name', { name: m.name }),
         icon: m.icon,
         done: false,
       });
@@ -156,7 +156,7 @@
     if (just.length && typeof showToast === 'function') {
       const n = just.length;
       const all = list.every((c) => c.done);
-      showToast(all ? 'Khel dailies complete' : 'Daily challenge done');
+      showToast(all ? t('dangal.khel_dailies_complete') : t('dangal.daily_challenge_done'));
     }
     if (typeof haptic === 'function') haptic('success');
   }
@@ -167,7 +167,7 @@
     const done = list.filter((c) => c.done).length;
     return `<div class="khel-dailies" data-khel-dailies>
       <div class="khel-dailies-head">
-        <span>Today on Khel</span>
+        <span>${tHtml('dangal.today_on_khel')}</span>
         <strong>${done}/${list.length}</strong>
       </div>
       <div class="khel-dailies-list">

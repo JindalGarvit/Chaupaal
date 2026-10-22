@@ -21,6 +21,32 @@
  *    value makes the best hand.
  *  - A player who can't cover a bet may pack, or (two left) call an all-in show.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.TeenPattiCore = factory();
@@ -32,7 +58,7 @@
   const SUIT_SYMBOLS = { S: '♠', H: '♥', D: '♦', C: '♣' };
   const RANK_WORDS = { 2: 'Twos', 3: 'Threes', 4: 'Fours', 5: 'Fives', 6: 'Sixes', 7: 'Sevens', 8: 'Eights', 9: 'Nines', 10: 'Tens', 11: 'Jacks', 12: 'Queens', 13: 'Kings', 14: 'Aces' };
   const RANK_SHORT = { 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
-  const CATS = ['High card', 'Pair', 'Colour', 'Sequence', 'Pure sequence', 'Trail'];
+  const CATS = /* i18n-copy */ [gtx('games.teenpatti.r.high', 'High card'), gtx('games.teenpatti.r.pair', 'Pair'), gtx('games.teenpatti.r.colour', 'Colour'), gtx('games.teenpatti.r.seq', 'Sequence'), gtx('games.teenpatti.r.pure', 'Pure sequence'), gtx('games.teenpatti.r.trail', 'Trail')];
   const VARIANTS = ['classic', 'muflis', 'ak47', 'joker'];
   const BUYINS = [0, 100, 250, 500];
   const HANDS = [10, 20, 30];
@@ -109,14 +135,14 @@
   }
 
   function handName(cat, tb) {
-    if (cat === 5) return 'Trail of ' + RANK_WORDS[tb[0]];
+    if (cat === 5) return gtx('games.teenpatti.trail_of_value', 'Trail of {{value}}', { value: RANK_WORDS[tb[0]] });
     if (cat === 4 || cat === 3) {
       const top = tb[0] === 15 ? 'A-K-Q' : tb[0] === 14 ? 'A-2-3' : RANK_SHORT[tb[0]] + '-' + RANK_SHORT[tb[0] - 1] + '-' + RANK_SHORT[tb[0] - 2];
       return CATS[cat] + ' ' + top;
     }
-    if (cat === 2) return 'Colour, ' + RANK_SHORT[tb[0]] + ' high';
-    if (cat === 1) return 'Pair of ' + RANK_WORDS[tb[0]];
-    return 'High card ' + RANK_SHORT[tb[0]];
+    if (cat === 2) return gtx('games.teenpatti.colour_value_high', 'Colour, {{value}} high', { value: RANK_SHORT[tb[0]] });
+    if (cat === 1) return gtx('games.teenpatti.pair_of_value', 'Pair of {{value}}', { value: RANK_WORDS[tb[0]] });
+    return gtx('games.teenpatti.high_card_value', 'High card {{value}}', { value: RANK_SHORT[tb[0]] });
   }
 
   function wildRanks(variant, joker) {
@@ -173,7 +199,7 @@
     };
   }
   const bootFor = (set) => (set.buyIn ? Math.max(1, Math.round(set.buyIn / 50)) : FREE_BOOT);
-  const variantLabel = (v) => ({ classic: 'Classic', muflis: 'Muflis (lowest wins)', ak47: 'AK47 (A K 4 7 wild)', joker: 'Joker (cut rank wild)' })[v] || 'Classic';
+  const variantLabel = (v) => ({ classic: gtx('games.teenpatti.rules.variant.variant.labels.classic', 'Classic'), muflis: gtx('games.teenpatti.rules.variant.variant.labels.muflis', 'Muflis (lowest wins)'), ak47: gtx('games.teenpatti.rules.variant.variant.labels.ak47', 'AK47 (A K 4 7 wild)'), joker: gtx('games.teenpatti.rules.variant.variant.labels.joker', 'Joker (cut rank wild)') })[v] || gtx('games.teenpatti.rules.variant.variant.labels.classic', 'Classic');
 
   // ---------------------------------------------------------------- state
 
@@ -185,7 +211,7 @@
     st.log.push({ no: st.seq, seat, msg });
     if (st.log.length > LOG_MAX) st.log.splice(0, st.log.length - LOG_MAX);
   }
-  const nameOf = (st, i) => (st.seats[i] ? st.seats[i].name : 'Player');
+  const nameOf = (st, i) => (st.seats[i] ? st.seats[i].name : gtx('dangal.party.player', 'Player'));
 
   /**
    * @param {{id,name,bot?,level?,stack?}[]} players seat order; `stack` defaults to the buy-in
@@ -209,7 +235,7 @@
       buyIn: set.buyIn,
       seats: players.map((p) => {
         const stack = Math.max(0, Math.floor(p.stack != null ? Number(p.stack) : set.buyIn || FREE_STACK));
-        return { id: String(p.id), name: String(p.name || 'Player').slice(0, 40), bot: !!p.bot, level: p.bot ? (LEVELS.indexOf(p.level) >= 0 ? p.level : 'normal') : null, stack, initial: stack, out: false, left: false, away: false, afk: 0 };
+        return { id: String(p.id), name: String(p.name || gtx('dangal.party.player', 'Player')).slice(0, 40), bot: !!p.bot, level: p.bot ? (LEVELS.indexOf(p.level) >= 0 ? p.level : 'normal') : null, stack, initial: stack, out: false, left: false, away: false, afk: 0 };
       }),
       handNo: 0,
       dealer: Math.floor(R() * n) % n,
@@ -380,7 +406,7 @@
     h.result = { winners, reason, pot: h.pot, won, shown, names };
     h.phase = 'done';
     h.turn = -1;
-    const how = { fold: 'everyone else packed', show: 'the show', sideshow: 'the side show', potlimit: 'the pot limit show' }[reason] || reason;
+    const how = { fold: gtx('games.teenpatti.byFold', 'everyone else packed'), show: gtx('games.teenpatti.the_show', 'the show'), sideshow: gtx('games.teenpatti.the_side_show', 'the side show'), potlimit: gtx('games.teenpatti.the_pot_limit_show', 'the pot limit show') }[reason] || reason;
     log(st, winners[0], winners.map((i) => nameOf(st, i)).join(' & ') + ' win' + (winners.length > 1 ? '' : 's') + ' ' + h.pot + ' — ' + how);
     return { ok: true, result: h.result };
   }
@@ -419,7 +445,7 @@
     if (a.type === 'forfeit') {
       if (a.reason === 'left') me.left = true;
       if (a.reason === 'afk') me.away = true;
-      if (h.phase !== 'done' && h.inHand[seat]) return packSeat(st, seat, a.reason === 'left' ? ' left the table' : ' is sitting out');
+      if (h.phase !== 'done' && h.inHand[seat]) return packSeat(st, seat, a.reason === 'left' ? gtx('games.teenpatti.left_the_table', ' left the table') : gtx('games.teenpatti.is_sitting_out', ' is sitting out'));
       return { ok: true };
     }
     if (h.phase === 'done') return E('phase');
@@ -428,7 +454,7 @@
     if (a.type === 'see') {
       if (h.seen[seat]) return E('seen');
       h.seen[seat] = true;
-      h.last[seat] = 'Seen';
+      h.last[seat] = gtx('games.teenpatti.seen', 'Seen');
       log(st, seat, nameOf(st, seat) + ' looked at their cards');
       return { ok: true };
     }
@@ -437,7 +463,7 @@
       const from = h.side.from;
       if (!a.accept) {
         log(st, seat, nameOf(st, seat) + ' denied the side show');
-        h.last[seat] = 'Denied side show';
+        h.last[seat] = gtx('games.teenpatti.denied_side_show', 'Denied side show');
         advance(st, from);
         return { ok: true, accepted: false };
       }
@@ -447,7 +473,7 @@
       const ss = strength(h.cards[seat], st.variant, h.joker);
       const loser = sf > ss ? seat : from;
       h.inHand[loser] = false;
-      h.last[loser] = 'Lost side show';
+      h.last[loser] = gtx('games.teenpatti.lost_side_show', 'Lost side show');
       log(st, seat, nameOf(st, seat) + ' accepted — ' + nameOf(st, loser) + ' packs');
       if (activeSeats(st).length === 1) return win(st, activeSeats(st)[0], 'sideshow', []);
       advance(st, from);
@@ -472,7 +498,7 @@
         h.stake = L.raise.stake;
         pay(st, seat, L.raise.cost);
         if (!h.seen[seat]) h.blind[seat] += 1;
-        h.last[seat] = 'Raise ' + L.raise.cost;
+        h.last[seat] = gtx('games.teenpatti.raise_cost', 'Raise {{cost}}', { cost: L.raise.cost });
         log(st, seat, nameOf(st, seat) + ' raised to ' + L.raise.cost);
         return afterBet(st, seat);
       }
@@ -481,7 +507,7 @@
         const act = activeSeats(st);
         const opp = act[0] === seat ? act[1] : act[0];
         pay(st, seat, L.show.cost);
-        h.last[seat] = 'Show';
+        h.last[seat] = gtx('games.teenpatti.rules.rules.5.h', 'Show');
         log(st, seat, nameOf(st, seat) + ' asked for a show');
         const sm = strength(h.cards[seat], st.variant, h.joker);
         const so = strength(h.cards[opp], st.variant, h.joker);
@@ -492,7 +518,7 @@
         pay(st, seat, L.sideshow.cost);
         h.phase = 'sideshow';
         h.side = { from: seat, to: L.sideshow.to };
-        h.last[seat] = 'Side show?';
+        h.last[seat] = gtx('games.teenpatti.side_show', 'Side show?');
         log(st, seat, nameOf(st, seat) + ' asked ' + nameOf(st, L.sideshow.to) + ' for a side show');
         if (h.pot >= st.potLimit) return afterBet(st, seat);
         return { ok: true };
@@ -505,7 +531,7 @@
   function packSeat(st, seat, why) {
     const h = st.hand;
     h.inHand[seat] = false;
-    h.last[seat] = 'Packed';
+    h.last[seat] = gtx('games.teenpatti.packed', 'Packed');
     log(st, seat, nameOf(st, seat) + why);
     const act = activeSeats(st);
     if (act.length === 1) return win(st, act[0], 'fold', []);

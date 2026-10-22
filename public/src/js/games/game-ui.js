@@ -67,38 +67,38 @@
   };
 
   const GAME_LABELS = {
-    quiz: 'Muqabala',
-    muqabala: 'Muqabala',
-    akhbaar: 'Akhbaar',
-    chess: 'Chess',
-    snakes: 'Snakes & Ladders',
-    ludo: 'Ludo',
-    uno: 'Oh No!',
-    ttt: 'Tic-Tac-Toe',
-    wordguess: 'Shabd Five',
-    scribble: 'Scribble',
-    tiptap: 'Tip Tap',
-    ankjod: 'Kakuro',
-    kakuro: 'Kakuro',
-    streetcricket: 'Street Cricket',
-    badminton: 'Badminton',
-    tambola: 'Tambola',
-    carrom: 'Carrom',
-    rummy: 'Rummy',
-    teenpatti: 'Teen Patti',
-    bluff: 'Bluff',
-    brickbreaker: 'Brick Breaker',
-    imposter: 'Imposter',
-    rajamantri: 'Raja Mantri Chor Sipahi',
-    charades: 'Charades',
-    mostlikely: 'Most Likely To?',
-    werewolf: 'Werewolf',
-    penalty: 'Penalty Shootout',
-    poker: "Texas Hold'em",
-    wrap: 'Monthly Wrap',
-    duniya: 'Duniya',
-    peepal: 'Peepal',
-    profile: 'Profile',
+    quiz: t('dangal.muqabala'),
+    muqabala: t('dangal.muqabala'),
+    akhbaar: t('dangal.akhbaar'),
+    chess: t('common.chess'),
+    snakes: t('dangal.snakes_ladders'),
+    ludo: t('dangal.ludo'),
+    uno: t('dangal.oh_no'),
+    ttt: t('dangal.tic_tac_toe'),
+    wordguess: t('dangal.shabd_five'),
+    scribble: t('dangal.scribble'),
+    tiptap: t('dangal.tip_tap'),
+    ankjod: t('dangal.kakuro'),
+    kakuro: t('dangal.kakuro'),
+    streetcricket: t('dangal.street_cricket'),
+    badminton: t('dangal.badminton'),
+    tambola: t('dangal.classics.tambola'),
+    carrom: t('dangal.classics.carrom'),
+    rummy: t('dangal.classics.rummy'),
+    teenpatti: t('dangal.classics.teen_patti'),
+    bluff: t('dangal.classics.bluff'),
+    brickbreaker: t('dangal.brick_breaker'),
+    imposter: t('dangal.party.imposter'),
+    rajamantri: t('dangal.party.raja_mantri_chor_sipahi'),
+    charades: t('dangal.party.charades'),
+    mostlikely: t('dangal.most_likely_to'),
+    werewolf: t('dangal.party.werewolf'),
+    penalty: t('dangal.penalty_shootout'),
+    poker: t('dangal.texas_hold_em'),
+    wrap: t('dangal.monthly_wrap'),
+    duniya: t('dangal.duniya'),
+    peepal: t('dangal.peepal'),
+    profile: t('common.profile'),
   };
 
   function trackShareEvent(name, params) {
@@ -109,131 +109,131 @@
 
   const COACH_TIPS = {
     quiz: [
-      'Daily Quiz: same 10 for everyone, one attempt · Duel: rated 1v1 · Party: 2–50 in a room',
-      'Correct = 600 + up to 400 for speed · ties go to the faster total time',
-      'Practice any category, unlimited and unrated · Report a question from its reveal',
+      t('dangal.daily_quiz_same_10_for_everyone'),
+      t('dangal.correct_600_up_to_400_for'),
+      t('dangal.practice_any_category_unlimited_and_unrate'),
     ],
-    chess: ['Tap a piece, then a highlighted square', 'Fischer Random shuffles the back rank', 'Harder AI thinks a little longer'],
+    chess: [t('dangal.tap_a_piece_then_a_highlighted'), t('dangal.fischer_random_shuffles_the_back_rank'), t('dangal.harder_ai_thinks_a_little_longer')],
     snakes: [
-      'Classic · Vedic (bounce) · Speed (2 dice) · Chaos (flips) · Moksha Patam 72 exact finish',
-      'Live 1v1: host locks one board · take turns · snakes down · ladders up',
-      'Virtual stakes settle once · Rematch opens a fresh match (same version)',
+      t('dangal.classic_vedic_bounce_speed_2_dice'),
+      t('dangal.live_1v1_host_locks_one_board'),
+      t('dangal.virtual_stakes_settle_once_rematch_opens'),
     ],
-    ludo: ['Roll six to enter a piece', 'Tap a glowing piece to move', 'Capture rivals by landing on them'],
+    ludo: [t('dangal.roll_six_to_enter_a_piece'), t('dangal.tap_a_glowing_piece_to_move'), t('dangal.capture_rivals_by_landing_on_them')],
     ttt: [
-      'Get three in a row · block early · center is strong',
-      'Practice Easy / Medium / Hard AI',
-      'Live 1v1: virtual stakes settle once per board · Rematch = fresh match',
+      t('dangal.get_three_in_a_row_block'),
+      t('dangal.practice_easy_medium_hard_ai'),
+      t('dangal.live_1v1_virtual_stakes_settle_once'),
     ],
     wordguess: [
-      'One Daily puzzle per local day, the same for everyone — streak follows your account',
-      'Hard mode reuses greens & ambers · archive of past puzzles · friends’ results after you finish',
-      'Practice has its own stats — never touches your Daily streak',
+      t('dangal.one_daily_puzzle_per_local_day'),
+      t('dangal.hard_mode_reuses_greens_ambers_archive'),
+      t('dangal.practice_has_its_own_stats_never'),
     ],
     scribble: [
-      'Live room for 2–12 — the drawer picks 1 of 3 words, everyone else guesses in chat',
-      'Faster guesses score more (300 → 50) · letter hints over time · “So close!” is private',
-      'Host sets rounds, draw time, hints and packs · custom words under Advanced',
+      t('dangal.live_room_for_2_12_the'),
+      t('dangal.faster_guesses_score_more_300_50'),
+      t('dangal.host_sets_rounds_draw_time_hints'),
     ],
     tiptap: [
-      'Match 4 → Line · L or T → Bomb · 5 in a row → Prism · swap two specials for a combo',
-      'Finish every goal before moves (or the clock) run out · 150 levels, up to three stars',
-      'Daily Challenge: same board for everyone, first try counts · no lives, no timers to wait out',
+      t('dangal.match_4_line_l_or_t'),
+      t('dangal.finish_every_goal_before_moves_or'),
+      t('dangal.daily_challenge_same_board_for_everyone'),
     ],
     ankjod: [
-      'Kakuro: each run of white cells must add up to its clue — digits 1–9, no repeats in a run',
-      'Every puzzle has exactly one answer · Easy to Expert, graded by the logic it needs',
-      'Pencil notes · Auto-notes · Sums helper · Hint explains the next step · Continue mid-puzzle',
-      'Daily Kakuro: same puzzle for everyone, fastest time wins (+30 s per hint) · archive of past days',
+      t('dangal.kakuro_each_run_of_white_cells'),
+      t('dangal.every_puzzle_has_exactly_one_answer'),
+      t('dangal.pencil_notes_auto_notes_sums_helper'),
+      t('dangal.daily_kakuro_same_puzzle_for_everyone'),
     ],
     streetcricket: [
-      'Based on the MCC Laws of Cricket, adapted for street play — bowl line, length and ball; tap one of 8 shots on time',
-      'Wides and no-balls cost an extra · a no-ball earns a free hit · one review per innings in Standard (simulated tracking)',
-      'Standard is rated · Gully and Backyard are unrated · Bots: Easy / Normal / Hard / Pro · Live is resolved by our server',
+      t('dangal.based_on_the_mcc_laws_of'),
+      t('dangal.wides_and_no_balls_cost_an'),
+      t('dangal.standard_is_rated_gully_and_backyard'),
     ],
     badminton: [
-      'Best of 3 games to 21 — win by 2, 30 caps it · every rally scores',
-      'Serve from the right court on an even score, left on odd · in doubles, only the server’s side changes courts',
-      'Tap as the shuttle reaches the green · Standard singles is rated · Doubles with friends, bots or matchmaking',
+      t('dangal.best_of_3_games_to_21'),
+      t('dangal.serve_from_the_right_court_on'),
+      t('dangal.tap_as_the_shuttle_reaches_the'),
     ],
     tambola: [
-      'Numbers are called one by one — mark them on your ticket (or turn on auto-mark)',
-      'Tap Claim when a prize is done: Early Five, lines, corners, Full House · first valid claim wins',
-      'A wrong claim (bogey) blocks that ticket · 2 to 100+ players · Caller mode works offline',
+      t('dangal.numbers_are_called_one_by_one'),
+      t('dangal.tap_claim_when_a_prize_is'),
+      t('dangal.a_wrong_claim_bogey_blocks_that'),
     ],
-    carrom: ['Pocket your own men from your baseline', 'Queen after one of yours, then cover it', 'Striker in the pocket = foul + due'],
-    uno: ['Match colour, number or symbol to play', 'Tap "Oh No!" as you play your second-to-last card', 'Think a Draw Four was a bluff? Challenge it'],
+    carrom: [t('dangal.pocket_your_own_men_from_your'), t('dangal.queen_after_one_of_yours_then'), t('dangal.striker_in_the_pocket_foul_due')],
+    uno: [t('dangal.match_colour_number_or_symbol_to'), t('dangal.tap_oh_no_as_you_play'), t('dangal.think_a_draw_four_was_a')],
     rummy: [
-      'Draw a card, throw a card — group your hand into sequences and sets',
-      '13-card: declare with 2+ sequences, one pure · Gin: knock at 10 or less deadwood',
-      'Points, Pool or Deals · bots Easy to Expert · coach in practice · virtual chips only',
+      t('dangal.draw_a_card_throw_a_card'),
+      t('dangal.13_card_declare_with_2_sequences'),
+      t('dangal.points_pool_or_deals_bots_easy'),
     ],
     teenpatti: [
-      'Everyone pays the boot · three cards each',
-      'Bet blind, or look and bet double · raise, pack, side show',
-      'Show when two are left · pot limit shows everyone · 18+ · virtual chips only',
+      t('dangal.everyone_pays_the_boot_three_cards'),
+      t('dangal.bet_blind_or_look_and_bet'),
+      t('dangal.show_when_two_are_left_pot'),
     ],
     bluff: [
-      'Play 1–4 cards face down and say what they are — true or not',
-      'Anyone can call “Bluff!” before the timer ends · wrong side picks up the pile',
-      'Empty your hand and survive the last call to win · 3–8 players',
+      t('dangal.play_1_4_cards_face_down'),
+      t('dangal.anyone_can_call_bluff_before_the'),
+      t('dangal.empty_your_hand_and_survive_the'),
     ],
     imposter: [
-      'Everyone gets the same secret word — except the Imposter',
-      'Take turns giving ONE clue word: not the word, not a translation, no repeats',
-      'Discuss, then vote. Catch the Imposter — but they get one guess to steal the win',
-      'Undercover: the Imposter gets a close word and doesn’t know they’re the odd one out',
+      t('dangal.everyone_gets_the_same_secret_word'),
+      t('dangal.take_turns_giving_one_clue_word'),
+      t('dangal.discuss_then_vote_catch_the_imposter'),
+      t('dangal.undercover_the_imposter_gets_a_close'),
     ],
     rajamantri: [
-      'Everyone draws a secret chit: Raja 1000 · Mantri 800 · Sipahi 500 · Chor 0',
-      'The Raja reveals and calls: “Mantri, find the Chor!” — the Mantri reveals too',
-      'The Mantri picks the Chor. Right: everyone keeps their points. Wrong: Mantri and Chor swap',
-      '5–8 players add Rani, Daku, Senapati, Daroga — find every thief, one pick each',
+      t('dangal.everyone_draws_a_secret_chit_raja'),
+      t('dangal.the_raja_reveals_and_calls_mantri'),
+      t('dangal.the_mantri_picks_the_chor_right'),
+      t('dangal.5_8_players_add_rani_daku'),
     ],
     charades: [
-      'Two teams take turns — the actor mimes a secret title, no talking',
-      'Teammates guess before the timer ends · Got it ✓ = +1',
-      'One Pass per turn by default · the actor can hold 👁 to re-check the title',
-      'On a video call, teammates can type guesses — close spellings count',
+      t('dangal.two_teams_take_turns_the_actor'),
+      t('dangal.teammates_guess_before_the_timer_ends'),
+      t('dangal.one_pass_per_turn_by_default'),
+      t('dangal.on_a_video_call_teammates_can'),
     ],
     mostlikely: [
-      'Most Likely To: everyone secretly votes for one player — the top pick gets crowned',
-      'Would You Rather: pick A or B, then guess what most of the room picked',
-      'Never Have I Ever: tap I have or Never — say "I have" and you lose a finger; last hand up wins',
-      'Votes stay hidden until the reveal · +1 for reading the room',
-      'Settings: packs, rounds, anonymous reveal and your own prompts',
+      t('dangal.most_likely_to_everyone_secretly_votes'),
+      t('dangal.would_you_rather_pick_a_or'),
+      t('dangal.never_have_i_ever_tap_i'),
+      t('dangal.votes_stay_hidden_until_the_reveal'),
+      t('dangal.settings_packs_rounds_anonymous_reveal_and'),
     ],
     werewolf: [
-      'Secret roles: Werewolves, a Seer, a Doctor and Villagers (Mafia theme under Advanced)',
-      'Night: everyone taps a choice — Werewolves pick a target, the Seer checks, the Doctor protects',
-      'Day: hear who was taken, talk it over, then vote someone out',
-      'Village wins when every Werewolf is out · Werewolves win when they match the rest',
-      'Advanced: Hunter, Witch, Bodyguard, Tanner, timers, role reveal, voice narrator',
+      t('dangal.secret_roles_werewolves_a_seer_a'),
+      t('dangal.night_everyone_taps_a_choice_werewolves'),
+      t('dangal.day_hear_who_was_taken_talk'),
+      t('dangal.village_wins_when_every_werewolf_is'),
+      t('dangal.advanced_hunter_witch_bodyguard_tanner_tim'),
     ],
     penalty: [
-      'Shoot: drag on the goal to aim, then hold the button for power — more power spreads the circle',
-      'Save: tap where to dive, then slide Early ↔ Late — early covers more, late reacts to the ball',
-      'Kicks alternate · best of 5, ends early when one side can’t catch up · then sudden death',
-      'Live: both pick at once and the server reveals the kick — nobody sees the other side first',
+      t('dangal.shoot_drag_on_the_goal_to'),
+      t('dangal.save_tap_where_to_dive_then'),
+      t('dangal.kicks_alternate_best_of_5_ends'),
+      t('dangal.live_both_pick_at_once_and'),
     ],
     poker: [
-      'Texas Hold’em: two cards each, five shared — make the best five-card hand from all seven',
-      'Blinds, then bet on the flop (3 cards), turn and river · fold, check, call, bet, raise or go all-in',
-      'Royal flush beats straight flush, four of a kind, full house, flush, straight, three of a kind, two pair, pair, high card',
-      'Practice vs bots · Quick tables and Sit & Go use wallet chips · Friends tables use table chips only',
-      'Virtual chips only — they can’t be bought or cashed out · 18+',
+      t('dangal.texas_hold_em_two_cards_each'),
+      t('dangal.blinds_then_bet_on_the_flop'),
+      t('dangal.royal_flush_beats_straight_flush_four'),
+      t('dangal.practice_vs_bots_quick_tables_and'),
+      t('dangal.virtual_chips_only_they_can_t'),
     ],
     brickbreaker: [
-      'Campaign (60 levels), Endless or the Daily — drag to move the paddle',
-      'Where the ball hits the paddle sets its angle · numbered bricks take that many hits',
-      'Steel can’t break · Bombs clear neighbours · moving bricks slide side to side',
-      'Power-ups: Wide, Multi-ball, Slow, Sticky, Laser, Extra ball — odds in How to play',
+      t('dangal.campaign_60_levels_endless_or_the'),
+      t('dangal.where_the_ball_hits_the_paddle'),
+      t('dangal.steel_can_t_break_bombs_clear'),
+      t('dangal.power_ups_wide_multi_ball_slow'),
     ],
   };
 
   const PB_KEYS = {
-    tiptap: { key: 'chaupaal_pb_tiptap', label: 'pts', higherBetter: true },
-    wordguess: { key: 'chaupaal_pb_wordguess', label: 'guesses', higherBetter: false },
+    tiptap: { key: 'chaupaal_pb_tiptap', label: t('dangal.pts'), higherBetter: true },
+    wordguess: { key: 'chaupaal_pb_wordguess', label: t('dangal.guesses'), higherBetter: false },
     ankjod: { key: 'chaupaal_pb_ankjod', label: 's', higherBetter: false },
     ankjod_easy: { key: 'chaupaal_pb_ankjod_easy', label: 's', higherBetter: false },
     ankjod_medium: { key: 'chaupaal_pb_ankjod_medium', label: 's', higherBetter: false },
@@ -241,15 +241,15 @@
     ankjod_expert: { key: 'chaupaal_pb_ankjod_expert', label: 's', higherBetter: false },
     ankjod_daily: { key: 'chaupaal_pb_ankjod_daily', label: 's', higherBetter: false },
     quiz: { key: 'chaupaal_pb_quiz', label: '/10', higherBetter: true },
-    streetcricket: { key: 'chaupaal_pb_streetcricket', label: ' runs', higherBetter: true },
-    streetcricket_over: { key: 'chaupaal_pb_streetcricket_over', label: ' runs', higherBetter: true },
-    streetcricket_nets: { key: 'chaupaal_pb_streetcricket_nets', label: ' clean', higherBetter: true },
-    streetcricket_chase: { key: 'chaupaal_pb_streetcricket_chase', label: ' runs', higherBetter: true },
-    streetcricket_chase_wins: { key: 'chaupaal_pb_streetcricket_chase_wins', label: ' wins', higherBetter: true },
-    badminton: { key: 'chaupaal_pb_badminton', label: 'pts', higherBetter: true },
-    carrom: { key: 'chaupaal_pb_carrom', label: 'coins', higherBetter: true },
-    brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: 'pts', higherBetter: true },
-    brickbreaker_endless: { key: 'chaupaal_pb_brickbreaker_endless', label: 'pts', higherBetter: true },
+    streetcricket: { key: 'chaupaal_pb_streetcricket', label: t('dangal.runs'), higherBetter: true },
+    streetcricket_over: { key: 'chaupaal_pb_streetcricket_over', label: t('dangal.runs'), higherBetter: true },
+    streetcricket_nets: { key: 'chaupaal_pb_streetcricket_nets', label: t('dangal.clean'), higherBetter: true },
+    streetcricket_chase: { key: 'chaupaal_pb_streetcricket_chase', label: t('dangal.runs'), higherBetter: true },
+    streetcricket_chase_wins: { key: 'chaupaal_pb_streetcricket_chase_wins', label: t('dangal.wins'), higherBetter: true },
+    badminton: { key: 'chaupaal_pb_badminton', label: t('dangal.pts'), higherBetter: true },
+    carrom: { key: 'chaupaal_pb_carrom', label: t('dangal.coins'), higherBetter: true },
+    brickbreaker: { key: 'chaupaal_pb_brickbreaker', label: t('dangal.pts'), higherBetter: true },
+    brickbreaker_endless: { key: 'chaupaal_pb_brickbreaker_endless', label: t('dangal.pts'), higherBetter: true },
   };
 
   function gameFeedback(action, opts) {
@@ -291,16 +291,16 @@
     const s = state || {};
     const mode = s.mode || 'waiting';
     const practice = !!s.practice;
-    const defaultTheirs = practice ? 'Practice AI thinking…' : 'Opponent thinking…';
+    const defaultTheirs = practice ? t('dangal.practice_ai_thinking') : t('dangal.opponent_thinking');
     const label =
       s.label ||
       (mode === 'yours'
-        ? 'Your turn'
+        ? t('dangal.your_turn')
         : mode === 'theirs'
           ? defaultTheirs
           : mode === 'over'
-            ? 'Game over'
-            : 'Waiting…');
+            ? t('dangal.game_over')
+            : t('dangal.waiting'));
     const sub = s.sub ? `<span class="game-turn-sub">${s.sub}</span>` : '';
     const pulse = s.pulse || mode === 'yours' ? ' game-turn--pulse' : '';
     return `<div class="game-turn game-turn--${mode}${pulse}" role="status" aria-live="polite"><span class="game-turn-dot" aria-hidden="true"></span><span class="game-turn-label">${label}</span>${sub}</div>`;
@@ -321,15 +321,15 @@
         ? String(chatOrName.id || chatOrName.uid || '')
         : '';
     // Canonical AI seat ids always map to Practice AI — never a friend display name.
-    if (!id || id === 'ai' || /^ai(_|$)/i.test(id) || id === 'practice') return 'Practice AI';
+    if (!id || id === 'ai' || /^ai(_|$)/i.test(id) || id === 'practice') return t('dangal.practice_ai');
     const s = String(raw || '').trim();
     if (!s || /^(ai|practice|friend|opponent)$/i.test(s) || /^ai\s*\d*$/i.test(s)) {
-      return 'Practice AI';
+      return t('dangal.practice_ai');
     }
-    if (/practice\s*ai/i.test(s)) return 'Practice AI';
-    if (/^ai(\s|$)/i.test(s)) return 'Practice AI';
+    if (/practice\s*ai/i.test(s)) return t('dangal.practice_ai');
+    if (/^ai(\s|$)/i.test(s)) return t('dangal.practice_ai');
     // Prefer honesty: human-looking leftover names on Practice launches → Practice AI
-    return 'Practice AI';
+    return t('dangal.practice_ai');
   }
 
   /**
@@ -339,23 +339,23 @@
   function practiceTurnStatus(opts) {
     const o = opts || {};
     if (o.liveOn) {
-      const name = o.oppName || 'Opponent';
+      const name = o.oppName || t('dangal.opponent');
       return {
         mode: o.myTurn ? 'yours' : 'theirs',
-        label: o.myTurn ? 'Your turn' : name + '’s turn',
+        label: o.myTurn ? t('dangal.your_turn') : t('dangal.name_s_turn', { name }),
         thinking: false,
       };
     }
     const sport = String(o.sport || '').trim();
     const thinkingVerb = sport
-      ? 'Practice AI ' + sport + (/\.\.\.|…$/.test(sport) ? '' : '…')
-      : 'Practice AI thinking…';
+      ? t('dangal.practice_ai_sport_value', { sport, value: /\.\.\.|…$/.test(sport) ? '' : '…' })
+      : t('dangal.practice_ai_thinking');
     if (o.myTurn) {
-      return { mode: 'yours', label: 'Your turn', thinking: false };
+      return { mode: 'yours', label: t('dangal.your_turn'), thinking: false };
     }
     return {
       mode: 'theirs',
-      label: o.thinking !== false ? thinkingVerb : 'Practice AI’s turn',
+      label: o.thinking !== false ? thinkingVerb : t('dangal.practice_ai_s_turn'),
       thinking: true,
     };
   }
@@ -402,7 +402,7 @@
   function gameChromeHtml(opts) {
     const o = opts || {};
     const backId = safe(o.backId || 'gameBack');
-    const title = safe(o.title || 'Game');
+    const title = safe(o.title || t('dangal.game'));
     const subtitle = o.subtitle ? `<span class="game-chrome-subtitle">${safe(o.subtitle)}</span>` : '';
     const brand = o.hideBrand ? '' : `<div class="game-chrome-brand">${gameBrandMarkHtml(true)}</div>`;
     const gameMark =
@@ -411,12 +411,12 @@
         : '';
     const pauseId = o.pauseId ? safe(o.pauseId) : '';
     const pauseBtn = pauseId
-      ? `<button type="button" id="${pauseId}" class="game-chrome-action game-tap-target" aria-label="Pause">⏸</button>`
+      ? `<button type="button" id="${pauseId}" class="game-chrome-action game-tap-target" aria-label="${tHtml('dangal.pause')}">⏸</button>`
       : '';
     const rightInner = o.rightHtml || '<span class="game-chrome-spacer" aria-hidden="true"></span>';
     const right = pauseBtn + rightInner;
     return `<div class="game-chrome">
-      ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn game-tap-target', id: backId }):`<button type="button" id="${backId}" class="game-back-btn game-tap-target cp-back-btn" aria-label="Back">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
+      ${typeof backButtonHtml==='function'?backButtonHtml({ className: 'game-back-btn game-tap-target', id: backId }):`<button type="button" id="${backId}" class="game-back-btn game-tap-target cp-back-btn" aria-label="${tHtml('common.back')}">${typeof iconHtml==='function'?iconHtml('arrow-left',{size:22}):''}</button>`}
       <div class="game-chrome-heading">${brand}${gameMark}<div class="game-chrome-title">${title}</div>${subtitle}</div>
       <div class="game-chrome-right">${right}</div>
     </div>`;
@@ -428,7 +428,7 @@
     return `<div class="game-scoreboard">
       <div class="game-score-side"><span>${safe(a.label || 'You')}</span><strong>${safe(a.score ?? 0)}</strong></div>
       <div class="game-score-divider">–</div>
-      <div class="game-score-side game-score-side--right"><span>${safe(b.label || 'Opponent')}</span><strong>${safe(b.score ?? 0)}</strong></div>
+      <div class="game-score-side game-score-side--right"><span>${safe(b.label || t('dangal.opponent'))}</span><strong>${safe(b.score ?? 0)}</strong></div>
     </div>`;
   }
 
@@ -436,10 +436,10 @@
   function defaultResultActions(opts) {
     const o = opts || {};
     if (Array.isArray(o.actions) && o.actions.length) return o.actions;
-    const list = [{ label: o.againLabel || 'Play again', primary: true, id: 'again' }];
-    if (o.share !== false) list.push({ label: o.shareLabel || 'Share', primary: false, id: 'share' });
-    if (o.challenge !== false) list.push({ label: o.challengeLabel || 'Challenge friend', primary: false, id: 'challenge' });
-    if (o.story) list.push({ label: 'Post to story', primary: false, id: 'story' });
+    const list = [{ label: o.againLabel || t('dangal.play_again'), primary: true, id: 'again' }];
+    if (o.share !== false) list.push({ label: o.shareLabel || t('common.share'), primary: false, id: 'share' });
+    if (o.challenge !== false) list.push({ label: o.challengeLabel || t('dangal.challenge_friend'), primary: false, id: 'challenge' });
+    if (o.story) list.push({ label: t('dangal.post_to_story'), primary: false, id: 'story' });
     (o.extraActions || []).forEach((a) => list.push(a));
     return list;
   }
@@ -447,7 +447,7 @@
   /** Calm shared results shell — Muqabala-derived, emoji optional and small. */
   function gameResultHtml(opts) {
     const o = opts || {};
-    const title = safe(o.title || 'Game over');
+    const title = safe(o.title || t('dangal.game_over'));
     const pbLine = o.pbHtml || (o.vsBest ? `<p class="game-result-pb">${safe(o.vsBest)}</p>` : '');
     const subtitle = o.subtitle ? `<p class="game-result-sub">${safe(o.subtitle)}</p>` : '';
     let glyph = '';
@@ -461,7 +461,7 @@
     const score =
       o.scoreHtml ||
       (o.you != null || o.opp != null
-        ? gameScoreHtml({ label: o.youLabel || 'You', score: o.you ?? 0 }, { label: o.oppLabel || 'Opponent', score: o.opp ?? 0 })
+        ? gameScoreHtml({ label: o.youLabel || t('dangal.solo.you'), score: o.you ?? 0 }, { label: o.oppLabel || t('dangal.opponent'), score: o.opp ?? 0 })
         : '');
     const statsStrip =
       o.statsHtml ||
@@ -507,7 +507,7 @@
 
   function gameSkeletonHtml(opts) {
     const o = opts || {};
-    const title = o.title || 'Loading…';
+    const title = o.title || t('dangal.classics.loading');
     const dark = o.theme === 'dark';
     return `
       <div class="game-overlay ${dark ? 'game-overlay--dark' : 'game-overlay--light'} game-overlay--entering" data-game-shell="1">
@@ -754,11 +754,11 @@
             return m + ':' + String(s % 60).padStart(2, '0');
           }
         : (n) => n + unit;
-    if (pb == null) return `First score · ${fmt(value)}`;
+    if (pb == null) return t('dangal.first_score_value', { value: fmt(value) });
     const better =
       meta.higherBetter ? Number(value) > pb : Number(value) < pb;
-    if (better) return `New best · ${fmt(value)} (was ${fmt(pb)})`;
-    if (Number(value) === pb) return `Tied best · ${fmt(pb)}`;
+    if (better) return t('dangal.new_best_value_was_pb', { value: fmt(value), pb: fmt(pb) });
+    if (Number(value) === pb) return t('dangal.tied_best_pb', { pb: fmt(pb) });
     return `${fmt(value)} · Best ${fmt(pb)}`;
   }
 
@@ -772,7 +772,7 @@
       const ident = getGameIdentity(gameId === 'muqabala' ? 'quiz' : gameId);
       if (ident && ident.label) return ident.label;
     }
-    return GAME_LABELS[gameId] || gameId || 'Game';
+    return GAME_LABELS[gameId] || gameId || t('dangal.game');
   }
 
   function buildGameShareCard(gameId, stats) {
@@ -800,7 +800,7 @@
     const nameRaw =
       (typeof userProfile !== 'undefined' && (userProfile?.username || userProfile?.name)) ||
       (typeof currentUser !== 'undefined' && currentUser?.displayName) ||
-      'Someone';
+      t('common.someone');
     const params = new URLSearchParams();
     params.set('name', String(nameRaw).slice(0, 60));
     if (score != null) params.set('score', String(score));
@@ -851,7 +851,7 @@
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(`${text}\n${url}`);
-        if (typeof showToast === 'function') showToast('Link copied — share anywhere');
+        if (typeof showToast === 'function') showToast(t('dangal.link_copied_share_anywhere'));
         trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'clipboard' });
         return { ok: true, method: 'clipboard' };
       }
@@ -914,7 +914,7 @@
         // Brand
         ctx.fillStyle = '#FFC93C';
         ctx.font = '700 22px "Space Grotesk", sans-serif';
-        ctx.fillText('CHAUPAAL', 48, 80);
+        ctx.fillText(t('dangal.chaupaal'), 48, 80);
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.font = '600 18px "Space Grotesk", sans-serif';
         ctx.fillText(gameDisplayName(gameId), 48, 112);
@@ -947,7 +947,7 @@
         // Footer
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
         ctx.font = '500 18px Inter, sans-serif';
-        ctx.fillText(isContent ? 'On Chaupaal' : 'Play on Chaupaal', 48, h - 56);
+        ctx.fillText(isContent ? t('dangal.on_chaupaal') : t('dangal.play_on_chaupaal'), 48, h - 56);
         canvas.toBlob((blob) => resolve(blob), 'image/png', 0.92);
       } catch (e) {
         resolve(null);
@@ -988,13 +988,13 @@
       sheet.className = 'game-friend-sheet';
       sheet.innerHTML = `
         <div class="game-friend-backdrop" data-fp-cancel></div>
-        <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="${safe(o.title || 'Challenge a friend')}">
-          <div class="game-friend-title">${safe(o.title || 'Challenge a friend')}</div>
-          <div class="game-friend-sub">${safe(o.subtitle || 'Pick someone from your friends')}</div>
+        <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="${safe(o.title || t('dangal.challenge_a_friend'))}">
+          <div class="game-friend-title">${safe(o.title || t('dangal.challenge_a_friend'))}</div>
+          <div class="game-friend-sub">${safe(o.subtitle || t('dangal.pick_someone_from_your_friends'))}</div>
           <div data-list-filter-host class="game-friend-filter"></div>
-          <div class="game-friend-list" data-fp-list><div class="game-friend-loading">Loading friends…</div></div>
-          <div class="game-friend-empty" data-list-filter-empty hidden>No matches</div>
-          <button type="button" class="game-friend-cancel" data-fp-cancel>Cancel</button>
+          <div class="game-friend-list" data-fp-list><div class="game-friend-loading">${tHtml('dangal.loading_friends')}</div></div>
+          <div class="game-friend-empty" data-list-filter-empty hidden>${tHtml('common.no_matches')}</div>
+          <button type="button" class="game-friend-cancel" data-fp-cancel>${tHtml('common.cancel')}</button>
         </div>`;
       const host = document.querySelector('.device') || document.body;
       host.appendChild(sheet);
@@ -1012,16 +1012,16 @@
         await enrichUsersWithProfileType(profiles);
       }
       if (!profiles.length) {
-        listEl.innerHTML = `<div class="game-friend-empty">No friends yet. Add friends in Baithak, or enter a username.</div>
-          <button type="button" class="game-result-btn game-result-btn--primary" data-fp-manual>Enter username</button>`;
+        listEl.innerHTML = `<div class="game-friend-empty">${tHtml('dangal.no_friends_yet_add_friends_in')}</div>
+          <button type="button" class="game-result-btn game-result-btn--primary" data-fp-manual>${tHtml('dangal.enter_username')}</button>`;
         listEl.querySelector('[data-fp-manual]')?.addEventListener('click', async () => {
           sheet.remove();
           const name =
             typeof promptNameSheet === 'function'
               ? await promptNameSheet({
-                  title: 'Friend username',
-                  placeholder: 'Enter username',
-                  confirmLabel: 'Challenge',
+                  title: t('dangal.friend_username'),
+                  placeholder: t('dangal.enter_username'),
+                  confirmLabel: t('common.dangal_challenge_start'),
                 })
               : null;
           finish(name ? { name, id: 'friend_' + name } : null);
@@ -1036,7 +1036,7 @@
           const you = typeof selfListLabel === 'function' ? selfListLabel() : null;
           const rawName = isYou
             ? `You${you?.name && you.name !== 'You' ? ` · ${you.name}` : ''}`
-            : p.name || p.username || p.displayName || 'Friend';
+            : p.name || p.username || p.displayName || t('common.friend');
           const name =
             isYou
               ? safe(rawName)
@@ -1059,7 +1059,7 @@
           const p = list[Number(btn.dataset.fpI)];
           if (!p) return finish(null);
           finish({
-            name: p.name || p.username || (typeof selfDisplayName === 'function' ? selfDisplayName() : 'Friend'),
+            name: p.name || p.username || (typeof selfDisplayName === 'function' ? selfDisplayName() : t('common.friend')),
             id: p.uid || p.id || 'friend_' + (p.username || p.name),
             uid: p.uid || p.id,
             avatar: p.avatar,
@@ -1071,7 +1071,7 @@
       if (filterHost && typeof mountListFilter === 'function') {
         mountListFilter({
           host: filterHost,
-          placeholder: 'Search friends…',
+          placeholder: t('dangal.search_friends'),
           surfaceId: 'friend_picker',
           getRows: () => [...listEl.querySelectorAll('.game-friend-row')],
           emptyEl: sheet.querySelector('[data-list-filter-empty]'),
@@ -1102,7 +1102,7 @@
         <div class="game-coach-brand">${gameBrandMarkHtml(true)}</div>
         <div class="game-coach-title">${safe(gameDisplayName(gameId))}</div>
         <ul class="game-coach-tips">${tips.map((t) => `<li>${safe(t)}</li>`).join('')}</ul>
-        <button type="button" class="game-result-btn game-result-btn--primary" data-coach-dismiss>Got it</button>
+        <button type="button" class="game-result-btn game-result-btn--primary" data-coach-dismiss>${tHtml('dangal.got_it')}</button>
       </div>`;
     overlay.appendChild(coach);
     const dismiss = () => {
@@ -1132,7 +1132,7 @@
     const o = opts || {};
     if (!overlay || !overlay.appendChild) return;
     if (overlay.querySelector('.game-howto-btn')) return;
-    const title = o.title || 'How to play';
+    const title = o.title || t('dangal.how_to_play');
     let body = o.body || '';
     if (!body && Array.isArray(o.tips) && o.tips.length) body = o.tips.join(' · ');
     if (!body && o.gameId) {
@@ -1146,8 +1146,8 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'game-howto-btn';
-    btn.setAttribute('aria-label', 'How to play');
-    btn.textContent = 'How to';
+    btn.setAttribute('aria-label', t('dangal.how_to_play'));
+    btn.textContent = t('dangal.how_to');
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1246,7 +1246,7 @@
   async function postGameScoreStory(gameId, stats) {
     const s = stats || {};
     if (typeof createPlatformStory !== 'function') {
-      if (typeof showToast === 'function') showToast('Sign in to post a story');
+      if (typeof showToast === 'function') showToast(t('dangal.sign_in_to_post_a_story'));
       return null;
     }
     const name = gameDisplayName(gameId);
@@ -1272,10 +1272,10 @@
         sharedGameId: gameId === 'muqabala' ? 'quiz' : gameId,
       });
       trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'story' });
-      if (typeof showToast === 'function') showToast('Posted to story');
+      if (typeof showToast === 'function') showToast(t('dangal.posted_to_story'));
       return story;
     } catch (e) {
-      if (typeof showToast === 'function') showToast(e?.message || 'Could not post story');
+      if (typeof showToast === 'function') showToast(e?.message || t('dangal.could_not_post_story'));
       return null;
     }
   }
@@ -1288,12 +1288,12 @@
     const body =
       s.friendText ||
       s.text ||
-      `Hey ${friend.name} — check out my Chaupaal ${gameDisplayName(gameId)} score!`;
+      t('dangal.hey_name_check_out_my_chaupaal', { name: friend.name, gameDisplayName: gameDisplayName(gameId) });
     const text = `${body}${url ? `\n${url}` : ''}`;
     const chat = {
       id: friend.uid || friend.id || 'friend_' + (friend.name || 'dm'),
       type: 'dm',
-      name: friend.name || 'Friend',
+      name: friend.name || t('common.friend'),
       avatar: friend.avatar || '👤',
       preview: text.slice(0, 48),
       time: 'now',
@@ -1320,7 +1320,7 @@
             input.dispatchEvent(new Event('input', { bubbles: true }));
           } catch (e) {}
         }
-        if (typeof showToast === 'function') showToast('Message ready — tap send');
+        if (typeof showToast === 'function') showToast(t('dangal.message_ready_tap_send'));
       }, 350);
     }, 250);
     trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'baithak' });
@@ -1335,14 +1335,14 @@
       sheet.className = 'game-friend-sheet';
       sheet.innerHTML = `
         <div class="game-friend-backdrop" data-fsf-close></div>
-        <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="Share with ${safe(friend.name)}">
-          <div class="game-friend-title">Share with ${safe(friend.name)}</div>
-          <div class="game-friend-sub">Send in Baithak chat, or share the card externally</div>
+        <div class="game-friend-card" role="dialog" aria-modal="true" aria-label="${tHtml('dangal.share_with_name', { name: friend.name })}">
+          <div class="game-friend-title">${tHtml('dangal.share_with_safe', { safe: safe(friend.name) })}</div>
+          <div class="game-friend-sub">${tHtml('dangal.send_in_baithak_chat_or_share')}</div>
           <div class="game-result-actions chaupaal-share-actions">
-            <button type="button" class="game-result-btn game-result-btn--primary" data-fsf="baithak">Send in Baithak</button>
-            <button type="button" class="game-result-btn" data-fsf="os">Share card / link</button>
+            <button type="button" class="game-result-btn game-result-btn--primary" data-fsf="baithak">${tHtml('dangal.send_in_baithak')}</button>
+            <button type="button" class="game-result-btn" data-fsf="os">${tHtml('dangal.share_card_link')}</button>
           </div>
-          <button type="button" class="game-friend-cancel" data-fsf-close>Cancel</button>
+          <button type="button" class="game-friend-cancel" data-fsf-close>${tHtml('common.cancel')}</button>
         </div>`;
       const host = document.querySelector('.device') || document.body;
       host.appendChild(sheet);
@@ -1360,7 +1360,7 @@
           ...stats,
           text:
             stats.friendText ||
-            `Hey ${friend.name} — ${stats.text || `check out my Chaupaal ${gameDisplayName(gameId)} score!`}`,
+            `Hey ${friend.name} — ${stats.text || t('dangal.check_out_my_chaupaal_gamedisplayname_scor', { gameDisplayName: gameDisplayName(gameId) })}`,
         };
         await shareGameResult(gameId, personalized);
         trackShareEvent('share_method', { surface: gameId || 'unknown', method: 'friend_os' });
@@ -1409,7 +1409,7 @@
     sheet.className = 'game-friend-sheet chaupaal-share-sheet share-sheet-ig';
     sheet.dataset.navManaged = '1';
     const showStory = o.story !== false;
-    const title = o.title || (typeof t === 'function' ? t('share_title', 'Share') : 'Share');
+    const title = o.title || (typeof t === 'function' ? t('dangal.share_title', 'Share') : t('dangal.share_title'));
     const ico = (name, size) =>
       typeof iconHtml === 'function' ? iconHtml(name, { size: size || 18 }) : '';
     sheet.innerHTML = `
@@ -1419,27 +1419,27 @@
         <div class="share-sheet-hero">
           <div class="share-sheet-mark" aria-hidden="true">${typeof TabElements !== 'undefined' && TabElements.markHtml ? TabElements.markHtml('chaupaal', 28) : ico('share', 22)}</div>
           <div class="game-friend-title">${safe(title)}</div>
-          ${o.subtitle ? `<div class="game-friend-sub">${safe(o.subtitle)}</div>` : `<div class="game-friend-sub">${safe(typeof t === 'function' ? t('share_sub', 'Send to someone on Chaupaal') : 'Send to someone on Chaupaal')}</div>`}
+          ${o.subtitle ? `<div class="game-friend-sub">${safe(o.subtitle)}</div>` : `<div class="game-friend-sub">${safe(typeof t === 'function' ? t('dangal.share_sub', 'Send to someone on Chaupaal') : t('dangal.send_to_someone_on_chaupaal'))}</div>`}
         </div>
-        <div class="share-section-label">${safe(typeof t === 'function' ? t('share_friends', 'Friends') : 'Friends')}</div>
+        <div class="share-section-label">${safe(typeof t === 'function' ? t('dangal.share_friends', 'Friends') : t('dangal.share_friends'))}</div>
         <div class="share-users-row" data-cs-friends><div class="game-friend-loading">…</div></div>
         <div class="share-recents" data-cs-recents></div>
         <div class="share-search-wrap search-field">
           <span class="share-search-ico search-field-icon" aria-hidden="true">${ico('search', 16)}</span>
-          <input type="search" class="share-search-input search-field-input search-field-hide-native-clear" data-cs-search placeholder="${safe(typeof t === 'function' ? t('share_search_ph', 'Search people…') : 'Search people…')}" autocomplete="off" enterkeyhint="search" data-living-ph="share_search">
-          <button type="button" class="search-field-clear share-search-clear" data-cs-clear aria-label="${safe(typeof t === 'function' ? t('search_clear', 'Clear search') : 'Clear search')}" hidden>✕</button>
+          <input type="search" class="share-search-input search-field-input search-field-hide-native-clear" data-cs-search placeholder="${safe(typeof t === 'function' ? t('share_search_ph', 'Search people…') : t('common.share_search_ph'))}" autocomplete="off" enterkeyhint="search" data-living-ph="share_search">
+          <button type="button" class="search-field-clear share-search-clear" data-cs-clear aria-label="${safe(typeof t === 'function' ? t('search_clear', 'Clear search') : t('common.search_clear'))}" hidden>✕</button>
         </div>
         <div class="share-sheet-actions">
-          <button type="button" class="share-action-row" data-cs="copy"><span class="share-action-ico">${ico('link', 18)}</span><span>${safe(typeof t === 'function' ? t('share_copy_link', 'Copy link') : 'Copy link')}</span></button>
+          <button type="button" class="share-action-row" data-cs="copy"><span class="share-action-ico">${ico('link', 18)}</span><span>${safe(typeof t === 'function' ? t('share_copy_link', 'Copy link') : t('common.share_copy_link'))}</span></button>
           ${
             typeof currentUser !== 'undefined' && currentUser && gameId !== 'invite'
-              ? `<button type="button" class="share-action-row" data-cs="invite-chaupaal"><span class="share-action-ico">${ico('users', 18)}</span><span>${safe(typeof t === 'function' ? t('contacts_invite_cta', 'Invite to Chaupaal') : 'Invite to Chaupaal')}</span></button>`
+              ? `<button type="button" class="share-action-row" data-cs="invite-chaupaal"><span class="share-action-ico">${ico('users', 18)}</span><span>${safe(typeof t === 'function' ? t('contacts_invite_cta', 'Invite to Chaupaal') : t('common.invite_to_chaupaal'))}</span></button>`
               : ''
           }
-          ${showStory ? `<button type="button" class="share-action-row" data-cs="story"><span class="share-action-ico">${ico('book-open', 18) || ico('image', 18)}</span><span>${safe(typeof t === 'function' ? t('share_to_story', 'Post to story') : 'Post to story')}</span></button>` : ''}
-          <button type="button" class="share-action-row share-action-row--external" data-cs="external"><span class="share-action-ico">${ico('share', 18)}</span><span>${safe(typeof t === 'function' ? t('share_external_more', 'External / More') : 'External / More')}</span></button>
+          ${showStory ? `<button type="button" class="share-action-row" data-cs="story"><span class="share-action-ico">${ico('book-open', 18) || ico('image', 18)}</span><span>${safe(typeof t === 'function' ? t('dangal.share_to_story', 'Post to story') : t('dangal.post_to_story'))}</span></button>` : ''}
+          <button type="button" class="share-action-row share-action-row--external" data-cs="external"><span class="share-action-ico">${ico('share', 18)}</span><span>${safe(typeof t === 'function' ? t('share_external_more', 'External / More') : t('common.share_external_more'))}</span></button>
         </div>
-        <button type="button" class="game-friend-cancel" data-cs-close>${safe(typeof t === 'function' ? t('cancel', 'Cancel') : 'Cancel')}</button>
+        <button type="button" class="game-friend-cancel" data-cs-close>${safe(typeof t === 'function' ? t('cancel', 'Cancel') : t('common.cancel'))}</button>
       </div>`;
     const hostEl = document.querySelector('.device') || document.body;
     hostEl.appendChild(sheet);
@@ -1497,12 +1497,12 @@
         } catch (e) {}
       }
       if (!profiles.length) {
-        listEl.innerHTML = `<div class="share-empty">${safe(typeof t === 'function' ? t('share_no_friends', 'No friends yet — search someone or use External / More.') : 'No friends yet — search someone or use External / More.')}</div>`;
+        listEl.innerHTML = `<div class="share-empty">${safe(typeof t === 'function' ? t('dangal.share_no_friends', 'No friends yet — search someone or use External / More.') : t('dangal.no_friends_yet_search_someone_or'))}</div>`;
       } else {
         listEl.innerHTML = profiles
           .slice(0, 24)
           .map((p) => {
-            const name = safe((p.name || p.username || 'Friend').split(' ')[0]);
+            const name = safe((p.name || p.username || t('common.friend')).split(' ')[0]);
             const av = typeof renderUserAvatarHtml==='function'
               ? renderUserAvatarHtml(p,{decorative:true})
               :(p.photoURL?`<img src="${safe(p.photoURL)}" alt="">`:`<span class="share-user-chip-fallback">${ico('user', 20)}</span>`);
@@ -1532,10 +1532,10 @@
             ? baithakChats.filter((c) => c && !c.isSelf && !c.isChaupaal).slice(0, 8)
             : [];
         if (chats.length && recentsEl) {
-          recentsEl.innerHTML = `<div class="share-section-label">${safe(typeof t === 'function' ? t('share_recent', 'Recent') : 'Recent')}</div>
+          recentsEl.innerHTML = `<div class="share-section-label">${safe(typeof t === 'function' ? t('share_recent', 'Recent') : t('common.share_recent'))}</div>
             <div class="share-users-row">${chats
               .map((c) => {
-                const label = safe((c.name || c.peerName || 'Chat').split(' ')[0]);
+                const label = safe((c.name || c.peerName || t('common.chat')).split(' ')[0]);
                 const id = safe(c.firestoreId || c.id || '');
                 const avatarIco = c.type === 'group' ? ico('users', 18) : ico('message-circle', 18);
                 return `<button type="button" class="share-user-chip" data-chat-id="${id}" data-name="${safe(c.name || '')}">
@@ -1580,7 +1580,7 @@
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(text);
-          if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('share_copied', 'Link copied') : 'Link copied');
+          if (typeof showToast === 'function') showToast(typeof t === 'function' ? t('dangal.share_copied', 'Link copied') : t('common.link_copied'));
         } else if (typeof showToast === 'function') showToast(url);
       } catch (e) {
         if (typeof showToast === 'function') showToast(url);
@@ -1879,37 +1879,37 @@
     return [
       {
         id: 'play3',
-        label: 'Play 3 sessions',
-        hint: 'Any games count',
+        label: t('dangal.play_3_sessions'),
+        hint: t('dangal.any_games_count'),
         progress: Math.min(week.plays || 0, 3),
         target: 3,
       },
       {
         id: 'variety',
-        label: 'Try 2 different games',
-        hint: 'Mix solos & duels',
+        label: t('dangal.try_2_different_games'),
+        hint: t('dangal.mix_solos_duels'),
         progress: Math.min(uniqueCount, 2),
         target: 2,
       },
       {
         id: 'win1',
-        label: 'Win one match',
-        hint: 'Optional — no pressure',
+        label: t('dangal.win_one_match'),
+        hint: t('dangal.optional_no_pressure'),
         progress: Math.min(week.wins || 0, 1),
         target: 1,
       },
       {
         id: 'shabd',
-        label: 'Finish today\'s Shabd',
-        hint: 'Daily 5-letter word',
+        label: t('dangal.finish_today_s_shabd'),
+        hint: t('dangal.daily_5_letter_word'),
         progress: week.shabd ? 1 : 0,
         target: 1,
         gameId: 'wordguess',
       },
       {
         id: 'gotd',
-        label: 'Play Game of the Day',
-        hint: 'Featured on the hub',
+        label: t('dangal.play_game_of_the_day'),
+        hint: t('dangal.featured_on_the_hub'),
         progress: week.gotd ? 1 : 0,
         target: 1,
       },
@@ -1931,7 +1931,7 @@
       const first = newly[0];
       try {
         if (typeof showToast === 'function') {
-          showToast(newly.length > 1 ? `Weekly goals · ${newly.length} done` : `Goal done · ${first.label}`);
+          showToast(newly.length > 1 ? t('dangal.weekly_goals_newlycount_done', { newlyCount: newly.length }) : t('dangal.goal_done_label', { label: first.label }));
         }
       } catch (e) {}
     }
@@ -1975,12 +1975,12 @@
     const bits = [`${g.played} play${g.played === 1 ? '' : 's'}`];
     if (rate != null && decided >= 2) bits.push(`${rate}% wins`);
     if (g.streak > 1) bits.push(`streak ${g.streak}`);
-    else if (g.bestStreak > 1) bits.push(`best streak ${g.bestStreak}`);
+    else if (g.bestStreak > 1) bits.push(t('common.best_streak_beststreak', { bestStreak: g.bestStreak }));
     if (g.bestScore != null) {
       const unit = (PB_KEYS[id] && PB_KEYS[id].label) || '';
       bits.push(`best ${g.bestScore}${unit}`);
     }
-    return `<div class="game-result-stats" aria-label="Your stats">${bits
+    return `<div class="game-result-stats" aria-label="${tHtml('dangal.your_stats')}">${bits
       .map((b) => `<span class="game-result-stat">${safe(b)}</span>`)
       .join('')}</div>`;
   }
@@ -1990,14 +1990,14 @@
     if (summary.hideMissions) return '';
     const open = summary.missions.find((m) => m.progress < m.target);
     if (!open) {
-      return `<p class="game-result-mission is-done">Weekly goals complete — nice and calm</p>`;
+      return `<p class="game-result-mission is-done">${tHtml('dangal.weekly_goals_complete_nice_and_calm')}</p>`;
     }
     return `<p class="game-result-mission">${safe(open.label)} · ${open.progress}/${open.target}</p>`;
   }
 
   function dangalHubProgressHtml() {
     const summary = getDangalHubSummary();
-    const streakLabel = summary.softDayStreak > 1 ? `${summary.softDayStreak}-day play streak` : summary.softDayStreak === 1 ? 'Played today' : 'Start a soft streak';
+    const streakLabel = summary.softDayStreak > 1 ? t('dangal.play_streak_days', { count: summary.softDayStreak }) : summary.softDayStreak === 1 ? t('common.played_today') : t('dangal.start_a_soft_streak');
     const missionsHidden = summary.hideMissions;
     const collapsed = summary.panelCollapsed;
     const missionRows = missionsHidden
@@ -2016,16 +2016,16 @@
 
     return `<div class="dangal-progress" id="dangalProgressPanel">
       <div class="dangal-progress-summary">
-        <div class="dangal-progress-pill"><span class="dangal-progress-k">Streak</span><strong>${safe(streakLabel)}</strong></div>
-        <div class="dangal-progress-pill"><span class="dangal-progress-k">This week</span><strong>${summary.weekPlays} play${summary.weekPlays === 1 ? '' : 's'}</strong></div>
-        <div class="dangal-progress-pill"><span class="dangal-progress-k">Goals</span><strong>${summary.missionsDone}/${summary.missionsTotal}</strong></div>
+        <div class="dangal-progress-pill"><span class="dangal-progress-k">${tHtml('common.shortcut_akhbaar_streak')}</span><strong>${safe(streakLabel)}</strong></div>
+        <div class="dangal-progress-pill"><span class="dangal-progress-k">${tHtml('common.this_week')}</span><strong>${tHtml('dangal.plays_count', { count: summary.weekPlays })}</strong></div>
+        <div class="dangal-progress-pill"><span class="dangal-progress-k">${tHtml('dangal.goals')}</span><strong>${summary.missionsDone}/${summary.missionsTotal}</strong></div>
       </div>
       <div class="dangal-progress-toolbar">
-        <button type="button" class="dangal-progress-toggle" id="dangalMissionsToggle" aria-expanded="${collapsed ? 'false' : 'true'}">${collapsed ? 'Show weekly goals' : 'Hide weekly goals'}</button>
-        ${missionsHidden ? '' : `<button type="button" class="dangal-progress-snooze" id="dangalMissionsSnooze" title="Hide goals for today">Not now</button>`}
+        <button type="button" class="dangal-progress-toggle" id="dangalMissionsToggle" aria-expanded="${collapsed ? 'false' : 'true'}">${collapsed ? tHtml('dangal.show_weekly_goals') : tHtml('dangal.hide_weekly_goals')}</button>
+        ${missionsHidden ? '' : `<button type="button" class="dangal-progress-snooze" id="dangalMissionsSnooze" title="${tHtml('dangal.hide_goals_for_today')}">${tHtml('common.not_now')}</button>`}
       </div>
       <div class="dangal-missions${collapsed || missionsHidden ? ' is-collapsed' : ''}" id="dangalMissionsList">
-        ${missionsHidden ? `<div class="dangal-missions-snoozed">Goals tucked away for today — they’ll return tomorrow.</div>` : missionRows}
+        ${missionsHidden ? `<div class="dangal-missions-snoozed">${tHtml('dangal.goals_tucked_away_for_today_they')}</div>` : missionRows}
       </div>
     </div>`;
   }
@@ -2046,7 +2046,7 @@
       data.hideMissionsUntil = dangalCalendarDay();
       data.panelCollapsed = true;
       saveDangalProgress(data);
-      if (typeof showToast === 'function') showToast('Goals hidden for today');
+      if (typeof showToast === 'function') showToast(t('dangal.goals_hidden_for_today'));
       if (typeof renderDangalGamesGrid === 'function') renderDangalGamesGrid();
     });
     panel.querySelectorAll('[data-mission-game]').forEach((btn) => {
@@ -2059,18 +2059,18 @@
 
   function tileProgressPillHtml(gameId) {
     const g = getDangalGameStats(gameId);
-    if (!g.played) return '<div class="dangal-game-progress-pill dangal-game-progress-pill--new">Try it</div>';
+    if (!g.played) return '<div class="dangal-game-progress-pill dangal-game-progress-pill--new">' + tHtml('dangal.try_it') + '</div>';
     const decided = (g.wins || 0) + (g.losses || 0);
-    if (g.streak > 1) return `<div class="dangal-game-progress-pill">Streak ${g.streak}</div>`;
+    if (g.streak > 1) return `<div class="dangal-game-progress-pill">${tHtml('dangal.streak_streak', { streak: g.streak })}</div>`;
     if (decided >= 3) {
       const rate = Math.round(((g.wins || 0) / decided) * 100);
-      return `<div class="dangal-game-progress-pill">${rate}% wins · ${g.played}</div>`;
+      return `<div class="dangal-game-progress-pill">${tHtml('dangal.rate_wins_played', { rate, played: g.played })}</div>`;
     }
     if (g.bestScore != null) {
       const unit = (PB_KEYS[normalizeDangalGameId(gameId)] && PB_KEYS[normalizeDangalGameId(gameId)].label) || '';
-      return `<div class="dangal-game-progress-pill">Best ${g.bestScore}${unit}</div>`;
+      return `<div class="dangal-game-progress-pill">${tHtml('dangal.best_bestscore_unit', { bestScore: g.bestScore, unit })}</div>`;
     }
-    return `<div class="dangal-game-progress-pill">${g.played} play${g.played === 1 ? '' : 's'}</div>`;
+    return `<div class="dangal-game-progress-pill">${tHtml('dangal.plays_count', { count: g.played })}</div>`;
   }
 
   /* ── Last played / continue helpers ── */
@@ -2159,7 +2159,7 @@
         const rating = p.gameRatings?.[key];
         if (rating != null) {
           rows.push({
-            name: (p.name || 'Friend').split(' ')[0],
+            name: (p.name || t('common.friend')).split(' ')[0],
             rating: Number(rating),
             you: false,
             profileType: p.profileType || null,
@@ -2181,10 +2181,10 @@
     const shareBtn = mine
       ? `<button type="button" class="btn btn--sm dangal-share-rank-btn" data-share-rank="1" data-rank="${
           rows.indexOf(mine) + 1
-        }" data-score="${safe(mine.rating)}" style="margin-top:8px;width:100%;">Share my rank</button>`
+        }" data-score="${safe(mine.rating)}" style="margin-top:8px;width:100%;">${tHtml('dangal.share_my_rank')}</button>`
       : '';
     return `<div class="dangal-friends-board">
-      <div class="dangal-section-label">Friends this week</div>
+      <div class="dangal-section-label">${tHtml('dangal.friends_this_week')}</div>
       ${rows
         .map(
           (r, i) =>
@@ -2207,21 +2207,21 @@
       uname && typeof shareUrl === 'function'
         ? shareUrl('profile', String(uname).replace(/^@/, ''))
         : location.origin + '/';
-    const rankLine = rank != null ? `#${rank} this week` : 'On the board this week';
+    const rankLine = rank != null ? `#${rank} this week` : t('dangal.on_the_board_this_week');
     const scoreLine = score !== '' && score != null ? String(score) : rankLine;
     const stats =
       typeof buildShareStats === 'function'
         ? buildShareStats({
             scoreLine,
-            meta: 'Dangal · weekly · virtual chips only',
+            meta: t('dangal.dangal_weekly_virtual_chips_only'),
             caption: rankLine,
-            text: `I'm ${rankLine} on Chaupaal Dangal${score !== '' ? ` (${score})` : ''}. Can you climb higher?`,
+            text: t('dangal.i_m_rankline_on_chaupaal_dangal_2', { rankLine, value: score !== '' ? ` (${score})` : '' }),
             url: profileUrl,
           })
         : {
             scoreLine,
-            meta: 'Dangal · weekly',
-            text: `I'm ${rankLine} on Chaupaal Dangal.`,
+            meta: t('dangal.dangal_weekly'),
+            text: t('dangal.i_m_rankline_on_chaupaal_dangal', { rankLine }),
             url: profileUrl,
           };
     if (typeof trackShareEvent === 'function') {
@@ -2230,7 +2230,7 @@
     if (typeof openUnifiedShareSheet === 'function') {
       openUnifiedShareSheet({
         gameId: 'dangal',
-        title: 'Share my rank',
+        title: t('dangal.share_my_rank'),
         subtitle: rankLine,
         stats,
       });
@@ -2302,12 +2302,12 @@
       sheet.className = 'game-pause-scrim';
       sheet.setAttribute('role', 'dialog');
       sheet.innerHTML = `<div class="game-pause-card">
-        <h3 class="game-pause-title">${o.title || 'Leave game?'}</h3>
+        <h3 class="game-pause-title">${o.title || tHtml('dangal.leave_game')}</h3>
         <p style="font-size:13px;color:rgba(255,255,255,.7);margin:0 0 14px;line-height:1.4;">${
-          o.body || 'Progress on this run will be lost.'
+          o.body || tHtml('dangal.progress_on_this_run_will_be')
         }</p>
-        <button type="button" class="btn btn--primary game-tap-target" data-leave-stay data-overlay-dismiss>Keep playing</button>
-        <button type="button" class="btn btn--secondary game-tap-target" data-leave-go>Leave</button>
+        <button type="button" class="btn btn--primary game-tap-target" data-leave-stay data-overlay-dismiss>${tHtml('dangal.keep_playing')}</button>
+        <button type="button" class="btn btn--secondary game-tap-target" data-leave-go>${tHtml('dangal.leave')}</button>
       </div>`;
       const host = document.querySelector('.device') || document.body;
       const owner = Array.from(document.querySelectorAll('.game-overlay')).pop() || null;
@@ -2364,11 +2364,11 @@
       scrim = document.createElement('div');
       scrim.className = 'game-pause-scrim';
       scrim.setAttribute('role', 'dialog');
-      scrim.setAttribute('aria-label', 'Game paused');
+      scrim.setAttribute('aria-label', t('dangal.game_paused'));
       scrim.innerHTML = `<div class="game-pause-card">
-        <h3 class="game-pause-title">Paused</h3>
-        <button type="button" class="btn btn--primary game-tap-target" data-gp-resume>Resume</button>
-        <button type="button" class="btn btn--secondary game-tap-target" data-gp-quit>Quit</button>
+        <h3 class="game-pause-title">${tHtml('dangal.paused')}</h3>
+        <button type="button" class="btn btn--primary game-tap-target" data-gp-resume>${tHtml('common.shortcut_dangal_resume')}</button>
+        <button type="button" class="btn btn--secondary game-tap-target" data-gp-quit>${tHtml('dangal.quit')}</button>
       </div>`;
       host.appendChild(scrim);
       scrim.querySelector('[data-gp-resume]')?.addEventListener('click', () => resume());
@@ -2422,8 +2422,8 @@
 
   /** Arrow / A-D paddle helper — returns unbind(). */
   function bindGameKeyboardPaddle(keys, onMove) {
-    const left = (keys && keys.left) || ['ArrowLeft', 'a', 'A'];
-    const right = (keys && keys.right) || ['ArrowRight', 'd', 'D'];
+    const left = (keys && keys.left) || ['ArrowLeft', 'a', 'A']; // i18n-ignore (codes / names)
+    const right = (keys && keys.right) || ['ArrowRight', 'd', 'D']; // i18n-ignore (codes / names)
     const move = typeof onMove === 'function' ? onMove : () => {};
     const handler = (e) => {
       if (left.includes(e.key)) {

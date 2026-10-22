@@ -21,7 +21,8 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const { readWithCopy } = require('./lib/i18n-source');
+const read = (p) => readWithCopy(p);
 
 const Packs = require(path.join(root, 'public/src/js/data/mostlikely-packs.js'));
 const ML = require(path.join(root, 'public/src/js/games/mostlikely-core.js'));

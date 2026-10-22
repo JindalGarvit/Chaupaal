@@ -10,11 +10,11 @@
   'use strict';
 
   const DIFFS = [
-    { id: 'easy', label: 'Easy', desc: 'Small grids · unique sums', emoji: '🌱' },
-    { id: 'medium', label: 'Medium', desc: 'Crossing runs narrow it down', emoji: '🔥' },
-    { id: 'hard', label: 'Hard', desc: 'Where can each digit go?', emoji: '💀' },
-    { id: 'expert', label: 'Expert', desc: 'Big grids · “what if” eliminations', emoji: '🧠' },
-    { id: 'daily', label: 'Daily', desc: 'One puzzle for everyone today', emoji: '📅' },
+    { id: 'easy', label: t('games.ankjod.easy'), desc: t('games.ankjod.small_grids_unique_sums'), emoji: '🌱' },
+    { id: 'medium', label: t('games.ankjod.medium'), desc: t('games.ankjod.crossing_runs_narrow_it_down'), emoji: '🔥' },
+    { id: 'hard', label: t('games.ankjod.hard'), desc: t('games.ankjod.where_can_each_digit_go'), emoji: '💀' },
+    { id: 'expert', label: t('games.ankjod.expert'), desc: t('games.ankjod.big_grids_what_if_eliminations'), emoji: '🧠' },
+    { id: 'daily', label: t('games.ankjod.rules.rules.5.h'), desc: t('games.ankjod.one_puzzle_for_everyone_today'), emoji: '📅' },
   ];
   const NUMBERED = ['easy', 'medium', 'hard', 'expert'];
   const GAME = 'ankjod';
@@ -1350,16 +1350,16 @@
 
   function checkStatusMessage(a) {
     if (!a) return '';
-    if (a.won) return 'Puzzle solved!';
+    if (a.won) return t('games.ankjod.puzzle_solved');
     if (a.bad && a.bad.size) {
-      if (a.hasDup && a.hasWrongSum) return 'Duplicates and wrong sums — see red cells';
-      if (a.hasDup) return 'Duplicate digit in a run — see red cells';
-      if (a.hasWrongSum) return 'A completed run doesn’t match its clue';
-      if (a.hasImpossible) return 'Some digits don’t fit remaining combos';
-      return 'Conflicts on the red cells';
+      if (a.hasDup && a.hasWrongSum) return t('games.ankjod.duplicates_and_wrong_sums_see_red');
+      if (a.hasDup) return t('games.ankjod.duplicate_digit_in_a_run_see');
+      if (a.hasWrongSum) return t('games.ankjod.a_completed_run_doesn_t_match');
+      if (a.hasImpossible) return t('games.ankjod.some_digits_don_t_fit_remaining');
+      return t('games.ankjod.conflicts_on_the_red_cells');
     }
-    if (!a.allFilled) return 'No conflicts yet — keep filling';
-    return 'Check the red cells — sums or repeats are off';
+    if (!a.allFilled) return t('games.ankjod.no_conflicts_yet_keep_filling');
+    return t('games.ankjod.check_the_red_cells_sums_or');
   }
 
   // ─── UI helpers ────────────────────────────────────────────────────────────
@@ -1486,7 +1486,7 @@
   }
 
   function diffLabel(id) {
-    return (DIFFS.find((d) => d.id === id) || {}).label || (id === 'archive' ? 'Archive' : id);
+    return (DIFFS.find((d) => d.id === id) || {}).label || (id === 'archive' ? t('games.ankjod.archive') : id);
   }
 
   function formatPbBestLine(diff) {
@@ -1494,12 +1494,12 @@
     const pbId = typeof ankJodPbGameId === 'function' ? ankJodPbGameId(diff) : 'ankjod';
     const pb = getGamePB(pbId);
     if (pb == null) return '';
-    return 'Best ' + formatTime(pb * 1000);
+    return t('games.ankjod.best_formattime', { formatTime: formatTime(pb * 1000) });
   }
 
   function savedTitle(save, diff) {
-    if (diff === 'daily') return 'Today’s Daily';
-    if (diff === 'archive') return 'Daily ' + (save.dailyKey || '');
+    if (diff === 'daily') return t('games.ankjod.today_s_daily');
+    if (diff === 'archive') return t('games.ankjod.daily_value', { value: save.dailyKey || '' });
     return diffLabel(diff) + (save.n ? ' #' + save.n : '');
   }
 
@@ -1509,12 +1509,12 @@
     sheet.className = 'game-pause-scrim';
     sheet.style.zIndex = '90';
     const elapsed = formatTime(Math.max(0, Number(save.elapsedMs) || 0));
-    sheet.innerHTML = `<div class="game-pause-card" role="dialog" aria-label="Continue puzzle">
-      <h3 class="game-pause-title">${savedTitle(save, diff)} in progress</h3>
-      <p style="font-size:13px;color:var(--muted,#8A7F72);margin:0 0 16px;line-height:1.4;">Saved at ${elapsed}. Continue where you left off, or start this board again.</p>
-      <button type="button" class="game-result-btn game-result-btn--primary" data-aj-cont>Continue</button>
-      <button type="button" class="game-result-btn" data-aj-new style="margin-top:8px;">Start over</button>
-      <button type="button" class="game-result-btn" data-aj-cancel style="margin-top:8px;">Cancel</button>
+    sheet.innerHTML = `<div class="game-pause-card" role="dialog" aria-label="${tHtml('games.ankjod.continue_puzzle')}">
+      <h3 class="game-pause-title">${tHtml('games.ankjod.title_in_progress', { title: savedTitle(save, diff) })}</h3>
+      <p style="font-size:13px;color:var(--muted,#8A7F72);margin:0 0 16px;line-height:1.4;">${tHtml('games.ankjod.saved_at_elapsed_continue_where_you', { elapsed })}</p>
+      <button type="button" class="game-result-btn game-result-btn--primary" data-aj-cont>${tHtml('games.ankjod.continue')}</button>
+      <button type="button" class="game-result-btn" data-aj-new style="margin-top:8px;">${tHtml('games.ankjod.start_over')}</button>
+      <button type="button" class="game-result-btn" data-aj-cancel style="margin-top:8px;">${tHtml('common.cancel')}</button>
     </div>`;
     const device = document.querySelector('.device') || document.body;
     device.appendChild(sheet);
@@ -1558,7 +1558,7 @@
     const continueBanner = lastSave
       ? `<button type="button" id="kkContinueLast" class="kk-diff-btn kk-diff-btn--continue">
           <span class="kk-diff-ico">▶</span>
-          <span class="kk-diff-txt"><b>Continue</b><small>${savedTitle(lastSave, lastDiff)} · ${formatTime(Math.max(0, Number(lastSave.elapsedMs) || 0))}</small></span>
+          <span class="kk-diff-txt"><b>${tHtml('games.ankjod.continue')}</b><small>${savedTitle(lastSave, lastDiff)} · ${formatTime(Math.max(0, Number(lastSave.elapsedMs) || 0))}</small></span>
         </button>`
       : '';
     const day = todayNo();
@@ -1566,8 +1566,8 @@
     const ds = Hub() ? Hub().dailyState(GAME) : null;
     const streak = Hub() ? Hub().streak(GAME) : 0;
     const dailyMeta = [
-      dEntry ? diffLabel(dEntry.grade) : 'One puzzle for everyone',
-      ds && ds.done && ds.result ? 'Done · ' + ds.result.line : ds && ds.started ? 'Scored try used' : 'Your first try counts',
+      dEntry ? diffLabel(dEntry.grade) : t('games.ankjod.one_puzzle_for_everyone'),
+      ds && ds.done && ds.result ? t('games.ankjod.done_line', { line: ds.result.line }) : ds && ds.started ? t('games.ankjod.scored_try_used') : t('games.ankjod.first_try_counts'),
       streak ? '🔥 ' + streak : '',
     ]
       .filter(Boolean)
@@ -1576,9 +1576,9 @@
       const L = bankList(d.id).length;
       const st = prog.stats[d.id];
       const bits = L
-        ? ['#' + nextNumber(d.id, prog), solvedCount(prog, d.id) + '/' + L + ' solved', st && st.bestMs ? 'Best ' + formatTime(st.bestMs) : '']
+        ? ['#' + nextNumber(d.id, prog), t('games.ankjod.solved_of', { n: solvedCount(prog, d.id), total: L }), st && st.bestMs ? t('games.ankjod.best_time', { time: formatTime(st.bestMs) }) : '']
         : [d.desc, formatPbBestLine(d.id)];
-      if (readAnkSave(d.id)) bits.push('In progress');
+      if (readAnkSave(d.id)) bits.push(t('games.ankjod.in_progress'));
       return `<button type="button" data-diff="${d.id}" class="kk-diff-btn">
           <span class="kk-diff-ico">${d.emoji}</span>
           <span class="kk-diff-txt"><b>${d.label}</b><small>${bits.filter(Boolean).join(' · ')}</small></span>
@@ -1586,21 +1586,21 @@
         </button>`;
     };
     overlay.innerHTML = `
-      ${gameChromeHtml({ title: 'Kakuro', subtitle: 'Solo', backId: 'kkDiffBack' })}
+      ${gameChromeHtml({ title: t('games.ankjod.kakuro'), subtitle: t('games.ankjod.solo'), backId: 'kkDiffBack' })}
       <div class="kk-hub">
-        <p class="kk-hub-lead">Fill the white cells with 1–9. Each clue is the sum of its run, with no digit repeated in a run.</p>
+        <p class="kk-hub-lead">${tHtml('games.ankjod.fill_the_white_cells_with_1')}</p>
         ${continueBanner}
         <button type="button" data-diff="daily" class="kk-diff-btn kk-diff-btn--daily">
           <span class="kk-diff-ico">📅</span>
-          <span class="kk-diff-txt"><b>Daily Kakuro</b><small>${dailyMeta}</small></span>
+          <span class="kk-diff-txt"><b>${tHtml('games.ankjod.daily_kakuro')}</b><small>${dailyMeta}</small></span>
           <span class="kk-diff-go">›</span>
         </button>
         ${DIFFS.filter((d) => d.id !== 'daily').map(diffRow).join('')}
         <div class="solo-hub-row">
-          ${KB() ? '<button type="button" class="solo-link" id="kkArchive">Archive</button>' : ''}
-          <button type="button" class="solo-link" id="kkStats">Stats</button>
-          <button type="button" class="solo-link" id="kkRules">How to play</button>
-          <button type="button" class="solo-link" id="kkSettings">Settings</button>
+          ${KB() ? '<button type="button" class="solo-link" id="kkArchive">' + tHtml('common.chaupaal_archive') + '</button>' : ''}
+          <button type="button" class="solo-link" id="kkStats">${tHtml('games.ankjod.stats')}</button>
+          <button type="button" class="solo-link" id="kkRules">${tHtml('games.ankjod.how_to_play')}</button>
+          <button type="button" class="solo-link" id="kkSettings">${tHtml('common.settings')}</button>
         </div>
       </div>`;
 
@@ -1675,14 +1675,14 @@
       return startAnkJodGame(ctx, 'daily', { scored: false });
     }
     H.openDaily(GAME, {
-      title: 'Daily Kakuro',
-      detail: (e ? diffLabel(e.grade) + ' · ' : '') + 'fastest time wins · +30 s per hint',
-      boardTitle: 'Daily Kakuro',
+      title: t('games.ankjod.daily_kakuro'),
+      detail: t('games.ankjod.value_fastest_time_wins_30_s', { value: e ? diffLabel(e.grade) + ' · ' : '' }),
+      boardTitle: t('games.ankjod.daily_kakuro'),
       onPlay: async (fresh) => {
         if (closeHub) closeHub();
         if (!fresh) return startAnkJodGame(ctx, 'daily', { scored: false, challenge: ctx && ctx.source === 'challenge' ? ctx : null });
         const r = await H.startDaily(GAME);
-        if (!r.scored && typeof showToast === 'function') showToast('You’ve already played today’s Daily on another device — this one is practice');
+        if (!r.scored && typeof showToast === 'function') showToast(t('games.ankjod.you_ve_already_played_today_s'));
         startAnkJodGame(ctx, 'daily', { scored: !!r.scored, challenge: ctx && ctx.source === 'challenge' ? ctx : null });
       },
     });
@@ -1718,8 +1718,8 @@
       </button>`);
     }
     const x = PartyKit.openSheet({
-      title: 'Daily archive',
-      bodyHtml: `<div class="kk-arch">${items.length ? items.join('') : '<div class="solo-empty">The archive fills up as the days go by.</div>'}<p class="solo-note">Past Dailies are practice — only today’s counts for the leaderboard.</p></div>`,
+      title: t('games.ankjod.daily_archive'),
+      bodyHtml: `<div class="kk-arch">${items.length ? items.join('') : '<div class="solo-empty">' + tHtml('games.ankjod.the_archive_fills_up_as_the') + '</div>'}<p class="solo-note">${tHtml('games.ankjod.past_dailies_are_practice_only_today')}</p></div>`,
     });
     if (!x || !x.el) return;
     x.el.addEventListener('click', (ev) => {
@@ -1746,10 +1746,10 @@
       .join('');
     const st = Hub() ? Hub().streak(GAME) : 0;
     PartyKit.openSheet({
-      title: 'Your Kakuro stats',
+      title: t('games.ankjod.your_kakuro_stats'),
       bodyHtml: `<div class="kk-stats">
-        <table class="kk-stats-table"><thead><tr><th></th><th>Solved</th><th>Best</th><th>Average</th></tr></thead><tbody>${rows}</tbody></table>
-        <p class="solo-note">Daily streak: ${st} ${st === 1 ? 'day' : 'days'} · best ${prog.daily.best}</p>
+        <table class="kk-stats-table"><thead><tr><th></th><th>${tHtml('games.ankjod.solved')}</th><th>${tHtml('games.ankjod.best')}</th><th>${tHtml('games.ankjod.average')}</th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="solo-note">${tHtml('games.ankjod.daily_streak_days_best', { st, best: prog.daily.best })}</p>
       </div>`,
     });
   }
@@ -1816,7 +1816,7 @@
     let selected = null; // [r,c]
     let showMistakes = false;
     let pencilMode = resumePencilMode;
-    let statusMsg = options.resume ? 'Resumed' : '';
+    let statusMsg = options.resume ? t('games.ankjod.resumed') : '';
     let won = false;
     let winShown = false;
     let timerId = null;
@@ -1844,11 +1844,11 @@
     const saveDiff = puzzle.archive ? 'archive' : puzzle.difficulty || difficulty || 'easy';
     const puzzleTitle = isDaily
       ? puzzle.archive
-        ? 'Daily ' + (puzzle.dailyKey || '')
-        : 'Daily Kakuro'
+        ? t('games.ankjod.daily_value', { value: puzzle.dailyKey || '' })
+        : t('games.ankjod.daily_kakuro')
       : diffMeta.label + (puzzle.n ? ' #' + puzzle.n : '');
     const subtitle = isDaily
-      ? (puzzle.archive ? 'Archive' : scored ? 'Daily · counts' : 'Daily · practice') + (puzzle.grade ? ' · ' + diffLabel(puzzle.grade) : '')
+      ? (puzzle.archive ? t('games.ankjod.archive') : scored ? t('games.ankjod.daily_counts') : t('games.ankjod.daily_practice')) + (puzzle.grade ? ' · ' + diffLabel(puzzle.grade) : '')
       : puzzleTitle;
 
     function getPlayElapsed() {
@@ -2085,7 +2085,7 @@
         selected = [h.r, h.c];
         hintFocusRun = null;
         showMistakes = false;
-        statusMsg = 'Filled in ' + h.n + '.';
+        statusMsg = t('games.ankjod.filled_in_n', { n: h.n });
         fb('valid');
         const a = analyzeMistakes(board, values);
         if (a.won) finishWin();
@@ -2103,7 +2103,7 @@
         return legacyHint();
       }
       if (!h || h.kind === 'none' || h.cell < 0) {
-        statusMsg = h ? h.text : 'No hint available right now';
+        statusMsg = h ? h.text : t('games.ankjod.no_hint_available_right_now');
         refreshPlay();
         return;
       }
@@ -2117,13 +2117,13 @@
         statusMsg = h.text;
       } else {
         pendingHint = { r, c, n: h.digit };
-        statusMsg = h.text + ' Tap Hint again to fill it in.';
+        statusMsg = t('games.ankjod.text_tap_hint_again_to_fill', { text: h.text });
         // P16: the solver's step stays the truth; AI (when on) may only re-word it with the same digits.
         const ph = pendingHint;
         if (window.DangalAssistUI && typeof DangalAssistUI.explainHint === 'function') {
           DangalAssistUI.explainHint('ankjod', { text: h.text, digit: h.digit, technique: h.techName || '', cell: 'row ' + (r + 1) + ', column ' + (c + 1) }, h.text).then((text) => {
             if (!text || pendingHint !== ph) return;
-            statusMsg = text + ' Tap Hint again to fill it in.';
+            statusMsg = t('games.ankjod.text_tap_hint_again_to_fill', { text });
             refreshPlay();
           });
         }
@@ -2147,7 +2147,7 @@
         hintFilled.add(forced.r + ',' + forced.c);
         selected = [forced.r, forced.c];
         showMistakes = false;
-        statusMsg = 'Hint: only ' + forced.n + ' fits here';
+        statusMsg = t('games.ankjod.hint_only_n_fits_here', { n: forced.n });
         fb('valid');
         const a = analyzeMistakes(board, values);
         if (a.won) finishWin();
@@ -2170,18 +2170,7 @@
           const emptyCell = tight.run.cells.find(([r, c]) => !values[r][c]);
           if (emptyCell) selected = emptyCell.slice();
           const dir = tight.run.dir === 'across' ? 'across' : 'down';
-          statusMsg =
-            'This ' +
-            dir +
-            ' run of ' +
-            tight.run.cells.length +
-            ' sums to ' +
-            tight.run.sum +
-            ' — ' +
-            tight.rem.length +
-            ' combo set' +
-            (tight.rem.length === 1 ? '' : 's') +
-            ' left';
+          statusMsg = t(dir === 'across' ? 'games.ankjod.run_status_across' : 'games.ankjod.run_status_down', { cells: tight.run.cells.length, sum: tight.run.sum, count: tight.rem.length });
           fb('select');
           refreshPlay();
           return;
@@ -2193,7 +2182,7 @@
       hintFocusRun = null;
       const sol = puzzle.solution;
       if (!sol) {
-        statusMsg = 'No more hints available';
+        statusMsg = t('games.ankjod.no_more_hints_available');
         refreshPlay();
         return;
       }
@@ -2210,7 +2199,7 @@
         }
       }
       if (!pick) {
-        statusMsg = 'Board already matches the solution path';
+        statusMsg = t('games.ankjod.board_already_matches_the_solution_path');
         refreshPlay();
         return;
       }
@@ -2221,7 +2210,7 @@
       hintFilled.add(pick.r + ',' + pick.c);
       selected = [pick.r, pick.c];
       showMistakes = false;
-      statusMsg = 'Hint: revealed a correct digit';
+      statusMsg = t('games.ankjod.hint_revealed_a_correct_digit');
       fb('valid');
       const a = analyzeMistakes(board, values);
       if (a.won) finishWin();
@@ -2259,12 +2248,12 @@
         pencil[r][c] = new Set(legal);
       });
       if (!before.length) {
-        statusMsg = 'Notes already match candidates';
+        statusMsg = t('games.ankjod.notes_already_match_candidates');
         refreshPlay();
         return;
       }
       pushHistory(before);
-      statusMsg = scope === 'run' ? 'Auto-notes on this run' : 'Auto-notes on empty cells';
+      statusMsg = scope === 'run' ? t('games.ankjod.auto_notes_on_this_run') : t('games.ankjod.auto_notes_on_empty_cells');
       fb('place');
       scheduleSave();
       refreshPlay();
@@ -2304,12 +2293,12 @@
         pencil[r][c] = next;
       });
       if (!before.length) {
-        statusMsg = 'No illegal notes to clean';
+        statusMsg = t('games.ankjod.no_illegal_notes_to_clean');
         refreshPlay();
         return;
       }
       pushHistory(before);
-      statusMsg = 'Cleaned impossible pencil notes';
+      statusMsg = t('games.ankjod.cleaned_impossible_pencil_notes');
       fb('select');
       scheduleSave();
       refreshPlay();
@@ -2329,16 +2318,16 @@
       coachEl = document.createElement('div');
       coachEl.className = 'kk-coach';
       coachEl.innerHTML = `
-        <div class="kk-coach-card" role="dialog" aria-label="Kakuro tips">
+        <div class="kk-coach-card" role="dialog" aria-label="${tHtml('games.ankjod.kakuro_tips')}">
           <div class="kk-coach-title">Kakuro</div>
           <ul class="kk-coach-tips">
-            <li>Fill each run of white cells with digits 1–9 — no repeats inside a run</li>
-            <li>A clue is the sum of the run to its right (across) or below it (down)</li>
-            <li>Pencil for notes · Auto-notes fills them in · Sums lists the digit sets for a run</li>
-            <li>Hint explains the next step — tap it again to fill the cell in</li>
-            <li>Leave anytime — Continue restores your board and timer</li>
+            <li>${tHtml('games.ankjod.fill_each_run_of_white_cells')}</li>
+            <li>${tHtml('games.ankjod.a_clue_is_the_sum_of')}</li>
+            <li>${tHtml('games.ankjod.pencil_for_notes_auto_notes_fills')}</li>
+            <li>${tHtml('games.ankjod.hint_explains_the_next_step_tap')}</li>
+            <li>${tHtml('games.ankjod.leave_anytime_continue_restores_your_board')}</li>
           </ul>
-          <button type="button" class="kk-coach-dismiss game-tap-target" data-kk-coach-ok>Got it</button>
+          <button type="button" class="kk-coach-dismiss game-tap-target" data-kk-coach-ok>${tHtml('games.ankjod.got_it')}</button>
         </div>`;
       root.appendChild(coachEl);
       const dismiss = () => {
@@ -2357,16 +2346,16 @@
     }
 
     function statusForSelection() {
-      if (won) return 'Puzzle solved!';
+      if (won) return t('games.ankjod.puzzle_solved');
       if (statusMsg) return statusMsg;
-      if (!selected) return pencilMode ? 'Pencil mode — tap digits for notes' : 'Tap a cell, then a digit';
+      if (!selected) return pencilMode ? t('games.ankjod.pencil_mode_tap_digits_for_notes') : t('games.ankjod.tap_a_cell_then_a_digit');
       const [sr, sc] = selected;
       const bits = [];
       (runIdx[sr][sc] || []).forEach((i) => {
         const run = runs[i];
         bits.push((run.dir === 'across' ? 'Across ' : 'Down ') + run.sum);
       });
-      return bits.join(' · ') || (pencilMode ? 'Pencil mode' : 'Enter a digit');
+      return bits.join(' · ') || (pencilMode ? t('games.ankjod.pencil_mode') : t('games.ankjod.enter_a_digit'));
     }
 
     function cellInnerHtml(r, c, pencilFs) {
@@ -2455,7 +2444,7 @@
       const pen = root.querySelector('#kkPencil');
       if (pen) {
         pen.classList.toggle('is-active', pencilMode);
-        pen.textContent = pencilMode ? 'Pencil on' : 'Pencil';
+        pen.textContent = pencilMode ? t('games.ankjod.pencil_on') : t('games.ankjod.pencil');
       }
       const timerEl = root.querySelector('#kkTimer');
       if (timerEl) timerEl.hidden = !prefs.timer;
@@ -2484,7 +2473,7 @@
       const listHtml = (sum, len, must) => {
         const all = combosOf(sum, len, []);
         const fits = new Set(combosOf(sum, len, must).map((cb) => cb.join('')));
-        if (!all.length) return '<div class="solo-empty">No digit set makes that sum.</div>';
+        if (!all.length) return '<div class="solo-empty">' + tHtml('games.ankjod.no_digit_set_makes_that_sum') + '</div>';
         return `<div class="kk-sums-list">${all
           .map((cb) => `<span class="${fits.has(cb.join('')) ? '' : 'is-out'}">${cb.join(' ')}</span>`)
           .join('')}</div>`;
@@ -2494,17 +2483,17 @@
         (runIdx[selected[0]][selected[1]] || []).forEach((i) => {
           const run = runs[i];
           const filled = run.cells.map(([r, c]) => values[r][c]).filter(Boolean);
-          sections += `<div class="kk-sums-run"><b>${run.dir === 'across' ? 'Across' : 'Down'} ${run.sum} in ${run.cells.length} cells</b>${
-            filled.length ? `<small>Already placed: ${filled.join(', ')} — sets without them are greyed out</small>` : ''
+          sections += `<div class="kk-sums-run"><b>${tHtml('games.ankjod.value_sum_in_cellscount_cells', { value: run.dir === 'across' ? t('games.ankjod.across') : t('games.ankjod.down'), sum: run.sum, cellsCount: run.cells.length })}</b>${
+            filled.length ? `<small>${tHtml('games.ankjod.already_placed_filled_sets_without_them', { filled: filled.join(', ') })}</small>` : ''
           }${listHtml(run.sum, run.cells.length, filled)}</div>`;
         });
       }
-      const lenOpts = [2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<option value="${n}">${n} cells</option>`).join('');
+      const lenOpts = [2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<option value="${n}">${tHtml('games.ankjod.n_cells', { count: n })}</option>`).join('');
       const x = PartyKit.openSheet({
-        title: 'Sums helper',
-        bodyHtml: `<div class="kk-sums">${sections || '<p class="solo-note">Select a cell to see the digit sets for its runs.</p>'}
-          <div class="kk-sums-run"><b>Look up any sum</b>
-            <div class="kk-sums-pick"><select data-k="len" aria-label="Cells">${lenOpts}</select><select data-k="sum" aria-label="Sum"></select></div>
+        title: t('games.ankjod.sums_helper'),
+        bodyHtml: `<div class="kk-sums">${sections || '<p class="solo-note">' + tHtml('games.ankjod.select_a_cell_to_see_the') + '</p>'}
+          <div class="kk-sums-run"><b>${tHtml('games.ankjod.look_up_any_sum')}</b>
+            <div class="kk-sums-pick"><select data-k="len" aria-label="${tHtml('games.ankjod.cells')}">${lenOpts}</select><select data-k="sum" aria-label="${tHtml('games.ankjod.sum')}"></select></div>
             <div data-k="out"></div></div></div>`,
       });
       if (!x || !x.el) return;
@@ -2517,7 +2506,7 @@
         const hi = (L * (19 - L)) / 2;
         const keep = Number(sumSel.value);
         let opts = '';
-        for (let s = lo; s <= hi; s++) opts += `<option value="${s}"${s === keep ? ' selected' : ''}>sum ${s}</option>`;
+        for (let s = lo; s <= hi; s++) opts += `<option value="${s}"${s === keep ? ' selected' : ''}>${tHtml('games.ankjod.sum_value', { value: s })}</option>`;
         sumSel.innerHTML = opts;
         out.innerHTML = listHtml(Number(sumSel.value), L, []);
       };
@@ -2563,11 +2552,11 @@
       const elapsed = getPlayElapsed();
       root.innerHTML = `
         ${gameChromeHtml({
-          title: 'Kakuro',
+          title: t('games.ankjod.kakuro'),
           subtitle,
           backId: 'kkBack',
           pauseId: 'kkPause',
-          rightHtml: `<button type="button" id="kkHelp" class="game-chrome-action game-tap-target" aria-label="How to play">?</button><button type="button" id="kkGear" class="game-chrome-action game-tap-target" aria-label="Settings">⚙</button><button type="button" id="kkNew" class="game-chrome-action">Menu</button>`,
+          rightHtml: `<button type="button" id="kkHelp" class="game-chrome-action game-tap-target" aria-label="${tHtml('games.ankjod.how_to_play')}">?</button><button type="button" id="kkGear" class="game-chrome-action game-tap-target" aria-label="${tHtml('common.settings')}">⚙</button><button type="button" id="kkNew" class="game-chrome-action">${tHtml('games.ankjod.menu')}</button>`,
         })}
         <div id="kkTimer" class="game-turn game-turn--waiting" role="status"${prefs.timer ? '' : ' hidden'}>${formatTime(elapsed)}</div>
         <div class="kk-board-area">
@@ -2578,20 +2567,20 @@
         <div class="kk-keypad">
           <div class="kk-num-row">${padBtns}</div>
           <div class="kk-action-row">
-            <button type="button" id="kkPencil" class="kk-action game-tap-target" title="Tap: pencil mode · Long-press: auto-notes">Pencil</button>
-            <button type="button" id="kkHint" class="kk-action game-tap-target">Hint</button>
-            <button type="button" id="kkErase" class="kk-action game-tap-target">Erase</button>
-            <button type="button" id="kkCheck" class="kk-action kk-action--primary game-tap-target">Check</button>
+            <button type="button" id="kkPencil" class="kk-action game-tap-target" title="${tHtml('games.ankjod.tap_pencil_mode_long_press_auto')}">${tHtml('games.ankjod.pencil')}</button>
+            <button type="button" id="kkHint" class="kk-action game-tap-target">${tHtml('games.ankjod.hint')}</button>
+            <button type="button" id="kkErase" class="kk-action game-tap-target">${tHtml('games.ankjod.erase')}</button>
+            <button type="button" id="kkCheck" class="kk-action kk-action--primary game-tap-target">${tHtml('games.ankjod.check')}</button>
           </div>
           <div class="kk-action-row kk-action-row--secondary">
-            <button type="button" id="kkUndo" class="kk-action game-tap-target" disabled>Undo</button>
-            <button type="button" id="kkRedo" class="kk-action game-tap-target" disabled>Redo</button>
-            <button type="button" id="kkAuto" class="kk-action game-tap-target" title="Fill notes with every digit that still fits">Auto-notes</button>
-            <button type="button" id="kkSums" class="kk-action game-tap-target" title="Digit sets for this run">Sums</button>
+            <button type="button" id="kkUndo" class="kk-action game-tap-target" disabled>${tHtml('games.ankjod.undo')}</button>
+            <button type="button" id="kkRedo" class="kk-action game-tap-target" disabled>${tHtml('games.ankjod.redo')}</button>
+            <button type="button" id="kkAuto" class="kk-action game-tap-target" title="${tHtml('games.ankjod.fill_notes_with_every_digit_that')}">${tHtml('games.ankjod.auto_notes')}</button>
+            <button type="button" id="kkSums" class="kk-action game-tap-target" title="${tHtml('games.ankjod.digit_sets_for_this_run')}">${tHtml('games.ankjod.sums')}</button>
           </div>
           <div class="kk-action-row kk-action-row--secondary">
-            <button type="button" id="kkClean" class="kk-action game-tap-target">Clean notes</button>
-            <button type="button" id="kkClear" class="kk-action game-tap-target">Clear all</button>
+            <button type="button" id="kkClean" class="kk-action game-tap-target">${tHtml('games.ankjod.clean_notes')}</button>
+            <button type="button" id="kkClear" class="kk-action game-tap-target">${tHtml('games.ankjod.clear_all')}</button>
           </div>
         </div>`;
 
@@ -2631,10 +2620,10 @@
         const ask =
           typeof confirmLeaveGame === 'function'
             ? confirmLeaveGame({
-                title: 'Leave Kakuro?',
-                body: scored ? 'Your board and time are saved — Continue from the menu to finish today’s scored try.' : 'Progress will be saved — you can Continue later.',
+                title: t('games.ankjod.leave_kakuro'),
+                body: scored ? t('games.ankjod.your_board_and_time_are_saved') : t('games.ankjod.progress_will_be_saved_you_can'),
               })
-            : Promise.resolve(window.confirm('Leave Kakuro? Progress will be saved.'));
+            : Promise.resolve(window.confirm(t('games.ankjod.leave_kakuro_progress_will_be_saved')));
         Promise.resolve(ask).then((ok) => {
           if (!ok) return;
           persistSave();
@@ -2684,8 +2673,8 @@
         if (won) return;
         const ask =
           typeof confirmLeaveGame === 'function'
-            ? confirmLeaveGame({ title: 'Clear all cells?', body: 'Every digit and pencil note on this board will be erased.' })
-            : Promise.resolve(window.confirm('Clear the entire board?'));
+            ? confirmLeaveGame({ title: t('games.ankjod.clear_all_cells'), body: t('games.ankjod.every_digit_and_pencil_note_on') })
+            : Promise.resolve(window.confirm(t('games.ankjod.clear_the_entire_board')));
         Promise.resolve(ask).then((ok) => {
           if (!ok) return;
           const before = [];
@@ -2701,7 +2690,7 @@
           showMistakes = false;
           hintFocusRun = null;
           hintFilled = new Set();
-          statusMsg = 'Board cleared';
+          statusMsg = t('games.ankjod.board_cleared');
           scheduleSave();
           refreshPlay();
         });
@@ -2734,7 +2723,7 @@
           clearPencilTimer();
           if (pencilLong || won) return;
           pencilMode = !pencilMode;
-          statusMsg = pencilMode ? 'Pencil mode on · long-press for auto-notes' : 'Digit mode';
+          statusMsg = pencilMode ? t('games.ankjod.pencil_mode_on_long_press_for') : t('games.ankjod.digit_mode');
           fb('select');
           refreshPlay();
         });
@@ -2749,8 +2738,8 @@
         else {
           const wrong = wrongCells().length;
           const issues = wrong || a.bad.size;
-          if (prefs.errors === 'off') statusMsg = issues ? 'Something’s not right yet — keep looking' : 'No mistakes so far — keep going';
-          else if (wrong && !a.bad.size) statusMsg = wrong === 1 ? '1 digit is wrong — marked in red' : wrong + ' digits are wrong — marked in red';
+          if (prefs.errors === 'off') statusMsg = issues ? t('games.ankjod.something_s_not_right_yet_keep') : t('games.ankjod.no_mistakes_so_far_keep_going');
+          else if (wrong && !a.bad.size) statusMsg = t('games.ankjod.digits_wrong', { wrong });
           else statusMsg = checkStatusMessage(a);
           fb(issues ? 'invalid' : 'select');
           refreshPlay();
@@ -2792,7 +2781,7 @@
       const legal = legalDigits(r, c);
       if (!legal.has(n)) {
         fb('invalid');
-        statusMsg = 'That digit can’t fit this run';
+        statusMsg = t('games.ankjod.that_digit_can_t_fit_this');
         refreshPlay();
         return;
       }
@@ -2862,7 +2851,7 @@
         score: winInfo.secs,
         label: formatTime(winInfo.ms),
         params,
-        text: `Kakuro ${puzzleTitle}: solved in ${winInfo.line}. Can you beat my time?`,
+        text: t('games.ankjod.kakuro_puzzletitle_solved_in_line_can', { puzzleTitle, line: winInfo.line }),
       });
     }
 
@@ -2880,17 +2869,17 @@
       const streak = isDaily && !puzzle.archive && H ? H.streak(GAME) : 0;
       const body = H
         ? H.resultHtml({
-            title: 'Solved · ' + puzzleTitle,
-            lines: [`<b>${w.line}</b>`, w.vsBest, streak ? `🔥 ${streak} day streak` : ''],
+            title: t('games.ankjod.solved_puzzletitle', { puzzleTitle }),
+            lines: [`<b>${w.line}</b>`, w.vsBest, streak ? tHtml('dangal.day_streak_fire', { count: streak }) : ''],
             status: w.status,
-            primary: nextN ? 'Next puzzle' : 'More puzzles',
+            primary: nextN ? t('games.ankjod.next_puzzle') : t('games.ankjod.more_puzzles'),
             share: true,
             board: !!w.board,
-            closeLabel: 'Done',
+            closeLabel: t('common.done'),
           })
-        : `<div class="kk-status kk-status--won">Puzzle solved! ${w.line}</div>`;
+        : `<div class="kk-status kk-status--won">${tHtml('games.ankjod.puzzle_solved_line', { line: w.line })}</div>`;
       root.innerHTML = `
-        ${gameChromeHtml({ title: 'Kakuro', subtitle, backId: 'kkBack' })}
+        ${gameChromeHtml({ title: t('games.ankjod.kakuro'), subtitle, backId: 'kkBack' })}
         <div class="kk-board-area kk-result">${body}<p class="solo-res-hint" id="kkSubmitNote">${w.note || ''}</p></div>`;
       root.querySelector('#kkBack')?.addEventListener('click', () => {
         if (session) session.end('won');
@@ -2903,7 +2892,7 @@
           else openDifficultyPicker(ctx);
         },
         share: shareWin,
-        board: () => w.board && H.openBoard(GAME, w.board, { title: 'Kakuro · ' + puzzleTitle }),
+        board: () => w.board && H.openBoard(GAME, w.board, { title: t('games.ankjod.kakuro_puzzletitle', { puzzleTitle }) }),
         close: () => {
           if (session) session.end('won');
         },
@@ -2931,7 +2920,7 @@
       winShown = true;
       showMistakes = false;
       pendingHint = null;
-      statusMsg = 'Puzzle solved!';
+      statusMsg = t('games.ankjod.puzzle_solved');
       clearAnkSave(saveDiff);
       const ms = Math.round(getPlayElapsed());
       const secs = Math.round(ms / 1000);
@@ -2960,8 +2949,8 @@
       const line = formatTime(ms) + (hintsUsed ? ' · ' + hintsUsed + (hintsUsed === 1 ? ' hint' : ' hints') : ' · no hints');
       let status = '';
       if (challenge && Number.isFinite(Number(challenge.beatScore)) && challenge.beatScore != null) {
-        const who = challenge.challenger || 'your friend';
-        status = secs < Number(challenge.beatScore) ? 'You beat ' + who + '’s time!' : who + '’s time still stands — try again';
+        const who = challenge.challenger || t('games.ankjod.your_friend');
+        status = secs < Number(challenge.beatScore) ? t('games.ankjod.you_beat_who_s_time', { who }) : t('games.ankjod.who_s_time_still_stands_try', { who });
       }
       const lbId = isDaily
         ? SC() && puzzle.dayNo != null
@@ -3001,16 +2990,16 @@
       let res = null;
       if (isDaily && !puzzle.archive) {
         if (!scored) return setNote(H.submitNote({ ranked: false, reason: 'practice' }));
-        if (H.signedIn()) setNote('Checking your time…');
+        if (H.signedIn()) setNote(t('games.ankjod.checking_your_time'));
         res = await H.finishDaily(GAME, run, { score: winInfo.secs, line: winInfo.line });
         setNote(H.submitNote(res.scored ? res : { ranked: false, reason: 'practice' }));
         return;
       }
-      if (puzzle.archive) return setNote('Archive puzzles are practice — only today’s Daily is ranked.');
+      if (puzzle.archive) return setNote(t('games.ankjod.archive_puzzles_are_practice_only_today'));
       if (!pkey || !winInfo.board) return;
       if (!H.signedIn()) return setNote(H.submitNote(null));
-      if (prevBest && winInfo.ms >= prevBest) return setNote('Your earlier best still stands.');
-      setNote('Checking your time…');
+      if (prevBest && winInfo.ms >= prevBest) return setNote(t('games.ankjod.your_earlier_best_still_stands'));
+      setNote(t('games.ankjod.checking_your_time'));
       res = await H.submit(GAME, winInfo.board, run);
       setNote(H.submitNote(res));
     }
@@ -3035,7 +3024,7 @@
         eraseCell();
       } else if (e.key === 'p' || e.key === 'P') {
         pencilMode = !pencilMode;
-        statusMsg = pencilMode ? 'Pencil mode on' : 'Digit mode';
+        statusMsg = pencilMode ? t('games.ankjod.pencil_mode_on') : t('games.ankjod.digit_mode');
         refreshPlay();
       } else if (e.key === 'ArrowUp' && selected) {
         moveSel(-1, 0);
@@ -3091,7 +3080,7 @@
     session = createGameSession({
       id: 'ankjod_' + Date.now(),
       type: 'ankjod',
-      title: 'Kakuro',
+      title: t('games.ankjod.kakuro'),
       mode: 'solo',
       elapsedOffsetMs: resumeElapsed,
       context: {
@@ -3215,8 +3204,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'ankjod',
-      name: 'Kakuro',
-      desc: 'Cross-sums · 320 puzzles, Easy to Expert · Daily · Solo',
+      name: t('games.ankjod.kakuro'),
+      desc: t('games.ankjod.cross_sums_320_puzzles_easy_to'),
       icon: '🔢',
       ratingKey: 'ankjod',
       gameType: 'solo',
@@ -3236,8 +3225,8 @@
     // Alias id for callers / deep links that expect "kakuro"
     registerGame({
       id: 'kakuro',
-      name: 'Kakuro',
-      desc: 'Cross-sums · Solo',
+      name: t('games.ankjod.kakuro'),
+      desc: t('games.ankjod.cross_sums_solo'),
       icon: '🔢',
       ratingKey: 'ankjod',
       gameType: 'solo',

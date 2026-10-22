@@ -19,7 +19,8 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const { readWithCopy } = require('./lib/i18n-source');
+const read = (p) => readWithCopy(p);
 const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
 
 const win = {};
@@ -98,11 +99,11 @@ assert(/Rules based on the FIDE Laws of Chess/.test(rules) && /Rules based on th
 assert(!/<image|xlink:href|\.png|\.jpg/.test(rules.slice(0, rules.indexOf('const GAME_IDENTITY'))), 'R4 marks are our own inline vector marks (no embedded logos)');
 
 const poker = read('public/src/js/games/poker.js');
-assert(/name: '🤖 ' \+ names\[i - 1\]/.test(poker), 'Poker practice bots are labelled as bots');
-assert(/tr\('ai', 'AI'\)/.test(read('public/src/js/games/penalty.js')), 'Penalty vs AI opponent is labelled AI');
+assert(/name: t\('games\.poker\.value_levellabel_bot', \{ value: names\[i - 1\]/.test(poker) && /🤖 \{\{value\}\} · \{\{levelLabel\}\} Bot/.test(fs.readFileSync(path.join(root, 'public/src/i18n/en.js'), 'utf8')), 'Poker practice bots are labelled as bots');
+assert(/tr\('ai', 'AI'\)|tr\('ai_label', 'AI · \{\{label\}\}'/.test(read('public/src/js/games/penalty.js')), 'Penalty vs AI opponent is labelled AI');
 const dangal = read('public/src/js/features/dangal.js');
-assert(/practiceAiName = 'Practice AI'/.test(dangal) && /simulated \? practiceAiName/.test(dangal), 'Quiz simulated opponents are Practice AI, never a human name');
-assert(/name: tr\('bot', 'Bot'\) \+ ' ' \+ \+\+botN/.test(read('public/src/js/games/ludo-ui.js')), 'Ludo bot seats are labelled Bot');
+assert(/practiceAiName = t\('dangal\.practice_ai'\)/.test(dangal) && /\nPractice AI\n/.test(dangal) && /simulated \? practiceAiName/.test(dangal), 'Quiz simulated opponents are Practice AI, never a human name');
+assert(/name: tr\('bot', 'Bot'\) \+ ' ' \+ \+\+botN|name: tr\('bot_value_label', 'Bot \{\{value\}\} · \{\{label\}\}', \{ value: \+\+botN/.test(read('public/src/js/games/ludo-ui.js')), 'Ludo bot seats are labelled Bot');
 assert(/Oh No!/.test(read('public/src/js/games/ohno-ui.js')) && !/\bUNO\b/.test(stripComments(read('public/src/js/games/ohno-ui.js'))), 'shedding-card game ships as "Oh No!"');
 
 // ---------- (c) retired ids + dead keys ----------

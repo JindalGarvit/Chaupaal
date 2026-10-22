@@ -9,7 +9,7 @@
   'use strict';
 
   const GAME = 'imposter';
-  const LABEL = 'Imposter';
+  const LABEL = t('dangal.identity.imposter.label');
   const BILINGUAL_KEY = 'chaupaal_imposter_bilingual';
   const SETTINGS_KEY = 'chaupaal_imposter_settings';
   const NAMES_KEY = 'chaupaal_imposter_names';
@@ -85,8 +85,14 @@
     } catch (e) {}
   }
 
+  /** Room content language while a room is open (secret words follow it); '' → my UI language. */
+  let roomContentLang = '';
+  function contentLang() {
+    return roomContentLang || lang();
+  }
+
   function word(w) {
-    return Core().wordLabel(w, lang(), bilingual());
+    return Core().wordLabel(w, contentLang(), bilingual());
   }
 
   function packLabel(p) {
@@ -103,7 +109,7 @@
     return [P.MIXED].concat(global, regional);
   }
 
-  const CUSTOM_PACK = { id: 'custom', en: 'Your pack', hi: '', icon: '✨' };
+  const CUSTOM_PACK = { id: 'custom', en: t('games.imposter.your_pack'), hi: '', icon: '✨' };
   function packById(id) {
     if (id === 'custom' && customPack) return Object.assign({}, CUSTOM_PACK, { en: customPack.name || CUSTOM_PACK.en, words: customPack.words });
     return packChoices().find((p) => p.id === id) || Core().packs.MIXED;
@@ -111,22 +117,22 @@
 
   /** The private card face. Undercover cards carry no role, so the odd one out can't tell. */
   function cardFaceHtml(secret) {
-    if (!secret) return '<div class="im-card-empty">Dealing…</div>';
+    if (!secret) return '<div class="im-card-empty">' + tHtml('games.imposter.dealing') + '</div>';
     if (secret.imposter) {
       const hint = secret.hint
-        ? `<div class="im-card-hint">Hint · ${esc(packLabel(secret.hint))}</div>`
-        : '<div class="im-card-hint">No hint this time</div>';
+        ? `<div class="im-card-hint">${tHtml('games.imposter.hint_hint', { hint: packLabel(secret.hint) })}</div>`
+        : '<div class="im-card-hint">' + tHtml('games.imposter.no_hint_this_time') + '</div>';
       return `<div class="im-card im-card--imposter">
         <div class="im-card-role">🕵️</div>
-        <div class="im-card-title">You are the Imposter</div>
+        <div class="im-card-title">${tHtml('games.imposter.you_are_the_imposter')}</div>
         ${hint}
-        <div class="im-card-tip">Blend in — listen to the clues and fake it.</div>
+        <div class="im-card-tip">${tHtml('games.imposter.blend_in_listen_to_the_clues')}</div>
       </div>`;
     }
     return `<div class="im-card">
-      <div class="im-card-label">Your secret word</div>
+      <div class="im-card-label">${tHtml('games.imposter.your_secret_word')}</div>
       <div class="im-card-word">${esc(word(secret.word))}</div>
-      <div class="im-card-tip">Give one-word clues. Don’t say the word!</div>
+      <div class="im-card-tip">${tHtml('games.imposter.give_one_word_clues_don_t')}</div>
     </div>`;
   }
 
@@ -150,60 +156,60 @@
             `<button type="button" role="radio" aria-checked="${String(v) === String(value)}" class="pk-seg-btn${String(v) === String(value) ? ' is-on' : ''}" data-v="${esc(v)}">${esc(label)}</button>`
         )
         .join('')}</div>`;
-    const impOptions = [[0, 'Auto (' + Math.min(autoImp, maxImp) + ')']];
+    const impOptions = [[0, t('games.imposter.auto_n', { n: Math.min(autoImp, maxImp) })]];
     for (let i = 1; i <= maxImp; i++) impOptions.push([i, String(i)]);
     Kit().openSheet({
-      title: 'Game settings',
+      title: t('games.imposter.game_settings'),
       bodyHtml: `
         <div class="pk-field">
-          <div class="pk-field-label">Mode</div>
-          ${seg('variant', s.variant, [['classic', 'Classic'], ['undercover', 'Undercover']])}
+          <div class="pk-field-label">${tHtml('games.imposter.mode')}</div>
+          ${seg('variant', s.variant, /* i18n-copy */ [['classic', t('games.imposter.classic')], ['undercover', t('games.imposter.rules.rules.3.h')]])}
           <div class="pk-field-help" data-variant-help></div>
         </div>
         <details class="pk-advanced">
-          <summary>Advanced</summary>
+          <summary>${tHtml('games.imposter.advanced')}</summary>
           <div class="pk-field" data-hint-field>
-            <label class="pk-toggle"><input type="checkbox" data-hint ${s.hint ? 'checked' : ''}> Imposter gets a one-word hint (the category)</label>
+            <label class="pk-toggle"><input type="checkbox" data-hint ${s.hint ? 'checked' : ''}> ${tHtml('games.imposter.imposter_gets_a_one_word_hint')}</label>
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Imposters</div>
+            <div class="pk-field-label">${tHtml('games.imposter.imposters')}</div>
             ${seg('imposters', s.imposters > maxImp ? 0 : s.imposters, impOptions)}
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Clue rounds</div>
+            <div class="pk-field-label">${tHtml('games.imposter.clue_rounds')}</div>
             ${seg('circuits', s.circuits, [[1, '1 round'], [2, '2 rounds']])}
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Discussion timer</div>
-            ${seg('discussionSec', s.discussionSec, [[0, 'Off'], [60, '60s'], [90, '90s'], [120, '2 min'], [180, '3 min']])}
+            <div class="pk-field-label">${tHtml('games.imposter.discussion_timer')}</div>
+            ${seg('discussionSec', s.discussionSec, [[0, t('games.imposter.off')], [60, '60s'], [90, '90s'], [120, '2 min'], [180, '3 min']])}
           </div>
           ${
             o.room
-              ? `<div class="pk-field"><div class="pk-field-label">Time per clue</div>${seg('clueSec', s.clueSec, [[30, '30s'], [45, '45s'], [60, '60s']])}</div>`
-              : `<div class="pk-field"><div class="pk-field-label">Voting</div>${seg('voteStyle', s.voteStyle, [['group', 'Point together'], ['secret', 'Secret pass-around']])}</div>`
+              ? `<div class="pk-field"><div class="pk-field-label">${tHtml('games.imposter.time_per_clue')}</div>${seg('clueSec', s.clueSec, [[30, '30s'], [45, '45s'], [60, '60s']])}</div>`
+              : `<div class="pk-field"><div class="pk-field-label">${tHtml('games.imposter.rules.rules.2.h')}</div>${seg('voteStyle', s.voteStyle, /* i18n-copy */ [['group', t('games.imposter.point_together')], ['secret', t('games.imposter.secret_pass_around')]])}</div>`
           }
           <div class="pk-field">
-            <div class="pk-field-label">Word difficulty</div>
-            ${seg('difficulty', s.difficulty || 'any', [['any', 'Any'], ['easy', 'Easier'], ['hard', 'Harder']])}
+            <div class="pk-field-label">${tHtml('games.imposter.word_difficulty')}</div>
+            ${seg('difficulty', s.difficulty || 'any', /* i18n-copy */ [['any', t('games.imposter.any')], ['easy', t('games.imposter.easier')], ['hard', t('games.imposter.harder')]])}
           </div>
           <div class="pk-field">
-            <label class="pk-toggle"><input type="checkbox" data-region ${s.region === 'in' ? 'checked' : ''}> Mix in India packs (Bollywood, cricket, festivals…)</label>
+            <label class="pk-toggle"><input type="checkbox" data-region ${s.region === 'in' ? 'checked' : ''}> ${tHtml('games.imposter.mix_in_india_packs_bollywood_cricket')}</label>
           </div>
           ${
             hiReader()
-              ? `<div class="pk-field"><label class="pk-toggle"><input type="checkbox" data-bilingual ${bilingual() ? 'checked' : ''}> Also show English words</label></div>`
+              ? `<div class="pk-field"><label class="pk-toggle"><input type="checkbox" data-bilingual ${bilingual() ? 'checked' : ''}> ${tHtml('games.imposter.also_show_english_words')}</label></div>`
               : ''
           }
         </details>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         const help = sheet.querySelector('[data-variant-help]');
         const hintField = sheet.querySelector('[data-hint-field]');
         const paintHelp = () => {
           help.textContent =
             s.variant === 'undercover'
-              ? 'The Imposter gets a close word and doesn’t know they’re the odd one out.'
-              : 'The Imposter knows they’re the Imposter but not the word.';
+              ? t('games.imposter.the_imposter_gets_a_close_word')
+              : t('games.imposter.the_imposter_knows_they_re_the');
           hintField.hidden = s.variant === 'undercover';
         };
         paintHelp();
@@ -239,17 +245,17 @@
     const tile = (p) => `<button type="button" class="im-pack${p.id === current ? ' is-on' : ''}" data-pack="${esc(p.id)}">
             <span class="im-pack-icon" aria-hidden="true">${esc(p.icon)}</span>
             <span class="im-pack-name">${esc(packLabel(p))}</span>
-            <span class="im-pack-count">${p.words ? p.words.length + ' words' : 'All packs'}</span>
+            <span class="im-pack-count">${p.words ? p.words.length + ' words' : tHtml('games.imposter.all_packs')}</span>
           </button>`;
     const choices = packChoices();
     const own = customPack ? [packById('custom')] : [];
     const showMake = Kit().aiOn() || Kit().savedPacks(GAME).length;
     Kit().openSheet({
-      title: 'Word pack',
+      title: t('games.imposter.word_pack'),
       bodyHtml: `<div class="im-packs">${own.concat(choices.filter((p) => !p.regional)).map(tile).join('')}</div>
-        <div class="pk-section">India packs · optional</div>
+        <div class="pk-section">${tHtml('games.imposter.india_packs_optional')}</div>
         <div class="im-packs">${choices.filter((p) => p.regional).map(tile).join('')}</div>
-        ${showMake ? `<button type="button" class="pk-row-btn" data-make>${Kit().aiOn() ? '✨ Make a pack about…' : 'Your saved packs'}<span class="pk-chev" aria-hidden="true">›</span></button>` : ''}`,
+        ${showMake ? `<button type="button" class="pk-row-btn" data-make>${Kit().aiOn() ? tHtml('games.imposter.make_a_pack_about') : tHtml('games.imposter.your_saved_packs')}<span class="pk-chev" aria-hidden="true">›</span></button>` : ''}`,
       onMount(sheet, close) {
         sheet.querySelectorAll('[data-pack]').forEach((btn) =>
           btn.addEventListener('click', () => {
@@ -277,21 +283,21 @@
 
   function howToCardHtml() {
     return `<details class="im-howto">
-      <summary>How to play · 20 seconds</summary>
+      <summary>${tHtml('games.imposter.how_to_play_20_seconds')}</summary>
       <ol>
-        <li>Everyone secretly sees the same word — except the <strong>Imposter</strong>.</li>
-        <li>Take turns saying <strong>one word</strong> about it. Not the word, not a translation, no repeats.</li>
-        <li>Discuss, then vote out who you think is faking.</li>
-        <li>Caught Imposters get <strong>one guess</strong> at the word to steal the win.</li>
+        <li>${tHtml('games.imposter.everyone_secretly_sees_the_same_word')} <strong>${tHtml('games.imposter.rules.ruleset.name')}</strong>.</li>
+        <li>${tHtml('games.imposter.take_turns_saying')} <strong>${tHtml('games.imposter.one_word')}</strong> ${tHtml('games.imposter.about_it_not_the_word_not')}</li>
+        <li>${tHtml('games.imposter.discuss_then_vote_out_who_you')}</li>
+        <li>${tHtml('games.imposter.caught_imposters_get')} <strong>${tHtml('games.imposter.one_guess')}</strong> ${tHtml('games.imposter.at_the_word_to_steal_the')}</li>
       </ol>
-      <div class="im-howto-score">Crew +1 each for a catch · Imposter +2 for surviving, +2 for a steal</div>
+      <div class="im-howto-score">${tHtml('games.imposter.crew_1_each_for_a_catch')}</div>
     </details>`;
   }
 
   function openImposter(ctx) {
     const c = ctx || {};
     if (!Core() || !Kit()) {
-      if (typeof showToast === 'function') showToast('Imposter is still loading — try again');
+      if (typeof showToast === 'function') showToast(t('games.imposter.imposter_is_still_loading_try_again'));
       return;
     }
     const fromGroup = c.source === 'chat_group' || (c.isGroup && c.chat);
@@ -299,7 +305,7 @@
       startRoomFlow({ chat: c.chat });
       return;
     }
-    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
+    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: t('games.imposter.party'), confirmLeave: () => false });
     if (c.mode === 'pass') renderPassSetup(shell);
     else renderHome(shell);
   }
@@ -308,18 +314,18 @@
     const body = shell.render(`<div class="im-home">
       <div class="im-hero">
         <div class="im-hero-mark">${typeof gameMarkHtml === 'function' ? gameMarkHtml(GAME, { size: 64 }) : '🕵️'}</div>
-        <div class="im-hero-title">Who’s faking it?</div>
-        <div class="im-hero-sub">3–12 players · everyone knows the word except the Imposter</div>
+        <div class="im-hero-title">${tHtml('games.imposter.who_s_faking_it')}</div>
+        <div class="im-hero-sub">${tHtml('games.imposter.3_12_players_everyone_knows_the')}</div>
       </div>
       ${howToCardHtml()}
       <div class="im-modes">
         <button type="button" class="im-mode im-mode--primary" data-mode="pass">
-          <span class="im-mode-title">Pass &amp; Play</span><span class="im-mode-sub">One phone, pass it around</span>
+          <span class="im-mode-title">${tHtml('games.imposter.pass_play')}</span><span class="im-mode-sub">${tHtml('games.imposter.one_phone_pass_it_around')}</span>
         </button>
         <button type="button" class="im-mode" data-mode="room">
-          <span class="im-mode-title">Play with friends</span><span class="im-mode-sub">Everyone on their own phone</span>
+          <span class="im-mode-title">${tHtml('games.imposter.play_with_friends')}</span><span class="im-mode-sub">${tHtml('games.imposter.everyone_on_their_own_phone')}</span>
         </button>
-        <button type="button" class="im-link" data-mode="join">Have a room code? Join</button>
+        <button type="button" class="im-link" data-mode="join">${tHtml('games.imposter.have_a_room_code_join')}</button>
         ${Kit().partyNightLinkHtml ? Kit().partyNightLinkHtml(GAME) : ''}
       </div>
     </div>`);
@@ -334,13 +340,13 @@
     const settings = loadSettings();
     const body = shell.render(`<div class="im-setup">
       <div class="im-setup-head">
-        <div class="im-step-title">Who’s playing?</div>
-        <button type="button" class="pk-icon-btn" data-settings aria-label="Game settings">⚙︎</button>
+        <div class="im-step-title">${tHtml('games.imposter.who_s_playing')}</div>
+        <button type="button" class="pk-icon-btn" data-settings aria-label="${tHtml('games.imposter.game_settings')}">⚙︎</button>
       </div>
       <div data-editor></div>
       <button type="button" class="im-pack-row" data-pack-row></button>
       <div class="im-setup-meta" data-meta></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${tHtml('games.imposter.start')}</button>
     </div>`);
     shell.setBack(() => renderHome(shell));
     const editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), {
@@ -352,7 +358,7 @@
     const packRow = body.querySelector('[data-pack-row]');
     const paintPack = () => {
       const p = packById(settings.pack);
-      packRow.innerHTML = `<span aria-hidden="true">${esc(p.icon)}</span> Words: <strong>${esc(packLabel(p))}</strong> <span class="im-chev" aria-hidden="true">›</span>`;
+      packRow.innerHTML = `<span aria-hidden="true">${esc(p.icon)}</span> ${tHtml('games.imposter.words')} <strong>${esc(packLabel(p))}</strong> <span class="im-chev" aria-hidden="true">›</span>`;
     };
     const paintMeta = () => {
       const n = editor.count();
@@ -360,9 +366,8 @@
       const meta = body.querySelector('[data-meta]');
       if (!meta) return;
       meta.textContent =
-        (settings.variant === 'undercover' ? 'Undercover' : 'Classic') +
-        ' · ' + k + (k === 1 ? ' Imposter' : ' Imposters') +
-        (settings.discussionSec ? ' · ' + settings.discussionSec + 's talk' : '');
+        t('games.imposter.meta_line', { variant: settings.variant === 'undercover' ? t('games.imposter.variant_undercover') : t('games.imposter.variant_classic'), count: k }) +
+        (settings.discussionSec ? t('games.imposter.discussionsec_s_talk', { discussionSec: settings.discussionSec }) : '');
     };
     paintPack();
     paintMeta();
@@ -401,7 +406,7 @@
 
   function nameOf(session, id) {
     const p = session.players.find((x) => x.id === id);
-    return p ? p.name : 'Someone';
+    return p ? p.name : t('common.someone');
   }
 
   function startPassRound(shell, session) {
@@ -418,7 +423,7 @@
       secrets: dealt.secrets,
       pub: Core().createRound(ids, dealt.settings, starter),
     };
-    shell.setSubtitle('Round ' + session.roundNo);
+    shell.setSubtitle(t('games.imposter.round_roundno', { roundNo: session.roundNo }));
     shell.guard = true;
     renderPassReveal(shell, session, 0);
   }
@@ -453,13 +458,13 @@
     const id = order[index];
     const secret = session.round.secrets[id];
     const body = shell.render(`<div class="im-reveal">
-      <div class="im-progress">Card ${index + 1} of ${order.length}</div>
+      <div class="im-progress">${tHtml('games.imposter.card_value_of_ordercount', { value: index + 1, orderCount: order.length })}</div>
       <div data-cover></div>
     </div>`);
     Kit().mountPassCover(body.querySelector('[data-cover]'), {
       name: nameOf(session, id),
       revealHtml: () => cardFaceHtml(secret),
-      doneLabel: index === order.length - 1 ? 'Hide & start' : 'Hide & pass',
+      doneLabel: index === order.length - 1 ? t('games.imposter.hide_start') : t('games.imposter.hide_pass'),
       onDone: () => renderPassReveal(shell, session, index + 1),
     });
   }
@@ -483,18 +488,18 @@
     const circuit = Math.floor(pub.turn / n) + 1;
     const circuits = session.round.settings.circuits;
     const body = shell.render(`<div class="im-clue-turn">
-      <div class="im-progress">Clue round ${circuit} of ${circuits} · ${(pub.turn % n) + 1}/${n}</div>
+      <div class="im-progress">${tHtml('games.imposter.clue_round_circuit_of_circuits_value', { circuit, circuits, value: (pub.turn % n) + 1, n })}</div>
       <div class="im-turn-name">${esc(nameOf(session, giver))}</div>
-      <div class="im-turn-sub">Say <strong>one word</strong> out loud</div>
-      <div class="im-rule">Not the word · not a translation · not part of it · no repeats</div>
+      <div class="im-turn-sub">${tHtml('games.imposter.say')} <strong>${tHtml('games.imposter.one_word')}</strong> ${tHtml('games.imposter.out_loud')}</div>
+      <div class="im-rule">${tHtml('games.imposter.not_the_word_not_a_translation')}</div>
       <div class="im-order">${pub.order
         .map((id, i) => {
           const done = pub.turn >= n * (circuit - 1) + i + 1;
           return `<span class="im-order-chip${id === giver ? ' is-now' : ''}${done ? ' is-done' : ''}">${esc(nameOf(session, id))}</span>`;
         })
         .join('')}</div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Said it — next</button>
-      <button type="button" class="im-link" data-skip-all>Skip to discussion</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${tHtml('games.imposter.said_it_next')}</button>
+      <button type="button" class="im-link" data-skip-all>${tHtml('games.imposter.skip_to_discussion')}</button>
     </div>`);
     body.querySelector('[data-next]').addEventListener('click', () => passAct(shell, session, { type: 'spoken' }));
     body.querySelector('[data-skip-all]').addEventListener('click', () => passAct(shell, session, { type: 'startDiscussion' }));
@@ -507,12 +512,12 @@
       return;
     }
     const body = shell.render(`<div class="im-discuss">
-      <div class="im-step-title">Discuss</div>
-      <div class="im-turn-sub">Who sounded like they didn’t know the word?</div>
+      <div class="im-step-title">${tHtml('common.discuss')}</div>
+      <div class="im-turn-sub">${tHtml('games.imposter.who_sounded_like_they_didn_t')}</div>
       <div class="pk-timer" data-timer></div>
       <div class="im-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-pause>Pause</button>
-        <button type="button" class="pk-btn pk-btn--primary" data-vote>Vote now</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-pause>${tHtml('games.imposter.pause')}</button>
+        <button type="button" class="pk-btn pk-btn--primary" data-vote>${tHtml('games.imposter.vote_now')}</button>
       </div>
     </div>`);
     let moved = false;
@@ -527,10 +532,10 @@
     pauseBtn.addEventListener('click', () => {
       if (timer.paused) {
         timer.resume();
-        pauseBtn.textContent = 'Pause';
+        pauseBtn.textContent = t('games.imposter.pause');
       } else {
         timer.pause();
-        pauseBtn.textContent = 'Resume';
+        pauseBtn.textContent = t('common.shortcut_dangal_resume');
       }
     });
     body.querySelector('[data-vote]').addEventListener('click', go);
@@ -550,13 +555,13 @@
       return;
     }
     const body = shell.render(`<div class="im-vote">
-      <div class="im-step-title">${revote ? 'Revote' : again ? 'Another Imposter is out there' : 'Vote'}</div>
+      <div class="im-step-title">${revote ? tHtml('games.imposter.revote') : again ? tHtml('games.imposter.another_imposter_is_out_there') : tHtml('games.imposter.vote')}</div>
       <div class="im-turn-sub">${
-        revote ? 'Only the tied players are up. ' : ''
-      }On three, everyone points at the Imposter. Tap who got the most fingers.</div>
+        revote ? tHtml('games.imposter.only_the_tied_players_are_up') : ''
+      }${tHtml('games.imposter.point_on_three')}</div>
       <div data-picker></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-accuse disabled>Accuse</button>
-      <button type="button" class="im-link" data-tie>It’s a tie</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-accuse disabled>${tHtml('games.imposter.accuse')}</button>
+      <button type="button" class="im-link" data-tie>${tHtml('games.imposter.it_s_a_tie')}</button>
     </div>`);
     let picked = null;
     const accuseBtn = body.querySelector('[data-accuse]');
@@ -565,7 +570,7 @@
       onPick: (ids) => {
         picked = ids[0];
         accuseBtn.disabled = !picked;
-        accuseBtn.textContent = 'Accuse ' + nameOf(session, picked);
+        accuseBtn.textContent = t('games.imposter.accuse_nameof', { nameOf: nameOf(session, picked) });
       },
     });
     accuseBtn.addEventListener('click', () => picked && passAct(shell, session, { type: 'accuse', target: picked }));
@@ -581,11 +586,11 @@
   function renderPassTiePick(shell, session) {
     const pub = session.round.pub;
     const body = shell.render(`<div class="im-vote">
-      <div class="im-step-title">Who tied?</div>
-      <div class="im-turn-sub">Pick everyone with the most votes.</div>
+      <div class="im-step-title">${tHtml('games.imposter.who_tied')}</div>
+      <div class="im-turn-sub">${tHtml('games.imposter.pick_everyone_with_the_most_votes')}</div>
       <div data-picker></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-ok disabled>Give them a defence</button>
-      <button type="button" class="im-link" data-back>Back to vote</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-ok disabled>${tHtml('games.imposter.give_them_a_defence')}</button>
+      <button type="button" class="im-link" data-back>${tHtml('games.imposter.back_to_vote')}</button>
     </div>`);
     let tied = [];
     const ok = body.querySelector('[data-ok]');
@@ -612,19 +617,19 @@
     if (index >= voters.length) return;
     const voter = voters[index];
     const body = shell.render(`<div class="im-reveal">
-      <div class="im-progress">${pub.phase === 'revote' ? 'Revote' : 'Secret vote'} · ${index + 1} of ${voters.length}</div>
+      <div class="im-progress">${tHtml('games.imposter.value_value2_of_voterscount', { value: { html: pub.phase === 'revote' ? 'Revote' : tHtml('games.imposter.secret_vote') }, value2: index + 1, votersCount: voters.length })}</div>
       <div class="pk-pass">
-        <div class="pk-pass-lead">Pass the phone to</div>
+        <div class="pk-pass-lead">${tHtml('games.imposter.pass_the_phone_to')}</div>
         <div class="pk-pass-name">${esc(nameOf(session, voter))}</div>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-ready>I’m ${esc(nameOf(session, voter))} — vote</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-ready>${tHtml('games.imposter.im_name_vote', { name: bidi(nameOf(session, voter)) })}</button>
       </div>
     </div>`);
     body.querySelector('[data-ready]').addEventListener('click', () => {
       const b = shell.render(`<div class="im-vote">
-        <div class="im-step-title">Who’s the Imposter?</div>
-        <div class="im-turn-sub">Nobody else will see your vote.</div>
+        <div class="im-step-title">${tHtml('games.imposter.who_s_the_imposter')}</div>
+        <div class="im-turn-sub">${tHtml('games.imposter.nobody_else_will_see_your_vote')}</div>
         <div data-picker></div>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-cast disabled>Vote &amp; pass</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-cast disabled>${tHtml('games.imposter.vote_pass')}</button>
       </div>`);
       let target = null;
       const cast = b.querySelector('[data-cast]');
@@ -664,9 +669,9 @@
       .map((id) => `<div class="im-tally-row"><span>${esc(nameOf(session, id))}</span><strong>${t.counts[id]}</strong></div>`)
       .join('');
     const body = shell.render(`<div class="im-vote">
-      <div class="im-step-title">The votes are in</div>
+      <div class="im-step-title">${tHtml('games.imposter.the_votes_are_in')}</div>
       <div class="im-tally">${rows}</div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>Continue</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${tHtml('games.imposter.continue')}</button>
     </div>`);
     body.querySelector('[data-go]').addEventListener('click', () => routePass(shell, session));
   }
@@ -675,10 +680,10 @@
     const pub = session.round.pub;
     const secs = session.round.settings.defenceSec;
     const body = shell.render(`<div class="im-discuss">
-      <div class="im-step-title">It’s a tie</div>
-      <div class="im-turn-sub">${pub.tied.map((id) => esc(nameOf(session, id))).join(' vs ')} — each gets a quick defence, then revote. Another tie and the Imposter survives.</div>
+      <div class="im-step-title">${tHtml('games.imposter.it_s_a_tie')}</div>
+      <div class="im-turn-sub">${tHtml('games.imposter.tied_defence', { names: pub.tied.map((id) => nameOf(session, id)).join(t('dangal.vs_join')) })}</div>
       <div class="pk-timer" data-timer></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>Revote</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${tHtml('games.imposter.revote')}</button>
     </div>`);
     let moved = false;
     const go = () => {
@@ -698,11 +703,11 @@
     const undercover = r.settings.variant === 'undercover';
     const body = shell.render(`<div class="im-steal">
       <div class="im-caught">🎯</div>
-      <div class="im-step-title">${esc(who)} ${undercover ? 'was the odd one out!' : 'was an Imposter!'}</div>
-      <div class="im-turn-sub">${esc(who)}, one guess to steal the win: ${undercover ? 'what was everyone else’s word?' : 'what’s the secret word?'}</div>
-      <input class="pk-input" data-guess maxlength="40" placeholder="Type the word (or say it out loud)" autocomplete="off" enterkeyhint="done">
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-check>Check guess</button>
-      <button type="button" class="im-link" data-spoken>They said it out loud</button>
+      <div class="im-step-title">${esc(who)} ${undercover ? tHtml('games.imposter.was_the_odd_one_out') : tHtml('games.imposter.was_an_imposter')}</div>
+      <div class="im-turn-sub">${tHtml('games.imposter.who_one_guess_to_steal_the', { who, value: { html: undercover ? tHtml('games.imposter.what_was_everyone_else_s_word') : tHtml('games.imposter.what_s_the_secret_word') } })}</div>
+      <input class="pk-input" data-guess maxlength="40" placeholder="${tHtml('games.imposter.type_the_word_or_say_it')}" autocomplete="off" enterkeyhint="done">
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-check>${tHtml('games.imposter.check_guess')}</button>
+      <button type="button" class="im-link" data-spoken>${tHtml('games.imposter.they_said_it_out_loud')}</button>
     </div>`);
     const input = body.querySelector('[data-guess]');
     const check = (spoken) => {
@@ -711,14 +716,14 @@
         input.focus();
         return;
       }
-      const auto = guess ? Core().matchGuess(guess, r.hidden.majority) : false;
+      const auto = guess ? Core().matchGuess(guess, r.hidden.majority, contentLang()) : false;
       const b = shell.render(`<div class="im-steal">
-        <div class="im-step-title">The word was</div>
+        <div class="im-step-title">${tHtml('games.imposter.the_word_was')}</div>
         <div class="im-card-word">${esc(word(r.hidden.majority))}</div>
-        ${guess ? `<div class="im-turn-sub">${esc(who)} guessed “${esc(guess)}” — ${auto ? 'looks right ✅' : 'looks wrong ❌'}</div>` : `<div class="im-turn-sub">Did ${esc(who)} say it?</div>`}
+        ${guess ? `<div class="im-turn-sub">${tHtml('games.imposter.who_guessed_guess_value', { who, guess, value: { html: auto ? tHtml('games.imposter.looks_right') : tHtml('games.imposter.looks_wrong') } })}</div>` : `<div class="im-turn-sub">${tHtml('games.imposter.did_who_say_it', { who })}</div>`}
         <div class="im-row">
-          <button type="button" class="pk-btn ${auto ? 'pk-btn--primary' : 'pk-btn--ghost'}" data-accept>Group accepts</button>
-          <button type="button" class="pk-btn ${auto ? 'pk-btn--ghost' : 'pk-btn--primary'}" data-reject>Group rejects</button>
+          <button type="button" class="pk-btn ${auto ? 'pk-btn--primary' : 'pk-btn--ghost'}" data-accept>${tHtml('games.imposter.group_accepts')}</button>
+          <button type="button" class="pk-btn ${auto ? 'pk-btn--ghost' : 'pk-btn--primary'}" data-reject>${tHtml('games.imposter.group_rejects')}</button>
         </div>
       </div>`);
       b.querySelector('[data-accept]').addEventListener('click', () => passAct(shell, session, { type: 'stealVerdict', ok: true, guess }));
@@ -744,11 +749,11 @@
       scoreboard: Kit().scoreboardHtml(session.players, session.scores, res.points),
       tally: null,
     }) + `<div class="im-result-actions">
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Next round</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${tHtml('games.imposter.next_round')}</button>
         ${Kit().passHubButtonHtml()}
         <div class="im-row">
-          <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-          <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
+          <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+          <button type="button" class="pk-btn pk-btn--ghost" data-setup>${tHtml('games.imposter.players_settings')}</button>
         </div>
         ${Kit().badCardHtml(card)}
       </div>`);
@@ -767,29 +772,29 @@
   function resultHeadline(res, nm) {
     const imps = res.imposters.map(nm);
     const stole = res.caught.find((c) => c.stealOk);
-    if (stole) return { glyph: '😈', title: nm(stole.id) + ' stole the win!', sub: 'Caught — but guessed the word.' };
+    if (stole) return { glyph: '😈', title: t('games.imposter.nm_stole_the_win', { nm: nm(stole.id) }), sub: t('games.imposter.caught_but_guessed_the_word') };
     if (res.survivors.length) {
       const who = res.survivors.map(nm).join(' & ');
       const why =
-        res.reason === 'wrong_accused' ? 'The group voted out the wrong person.' : 'Nobody could agree — the Imposter slipped away.';
-      return { glyph: '🕵️', title: who + ' fooled everyone!', sub: why };
+        res.reason === 'wrong_accused' ? t('games.imposter.the_group_voted_out_the_wrong') : t('games.imposter.nobody_could_agree_the_imposter_slipped');
+      return { glyph: '🕵️', title: t('games.imposter.who_fooled_everyone', { who }), sub: why };
     }
-    return { glyph: '🎉', title: 'Crew wins!', sub: (imps.length > 1 ? 'Imposters ' : 'Imposter ') + imps.join(' & ') + ' caught.' };
+    return { glyph: '🎉', title: t('games.imposter.crew_wins'), sub: t('games.imposter.imposters_caught', { count: imps.length, names: imps.join(' & ') }) };
   }
 
   function resultHtml(res, nm, settings, extra) {
     const h = resultHeadline(res, nm);
     const x = extra || {};
     const words = res.minority
-      ? `<div class="im-words"><div><span>Crew word</span><strong>${esc(word(res.majority))}</strong></div><div><span>Imposter word</span><strong>${esc(word(res.minority))}</strong></div></div>`
-      : `<div class="im-words"><div><span>The word</span><strong>${esc(word(res.majority))}</strong></div>${
-          res.category ? `<div><span>Category</span><strong>${esc(packLabel(res.category))}</strong></div>` : ''
+      ? `<div class="im-words"><div><span>${tHtml('games.imposter.crew_word')}</span><strong>${esc(word(res.majority))}</strong></div><div><span>${tHtml('games.imposter.imposter_word')}</span><strong>${esc(word(res.minority))}</strong></div></div>`
+      : `<div class="im-words"><div><span>${tHtml('games.imposter.the_word')}</span><strong>${esc(word(res.majority))}</strong></div>${
+          res.category ? `<div><span>${tHtml('common.feedback_category')}</span><strong>${esc(packLabel(res.category))}</strong></div>` : ''
         }</div>`;
     const steals = res.caught
       .filter((c) => c.guess != null || c.stealOk != null)
       .map(
         (c) =>
-          `<div class="im-steal-line">${esc(nm(c.id))} guessed ${c.guess ? '“' + esc(c.guess) + '”' : 'out loud'} — ${c.overridden ? (c.stealOk ? 'group accepted 😈' : 'group said no') : c.stealOk ? 'correct 😈' : 'wrong'}</div>`
+          `<div class="im-steal-line">${tHtml('games.imposter.id_guessed_value_value2', { id: nm(c.id), value: { html: c.guess ? '“' + esc(c.guess) + '”' : tHtml('games.imposter.out_loud') }, value2: { html: c.overridden ? (c.stealOk ? tHtml('games.imposter.group_accepted') : tHtml('games.imposter.group_said_no')) : c.stealOk ? 'correct 😈' : 'wrong' } })}</div>`
       )
       .join('');
     return `<div class="im-result">
@@ -797,10 +802,10 @@
       <div class="im-result-title">${esc(h.title)}</div>
       <div class="im-result-sub">${esc(h.sub)}</div>
       ${words}
-      <div class="im-result-imps">${res.imposters.length > 1 ? 'Imposters' : 'Imposter'}: <strong>${res.imposters.map((id) => esc(nm(id))).join(', ')}</strong></div>
+      <div class="im-result-imps">${res.imposters.length > 1 ? tHtml('games.imposter.imposters') : tHtml('games.imposter.rules.ruleset.name')}: <strong>${res.imposters.map((id) => esc(nm(id))).join(', ')}</strong></div>
       ${steals}
       ${x.tally || ''}
-      <div class="im-section-label">Scores</div>
+      <div class="im-section-label">${tHtml('games.imposter.scores')}</div>
       ${x.scoreboard || ''}
     </div>`;
   }
@@ -808,17 +813,17 @@
   function shareResult(res, nm) {
     const stole = res.caught.find((c) => c.stealOk);
     let line;
-    if (stole) line = nm(stole.id) + ' got caught but stole the win as the Imposter 😈';
-    else if (res.survivors.length) line = res.survivors.map(nm).join(' & ') + ' fooled everyone as the Imposter 😈';
-    else line = 'We caught the Imposter (' + res.imposters.map(nm).join(' & ') + ') 🕵️';
+    if (stole) line = t('games.imposter.nm_got_caught_but_stole_the', { nm: nm(stole.id) });
+    else if (res.survivors.length) line = t('games.imposter.value_fooled_everyone_as_the_imposter', { value: res.survivors.map(nm).join(' & ') });
+    else line = t('games.imposter.we_caught_the_imposter_value', { value: res.imposters.map(nm).join(' & ') });
     const text = line + ' — play Imposter on Chaupaal';
     const url = location.origin + '/';
     const stats =
       typeof buildShareStats === 'function'
-        ? buildShareStats({ scoreLine: line, meta: 'Imposter · party game', text, url, caption: line })
-        : { scoreLine: line, meta: 'Imposter', text, url };
+        ? buildShareStats({ scoreLine: line, meta: t('games.imposter.imposter_party_game'), text, url, caption: line })
+        : { scoreLine: line, meta: t('games.imposter.rules.ruleset.name'), text, url };
     if (typeof openUnifiedShareSheet === 'function') {
-      openUnifiedShareSheet({ gameId: GAME, title: 'Share', subtitle: line, stats });
+      openUnifiedShareSheet({ gameId: GAME, title: t('common.share'), subtitle: line, stats });
     } else if (typeof shareGameResult === 'function') {
       shareGameResult(GAME, stats);
     }
@@ -828,7 +833,7 @@
 
   function requireSignIn() {
     if (Kit().isSignedIn()) return true;
-    if (typeof showToast === 'function') showToast('Sign in to play on separate phones — Pass & Play works signed out');
+    if (typeof showToast === 'function') showToast(t('games.imposter.sign_in_to_play_on_separate'));
     if (typeof openAuthSheet === 'function') openAuthSheet('login');
     return false;
   }
@@ -837,40 +842,40 @@
     const o = opts || {};
     if (!requireSignIn()) return;
     if (navigator.onLine === false) {
-      if (typeof showToast === 'function') showToast('You’re offline — Pass & Play works without internet');
+      if (typeof showToast === 'function') showToast(t('games.imposter.you_re_offline_pass_play_works'));
       return;
     }
     const settings = loadSettings();
     try {
       const chatId = o.chat ? o.chat.firestoreId || o.chat.id : '';
       const res = await Kit().roomCall(GAME, 'create', {
-        name: Kit().myName() || 'Host',
-        settings,
+        name: Kit().myName() || t('games.imposter.host'),
+        settings: Object.assign({ contentLang: Kit().uiContentLang ? Kit().uiContentLang() : 'en' }, settings),
         chatId: chatId && chatId !== 'ai' ? chatId : '',
       });
       if (o.chat && chatId && chatId !== 'ai') {
         const sent = await Kit().postInviteToChat(o.chat, GAME, res.code, LABEL);
-        if (sent && typeof showToast === 'function') showToast('Invite posted in the chat');
+        if (sent && typeof showToast === 'function') showToast(t('games.imposter.invite_posted_in_the_chat'));
       }
       openRoom(res.code, { host: true });
     } catch (e) {
-      if (typeof showToast === 'function') showToast(Kit().roomErrorText(e) || 'Couldn’t create a room');
+      if (typeof showToast === 'function') showToast(Kit().roomErrorText(e) || t('games.imposter.couldn_t_create_a_room'));
     }
   }
 
   function openJoinByCode() {
     if (!requireSignIn()) return;
     Kit().openSheet({
-      title: 'Join a room',
-      bodyHtml: `<input class="pk-input pk-input--code" data-code maxlength="6" placeholder="ROOM CODE" autocapitalize="characters" autocomplete="off" enterkeyhint="go" aria-label="Room code">
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-join>Join</button>`,
+      title: t('games.imposter.join_a_room'),
+      bodyHtml: `<input class="pk-input pk-input--code" data-code maxlength="6" placeholder="${tHtml('games.imposter.room_code')}" autocapitalize="characters" autocomplete="off" enterkeyhint="go" aria-label="${tHtml('games.imposter.room_code_2')}">
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-join>${tHtml('games.imposter.join')}</button>`,
       onMount(sheet, close) {
         const input = sheet.querySelector('[data-code]');
         setTimeout(() => input.focus(), 50);
         const go = () => {
           const code = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
           if (code.length !== 6) {
-            if (typeof showToast === 'function') showToast('Room codes are 6 letters and numbers');
+            if (typeof showToast === 'function') showToast(t('games.imposter.room_codes_are_6_letters_and'));
             return;
           }
           close();
@@ -888,10 +893,10 @@
     if (!requireSignIn()) return;
     if (o.join) {
       try {
-        const res = await Kit().roomCall(GAME, 'join', { code, name: Kit().myName() || 'Player' });
-        if (res.pending && typeof showToast === 'function') showToast('Round in progress — you’ll be dealt in next round');
+        const res = await Kit().roomCall(GAME, 'join', { code, name: Kit().myName() || t('dangal.party.player') });
+        if (res.pending && typeof showToast === 'function') showToast(t('games.imposter.round_in_progress_you_ll_be'));
       } catch (e) {
-        if (typeof showToast === 'function') showToast(Kit().roomErrorText(e) || 'Couldn’t join that room');
+        if (typeof showToast === 'function') showToast(Kit().roomErrorText(e) || t('games.imposter.couldn_t_join_that_room'));
         return;
       }
     }
@@ -900,16 +905,19 @@
     const shell = Kit().openShell({
       gameId: GAME,
       title: LABEL,
-      subtitle: 'Room ' + code,
+      subtitle: t('games.imposter.room_code_3', { code }),
       confirmLeave: () => !!(view.pub && view.pub.status === 'playing'),
-      leaveBody: 'You can rejoin from the invite link while the room is open.',
+      leaveBody: t('games.imposter.you_can_rejoin_from_the_invite'),
       onClose: () => {
+        roomContentLang = '';
         if (conn) conn.stop();
       },
     });
     conn = Kit().connectRoom(GAME, code, {
       onPub: (pub) => {
         view.pub = pub;
+        roomContentLang = (pub && pub.settings && pub.settings.contentLang) || '';
+        if (roomContentLang && Kit().ensureContentLocale) Kit().ensureContentLocale(GAME, roomContentLang).then(() => view.pub === pub && paintRoom(shell, conn, view));
         paintRoom(shell, conn, view);
       },
       onSecret: (secret) => {
@@ -922,15 +930,15 @@
       },
     });
     if (!conn) {
-      shell.render('<div class="im-empty">Can’t reach the game server right now. Try again in a moment.</div>');
+      shell.render('<div class="im-empty">' + tHtml('games.imposter.can_t_reach_the_game_server') + '</div>');
       return;
     }
-    shell.render('<div class="im-empty">Joining room…</div>');
+    shell.render('<div class="im-empty">' + tHtml('games.imposter.joining_room') + '</div>');
   }
 
   function roomName(view, id) {
     const p = view.pub && view.pub.players && view.pub.players[id];
-    return p ? p.name : 'Player';
+    return p ? p.name : t('dangal.party.player');
   }
 
   function roomPlayers(view) {
@@ -957,7 +965,7 @@
       let msg = Kit().roomErrorText(e);
       if (/^CLUE_/.test(code)) {
         const reason = code.slice(5).toLowerCase();
-        msg = Core().CLUE_REASON_COPY[reason] || 'Try a different clue';
+        msg = Core().CLUE_REASON_COPY[reason] || t('games.imposter.try_a_different_clue');
       }
       if (errEl) errEl.textContent = msg || '';
       else if (msg && typeof showToast === 'function') showToast(msg);
@@ -971,23 +979,23 @@
     if (shell.closed) return;
     const pub = view.pub;
     if (!pub) {
-      shell.render(`<div class="im-empty">This room isn’t available any more.
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>Back to games</button></div>`)
+      shell.render(`<div class="im-empty">${tHtml('games.imposter.this_room_isn_t_available_any')}
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>${tHtml('games.imposter.back_to_games')}</button></div>`)
         ?.querySelector('[data-close]')
         ?.addEventListener('click', () => shell.close());
       return;
     }
     const me = conn.uid;
     if (pub.status === 'closed') {
-      shell.render(`<div class="im-empty">${pub.hub ? 'Back to the party…' : 'The host closed this room.'}
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>Done</button></div>`)
+      shell.render(`<div class="im-empty">${pub.hub ? tHtml('games.imposter.back_to_the_party') : tHtml('games.imposter.the_host_closed_this_room')}
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>${tHtml('common.done')}</button></div>`)
         ?.querySelector('[data-close]')
         ?.addEventListener('click', () => shell.close());
       return;
     }
     if (!pub.players || !pub.players[me] || pub.players[me].left) {
-      shell.render(`<div class="im-empty">You’re no longer in this room.
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>Done</button></div>`)
+      shell.render(`<div class="im-empty">${tHtml('games.imposter.you_re_no_longer_in_this')}
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-close>${tHtml('common.done')}</button></div>`)
         ?.querySelector('[data-close]')
         ?.addEventListener('click', () => shell.close());
       return;
@@ -1035,17 +1043,17 @@
     if (!isHost || !st) return '';
     const timed = ['clues', 'discuss', 'vote', 'revote', 'defence', 'steal', 'reveal'].indexOf(st.phase) >= 0;
     if (!timed) return '';
-    return `<div class="im-hostbar"><span>Host</span>${
+    return `<div class="im-hostbar"><span>${tHtml('games.imposter.host')}</span>${
       view.pub.paused
-        ? '<button type="button" class="pk-chip" data-host="resume">Resume</button>'
-        : '<button type="button" class="pk-chip" data-host="pause">Pause</button>'
+        ? '<button type="button" class="pk-chip" data-host="resume">' + tHtml('common.shortcut_dangal_resume') + '</button>'
+        : '<button type="button" class="pk-chip" data-host="pause">' + tHtml('games.imposter.pause') + '</button>'
     }${
       view.pub.deadline || view.pub.paused
         ? (view.pub.extended && view.pub.extended.key === String(view.pub.phaseKey || '') ? Number(view.pub.extended.n) || 0 : 0) < 3
-          ? '<button type="button" class="pk-chip" data-host="addTime" aria-label="Add 30 seconds">+30s</button>'
+          ? '<button type="button" class="pk-chip" data-host="addTime" aria-label="' + tHtml('games.imposter.add_30_seconds') + '">+30s</button>'
           : ''
         : ''
-    }${st.phase === 'discuss' ? '<button type="button" class="pk-chip" data-host="skipDiscussion">Skip to vote</button>' : ''}</div>`;
+    }${st.phase === 'discuss' ? '<button type="button" class="pk-chip" data-host="skipDiscussion">' + tHtml('games.imposter.skip_to_vote') + '</button>' : ''}</div>`;
   }
 
   function wireHostBar(body, conn, view) {
@@ -1061,32 +1069,33 @@
     const s = Core().mergeSettings(pub.settings);
     const k = Core().resolveImposterCount(Math.max(3, players.length), s.imposters);
     const body = shell.render(`<div class="im-lobby">
-      <div class="im-code-label">Room code</div>
-      <div class="im-code" aria-label="Room code ${esc(view.code)}">${esc(view.code)}</div>
+      <div class="im-code-label">${tHtml('games.imposter.room_code_2')}</div>
+      <div class="im-code" aria-label="${tHtml('dangal.room_code_value', { code: view.code })}">${esc(view.code)}</div>
       <div class="im-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-share>Share link</button>
-        <button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite friends</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('games.imposter.share_link')}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-invite>${tHtml('games.imposter.invite_friends')}</button>
       </div>
-      <div class="im-section-label">In the room · ${players.length}/12</div>
+      <div class="im-section-label">${tHtml('games.imposter.in_the_room_playerscount_12', { playersCount: players.length })}</div>
       <div class="im-lobby-list">${players
         .map(
           (p, i) => `<div class="im-lobby-row"><span class="im-dot" data-presence="${esc(p.id)}"></span>${Kit().identityHtml(i, p.name)}<span>${esc(p.name)}</span>${
-            p.id === pub.host ? '<span class="im-badge">Host</span>' : ''
-          }${p.id === conn.uid ? '<span class="im-badge im-badge--me">You</span>' : ''}</div>`
+            p.id === pub.host ? '<span class="im-badge">' + tHtml('games.imposter.host') + '</span>' : ''
+          }${p.id === conn.uid ? '<span class="im-badge im-badge--me">' + tHtml('common.you') + '</span>' : ''}</div>`
         )
         .join('')}</div>
       <button type="button" class="im-pack-row" data-settings ${isHost ? '' : 'disabled'}>
-        ${esc(packById(s.pack).icon)} ${esc(packLabel(packById(s.pack)))} · ${s.variant === 'undercover' ? 'Undercover' : 'Classic'} · ${k} ${k === 1 ? 'Imposter' : 'Imposters'}
+        ${esc(packById(s.pack).icon)} ${esc(packLabel(packById(s.pack)))} · ${s.variant === 'undercover' ? tHtml('games.imposter.variant_undercover') : tHtml('games.imposter.classic')} · ${tHtml('games.imposter.imposter_count', { count: k })}
         ${isHost ? '<span class="im-chev" aria-hidden="true">›</span>' : ''}
       </button>
+      ${Kit().contentLangRowHtml ? Kit().contentLangRowHtml(GAME, pub.settings, isHost) : ''}
       ${
         isHost
           ? `<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start ${players.length < 3 ? 'disabled' : ''}>${
-              players.length < 3 ? 'Need ' + (3 - players.length) + ' more to start' : 'Start'
+              players.length < 3 ? tHtml('games.imposter.need_value_more_to_start', { value: 3 - players.length }) : tHtml('games.imposter.start')
             }</button>`
-          : '<div class="im-wait">Waiting for the host to start…</div>'
+          : '<div class="im-wait">' + tHtml('games.imposter.waiting_for_the_host_to_start') + '</div>'
       }
-      <button type="button" class="im-link" data-leave>Leave room</button>
+      <button type="button" class="im-link" data-leave>${tHtml('games.imposter.leave_room')}</button>
     </div>`);
     body.querySelector('[data-share]').addEventListener('click', () => Kit().shareRoom(GAME, view.code, LABEL));
     body.querySelector('[data-invite]').addEventListener('click', () => Kit().inviteFriends(GAME, view.code, LABEL));
@@ -1096,6 +1105,7 @@
     });
     if (isHost) {
       body.querySelector('[data-settings]').addEventListener('click', () => openRoomSettings(conn, view, players.length));
+      body.querySelector('[data-content-lang]')?.addEventListener('click', () => Kit().pickContentLang(GAME, pub.settings, (next) => act(conn, view, 'settings', { settings: { contentLang: next } })));
       body.querySelector('[data-start]')?.addEventListener('click', () => act(conn, view, 'start', customArgs(s)));
     }
   }
@@ -1103,9 +1113,9 @@
   function openRoomSettings(conn, view, n) {
     const s = Core().mergeSettings(view.pub.settings);
     Kit().openSheet({
-      title: 'Room settings',
-      bodyHtml: `<button type="button" class="im-pack-row" data-pack>${esc(packById(s.pack).icon)} Words: <strong>${esc(packLabel(packById(s.pack)))}</strong> <span class="im-chev">›</span></button>
-        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-more>Mode &amp; advanced</button>`,
+      title: t('games.imposter.room_settings'),
+      bodyHtml: `<button type="button" class="im-pack-row" data-pack>${esc(packById(s.pack).icon)} ${tHtml('games.imposter.words_pack', { pack: { html: '<strong>' + esc(packLabel(packById(s.pack))) + '</strong>' } })} <span class="im-chev">›</span></button>
+        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-more>${tHtml('games.imposter.mode_advanced')}</button>`,
       onMount(sheet, close) {
         sheet.querySelector('[data-pack]').addEventListener('click', () => {
           close();
@@ -1131,10 +1141,10 @@
 
   function renderPending(shell, conn, view, st) {
     const body = shell.render(`<div class="im-empty">
-      <div class="im-step-title">Round in progress</div>
-      <div class="im-turn-sub">You’ll be dealt in when the next round starts.</div>
+      <div class="im-step-title">${tHtml('games.imposter.round_in_progress')}</div>
+      <div class="im-turn-sub">${tHtml('games.imposter.you_ll_be_dealt_in_when')}</div>
       ${cluesListHtml(null, st, (id) => roomName(view, id))}
-      <button type="button" class="im-link" data-leave>Leave room</button>
+      <button type="button" class="im-link" data-leave>${tHtml('games.imposter.leave_room')}</button>
     </div>`);
     body.querySelector('[data-leave]').addEventListener('click', async () => {
       await act(conn, view, 'leave');
@@ -1160,7 +1170,7 @@
   }
 
   function peekHtml() {
-    return `<button type="button" class="im-peek" data-peek aria-label="Hold to peek at your card">👁 Hold to peek at your card</button>`;
+    return `<button type="button" class="im-peek" data-peek aria-label="${tHtml('games.imposter.hold_to_peek_at_your_card_2')}">${tHtml('games.imposter.hold_to_peek_at_your_card')}</button>`;
   }
 
   function wirePeek(body, view) {
@@ -1191,8 +1201,8 @@
     const nm = (id) => roomName(view, id);
     const pub = view.pub;
     const inRound = st.players.indexOf(me) >= 0;
-    shell.setSubtitle('Room ' + view.code + ' · Round ' + pub.roundNo);
-    const pausedNote = pub.paused ? '<div class="im-paused">Paused by the host</div>' : '';
+    shell.setSubtitle(t('games.imposter.room_code_round_roundno', { code: view.code, roundNo: pub.roundNo }));
+    const pausedNote = pub.paused ? '<div class="im-paused">' + tHtml('games.imposter.paused_by_the_host') + '</div>' : '';
 
     if (st.phase === 'reveal') {
       const ready = st.players.filter((id) => pub.seen && pub.seen[id]).length;
@@ -1201,8 +1211,8 @@
       if (mine || !inRound) {
         const body = shell.render(`<div class="im-reveal">
           ${hostBar(conn, view, st)}
-          <div class="im-step-title">Waiting for everyone to see their card</div>
-          <div class="im-turn-sub">${ready}/${st.players.length} ready</div>
+          <div class="im-step-title">${tHtml('games.imposter.waiting_for_everyone_to_see_their')}</div>
+          <div class="im-turn-sub">${tHtml('dangal.ready_of', { n: ready, total: st.players.length })}</div>
           ${timerHtml()}
           ${inRound ? peekHtml() : ''}
         </div>`);
@@ -1212,14 +1222,14 @@
         return;
       }
       const body = shell.render(`<div class="im-reveal">
-        <div class="im-progress">Round ${pub.roundNo} · ${ready}/${st.players.length} ready</div>
+        <div class="im-progress">${tHtml('games.imposter.round_roundno_ready_playerscount_ready', { roundNo: pub.roundNo, ready, playersCount: st.players.length })}</div>
         <div data-cover></div>
       </div>`);
       Kit().mountPassCover(body.querySelector('[data-cover]'), {
-        lead: 'Your card',
+        lead: t('games.imposter.your_card'),
         name: nm(me),
         revealHtml: () => cardFaceHtml(secretOk ? view.secret : null),
-        doneLabel: 'I’ve seen it',
+        doneLabel: t('games.imposter.i_ve_seen_it'),
         onDone: () => act(conn, view, 'seen'),
       });
       return;
@@ -1232,20 +1242,20 @@
       const mine = giver === me;
       const body = shell.render(`<div class="im-room-clues">
         ${hostBar(conn, view, st)}
-        <div class="im-progress">Clue round ${circuit} of ${Core().mergeSettings(pub.settings).circuits}</div>
+        <div class="im-progress">${tHtml('games.imposter.clue_round_circuit_of_value', { circuit, value: Core().mergeSettings(pub.settings).circuits })}</div>
         ${pausedNote}
-        <div class="im-turn-name">${mine ? 'Your turn' : esc(nm(giver)) + '’s turn'}</div>
+        <div class="im-turn-name">${mine ? tHtml('games.imposter.your_turn') : esc(nm(giver)) + '’s turn'}</div>
         ${timerHtml()}
         ${cluesListHtml(null, st, nm)}
         ${
           mine
             ? `<div class="im-clue-form">
-                <input class="pk-input" data-keep="clue" data-clue maxlength="24" placeholder="One word" autocomplete="off" autocapitalize="off" enterkeyhint="send" aria-label="Your one-word clue">
-                <button type="button" class="pk-btn pk-btn--primary" data-send>Send</button>
+                <input class="pk-input" data-keep="clue" data-clue maxlength="24" placeholder="${tHtml('games.imposter.one_word_2')}" autocomplete="off" autocapitalize="off" enterkeyhint="send" aria-label="${tHtml('games.imposter.your_one_word_clue')}">
+                <button type="button" class="pk-btn pk-btn--primary" data-send>${tHtml('common.send')}</button>
               </div>
               <div class="im-error" data-err role="alert"></div>
-              <div class="im-rule">Not the word · not a translation · not part of it · no repeats</div>`
-            : '<div class="im-wait">Listen closely…</div>'
+              <div class="im-rule">${tHtml('games.imposter.not_the_word_not_a_translation')}</div>`
+            : '<div class="im-wait">' + tHtml('games.imposter.listen_closely') + '</div>'
         }
         ${inRound ? peekHtml() : ''}
       </div>`);
@@ -1259,7 +1269,7 @@
           const w = view.secret && view.secret.word ? view.secret.word : null;
           const v = Core().validateClue(input.value, { word: w, used: st.clues.map((c) => c.text).filter(Boolean) });
           if (!v.ok) {
-            err.textContent = Core().CLUE_REASON_COPY[v.reason] || 'Try another clue';
+            err.textContent = Core().CLUE_REASON_COPY[v.reason] || t('games.imposter.try_another_clue');
             return;
           }
           err.textContent = '';
@@ -1276,9 +1286,9 @@
     if (st.phase === 'discuss') {
       const body = shell.render(`<div class="im-discuss">
         ${hostBar(conn, view, st)}
-        <div class="im-step-title">Discuss</div>
+        <div class="im-step-title">${tHtml('common.discuss')}</div>
         ${pausedNote}
-        <div class="im-turn-sub">Who sounded like they didn’t know the word?</div>
+        <div class="im-turn-sub">${tHtml('games.imposter.who_sounded_like_they_didn_t')}</div>
         ${timerHtml()}
         ${cluesListHtml(null, st, nm)}
         ${inRound ? peekHtml() : ''}
@@ -1292,17 +1302,17 @@
     if (st.phase === 'vote' || st.phase === 'revote') {
       const canVote = st.voters.indexOf(me) >= 0;
       const voted = st.voted.indexOf(me) >= 0;
-      const title = st.phase === 'revote' ? 'Revote' : st.voteRound > 1 ? 'Another Imposter is out there' : 'Vote';
+      const title = st.phase === 'revote' ? t('games.imposter.revote') : st.voteRound > 1 ? t('games.imposter.another_imposter_is_out_there') : t('games.imposter.vote');
       const body = shell.render(`<div class="im-vote">
         ${hostBar(conn, view, st)}
         <div class="im-step-title">${title}</div>
         ${pausedNote}
         ${timerHtml()}
-        <div class="im-turn-sub">${st.voted.length}/${st.voters.length} voted${st.phase === 'revote' ? ' · only the tied players are up' : ''}</div>
+        <div class="im-turn-sub">${tHtml('games.imposter.votedcount_voterscount_voted_value', { votedCount: st.voted.length, votersCount: st.voters.length, value: st.phase === 'revote' ? t('games.imposter.only_the_tied_players_are_up_2') : '' })}</div>
         ${
           canVote && !voted
-            ? '<div data-picker></div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-cast disabled>Lock in vote</button>'
-            : `<div class="im-wait">${voted ? 'Vote locked in — waiting for the rest…' : 'Watching the vote…'}</div>`
+            ? '<div data-picker></div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-cast disabled>' + tHtml('games.imposter.lock_in_vote') + '</button>'
+            : `<div class="im-wait">${voted ? tHtml('games.imposter.vote_locked_in_waiting_for_the') : tHtml('games.imposter.watching_the_vote')}</div>`
         }
         ${cluesListHtml(null, st, nm)}
       </div>`);
@@ -1317,7 +1327,7 @@
           onPick: (ids) => {
             target = ids[0];
             cast.disabled = !target;
-            cast.textContent = 'Vote ' + nm(target);
+            cast.textContent = t('games.imposter.vote_nm', { nm: nm(target) });
           },
         });
         cast.addEventListener('click', () => target && act(conn, view, 'vote', { target }));
@@ -1328,9 +1338,9 @@
     if (st.phase === 'defence') {
       const body = shell.render(`<div class="im-discuss">
         ${hostBar(conn, view, st)}
-        <div class="im-step-title">It’s a tie</div>
+        <div class="im-step-title">${tHtml('games.imposter.it_s_a_tie')}</div>
         ${pausedNote}
-        <div class="im-turn-sub">${st.tied.map((id) => esc(nm(id))).join(' vs ')} — quick defence, then a revote. Another tie and the Imposter survives.</div>
+        <div class="im-turn-sub">${tHtml('games.imposter.tied_defence_short', { names: st.tied.map((id) => nm(id)).join(t('dangal.vs_join')) })}</div>
         ${voteBreakdownHtml(st, nm)}
         ${timerHtml()}
       </div>`);
@@ -1345,16 +1355,16 @@
       const body = shell.render(`<div class="im-steal">
         ${hostBar(conn, view, st)}
         <div class="im-caught">🎯</div>
-        <div class="im-step-title">${mine ? 'You' : esc(nm(st.stealer))} ${undercover ? (mine ? 'were the odd one out!' : 'was the odd one out!') : mine ? 'were caught!' : 'was an Imposter!'}</div>
+        <div class="im-step-title">${mine ? tHtml('dangal.classics.you') : esc(nm(st.stealer))} ${undercover ? (mine ? tHtml('games.imposter.were_the_odd_one_out') : tHtml('games.imposter.was_the_odd_one_out')) : mine ? tHtml('games.imposter.were_caught') : tHtml('games.imposter.was_an_imposter')}</div>
         ${voteBreakdownHtml(st, nm)}
         ${timerHtml()}
         ${
           mine
-            ? `<div class="im-turn-sub">One guess to steal the win — ${undercover ? 'what was everyone else’s word?' : 'what’s the secret word?'}</div>
-               <input class="pk-input" data-keep="guess" data-guess maxlength="40" placeholder="Your guess" autocomplete="off" enterkeyhint="send">
-               <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-steal>Guess</button>
+            ? `<div class="im-turn-sub">${tHtml('games.imposter.one_guess_to_steal_the_win', { value: { html: undercover ? tHtml('games.imposter.what_was_everyone_else_s_word') : tHtml('games.imposter.what_s_the_secret_word') } })}</div>
+               <input class="pk-input" data-keep="guess" data-guess maxlength="40" placeholder="${tHtml('games.imposter.your_guess')}" autocomplete="off" enterkeyhint="send">
+               <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-steal>${tHtml('games.imposter.guess')}</button>
                <div class="im-error" data-err role="alert"></div>`
-            : `<div class="im-wait">${esc(nm(st.stealer))} is guessing the word…</div>`
+            : `<div class="im-wait">${tHtml('games.imposter.name_is_guessing', { name: bidi(nm(st.stealer)) })}</div>`
         }
       </div>`);
       wireHostBar(body, conn, view);
@@ -1387,15 +1397,15 @@
           `<div class="im-result-actions">
             ${
               isHost
-                ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Next round</button>'
-                : '<div class="im-wait">Waiting for the host to deal the next round…</div>'
+                ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>' + tHtml('games.imposter.next_round') + '</button>'
+                : '<div class="im-wait">' + tHtml('games.imposter.waiting_for_the_host_to_deal') + '</div>'
             }
             <div class="im-row">
-              <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-              ${isHost ? '<button type="button" class="pk-btn pk-btn--ghost" data-settings>Settings</button>' : '<button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite</button>'}
+              <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+              ${isHost ? '<button type="button" class="pk-btn pk-btn--ghost" data-settings>' + tHtml('common.settings') + '</button>' : '<button type="button" class="pk-btn pk-btn--ghost" data-invite>' + tHtml('common.invite') + '</button>'}
             </div>
             ${Kit().badCardHtml(card)}
-            <button type="button" class="im-link" data-leave>${isHost ? (pub.hub ? 'Back to the party' : 'End room') : 'Leave room'}</button>
+            <button type="button" class="im-link" data-leave>${isHost ? (pub.hub ? tHtml('dangal.party.back_to_party') : tHtml('dangal.party.end_room')) : tHtml('dangal.party.leave_room')}</button>
           </div>`
       );
       if (card) Kit().wireBadCard(body, card);
@@ -1452,7 +1462,7 @@
     const rows = Object.keys(t.votes)
       .map((v) => `<div class="im-tally-row"><span>${esc(nm(v))}</span><span class="im-arrow" aria-hidden="true">→</span><strong>${esc(nm(t.votes[v]))}</strong></div>`)
       .join('');
-    return `<details class="im-breakdown"><summary>${t.revote ? 'Revote' : 'Vote'} breakdown</summary><div class="im-tally">${rows}</div></details>`;
+    return `<details class="im-breakdown"><summary>${t.revote ? tHtml('games.imposter.revote_breakdown') : tHtml('games.imposter.vote_breakdown')}</summary><div class="im-tally">${rows}</div></details>`;
   }
 
   // ---------------- registration ----------------
@@ -1464,7 +1474,7 @@
     registerGame({
       id: 'imposter',
       name: LABEL,
-      desc: 'Everyone knows the word — except the Imposter',
+      desc: t('games.imposter.everyone_knows_the_word_except_the'),
       icon: '🕵️',
       gameType: 'multiplayer',
       genre: 'party',
@@ -1475,7 +1485,7 @@
       selfChat: false,
       order: 20,
       meta: {
-        kit: 'party-kit.js (Pass & Play + Room)',
+        kit: t('games.imposter.party_kit_js_pass_play_room'),
         dealing: 'party_room → server-lib/party-deal.js; roles never in shared state',
         packs: 'data/imposter-packs.js',
       },

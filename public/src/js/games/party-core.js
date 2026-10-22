@@ -2,21 +2,49 @@
  * Party Kit — pure helpers shared by party game cores on the client and the server
  * (forgiving text matching, shuffling). No DOM, no network. UMD: window.PartyCore / require().
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
-  const api = factory();
+  const SN = typeof module === 'object' && module.exports ? require('../core/search-normalize.js') : root.SearchNormalize;
+  const api = factory(SN);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.PartyCore = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (SN) {
   'use strict';
 
-  /** Lowercase, strip accents + punctuation, collapse spaces. Keeps Devanagari. */
+  /** Fold (L4 search normalisation), strip Latin accents + punctuation, collapse spaces. Keeps every script. */
   function normalize(s) {
-    return String(s == null ? '' : s)
+    const raw = String(s == null ? '' : s);
+    return (SN && SN.fold ? SN.fold(raw) : raw)
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/&/g, ' and ')
-      .replace(/[^a-z0-9\u0900-\u097f]+/g, ' ')
+      .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ')
       .trim()
       .replace(/\s+/g, ' ');
   }
@@ -46,9 +74,9 @@
     return out.filter((v, i) => v && out.indexOf(v) === i);
   }
 
-  /** Typos allowed for a Latin target of this length (Devanagari must match exactly). */
+  /** Typos allowed for a Latin target of this length (other scripts must match exactly). */
   function tolerance(target) {
-    if (/[\u0900-\u097f]/.test(target)) return 0;
+    if (!/^[a-z0-9 ]+$/.test(target)) return 0;
     const len = target.replace(/ /g, '').length;
     if (len >= 14) return 3;
     if (len >= 8) return 2;
@@ -110,5 +138,22 @@
     return both && item.en && item.en !== item.hi ? item.hi + ' · ' + item.en : item.hi;
   }
 
-  return { normalize, levenshtein, fuzzyMatch, shuffle, rngOr, bilingualLabel, isHindi };
+  /** Room content language code ('' = not set: older rooms accept every bundled label). */
+  function contentLang(v) {
+    const l = String(v == null ? '' : v).toLowerCase().split(/[-_]/)[0];
+    return /^[a-z]{2,3}$/.test(l) ? l : '';
+  }
+
+  /**
+   * Answers a typed guess may match: English (canonical) + the room content language's label + alt spellings.
+   * With no content language (older rooms) every bundled label counts, as before.
+   */
+  function guessLabels(item, lang) {
+    if (!item) return [];
+    const l = contentLang(lang);
+    const local = l ? (l !== 'en' && item[l] ? [item[l]] : []) : [item.hi];
+    return [item.en].concat(local, Array.isArray(item.alts) ? item.alts : []).filter(Boolean);
+  }
+
+  return { normalize, levenshtein, fuzzyMatch, shuffle, rngOr, bilingualLabel, isHindi, contentLang, guessLabels };
 });

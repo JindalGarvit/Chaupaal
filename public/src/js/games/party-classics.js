@@ -31,7 +31,7 @@
         lbl =
           typeof practiceTurnStatus === 'function'
             ? practiceTurnStatus({ myTurn: false, sport: o.sport }).label
-            : 'Practice AI thinking…';
+            : t('dangal.classics.practice_ai_thinking');
       }
     }
     if (typeof gameTurnBannerHtml === 'function') {
@@ -56,10 +56,10 @@
     const o = opts || {};
     return (
       '<div class="pc-party-wait" role="status" aria-live="polite">' +
-      partyTurnBanner(o.mode || 'waiting', o.title || 'Waiting…', o.sub || '') +
+      partyTurnBanner(o.mode || 'waiting', o.title || t('dangal.classics.waiting'), o.sub || '') +
       (o.hudHtml || '') +
       '<p class="pc-hint">' +
-      esc(o.detail || 'Table stays live — opponent actions will appear here.') +
+      esc(o.detail || t('dangal.classics.table_stays_live_opponent_actions_will')) +
       '</p>' +
       '</div>'
     );
@@ -75,14 +75,14 @@
     if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
       return DangalLive.modeChromeLabel(false, detail || 'vs AI');
     }
-    return detail ? 'Practice · ' + detail : 'Practice vs AI';
+    return detail ? t('dangal.classics.practice_detail', { detail }) : t('dangal.classics.practice_vs_ai');
   }
 
   function liveSub(detail) {
     if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
       return DangalLive.modeChromeLabel(true, detail);
     }
-    return 'Live 1v1';
+    return t('dangal.classics.live_1v1');
   }
 
   function chatLiveOn(chat) {
@@ -106,7 +106,7 @@
       ctx.practiceKind === 'vsAi' ||
       ctx.practiceKind === 'solo';
     return Object.assign(
-      { name: practiceSeat ? 'Practice AI' : 'Opponent' },
+      { name: practiceSeat ? t('dangal.classics.practice_ai') : t('dangal.classics.opponent') },
       ctx.chat || {},
       {
         dangalMatchId: ctx.matchId || undefined,
@@ -114,7 +114,7 @@
         uid: ctx.opponentUid || undefined,
         dangalSource: ctx.source || undefined,
       },
-      practiceSeat ? { name: 'Practice AI', id: 'ai' } : {}
+      practiceSeat ? { name: t('dangal.classics.practice_ai'), id: 'ai' } : {}
     );
   }
 
@@ -135,11 +135,11 @@
     const live = !!o.live;
     if (typeof confirmLeaveGame === 'function') {
       const ok = await confirmLeaveGame({
-        title: o.title || 'Leave game?',
+        title: o.title || t('dangal.classics.leave_game'),
         body:
           live && playing
-            ? 'Leaving now counts as a forfeit for your opponent.'
-            : o.body || 'This run will end.',
+            ? t('dangal.classics.leaving_now_counts_as_a_forfeit')
+            : o.body || t('dangal.classics.this_run_will_end'),
       });
       if (!ok) return false;
     }
@@ -275,8 +275,8 @@
         live: !!o.live || !!liveHandle,
         liveHandle,
         isPlaying: !gameOver,
-        title: 'Leave ' + (o.title || 'game') + '?',
-        body: o.leaveBody || 'This run will end.',
+        title: t('dangal.classics.leave_value', { value: o.title || t('dangal.classics.game') }),
+        body: o.leaveBody || t('dangal.classics.this_run_will_end'),
       });
     });
     return shell;
@@ -294,18 +294,18 @@
     buzz(draw ? 'draw' : won ? 'win' : 'lose');
     if (typeof setGamePB === 'function' && spec.pbScore != null) setGamePB(spec.id, spec.pbScore);
     const extras = Array.isArray(spec.extraActions) ? spec.extraActions.slice() : [];
-    extras.push({ label: 'Done', primary: false, id: 'leave' });
+    extras.push({ label: t('common.done'), primary: false, id: 'leave' });
     shell.body.innerHTML =
       typeof gameResultHtml === 'function'
         ? gameResultHtml({
             gameId: spec.id,
             glyph: spec.glyph,
-            title: spec.title || (draw ? 'Draw' : won ? 'You win' : 'You lose'),
+            title: spec.title || (draw ? t('dangal.classics.draw') : won ? t('dangal.classics.you_win') : t('dangal.classics.you_lose')),
             subtitle: spec.subtitle || '',
             you,
             opp,
             challenge: false,
-            againLabel: spec.againLabel || 'Play again',
+            againLabel: spec.againLabel || t('dangal.classics.play_again'),
             extraActions: extras,
           })
         : '';
@@ -369,8 +369,8 @@
           you: iWon ? 1 : 0,
           opp: iWon ? 0 : 1,
           glyph: '⚑',
-          title: iWon ? 'Opponent left' : 'You forfeited',
-          subtitle: 'Forfeit',
+          title: iWon ? t('dangal.classics.opponent_left') : t('dangal.classics.you_forfeited'),
+          subtitle: t('dangal.classics.forfeit'),
           shareText: gameType + ' on Chaupaal',
           onAgain: () => {},
         });
@@ -572,12 +572,12 @@
 
   /** Dividend ladder (Prompt 2) — interim claims = 1 pt each; Full House ends the match. */
   const TAMBOLA_DIVIDEND_META = {
-    earlyFive: { key: 'earlyFive', label: 'Early Five', pts: 1 },
-    top: { key: 'top', label: 'Top line', pts: 1, row: 0 },
-    mid: { key: 'mid', label: 'Middle line', pts: 1, row: 1 },
-    bottom: { key: 'bottom', label: 'Bottom line', pts: 1, row: 2 },
-    corners: { key: 'corners', label: 'Four corners', pts: 1 },
-    fullHouse: { key: 'fullHouse', label: 'Full house', pts: 0 },
+    earlyFive: { key: 'earlyFive', label: t('dangal.classics.early_five'), pts: 1 },
+    top: { key: 'top', label: t('dangal.classics.top_line'), pts: 1, row: 0 },
+    mid: { key: 'mid', label: t('dangal.classics.middle_line'), pts: 1, row: 1 },
+    bottom: { key: 'bottom', label: t('dangal.classics.bottom_line'), pts: 1, row: 2 },
+    corners: { key: 'corners', label: t('dangal.classics.four_corners'), pts: 1 },
+    fullHouse: { key: 'fullHouse', label: t('dangal.classics.full_house'), pts: 0 },
   };
   const TAMBOLA_DIVIDEND_ORDER = ['earlyFive', 'top', 'mid', 'bottom', 'corners', 'fullHouse'];
 
@@ -692,12 +692,12 @@
 
     const shell = openShell({
       id: 'tambola',
-      title: 'Tambola',
+      title: t('dangal.classics.tambola'),
       subtitle: liveOn
         ? liveSub() +
-          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
-          ' · Housie'
-        : practiceSub('Rival ticket · claim ladder'),
+          (liveStake > 0 ? t('dangal.classics.stake_livestake_virtual', { liveStake }) : ' · ' + t('dangal.friendly')) +
+          ' · ' + t('dangal.classics.housie')
+        : practiceSub(t('dangal.classics.rival_ticket_claim_ladder')),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -897,7 +897,7 @@
     function callBoardHtml() {
       const called = calledNow();
       const lastN = last !== '—' && last != null ? last | 0 : 0;
-      let html = '<div class="pc-callboard" aria-label="Numbers called">';
+      let html = '<div class="pc-callboard" aria-label="' + tHtml('dangal.classics.numbers_called') + '">';
       for (let decade = 0; decade < 9; decade++) {
         html += '<div class="pc-callboard-row">';
         for (let k = 1; k <= 10; k++) {
@@ -924,7 +924,7 @@
     function claimBarHtml() {
       const called = calledNow();
       const locked = !claimsOpen || Date.now() < bogeyUntil || ended;
-      let html = '<div class="pc-claimbar" role="group" aria-label="Claim dividends">';
+      let html = '<div class="pc-claimbar" role="group" aria-label="' + tHtml('dangal.classics.claim_dividends') + '">';
       TAMBOLA_DIVIDEND_ORDER.forEach((key) => {
         const meta = TAMBOLA_DIVIDEND_META[key];
         const already = taken[key];
@@ -957,28 +957,28 @@
         : '';
       const claimReady = claimsOpen && Date.now() >= bogeyUntil && !ended;
       let turnMode = 'waiting';
-      let turnLabel = 'Calling…';
-      let turnSub = 'Caller ' + idx + '/90';
+      let turnLabel = t('dangal.classics.calling');
+      let turnSub = t('dangal.classics.caller_idx_90', { idx });
       if (ended) {
         turnMode = 'over';
-        turnLabel = 'Match over';
+        turnLabel = t('dangal.classics.match_over');
         turnSub = '';
       } else if (!claimsOpen && last === '—') {
         turnMode = 'waiting';
-        turnLabel = 'Dealing…';
-        turnSub = 'Ticket incoming';
+        turnLabel = t('dangal.classics.dealing');
+        turnSub = t('dangal.classics.ticket_incoming');
       } else if (claimReady) {
         turnMode = 'yours';
-        turnLabel = 'Your claims';
-        turnSub = 'Tap a ready dividend';
+        turnLabel = t('dangal.classics.your_claims');
+        turnSub = t('dangal.classics.tap_a_ready_dividend');
       } else if (!claimsOpen) {
         turnMode = 'waiting';
-        turnLabel = 'Caller pacing…';
-        turnSub = 'Claims pause briefly';
+        turnLabel = t('dangal.classics.caller_pacing');
+        turnSub = t('dangal.classics.claims_pause_briefly');
       } else {
         turnMode = 'waiting';
-        turnLabel = 'Listening…';
-        turnSub = 'Mark your ticket';
+        turnLabel = t('dangal.classics.listening');
+        turnSub = t('dangal.classics.mark_your_ticket');
       }
       shell.body.innerHTML =
         '<div class="pc-tambola">' +
@@ -990,18 +990,16 @@
         markedCount +
         '/15' +
         oppLine +
-        ' · caller ' +
-        idx +
-        '/90 · pts <b>' +
+        ' · ' + tHtml('dangal.classics.caller_progress', { n: idx }) + ' · ' + tHtml('dangal.classics.pts_label') + ' <b>' +
         youPts +
         '</b>–<b>' +
         oppPts +
         '</b>' +
-        (liveOn ? ' · Live' : '') +
+        (liveOn ? ' · ' + tHtml('dangal.live') : '') +
         (!claimsOpen ? ' · …' : '') +
         '</p>' +
         callBoardHtml() +
-        '<div class="pc-ticket pc-ticket--housie" role="grid" aria-label="Your Tambola ticket">' +
+        '<div class="pc-ticket pc-ticket--housie" role="grid" aria-label="' + tHtml('dangal.classics.your_tambola_ticket') + '">' +
         ticketGridHtml(ticketYou) +
         '</div>' +
         claimBarHtml() +
@@ -1014,7 +1012,7 @@
     function bogey(msg) {
       buzz('invalid');
       bogeyUntil = Date.now() + 1200;
-      if (typeof showToast === 'function') showToast(msg || 'Bogey — not ready');
+      if (typeof showToast === 'function') showToast(msg || t('dangal.classics.bogey_not_ready'));
       paint();
     }
 
@@ -1036,18 +1034,10 @@
       const draw = !!o.draw;
       const won = forfeit ? !!o.iWon : draw ? false : !!winnerIsYou;
       const baseSub =
-        (subtitle ||
+        t('dangal.classics.value_pts_youpts_opppts', { value: (subtitle ||
           (forfeit
             ? won
-              ? 'Opponent left'
-              : 'You forfeited'
-            : won
-              ? 'Full house!'
-              : 'Opponent full house')) +
-        ' · pts ' +
-        youPts +
-        '–' +
-        oppPts;
+              ? t('dangal.classics.opponent_left') : t('dangal.classics.you_forfeited') : won ? t('dangal.classics.full_house_excl') : t('dangal.classics.opponent_full_house'))), youPts, oppPts });
 
       reportTambolaResult(won, draw, baseSub);
 
@@ -1072,7 +1062,7 @@
             (sub ? ' · ' : '') +
             (Number.isFinite(cd) && cd !== 0
               ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
-              : 'Virtual stakes · not real money');
+              : t('dangal.virtual_stakes_not_real'));
         }
         showDuelResult(shell, {
           id: 'tambola',
@@ -1082,20 +1072,16 @@
           pbScore: youPts,
           title: forfeit
             ? won
-              ? 'Opponent left'
-              : 'You forfeited'
+              ? t('dangal.classics.opponent_left')
+              : t('dangal.classics.you_forfeited')
             : draw
-              ? 'Draw'
+              ? t('dangal.classics.draw')
               : won
-                ? 'Full house — you win'
-                : 'Full house — opponent',
+                ? t('dangal.classics.full_house_you_win')
+                : t('dangal.classics.full_house_opponent'),
           subtitle: sub,
           shareText:
-            'Tambola on Chaupaal: ' +
-            youPts +
-            '–' +
-            oppPts +
-            (liveOn && liveStake > 0 ? ' · virtual stakes' : ''),
+            t('dangal.classics.tambola_on_chaupaal_youpts_opppts_value', { youPts, oppPts, value: liveOn && liveStake > 0 ? t('dangal.classics.virtual_stakes') : '' }),
           onAgain: freshRematch,
         });
       });
@@ -1111,18 +1097,18 @@
       if (ended || resultShown) return false;
       if (!TAMBOLA_DIVIDEND_META[key]) return false;
       if (taken[key]) {
-        if (isYou && !o.fromRemote && !o.fromAi) bogey('Already claimed');
+        if (isYou && !o.fromRemote && !o.fromAi) bogey(t('dangal.classics.already_claimed'));
         return false;
       }
 
       const called = calledNow();
       if (isYou && !o.fromRemote) {
         if (!claimsOpen || Date.now() < bogeyUntil) {
-          bogey('Too late — wait for the next call window');
+          bogey(t('dangal.classics.too_late_wait_for_the_next'));
           return false;
         }
         if (!tambolaDividendReady(key, ticketYou, called)) {
-          bogey('Bogey — pattern not complete');
+          bogey(t('dangal.classics.bogey_pattern_not_complete'));
           return false;
         }
       } else if (!isYou && o.fromAi) {
@@ -1140,7 +1126,7 @@
       }
 
       if (typeof showToast === 'function') {
-        showToast(meta.label + '!' + (isYou ? '' : ' (opp)'));
+        showToast(isYou ? t('dangal.classics.prize_claimed', { prize: meta.label }) : t('dangal.classics.prize_claimed_opp', { prize: meta.label }));
       }
       buzz(isYou ? 'win' : 'lose', { noConfetti: true });
 
@@ -1187,7 +1173,7 @@
       }
       if (c.dividend === 'fullHouse' || taken.fullHouse) {
         applying = true;
-        endMatch(taken.fullHouse === liveRoles.me || c.by === liveRoles.me, 'Full house', {
+        endMatch(taken.fullHouse === liveRoles.me || c.by === liveRoles.me, t('dangal.classics.full_house'), {
           skipLivePush: true,
         });
         applying = false;
@@ -1262,7 +1248,7 @@
             canFullHouse(ticketYou, calledNow()) ||
             youPts > oppPts ||
             (youPts === oppPts && markedCountOf(ticketYou) >= markedCountOf(ticketOpp));
-          endMatch(youWin, 'Bag exhausted');
+          endMatch(youWin, t('dangal.classics.bag_exhausted'));
         }
         return;
       }
@@ -1386,7 +1372,7 @@
             if (!shell.alive() || ended) return;
             if (idx >= bag.length) {
               if (!taken.fullHouse) {
-                endMatch(youPts >= oppPts, 'Bag exhausted');
+                endMatch(youPts >= oppPts, t('dangal.classics.bag_exhausted'));
               }
               return;
             }
@@ -1407,11 +1393,11 @@
         } else {
           shell.body.innerHTML = partyWaitPanel({
             mode: 'waiting',
-            title: 'Waiting for caller…',
-            sub: 'Live Tambola',
-            detail: 'Your ticket appears when the host deals. Claims stay closed until numbers start.',
+            title: t('dangal.classics.waiting_for_caller'),
+            sub: t('dangal.classics.live_tambola'),
+            detail: t('dangal.classics.your_ticket_appears_when_the_host'),
             hudHtml:
-              '<div class="pc-call" aria-hidden="true">—</div><p class="pc-hint">pts <b>0</b>–<b>0</b> · virtual stakes only</p>',
+              '<div class="pc-call" aria-hidden="true">—</div><p class="pc-hint">' + tHtml('dangal.classics.pts') + ' <b>0</b>–<b>0</b> ' + tHtml('dangal.classics.virtual_stakes_only') + '</p>',
           });
         }
       }
@@ -1435,7 +1421,7 @@
     const cueSub = liveOn
       ? liveSub()
       : isCarrom
-        ? 'Practice vs AI · ' + (spec.difficulty || spec.subtitle || 'Medium')
+        ? t('dangal.classics.practice_vs_ai_value', { value: spec.difficulty || spec.subtitle || t('dangal.classics.lvl.medium') })
         : practiceSub(spec.subtitle || spec.title || 'vs AI');
     const shell = openShell({
       id: spec.id,
@@ -1447,7 +1433,7 @@
       bg: spec.bg,
       pauseId,
       chat,
-      leaveBody: isCarrom && !liveOn ? 'Resign counts as a loss vs AI.' : undefined,
+      leaveBody: isCarrom && !liveOn ? t('dangal.classics.resign_counts_as_a_loss_vs') : undefined,
       cleanup: () => {
         cancelAnimationFrame(raf);
         raf = 0;
@@ -1466,7 +1452,7 @@
     });
     if (!shell) return;
 
-    const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+    const DIFF_LABEL = { easy: t('dangal.classics.lvl.easy'), medium: t('dangal.classics.lvl.medium'), hard: t('dangal.classics.lvl.hard') };
     let difficulty =
       spec.difficulty === 'easy' || spec.difficulty === 'hard' || spec.difficulty === 'medium'
         ? spec.difficulty
@@ -1477,7 +1463,7 @@
     if (isCarrom && liveOn) {
       const roles0 = typeof DangalLive !== 'undefined' && DangalLive.roles ? DangalLive.roles(chat) : null;
       if (!roles0 || !roles0.me || !roles0.playerA) {
-        if (typeof showToast === 'function') showToast('Live Carrom unavailable — try Practice');
+        if (typeof showToast === 'function') showToast(t('dangal.classics.live_carrom_unavailable_try_practice'));
       }
       youColor = roles0 && roles0.me === roles0.playerA ? 'white' : 'black';
     } else if (spec.youColor === 'black' || spec.youColor === 'white') {
@@ -1499,33 +1485,33 @@
       let pickDiff = difficulty || 'medium';
       let pickBreak = breakerPick || 'you';
       shell.body.innerHTML = `<div class="pc-carrom-pick">
-        <p class="pc-carrom-pick-title">Carrom Practice</p>
-        <p class="pc-carrom-pick-sub">Same rules for you and AI. Cover the Queen. Striker pocket is a foul.</p>
+        <p class="pc-carrom-pick-title">${tHtml('dangal.classics.carrom_practice')}</p>
+        <p class="pc-carrom-pick-sub">${tHtml('dangal.classics.same_rules_for_you_and_ai')}</p>
         <div class="pc-carrom-field">
-          <span class="pc-carrom-field-label">Your colour</span>
+          <span class="pc-carrom-field-label">${tHtml('dangal.classics.your_colour')}</span>
           <div class="pc-carrom-pick-row" data-field="color">
-            <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--white is-on" data-color="white">White</button>
-            <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--black" data-color="black">Black</button>
-            <button type="button" class="pc-carrom-pick-btn" data-color="random">Random</button>
+            <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--white is-on" data-color="white">${tHtml('dangal.classics.white')}</button>
+            <button type="button" class="pc-carrom-pick-btn pc-carrom-pick-btn--black" data-color="black">${tHtml('dangal.classics.black')}</button>
+            <button type="button" class="pc-carrom-pick-btn" data-color="random">${tHtml('dangal.classics.random')}</button>
           </div>
         </div>
         <div class="pc-carrom-field">
-          <span class="pc-carrom-field-label">Difficulty</span>
+          <span class="pc-carrom-field-label">${tHtml('dangal.classics.difficulty')}</span>
           <div class="pc-carrom-pick-row" data-field="diff">
-            <button type="button" class="pc-carrom-pick-btn" data-diff="easy">Easy</button>
-            <button type="button" class="pc-carrom-pick-btn is-on" data-diff="medium">Medium</button>
-            <button type="button" class="pc-carrom-pick-btn" data-diff="hard">Hard</button>
+            <button type="button" class="pc-carrom-pick-btn" data-diff="easy">${tHtml('dangal.classics.lvl.easy')}</button>
+            <button type="button" class="pc-carrom-pick-btn is-on" data-diff="medium">${tHtml('dangal.classics.lvl.medium')}</button>
+            <button type="button" class="pc-carrom-pick-btn" data-diff="hard">${tHtml('dangal.classics.lvl.hard')}</button>
           </div>
         </div>
         <div class="pc-carrom-field">
-          <span class="pc-carrom-field-label">Who breaks</span>
+          <span class="pc-carrom-field-label">${tHtml('dangal.classics.who_breaks')}</span>
           <div class="pc-carrom-pick-row" data-field="break">
-            <button type="button" class="pc-carrom-pick-btn is-on" data-break="you">You</button>
+            <button type="button" class="pc-carrom-pick-btn is-on" data-break="you">${tHtml('common.you')}</button>
             <button type="button" class="pc-carrom-pick-btn" data-break="opp">AI</button>
-            <button type="button" class="pc-carrom-pick-btn" data-break="random">Random</button>
+            <button type="button" class="pc-carrom-pick-btn" data-break="random">${tHtml('dangal.classics.random')}</button>
           </div>
         </div>
-        <button type="button" class="pc-carrom-start" data-carrom-start>Start</button>
+        <button type="button" class="pc-carrom-start" data-carrom-start>${tHtml('dangal.classics.start')}</button>
       </div>`;
       const syncOn = (row, attr, val) => {
         row.querySelectorAll('button').forEach((b) => {
@@ -1591,13 +1577,11 @@
 
     if (isCarrom && !liveOn) {
       setChromeSubtitle(
-        'Practice vs AI · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' · ' + (youColor === 'white' ? 'White' : 'Black')
+        t('dangal.classics.practice_vs_ai_value_value2', { value: DIFF_LABEL[difficulty] || t('dangal.classics.lvl.medium'), value2: youColor === 'white' ? t('dangal.classics.white') : t('dangal.classics.black') })
       );
     } else if (isCarrom && liveOn) {
       setChromeSubtitle(
-        'Live 1v1 · ' +
-          (youColor === 'white' ? 'White' : 'Black') +
-          (liveStake > 0 ? ' · Stake ⚡' + liveStake : ' · Friendly')
+        (liveStake > 0 ? t('dangal.classics.live_1v1_colour_stake', { colour: youColor === 'white' ? t('dangal.classics.white') : t('dangal.classics.black'), stake: liveStake }) : t('dangal.classics.live_1v1_colour_friendly', { colour: youColor === 'white' ? t('dangal.classics.white') : t('dangal.classics.black') }))
       );
     }
 
@@ -1608,28 +1592,26 @@
 
     const coachCopy = isCarrom
       ? liveOn
-        ? 'You are ' +
-          (youColor === 'white' ? 'White (host breaks)' : 'Black') +
-          '. Same Queen/foul rules. Only shoot on your turn.'
-        : 'You shoot from the near baseline; AI from the far. Cover the Queen after one of yours.'
-      : 'Drag back on the cue ball to aim, release to shoot.';
+        ? t('dangal.classics.you_are_value_same_queen_foul', { value: youColor === 'white' ? t('dangal.classics.white_host_breaks') : t('dangal.classics.black') })
+        : t('dangal.classics.you_shoot_from_the_near_baseline')
+      : t('dangal.classics.drag_back_on_the_cue_ball');
 
     shell.body.innerHTML = `<div class="pc-cue${isCarrom ? ' pc-cue--carrom' : ''}">
       ${
         !coachDismissed && isCarrom
-          ? `<div class="pc-cue-coach" data-cue-coach><span>${coachCopy}</span><button type="button" data-cue-coach-x>Got it</button></div>`
+          ? `<div class="pc-cue-coach" data-cue-coach><span>${coachCopy}</span><button type="button" data-cue-coach-x>${tHtml('dangal.classics.got_it')}</button></div>`
           : ''
       }
-      <div class="pc-cue-hud" data-cue-hud>You 0 · Opp 0</div>
-      <canvas data-cue aria-label="${spec.title || 'Cue'} board"></canvas>
+      <div class="pc-cue-hud" data-cue-hud>${tHtml('dangal.classics.you_0_opp_0')}</div>
+      <canvas data-cue aria-label="${tHtml('dangal.classics.board_aria', { game: spec.title || t('dangal.classics.cue') })}"></canvas>
       <p class="pc-hint" data-cue-hint>${
         isCarrom
           ? liveOn
-            ? 'Connecting…'
+            ? tHtml('dangal.classics.connecting')
             : breaker === 'you'
-              ? 'Your break — drag back on the striker.'
-              : 'AI breaks…'
-          : 'Drag back on the cue ball to aim, release to shoot.'
+              ? tHtml('dangal.classics.your_break_drag_back_on_the')
+              : tHtml('dangal.classics.ai_breaks')
+          : tHtml('dangal.classics.drag_back_on_the_cue_ball')
       }</p>
     </div>`;
     const canvas = shell.body.querySelector('[data-cue]');
@@ -1709,11 +1691,11 @@
     }
 
     function queenStatusLabel() {
-      if (queenCoveredBy === 'you') return 'Covered (You)';
-      if (queenCoveredBy === 'opp') return liveOn ? 'Covered (Opp)' : 'Covered (AI)';
-      if (queenPendingCoverFor === 'you') return 'Pending cover (You)';
-      if (queenPendingCoverFor === 'opp') return liveOn ? 'Pending cover (Opp)' : 'Pending cover (AI)';
-      return 'On board';
+      if (queenCoveredBy === 'you') return t('dangal.classics.covered_you');
+      if (queenCoveredBy === 'opp') return liveOn ? t('dangal.classics.covered_opp') : t('dangal.classics.covered_ai');
+      if (queenPendingCoverFor === 'you') return t('dangal.classics.pending_cover_you');
+      if (queenPendingCoverFor === 'opp') return liveOn ? t('dangal.classics.pending_cover_opp') : t('dangal.classics.pending_cover_ai');
+      return t('dangal.classics.on_board');
     }
 
     function updateHud() {
@@ -1723,29 +1705,29 @@
         const oLeft = countOnBoard(oppColor);
         const yIn = countPocketed(youColor);
         const oIn = countPocketed(oppColor);
-        const oppName = liveOn ? 'Opp' : 'AI';
+        const oppName = liveOn ? t('dangal.classics.opp') : 'AI';
         const turn = ended
-          ? 'Over'
+          ? t('dangal.classics.over')
           : moving
-            ? 'Balls moving…'
+            ? t('dangal.classics.balls_moving')
             : myTurn
-              ? 'Your turn'
+              ? t('dangal.classics.your_turn')
               : liveOn
-                ? 'Opp turn'
-                : 'AI turn';
+                ? t('dangal.classics.opp_turn')
+                : t('dangal.classics.ai_turn');
         hud.innerHTML =
-          `<div class="pc-cue-hud-row"><span class="pc-cue-swatch pc-cue-swatch--${youColor}"></span>You · ${colorLabel(youColor)} · ${yLeft} left (${yIn})` +
-          ` · <span class="pc-cue-swatch pc-cue-swatch--${oppColor}"></span>${oppName} · ${colorLabel(oppColor)} · ${oLeft} left (${oIn})</div>` +
-          `<div class="pc-cue-hud-row">Queen: ${queenStatusLabel()} · ${turn}` +
-          (liveOn ? '' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
+          `<div class="pc-cue-hud-row"><span class="pc-cue-swatch pc-cue-swatch--${youColor}"></span>${tHtml('dangal.classics.cue_hud_you', { color: colorLabel(youColor), left: yLeft, potted: yIn })}` +
+          ` · <span class="pc-cue-swatch pc-cue-swatch--${oppColor}"></span>${tHtml('dangal.classics.oppname_colorlabel_oleft_left_oin', { oppName, colorLabel: colorLabel(oppColor), oLeft, oIn })}</div>` +
+          `<div class="pc-cue-hud-row">${tHtml('dangal.classics.cue_hud_queen', { status: queenStatusLabel(), turn })}` +
+          (liveOn ? '' : ' · ' + (DIFF_LABEL[difficulty] || t('dangal.medium'))) +
           `</div>`;
       } else {
-        hud.textContent = `You ${youPocketed} · Opp ${oppPocketed}`;
+        hud.textContent = t('dangal.classics.you_youpocketed_opp_opppocketed', { youPocketed, oppPocketed });
       }
     }
 
     function colorLabel(c) {
-      return c === 'white' ? 'White' : 'Black';
+      return c === 'white' ? t('dangal.classics.white') : t('dangal.classics.black');
     }
 
     function resize() {
@@ -1982,12 +1964,12 @@
       dragging = null;
       updateHud();
       hint.textContent = myTurn
-        ? 'Your shot.'
+        ? t('dangal.classics.your_shot')
         : liveOn
-          ? 'Opponent’s shot…'
+          ? t('dangal.classics.opponent_s_shot')
           : typeof practiceTurnStatus === 'function'
             ? practiceTurnStatus({ myTurn: false, sport: 'aiming' }).label
-            : 'Practice AI thinking…';
+            : t('dangal.classics.practice_ai_thinking');
     }
 
     function applyCarromLiveVal(val) {
@@ -2014,9 +1996,9 @@
           if (!c || Math.abs(c.y - seatBaselineY('you')) > 36) {
             resetCueToBaseline({ seat: 'you' });
           }
-          hint.textContent = lastHint ? lastHint + ' Your shot.' : 'Your shot.';
+          hint.textContent = lastHint ? t('dangal.classics.lasthint_your_shot', { lastHint }) : t('dangal.classics.your_shot');
         } else {
-          hint.textContent = lastHint ? lastHint + ' Opponent’s shot…' : 'Opponent’s shot…';
+          hint.textContent = lastHint ? t('dangal.classics.lasthint_opponent_s_shot', { lastHint }) : t('dangal.classics.opponent_s_shot');
         }
       }
       updateHud();
@@ -2046,7 +2028,7 @@
         DangalLive.pingTurn(liveRoles.opp, spec.id, { chatId: chat && (chat.firestoreId || chat.id) });
       }
       myTurn = false;
-      hint.textContent = lastHint ? lastHint + ' Opponent’s shot…' : 'Opponent’s shot…';
+      hint.textContent = lastHint ? t('dangal.classics.lasthint_opponent_s_shot', { lastHint }) : t('dangal.classics.opponent_s_shot');
       updateHud();
     }
 
@@ -2133,7 +2115,7 @@
       dragging = null;
       if (!c || !canHumanAim()) return;
       if (wasPlace) {
-        hint.textContent = 'Striker placed — drag back to shoot.';
+        hint.textContent = t('dangal.classics.striker_placed_drag_back_to_shoot');
         return;
       }
       const dx = c.x - aim.x;
@@ -2148,7 +2130,7 @@
       c.vx = (dx / mag) * p;
       c.vy = (dy / mag) * p;
       moving = true;
-      hint.textContent = 'Balls moving…';
+      hint.textContent = t('dangal.classics.balls_moving');
       updateHud();
       buzz('stone');
     });
@@ -2212,7 +2194,7 @@
             strokePocketed.push(b);
           } else {
             resetCueToBaseline({ foul: true });
-            hint.textContent = 'Cue pocketed — reset.';
+            hint.textContent = t('dangal.classics.cue_pocketed_reset');
           }
         }
       });
@@ -2270,7 +2252,7 @@
       let foul = false;
       let msg = '';
       let keepTurn = false;
-      const who = seat === 'you' ? 'You' : liveOn ? 'Opp' : 'AI';
+      const who = seat === 'you' ? t('dangal.classics.you') : liveOn ? t('dangal.classics.opp') : 'AI';
 
       const bounceOpp = () => returnPieces(oppHit);
 
@@ -2278,7 +2260,7 @@
         foul = true;
         msg = queenHit.length
           ? who + ': foul — striker + Queen. Queen back.'
-          : who + ': foul — striker pocketed.';
+          : t('dangal.classics.who_foul_striker_pocketed', { who });
         returnPieces(ownHit);
         bounceOpp();
         returnPieces(queenHit);
@@ -2292,7 +2274,7 @@
         const legalQueen = priorOwn >= 1;
         if (!legalQueen) {
           foul = true;
-          msg = who + ': Queen illegal — need one of yours first.';
+          msg = t('dangal.classics.who_queen_illegal_need_one_of', { who });
           returnPieces(queenHit);
           bounceOpp();
           if (priorOwn >= 1) returnPenaltyOwn(color);
@@ -2302,13 +2284,13 @@
           queenPendingCoverFor = null;
           bounceOpp();
           keepTurn = true;
-          msg = who + ': Queen covered!';
+          msg = t('dangal.classics.who_queen_covered', { who });
           buzz('win');
         } else {
           queenPendingCoverFor = seat;
           bounceOpp();
           keepTurn = true;
-          msg = who + ': Queen pocketed — cover next shot.';
+          msg = t('dangal.classics.who_queen_pocketed_cover_next_shot', { who });
         }
       } else if (coveringNow) {
         bounceOpp();
@@ -2316,11 +2298,11 @@
           queenCoveredBy = seat;
           queenPendingCoverFor = null;
           keepTurn = true;
-          msg = who + ': Queen covered!';
+          msg = t('dangal.classics.who_queen_covered', { who });
           buzz('win');
         } else {
           foul = true;
-          msg = who + ': cover failed — Queen returns.';
+          msg = t('dangal.classics.who_cover_failed_queen_returns', { who });
           const q = balls.find((b) => b.kind === 'queen');
           if (q && q.dead && !queenCoveredBy) placeAtCenter(q);
           queenPendingCoverFor = null;
@@ -2331,9 +2313,9 @@
           keepTurn = true;
           msg = who + (oppHit.length ? ': man in — opp coin returned.' : ': nice — keep shooting.');
         } else if (oppHit.length) {
-          msg = who + ': opp coin returned — turn ends.';
+          msg = t('dangal.classics.who_opp_coin_returned_turn_ends', { who });
         } else {
-          msg = who + ': miss — turn ends.';
+          msg = t('dangal.classics.who_miss_turn_ends', { who });
         }
       }
 
@@ -2342,12 +2324,12 @@
           const revive = balls.filter((b) => b.dead && b.kind === color);
           if (revive.length) placeAtCenter(revive[revive.length - 1]);
           keepTurn = false;
-          msg = who + ': need Queen covered by you to finish.';
+          msg = t('dangal.classics.who_need_queen_covered_by_you', { who });
         } else if (!queenCoveredBy) {
           const revive = balls.filter((b) => b.dead && b.kind === color);
           if (revive.length) placeAtCenter(revive[revive.length - 1]);
           keepTurn = false;
-          msg = who + ': cover the Queen before your last man.';
+          msg = t('dangal.classics.who_cover_the_queen_before_your', { who });
           if (queenPendingCoverFor === seat) {
             const q = balls.find((b) => b.kind === 'queen');
             if (q && q.dead) placeAtCenter(q);
@@ -2396,7 +2378,7 @@
       myTurn = nextSeat === 'you';
       resetCueToBaseline({ seat: nextSeat, foul: foul && strikerHit });
       lastHint = msg;
-      hint.textContent = msg + (myTurn ? ' Your shot.' : liveOn ? ' Opponent’s shot…' : '');
+      hint.textContent = msg + (myTurn ? ' ' + t('dangal.classics.your_shot_dot') : liveOn ? ' ' + t('dangal.classics.opponents_shot') : '');
       updateHud();
 
       if (liveOn) {
@@ -2406,7 +2388,7 @@
       }
 
       if (!myTurn) scheduleAiTurn();
-      else if (myTurn && !msg.includes('Your shot')) hint.textContent = (msg ? msg + ' ' : '') + 'Your shot.';
+      else if (myTurn && !msg.includes('Your shot')) hint.textContent = t('dangal.classics.value_your_shot', { value: msg ? msg + ' ' : '' });
     }
 
     function distPointSeg(px, py, x1, y1, x2, y2) {
@@ -2565,7 +2547,7 @@
       hint.textContent =
         typeof practiceTurnStatus === 'function'
           ? practiceTurnStatus({ myTurn: false, sport: 'aiming' }).label
-          : 'Practice AI thinking…';
+          : t('dangal.classics.practice_ai_thinking');
       updateHud();
       if (oppTimer) clearTimeout(oppTimer);
       const think =
@@ -2610,7 +2592,7 @@
       const c = cueBall();
       if (!c) {
         myTurn = true;
-        hint.textContent = 'Your shot.';
+        hint.textContent = t('dangal.classics.your_shot');
         updateHud();
         return;
       }
@@ -2626,7 +2608,7 @@
       c.vx = shot.vx;
       c.vy = shot.vy;
       moving = true;
-      hint.textContent = 'AI shooting…';
+      hint.textContent = t('dangal.classics.ai_shooting');
       updateHud();
       buzz('stone');
     }
@@ -2642,7 +2624,7 @@
       oppPocketed += 1;
       updateHud();
       buzz('place');
-      hint.textContent = liveOn ? 'Opponent pocketed one.' : 'Practice AI pocketed one.';
+      hint.textContent = liveOn ? t('dangal.classics.opponent_pocketed_one') : t('dangal.classics.practice_ai_pocketed_one');
       myTurn = true;
       if (!remaining()) finish(youPocketed >= oppPocketed);
     }
@@ -2653,7 +2635,7 @@
         !liveOn && typeof practiceAiChat === 'function'
           ? practiceAiChat()
           : !liveOn
-            ? { name: 'Practice AI', id: 'ai' }
+            ? { name: t('dangal.classics.practice_ai'), id: 'ai' }
             : chat;
       return {
         chat: practiceChat,
@@ -2688,14 +2670,14 @@
       if (Number.isFinite(delta) && (delta !== 0 || liveStake > 0)) {
         parts.push(
           delta === 0
-            ? `Virtual chips · balance ${bal != null ? bal : '—'}`
-            : `Virtual chips ${delta > 0 ? '+' : ''}${delta}${bal != null ? ` · balance ${bal}` : ''}`
+            ? t('dangal.classics.virtual_chips_balance_value', { value: bal != null ? bal : '—' })
+            : t('dangal.classics.virtual_chips_value_delta_value2', { value: delta > 0 ? '+' : '', delta, value2: bal != null ? t('dangal.classics.balance_bal', { bal }) : '' })
         );
       }
-      if (!parts.length && liveOn) parts.push('Settled · virtual chips only — not real money');
+      if (!parts.length && liveOn) parts.push(t('dangal.classics.settled_virtual_chips_only_not_real'));
       if (!parts.length) return;
       el.hidden = false;
-      el.textContent = parts.join(' · ') + ' · not real money';
+      el.textContent = t('dangal.classics.parts_not_real_money', { parts: parts.join(' · ') });
     }
 
     async function settleCarromOnce(won) {
@@ -2724,19 +2706,19 @@
           if (el) {
             el.hidden = false;
             el.innerHTML =
-              `Couldn’t update chips <button type="button" id="carromChipRetry" class="game-tap-target" style="margin-left:8px;">Retry</button>`;
+              `${tHtml('dangal.couldnt_update_chips')} <button type="button" id="carromChipRetry" class="game-tap-target" style="margin-left:8px;">${tHtml('common.retry')}</button>`;
             el.querySelector('#carromChipRetry')?.addEventListener('click', () => {
               settleCarromOnce(won);
             });
           }
-          if (typeof showToast === 'function') showToast('Couldn’t update chips — tap Retry');
+          if (typeof showToast === 'function') showToast(t('dangal.classics.couldn_t_update_chips_tap_retry'));
           return settle;
         }
         paintCarromSettle(settle);
         return settle;
       } catch (e) {
         settleDone = false;
-        if (typeof showToast === 'function') showToast('Couldn’t update chips — try Retry');
+        if (typeof showToast === 'function') showToast(t('dangal.classics.couldn_t_update_chips_try_retry'));
         return null;
       }
     }
@@ -2763,11 +2745,11 @@
         (chat && (chat.firestoreId || chat.id)) ||
         '';
       if (!oppUid || (typeof isPersistableUid === 'function' && !isPersistableUid(oppUid))) {
-        if (typeof showToast === 'function') showToast('Opponent left — challenge them again from friends');
+        if (typeof showToast === 'function') showToast(t('dangal.classics.opponent_left_challenge_them_again_from'));
         if (typeof openFriendPickerSheet === 'function') {
           const f = await openFriendPickerSheet({
-            title: 'Challenge · Carrom',
-            subtitle: 'Live 1v1 · virtual chips only',
+            title: t('dangal.classics.challenge_carrom'),
+            subtitle: t('dangal.classics.live_1v1_virtual_chips_only'),
           });
           if (f) {
             await tearDownLiveHandle();
@@ -2815,7 +2797,7 @@
       }
       const rematchId =
         typeof dangalMatchId === 'function'
-          ? dangalMatchId('carrom', { name: chat.name || 'Friend', opponentUid: oppUid })
+          ? dangalMatchId('carrom', { name: chat.name || t('common.friend'), opponentUid: oppUid })
           : 'carrom_' + Date.now();
       await tearDownLiveHandle();
       try {
@@ -2834,14 +2816,14 @@
       if (typeof sendChallengeCard === 'function' && oppUid && chatId) {
         try {
           await sendChallengeCard(oppUid, 'carrom', { chatId, matchId: rematchId, stake: nextStake });
-          if (typeof showToast === 'function') showToast('Rematch sent — they Accept to join');
+          if (typeof showToast === 'function') showToast(t('dangal.classics.rematch_sent_they_accept_to_join'));
         } catch (e) {}
       } else if (typeof showToast === 'function') {
-        showToast('Rematch ready — ask your friend to join from Baithak');
+        showToast(t('dangal.classics.rematch_ready_ask_your_friend_to'));
       }
       shell.close('rematch');
       openCarrom({
-        name: chat.name || 'Friend',
+        name: chat.name || t('common.friend'),
         id: oppUid,
         uid: oppUid,
         peerUid: oppUid,
@@ -2896,9 +2878,9 @@
             opp: won ? 0 : 1,
             glyph: spec.glyph,
             pbScore: youPocketed,
-            title: won ? 'You win' : 'Defeat',
-            subtitle: 'Pocketed ' + youPocketed + ' · opponent ' + oppPocketed,
-            shareText: (spec.title || 'Game') + ' on Chaupaal',
+            title: won ? t('dangal.classics.you_win') : t('dangal.classics.defeat'),
+            subtitle: t('dangal.classics.pocketed_youpocketed_opponent_opppocketed', { youPocketed, oppPocketed }),
+            shareText: (spec.title || t('dangal.classics.game_2')) + ' on Chaupaal',
             onAgain: () => openCueGame(Object.assign({}, spec, { chat })),
           });
           return;
@@ -2907,46 +2889,46 @@
       noteCarromSession(won);
       const winColor = won ? youColor : oppColor;
       const resign = m.resign || m.forfeit;
-      const stakeLine = liveOn ? (liveStake > 0 ? `⚡${liveStake} virtual` : 'Friendly') : '';
+      const stakeLine = liveOn ? (liveStake > 0 ? `⚡${liveStake} virtual` : t('dangal.classics.friendly_2')) : '';
       const shareStats = {
-        scoreLine: won ? 'Win' : 'Loss',
+        scoreLine: won ? t('dangal.classics.win') : t('dangal.classics.loss'),
         meta: [
           colorLabel(youColor),
-          queenCoveredBy ? 'Queen covered' : '',
-          liveOn ? 'Live' : DIFF_LABEL[difficulty] || 'Medium',
+          queenCoveredBy ? t('dangal.classics.queen_covered') : '',
+          liveOn ? t('dangal.live') : DIFF_LABEL[difficulty] || t('dangal.medium'),
           stakeLine,
         ]
           .filter(Boolean)
           .join(' · '),
-        vs: liveOn ? 'vs Friend' : 'vs AI',
+        vs: liveOn ? t('dangal.classics.vs_friend') : 'vs AI',
         stake: liveStake,
         text:
-          `Chaupaal Carrom · ${won ? 'Win' : 'Loss'} · ${colorLabel(youColor)}` +
-          (queenCoveredBy ? ' · Queen covered' : '') +
+          `Chaupaal Carrom · ${won ? t('dangal.classics.win') : t('dangal.classics.loss')} · ${colorLabel(youColor)}` +
+          (queenCoveredBy ? ' · ' + t('dangal.classics.queen_covered') : '') +
           (liveOn
             ? liveStake > 0
               ? ` · Live · Stake ⚡${liveStake} (virtual chips)`
               : ' · Live · Friendly'
-            : ` · Practice · ${DIFF_LABEL[difficulty] || 'Medium'}`) +
-          ' · not real money',
+            : ` · Practice · ${DIFF_LABEL[difficulty] || t('dangal.classics.lvl.medium')}`) +
+          ' ' + t('dangal.classics.not_real_money'),
       };
       const chatId =
         (window.__dangalLaunchCtx && window.__dangalLaunchCtx.chatId) ||
         (window.currentOpenChat && (window.currentOpenChat.firestoreId || window.currentOpenChat.id)) ||
         (chat && (chat.firestoreId || chat.id)) ||
         '';
-      const actions = [{ label: liveOn ? 'Rematch' : 'Play again', primary: true, id: 'again' }];
+      const actions = [{ label: liveOn ? t('dangal.classics.rematch') : t('dangal.classics.play_again'), primary: true, id: 'again' }];
       if (typeof shareGameResult === 'function' || typeof openUnifiedShareSheet === 'function') {
-        actions.push({ label: 'Share', primary: false, id: 'share' });
+        actions.push({ label: t('common.share'), primary: false, id: 'share' });
       }
       if (typeof openFriendPickerSheet === 'function') {
-        actions.push({ label: 'Challenge friend', primary: false, id: 'challenge' });
+        actions.push({ label: t('dangal.classics.challenge_friend'), primary: false, id: 'challenge' });
       }
       if (typeof postGameScoreStory === 'function') {
-        actions.push({ label: 'Post to story', primary: false, id: 'story' });
+        actions.push({ label: t('dangal.classics.post_to_story'), primary: false, id: 'story' });
       }
       if (chatId && typeof openChatScreen === 'function') {
-        actions.push({ label: 'Chat', primary: false, id: 'chat' });
+        actions.push({ label: t('common.chat'), primary: false, id: 'chat' });
       }
       const stakeSub = liveOn ? (liveStake > 0 ? ` · Stake ⚡${liveStake} (virtual)` : ' · Friendly') : '';
       if (shell && typeof shell.markOver === 'function') shell.markOver();
@@ -2963,24 +2945,20 @@
               title: resign
                 ? liveOn
                   ? won
-                    ? 'Opponent left'
-                    : 'You forfeited'
-                  : 'You resigned'
-                : colorLabel(winColor) + ' won',
+                    ? t('dangal.classics.opponent_left')
+                    : t('dangal.classics.you_forfeited')
+                  : t('dangal.classics.you_resigned')
+                : t('dangal.classics.colorlabel_won', { colorLabel: colorLabel(winColor) }),
               subtitle:
                 (resign
                   ? liveOn
                     ? won
-                      ? 'Forfeit win · '
-                      : 'Forfeit · '
-                    : 'Resign · '
-                  : (won ? 'You' : liveOn ? 'Opp' : 'AI') + ' · ') +
+                      ? t('dangal.classics.forfeit_win') + ' · ' : t('dangal.classics.forfeit') + ' · ' : t('dangal.classics.resign') + ' · ' : (won ? t('dangal.classics.you') : liveOn ? t('dangal.classics.opp') : t('dangal.classics.ai')) + ' · ') +
                 colorLabel(winColor) +
-                (queenCoveredBy ? ' · Queen covered' : '') +
-                (liveOn ? ' · Live' : ' · ' + (DIFF_LABEL[difficulty] || 'Medium')) +
+                (queenCoveredBy ? ' · ' + t('dangal.classics.queen_covered') : '') +
+                (liveOn ? ' · ' + t('dangal.live') : ' · ' + (DIFF_LABEL[difficulty] || t('dangal.medium'))) +
                 stakeSub +
-                ' · You pocketed ' +
-                countPocketed(youColor),
+                ' · ' + t('dangal.classics.you_pocketed_n', { n: countPocketed(youColor) }),
               you: won ? 1 : 0,
               opp: won ? 0 : 1,
               shareCardHtml:
@@ -3023,13 +3001,13 @@
           challenge: async () => {
             if (typeof openFriendPickerSheet !== 'function') return;
             const f = await openFriendPickerSheet({
-              title: 'Challenge · Carrom',
-              subtitle: 'Live 1v1 · virtual chips only — not real money',
+              title: t('dangal.classics.challenge_carrom'),
+              subtitle: t('dangal.classics.live_1v1_virtual_chips_only_not'),
             });
             if (!f) return;
             const uid = f.uid || f.id || '';
             if (!uid || (typeof isPersistableUid === 'function' && !isPersistableUid(uid))) {
-              if (typeof showToast === 'function') showToast('Pick a real friend to challenge');
+              if (typeof showToast === 'function') showToast(t('dangal.classics.pick_a_real_friend_to_challenge'));
               return;
             }
             let stakePick = 0;
@@ -3205,7 +3183,7 @@
       hint.textContent =
         typeof practiceTurnStatus === 'function'
           ? practiceTurnStatus({ myTurn: false, sport: 'aiming' }).label
-          : 'Practice AI thinking…';
+          : t('dangal.classics.practice_ai_thinking');
       if (shell.gs && shell.gs.schedule) shell.gs.schedule(aiTurn, 700);
       else setTimeout(aiTurn, 700);
     }
@@ -3263,8 +3241,8 @@
           const ok =
             typeof confirmLeaveGame === 'function'
               ? await confirmLeaveGame({
-                  title: 'Resign Carrom?',
-                  body: 'This counts as a loss vs AI.',
+                  title: t('dangal.classics.resign_carrom'),
+                  body: t('dangal.classics.this_counts_as_a_loss_vs'),
                 })
               : true;
           if (!ok) return;
@@ -3279,7 +3257,7 @@
           ? buildCarromState({
               phase: 'deal',
               breakDone: false,
-              hint: 'Host breaks — White.',
+              hint: t('dangal.classics.host_breaks_white'),
               pocketed: { white: 0, black: 0 },
               queen: { status: 'board', pendingColor: null, coveredBy: null },
             })
@@ -3357,7 +3335,7 @@
         if (isCarrom) {
           if (youColor === 'white') {
             resetCueToBaseline({ seat: 'you', x: W / 2 });
-            hint.textContent = 'Your break — drag back on the striker.';
+            hint.textContent = t('dangal.classics.your_break_drag_back_on_the');
             myTurn = true;
             // Ensure deal snap is published (join seed + explicit push for turn)
             liveHandle.push({
@@ -3367,17 +3345,17 @@
               state: buildCarromState({
                 phase: 'deal',
                 breakDone: false,
-                hint: 'Host breaks — White.',
+                hint: t('dangal.classics.host_breaks_white'),
               }),
             });
             liveSeeded = true;
           } else {
             myTurn = false;
-            hint.textContent = 'Waiting for board… White breaks.';
+            hint.textContent = t('dangal.classics.waiting_for_board_white_breaks');
           }
           updateHud();
         } else {
-          hint.textContent = myTurn ? 'Your shot.' : 'Waiting for opponent…';
+          hint.textContent = myTurn ? t('dangal.classics.your_shot') : t('dangal.classics.waiting_for_opponent');
           if (liveRoles.host) {
             liveHandle.push({
               status: 'playing',
@@ -3387,11 +3365,11 @@
           }
         }
       } else if (isCarrom) {
-        if (typeof showToast === 'function') showToast('Couldn’t join Live — opening Practice');
+        if (typeof showToast === 'function') showToast(t('dangal.classics.couldn_t_join_live_opening_practice'));
         // Keep board playable solo without AI live path
         myTurn = true;
         resetCueToBaseline({ seat: 'you' });
-        hint.textContent = 'Your shot (Practice fallback).';
+        hint.textContent = t('dangal.classics.your_shot_practice_fallback');
       }
     }
 
@@ -3545,8 +3523,8 @@
     openCueGame({
       id: 'carrom',
       variant: 'carrom',
-      title: 'Carrom',
-      subtitle: liveWanted ? 'Live 1v1' : 'Medium',
+      title: t('dangal.classics.carrom'),
+      subtitle: liveWanted ? t('dangal.classics.live_1v1') : t('dangal.classics.lvl.medium'),
       chat,
       accent: '#8D6E63',
       bg: '#1A0F00',
@@ -3602,7 +3580,7 @@
 
   function rummyCardLabel(c) {
     if (!c) return '—';
-    if (isPrintedJoker(c)) return 'Joker';
+    if (isPrintedJoker(c)) return t('dangal.classics.joker');
     return String(c.r) + String(c.s || '');
   }
 
@@ -3672,7 +3650,7 @@
       errors: errors || [],
       melds: [],
     });
-    if (cards.length !== 13) return fail(['Need exactly 13 cards to declare']);
+    if (cards.length !== 13) return fail(/* i18n-copy */ [t('dangal.classics.need_exactly_13_cards_to_declare')]);
 
     let solution = null;
 
@@ -3748,8 +3726,8 @@
       rec(0);
     }
     const errors = [];
-    if (!foundPure) errors.push('Missing pure sequence');
-    else errors.push('Need a second sequence and all cards melded');
+    if (!foundPure) errors.push(t('dangal.classics.missing_pure_sequence'));
+    else errors.push(t('dangal.classics.need_a_second_sequence_and_all'));
     return fail(errors);
   }
 
@@ -3899,12 +3877,12 @@
 
   function rummyReasonLabel(reason) {
     const r = String(reason || '');
-    if (r === 'declare') return 'Declare';
-    if (r === 'wrongShow') return 'Wrong show';
-    if (r === 'drop') return 'Drop';
-    if (r === 'oppDrop') return 'Opponent drop';
-    if (r === 'forfeit') return 'Forfeit';
-    return r || 'Hand over';
+    if (r === 'declare') return t('dangal.classics.declare');
+    if (r === 'wrongShow') return t('dangal.classics.wrong_show');
+    if (r === 'drop') return t('dangal.classics.drop');
+    if (r === 'oppDrop') return t('dangal.classics.opponent_drop');
+    if (r === 'forfeit') return t('dangal.classics.forfeit');
+    return r || t('dangal.classics.hand_over');
   }
 
 
@@ -4040,7 +4018,7 @@
     const liveOn = chatLiveOn(chat);
     const rng = rngFn();
     let aiTimer = 0;
-    const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+    const DIFF_LABEL = { easy: t('dangal.classics.lvl.easy'), medium: t('dangal.classics.lvl.medium'), hard: t('dangal.classics.lvl.hard') };
     let difficulty =
       (chat && (chat.difficulty === 'easy' || chat.difficulty === 'hard' || chat.difficulty === 'medium')
         ? chat.difficulty
@@ -4068,12 +4046,12 @@
 
     const shell = openShell({
       id: 'rummy',
-      title: 'Rummy',
+      title: t('dangal.classics.rummy'),
       subtitle: liveOn
         ? liveSub() +
-          (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') +
-          ' · Points Rummy'
-        : practiceSub('Points Rummy · ' + (DIFF_LABEL[difficulty] || 'Medium') + ' AI'),
+          (liveStake > 0 ? t('dangal.classics.stake_livestake_virtual', { liveStake }) : ' · ' + t('dangal.friendly')) +
+          ' · ' + t('dangal.classics.points_rummy')
+        : practiceSub(t('dangal.classics.points_rummy_value_ai', { value: DIFF_LABEL[difficulty] || t('dangal.classics.lvl.medium') })),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -4248,11 +4226,11 @@
     }
 
     function wildChrome() {
-      if (!wildRank) return 'Wild: —';
+      if (!wildRank) return t('dangal.classics.wild');
       if (wildShow && !isPrintedJoker(wildShow) && wildShow.r === wildRank) {
-        return 'Wild: ' + rummyCardLabel(wildShow);
+        return t('dangal.classics.wild_rummycardlabel', { rummyCardLabel: rummyCardLabel(wildShow) });
       }
-      return 'Wild: ' + wildRank + 's';
+      return t('dangal.classics.wild_wildrank_s', { wildRank });
     }
 
     /** Public mid-hand snapshot — never handA/handB/deck faces. */
@@ -4352,13 +4330,13 @@
     }
 
     function phaseHint() {
-      if (liveOn && !myTurn) return 'Opponent\u2019s turn\u2026';
+      if (liveOn && !myTurn) return t('dangal.classics.opponent_s_turn');
       if (phase === 'needDraw') {
         return iHaveDrawn()
-          ? 'Draw/take, Discard later — or Middle Drop (40).'
-          : 'Draw/take — or First Drop (20).';
+          ? t('dangal.classics.draw_take_discard_later_or_middle')
+          : t('dangal.classics.draw_take_or_first_drop_20');
       }
-      return 'Discard, Declare (valid), or Show anyway (wrong show = 80).';
+      return t('dangal.classics.discard_declare_valid_or_show_anyway');
     }
 
     function meldSummary(melds) {
@@ -4376,9 +4354,9 @@
     function shareReasonBits(reason, melds) {
       if (reason === 'declare') {
         const pure = (melds || []).some((m) => m.pure);
-        return pure ? 'pure sequence' : 'valid declare';
+        return pure ? t('dangal.classics.pure_sequence') : t('dangal.classics.valid_declare');
       }
-      if (reason === 'wrongShow') return 'wrong show';
+      if (reason === 'wrongShow') return t('dangal.classics.wrong_show_2');
       if (reason === 'drop' || reason === 'oppDrop') return 'drop';
       if (reason === 'forfeit') return 'forfeit';
       return rummyReasonLabel(reason).toLowerCase();
@@ -4445,29 +4423,21 @@
       const title =
         reason === 'wrongShow'
           ? winnerIsYou
-            ? 'Opponent wrong show'
-            : 'Wrong show'
+            ? t('dangal.classics.opponent_wrong_show')
+            : t('dangal.classics.wrong_show')
           : reason === 'drop' || reason === 'oppDrop'
             ? winnerIsYou
-              ? 'Opponent dropped'
-              : 'You dropped'
+              ? t('dangal.classics.opponent_dropped')
+              : t('dangal.classics.you_dropped')
             : reason === 'forfeit'
               ? winnerIsYou
-                ? 'Opponent left'
-                : 'You forfeited'
+                ? t('dangal.classics.opponent_left')
+                : t('dangal.classics.you_forfeited')
               : winnerIsYou
-                ? 'You win'
-                : 'Opponent wins';
+                ? t('dangal.classics.you_win')
+                : t('dangal.classics.opponent_wins');
       const sub =
-        'You ' +
-        youPoints +
-        ' · Opp ' +
-        oppPoints +
-        ' · ' +
-        rummyReasonLabel(reason) +
-        (wildRank ? ' · Wild ' + wildRank + 's' : '') +
-        (o.detail ? ' · ' + o.detail : '') +
-        (liveOn && liveStake > 0 ? ' · virtual stakes' : '');
+        t('dangal.classics.you_youpoints_opp_opppoints_label_value_value2', { youPoints, oppPoints, label: rummyReasonLabel(reason), value: (wildRank ? ' · ' + t('dangal.classics.wild_rank', { rank: wildRank }) : ''), value2: (o.detail ? ' · ' + o.detail : ''), value3: (liveOn && liveStake > 0 ? ' ' + t('dangal.classics.virtual_stakes_2') : '') });
       lastResult = {
         youPoints,
         oppPoints,
@@ -4521,13 +4491,7 @@
           title,
           subtitle,
           shareText:
-            'Chaupaal Rummy · +' +
-            youPoints +
-            ' vs ' +
-            oppPoints +
-            ' · ' +
-            shareReasonBits(reason, o.melds) +
-            (liveOn ? ' (virtual)' : ''),
+            t('dangal.classics.chaupaal_rummy_youpoints_vs_opppoints_shar', { youPoints, oppPoints, shareReasonBits: shareReasonBits(reason, o.melds), value: liveOn ? t('dangal.classics.virtual') : '' }),
           onAgain: () => openRummy(chat),
         });
       });
@@ -4564,7 +4528,7 @@
           youPoints: youPts,
           oppPoints: oppPts,
           winnerIsYou: !actorIsMe,
-          detail: 'Wrong show',
+          detail: t('dangal.classics.wrong_show'),
         });
         return;
       }
@@ -4575,7 +4539,7 @@
         oppPoints: actorIsMe ? oppDead.points : 0,
         winnerIsYou: actorIsMe,
         melds: result.melds,
-        detail: meldSummary(result.melds) || 'Valid declare',
+        detail: meldSummary(result.melds) || t('dangal.classics.valid_declare_2'),
       });
     }
 
@@ -4590,7 +4554,7 @@
         youPoints: actorIsMe ? pts : 0,
         oppPoints: actorIsMe ? 0 : pts,
         winnerIsYou: !actorIsMe,
-        detail: first ? 'First drop' : 'Middle drop',
+        detail: first ? t('dangal.classics.first_drop') : t('dangal.classics.middle_drop'),
       });
     }
 
@@ -4629,20 +4593,20 @@
       const turnMode = !myTurn ? 'theirs' : phase === 'needDraw' ? 'yours' : 'yours';
       const turnLabel = !myTurn
         ? liveOn
-          ? 'Opponent’s turn'
+          ? t('dangal.classics.opponent_s_turn_2')
           : typeof practiceTurnStatus === 'function'
             ? practiceTurnStatus({ myTurn: false }).label
-            : 'Practice AI thinking…'
+            : t('dangal.classics.practice_ai_thinking')
         : phase === 'needDraw'
-          ? 'Your turn — draw'
-          : 'Your turn — discard';
+          ? t('dangal.classics.your_turn_draw')
+          : t('dangal.classics.your_turn_discard');
       const turnSub = !myTurn
-        ? 'Opp ' + oppHandCount() + ' · Stock ' + stock
+        ? t('dangal.classics.opp_opphandcount_stock_stock', { oppHandCount: oppHandCount(), stock })
         : phase === 'needDraw'
-          ? 'Draw or take discard'
+          ? t('dangal.classics.draw_or_take_discard')
           : selectedId
-            ? 'Discard or Declare'
-            : 'Select a card';
+            ? t('dangal.classics.discard_or_declare')
+            : t('dangal.classics.select_a_card');
 
       const drawCls = canDraw ? ' cs-hit--primary' : '';
       const discardCls = canDiscard && !canDraw ? ' cs-hit--primary' : '';
@@ -4657,33 +4621,33 @@
         '<span class="pc-rummy-wild"><b>' +
         esc(wildChrome()) +
         '</b></span>' +
-        '<span>Opp <b>' +
+        '<span>' + tHtml('dangal.classics.opp') + ' <b>' +
         oppHandCount() +
         '</b></span>' +
-        '<span>Stock <b>' +
+        '<span>' + tHtml('dangal.classics.stock') + ' <b>' +
         stock +
         '</b></span>' +
-        '<span>You <b>' +
+        '<span>' + tHtml('common.you') + ' <b>' +
         you.length +
         '</b></span>' +
         '</div>' +
         '<div class="pc-rummy-piles">' +
-        '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">Stock</span>' +
+        '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">' + tHtml('dangal.classics.stock') + '</span>' +
         '<span class="pc-card pc-back" aria-hidden="true"></span>' +
         '<span class="pc-rummy-pile-count">' +
         stock +
         '</span></div>' +
-        '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">Discard</span>' +
+        '<div class="pc-rummy-pile"><span class="pc-rummy-pile-label">' + tHtml('dangal.classics.discard') + '</span>' +
         topHtml +
         '</div></div>' +
-        '<div class="pc-rummy-sort" role="group" aria-label="Sort hand">' +
+        '<div class="pc-rummy-sort" role="group" aria-label="' + tHtml('dangal.classics.sort_hand') + '">' +
         '<button type="button" class="pc-rummy-sort-btn' +
         (sortMode === 'suit' ? ' is-on' : '') +
-        '" data-sort="suit">Suit</button>' +
+        '" data-sort="suit">' + tHtml('dangal.classics.suit') + '</button>' +
         '<button type="button" class="pc-rummy-sort-btn' +
         (sortMode === 'rank' ? ' is-on' : '') +
-        '" data-sort="rank">Rank</button>' +
-        '<button type="button" class="pc-rummy-sort-btn" data-suggest>Hint pure</button>' +
+        '" data-sort="rank">' + tHtml('dangal.classics.rank') + '</button>' +
+        '<button type="button" class="pc-rummy-sort-btn" data-suggest>' + tHtml('dangal.classics.hint_pure') + '</button>' +
         '</div>' +
         '<div class="pc-hand pc-rummy-hand">' +
         handHtml +
@@ -4691,30 +4655,30 @@
         '<div class="pc-actions pc-rummy-actions">' +
         '<button type="button" class="cs-hit' +
         drawCls +
-        '" data-draw' +
-        (canDraw ? '' : ' disabled') +
-        '>Draw</button>' +
+        '" data-draw' + // i18n-ignore (HTML attribute)
+        (canDraw ? '' : ' disabled') + // i18n-ignore (HTML attribute)
+        '>' + tHtml('dangal.classics.draw') + '</button>' +
         '<button type="button" class="cs-hit" data-take' +
-        (canTake ? '' : ' disabled') +
-        '>Take discard</button>' +
+        (canTake ? '' : ' disabled') + // i18n-ignore (HTML attribute)
+        '>' + tHtml('dangal.classics.take_discard') + '</button>' +
         '<button type="button" class="cs-hit' +
         discardCls +
-        '" data-discard' +
-        (canDiscard ? '' : ' disabled') +
-        '>Discard</button>' +
+        '" data-discard' + // i18n-ignore (HTML attribute)
+        (canDiscard ? '' : ' disabled') + // i18n-ignore (HTML attribute)
+        '>' + tHtml('dangal.classics.discard') + '</button>' +
         '<button type="button" class="cs-hit" data-declare' +
-        (canDeclare ? '' : ' disabled') +
-        '>Declare</button>' +
+        (canDeclare ? '' : ' disabled') + // i18n-ignore (HTML attribute)
+        '>' + tHtml('dangal.classics.declare') + '</button>' +
         '<button type="button" class="cs-hit cs-hit--ghost" data-show' +
-        (canShow ? '' : ' disabled') +
-        '>Show</button>' +
+        (canShow ? '' : ' disabled') + // i18n-ignore (HTML attribute)
+        '>' + tHtml('dangal.classics.show') + '</button>' +
         '<button type="button" class="cs-hit cs-hit--ghost" data-drop' +
-        (canDrop ? '' : ' disabled') +
+        (canDrop ? '' : ' disabled') + // i18n-ignore (HTML attribute)
         '>' +
-        (canDrop ? 'Drop ' + dropPts : 'Drop') +
+        (canDrop ? tHtml('dangal.classics.drop_droppts', { dropPts }) : tHtml('dangal.classics.drop')) +
         '</button>' +
         '</div>' +
-        '<p class="pc-hint pc-rummy-declare-hint">Declare = valid only. Show = may cost 80 if invalid. Drop before drawing (20 first / 40 middle). Live hides hands until reveal.</p>' +
+        '<p class="pc-hint pc-rummy-declare-hint">' + tHtml('dangal.classics.declare_valid_only_show_may_cost') + '</p>' +
         '</div>';
 
       shell.body.querySelectorAll('[data-sort]').forEach((btn) => {
@@ -4725,14 +4689,14 @@
       });
       shell.body.querySelector('[data-suggest]')?.addEventListener('click', () => {
         highlightIds = rummySuggestHighlightIds(myHand(), wildRank);
-        paint(highlightIds.length ? 'Possible pure sequence highlighted.' : 'No pure sequence spotted yet.');
+        paint(highlightIds.length ? t('dangal.classics.possible_pure_sequence_highlighted') : t('dangal.classics.no_pure_sequence_spotted_yet'));
       });
 
       shell.body.querySelectorAll('.pc-rummy-hand .pc-card').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (!myTurn || ended || phase !== 'needDiscard') return;
           selectedId = btn.dataset.cid;
-          paint('Selected — Discard or Declare.');
+          paint(t('dangal.classics.selected_discard_or_declare'));
         });
       });
 
@@ -4744,7 +4708,7 @@
         }
         if (liveOn && !isHost()) {
           guestReq('reqDrawStock');
-          paint('Drawing…');
+          paint(t('dangal.classics.drawing'));
           return;
         }
         if (liveOn && isHost()) {
@@ -4761,7 +4725,7 @@
           deckCount = deck.length;
           buzz('card');
           hostPush({ act: 'drawStock' });
-          paint('Drawn — select a card to discard or declare.');
+          paint(t('dangal.classics.drawn_select_a_card_to_discard'));
           return;
         }
         const c = deck.pop();
@@ -4774,7 +4738,7 @@
         highlightIds = [];
         markIDrew();
         buzz('card');
-        paint('Drawn — select a card to discard or declare.');
+        paint(t('dangal.classics.drawn_select_a_card_to_discard'));
       });
 
       shell.body.querySelector('[data-take]')?.addEventListener('click', () => {
@@ -4785,7 +4749,7 @@
         }
         if (liveOn && !isHost()) {
           guestReq('reqTakeDiscard');
-          paint('Taking…');
+          paint(t('dangal.classics.taking'));
           return;
         }
         const c = discard.pop();
@@ -4802,7 +4766,7 @@
           deckCount = deck.length;
           hostPush({ act: 'takeDiscard' });
         }
-        paint('Took discard — select a card to discard or declare.');
+        paint(t('dangal.classics.took_discard_select_a_card_to'));
       });
 
       shell.body.querySelector('[data-discard]')?.addEventListener('click', () => {
@@ -4817,7 +4781,7 @@
         const card = hand[ix];
         if (liveOn && !isHost()) {
           guestReq('reqDiscard', { cardId: card.id, card: { r: card.r, s: card.s, id: card.id } });
-          paint('Discarding…');
+          paint(t('dangal.classics.discarding'));
           return;
         }
         discard.push(hand.splice(ix, 1)[0]);
@@ -4833,15 +4797,15 @@
           if (typeof DangalLive !== 'undefined' && DangalLive.pingTurn) {
             DangalLive.pingTurn(liveRoles.opp, 'rummy', { chatId: chat && (chat.firestoreId || chat.id) });
           }
-          paint('Discarded. Waiting…');
+          paint(t('dangal.classics.discarded_waiting'));
           return;
         }
         paint(
           liveOn
-            ? 'Discarded. Waiting…'
+            ? t('dangal.classics.discarded_waiting')
             : typeof practiceTurnStatus === 'function'
               ? practiceTurnStatus({ myTurn: false }).label
-              : 'Practice AI thinking…'
+              : t('dangal.classics.practice_ai_thinking')
         );
         if (aiTimer) clearTimeout(aiTimer);
         const think =
@@ -4860,7 +4824,7 @@
           drawnId = null;
           selectedId = null;
           highlightIds = [];
-          paint('Your turn — draw or take discard.');
+          paint(t('dangal.classics.your_turn_draw_or_take_discard'));
         }, Math.min(900, Math.max(300, think)));
       });
 
@@ -4877,15 +4841,15 @@
         if (!result.ok) {
           if (!forceWrong) {
             buzz('invalid');
-            const err = (result.errors && result.errors[0]) || 'Need a pure sequence…';
+            const err = (result.errors && result.errors[0]) || t('dangal.classics.need_a_pure_sequence');
             if (typeof showToast === 'function') showToast(err);
-            paint(err + ' — keep playing, or Show to risk 80.');
+            paint(t('dangal.classics.err_keep_playing_or_show_to', { err }));
             return;
           }
         }
         if (liveOn && !isHost()) {
           guestReq('reqDeclare', { finishId: selectedId, forceWrong: !!forceWrong });
-          paint(forceWrong ? 'Showing…' : 'Declaring…');
+          paint(forceWrong ? t('dangal.classics.showing') : t('dangal.classics.declaring'));
           return;
         }
         if (liveOn && isHost()) {
@@ -4903,7 +4867,7 @@
             youPoints: RUMMY_WRONG_SHOW,
             oppPoints: 0,
             winnerIsYou: false,
-            detail: 'Wrong show',
+            detail: t('dangal.classics.wrong_show'),
           });
           return;
         }
@@ -4918,7 +4882,7 @@
           oppPoints: oppDead.points,
           winnerIsYou: true,
           melds: result.melds,
-          detail: meldSummary(result.melds) || 'Valid declare',
+          detail: meldSummary(result.melds) || t('dangal.classics.valid_declare_2'),
         });
       }
 
@@ -4938,17 +4902,17 @@
         let ok = false;
         if (typeof confirmSheet === 'function') {
           ok = await confirmSheet({
-            title: 'Wrong show?',
-            message: 'Hand is not valid. Show anyway for 80 points and end the hand?',
-            confirmLabel: 'Show (80)',
-            cancelLabel: 'Keep playing',
+            title: t('dangal.classics.wrong_show_3'),
+            message: t('dangal.classics.hand_is_not_valid_show_anyway'),
+            confirmLabel: t('dangal.classics.show_80'),
+            cancelLabel: t('dangal.classics.keep_playing'),
             danger: true,
           });
         } else {
-          ok = typeof confirm === 'function' && confirm('Show anyway for 80 points?');
+          ok = typeof confirm === 'function' && confirm(t('dangal.classics.show_anyway_for_80_points'));
         }
         if (!ok) {
-          paint('Kept playing — fix melds or discard.');
+          paint(t('dangal.classics.kept_playing_fix_melds_or_discard'));
           return;
         }
         runDeclare(true);
@@ -4962,17 +4926,17 @@
         let ok = true;
         if (typeof confirmSheet === 'function') {
           ok = await confirmSheet({
-            title: first ? 'First drop?' : 'Middle drop?',
-            message: 'Drop for ' + pts + ' points? Opponent scores 0.',
-            confirmLabel: 'Drop ' + pts,
-            cancelLabel: 'Cancel',
+            title: first ? t('dangal.classics.first_drop_2') : t('dangal.classics.middle_drop_2'),
+            message: t('dangal.classics.drop_for_pts_points_opponent_scores', { pts }),
+            confirmLabel: t('dangal.classics.drop_pts', { pts }),
+            cancelLabel: t('common.cancel'),
             danger: false,
           });
         }
         if (!ok) return;
         if (liveOn && !isHost()) {
           guestReq('reqDrop');
-          paint('Dropping…');
+          paint(t('dangal.classics.dropping'));
           return;
         }
         if (liveOn && isHost()) {
@@ -4984,7 +4948,7 @@
           youPoints: pts,
           oppPoints: 0,
           winnerIsYou: false,
-          detail: first ? 'First drop' : 'Middle drop',
+          detail: first ? t('dangal.classics.first_drop') : t('dangal.classics.middle_drop'),
         });
       });
     }
@@ -5000,7 +4964,7 @@
         // Softlock guard: never leave Practice with myTurn stuck false.
         myTurn = true;
         phase = 'needDraw';
-        paint('Your turn — draw or take discard.');
+        paint(t('dangal.classics.your_turn_draw_or_take_discard'));
         return;
       }
 
@@ -5019,7 +4983,7 @@
             youPoints: 0,
             oppPoints: RUMMY_FIRST_DROP,
             winnerIsYou: true,
-            detail: 'AI first drop',
+            detail: t('dangal.classics.ai_first_drop'),
           });
           return;
         }
@@ -5034,7 +4998,7 @@
             youPoints: 0,
             oppPoints: RUMMY_MIDDLE_DROP,
             winnerIsYou: true,
-            detail: 'AI middle drop',
+            detail: t('dangal.classics.ai_middle_drop'),
           });
           return;
         }
@@ -5061,7 +5025,7 @@
       if (handB.length !== 14) {
         myTurn = true;
         phase = 'needDraw';
-        paint('Your turn — draw or take discard.');
+        paint(t('dangal.classics.your_turn_draw_or_take_discard'));
         return;
       }
 
@@ -5080,7 +5044,7 @@
             oppPoints: 0,
             winnerIsYou: false,
             melds: result.melds,
-            detail: 'AI declare',
+            detail: t('dangal.classics.ai_declare'),
           });
           return;
         }
@@ -5152,13 +5116,13 @@
           myTurn = val.turn === liveRoles.me;
           phase = 'needDraw';
           applying = false;
-          paint('Dealt — draw or take the open discard.');
+          paint(t('dangal.classics.dealt_draw_or_take_the_open'));
           return;
         }
         if (isHost() && dealtLive) {
           applyPublic(st);
           applying = false;
-          paint('Your break — draw or take the open discard.');
+          paint(t('dangal.classics.your_break_draw_or_take_the'));
           return;
         }
         // Legacy leaky deal — take only own seat if present
@@ -5170,7 +5134,7 @@
           applyPublic(st);
           myTurn = val.turn === liveRoles.me;
           applying = false;
-          paint('Dealt — draw or take the open discard.');
+          paint(t('dangal.classics.dealt_draw_or_take_the_open'));
           return;
         }
         applying = false;
@@ -5211,7 +5175,7 @@
             });
           }
           applying = false;
-          paint('Opponent drawing…');
+          paint(t('dangal.classics.opponent_drawing'));
           return;
         }
         if (act === 'reqTakeDiscard') {
@@ -5232,7 +5196,7 @@
             });
           }
           applying = false;
-          paint('Opponent took discard…');
+          paint(t('dangal.classics.opponent_took_discard'));
           return;
         }
         if (act === 'reqDiscard' && val.cardId) {
@@ -5254,7 +5218,7 @@
               DangalLive.pingTurn(liveRoles.me, 'rummy', { chatId: chat && (chat.firestoreId || chat.id) });
             }
             applying = false;
-            paint('Your turn — draw or take discard.');
+            paint(t('dangal.classics.your_turn_draw_or_take_discard'));
             return;
           }
           applying = false;
@@ -5290,17 +5254,17 @@
         buzz('card');
         paint(
           val.source === 'discard'
-            ? 'Took discard — select a card to discard or declare.'
-            : 'Drawn — select a card to discard or declare.'
+            ? t('dangal.classics.took_discard_select_a_card_to')
+            : t('dangal.classics.drawn_select_a_card_to_discard')
         );
         return;
       }
 
       if (act === 'declareReject' && val.for === liveRoles.me) {
         applying = false;
-        const err = val.err || 'Invalid declare';
+        const err = val.err || t('dangal.classics.invalid_declare');
         if (typeof showToast === 'function') showToast(err);
-        paint(err + ' — keep playing.');
+        paint(t('dangal.classics.err_keep_playing', { err }));
         return;
       }
 
@@ -5339,7 +5303,7 @@
 
       applying = false;
       if (myTurn) paint(phaseHint());
-      else paint('Opponent\u2019s turn\u2026');
+      else paint(t('dangal.classics.opponent_s_turn'));
     }
 
     if (liveOn) {
@@ -5364,7 +5328,7 @@
               oppPoints: iWon ? 80 : 0,
               winnerIsYou: !!iWon,
               skipLivePush: true,
-              detail: 'Leave mid-hand · forfeit 80',
+              detail: t('dangal.classics.leave_mid_hand_forfeit_80'),
             });
           },
         }
@@ -5379,21 +5343,21 @@
           phase = 'needDraw';
           // Host keeps both real hands; mask only for paint opp via counts — host uses real oppHand for score
           publishPrivateDeal();
-          paint('Your break — draw or take the open discard.');
+          paint(t('dangal.classics.your_break_draw_or_take_the'));
         } else {
           shell.body.innerHTML =
             shell.body.innerHTML = partyWaitPanel({
               mode: 'waiting',
-              title: 'Waiting for deal…',
-              sub: 'Live Rummy',
-              detail: 'Hands stay private mid-table. Stock and discard appear when the host deals.',
+              title: t('dangal.classics.waiting_for_deal'),
+              sub: t('dangal.classics.live_rummy'),
+              detail: t('dangal.classics.hands_stay_private_mid_table_stock'),
             });
         }
       }
     } else {
       dealFresh();
       myTurn = true;
-      paint('Your turn — draw or take the open discard.');
+      paint(t('dangal.classics.your_turn_draw_or_take_the'));
     }
   }
 
@@ -5422,12 +5386,12 @@
 
   function tpRankName(cards) {
     const s = tpScore(cards);
-    if (s >= 6000) return 'Trail';
-    if (s >= 5000) return 'Pure sequence';
-    if (s >= 4000) return 'Sequence';
-    if (s >= 3000) return 'Colour';
-    if (s >= 2000) return 'Pair';
-    return 'High card';
+    if (s >= 6000) return t('dangal.classics.trail');
+    if (s >= 5000) return t('dangal.classics.pure_sequence_2');
+    if (s >= 4000) return t('dangal.classics.sequence');
+    if (s >= 3000) return t('dangal.classics.colour');
+    if (s >= 2000) return t('dangal.classics.pair');
+    return t('dangal.classics.high_card');
   }
 
   function cardBacks(n) {
@@ -5474,10 +5438,10 @@
 
     const shell = openShell({
       id: 'teenpatti',
-      title: 'Teen Patti',
+      title: t('dangal.classics.teen_patti'),
       subtitle: liveOn
-        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') + ' · 1v1'
-        : practiceSub('Ring · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'hard' ? 'Hard' : 'Medium') + ' AI'),
+        ? liveSub() + (liveStake > 0 ? t('dangal.classics.stake_livestake_virtual', { liveStake }) : ' · ' + t('dangal.friendly')) + ' · 1v1'
+        : practiceSub(t('dangal.classics.ring_value_ai', { value: (aiDiff === 'easy' ? t('dangal.classics.lvl.easy') : aiDiff === 'hard' ? t('dangal.classics.lvl.hard') : t('dangal.classics.lvl.medium')) })),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
@@ -5858,12 +5822,7 @@
       const d = sessionDelta();
       const dStr = d === 0 ? '±0' : d > 0 ? '+' + d : String(d);
       return (
-        'Hand ' +
-        Math.max(1, handNum) +
-        ' · session ' +
-        dStr +
-        (liveOn ? ' · Live 1v1' : ' · Practice') +
-        ' · virtual'
+        t('dangal.classics.hand_value_session_dstr_value2_virtual', { value: Math.max(1, handNum), dStr, value2: ' · ' + (liveOn ? t('dangal.classics.live_1v1_short') : t('dangal.classics.practice_short')) })
       );
     }
 
@@ -5882,19 +5841,19 @@
         mine && seen && oppSeen() && !myPacked() && !oppPacked() && activeCount() === 2 && phase === 'dealt';
       const canShow = mine && seen && oppSeen() && activeCount() === 2 && phase === 'dealt';
       const canPack = mine && !myPacked() && phase === 'dealt';
-      const badge = seen ? 'Seen' : 'Blind';
+      const badge = seen ? t('dangal.classics.seen') : t('dangal.classics.blind');
       const oppBadge = oppSeen() ? 'seen' : 'blind';
       const turnLabel = pending
         ? iAmSideShowTarget()
-          ? 'Side-show request'
-          : 'Waiting on side-show…'
+          ? t('dangal.classics.side_show_request')
+          : t('dangal.classics.waiting_on_side_show')
         : mine
-          ? 'Your turn'
+          ? t('dangal.classics.your_turn')
           : liveOn
-            ? 'Opponent’s turn'
+            ? t('dangal.classics.opponent_s_turn_2')
             : typeof practiceTurnStatus === 'function'
               ? practiceTurnStatus({ myTurn: false }).label
-              : 'Practice AI thinking…';
+              : t('dangal.classics.practice_ai_thinking');
       const turnMode = pending
         ? iAmSideShowTarget()
           ? 'yours'
@@ -5903,52 +5862,50 @@
           ? 'yours'
           : 'theirs';
       const turnSub = pending
-        ? 'Accept or refuse'
-        : 'Pot ' + pot + ' · S=' + stake + (liveStake > 0 ? ' · ⚡' + liveStake : '');
+        ? t('dangal.classics.accept_or_refuse')
+        : t('dangal.classics.pot') + ' ' + pot + ' · S=' + stake + (liveStake > 0 ? ' · ⚡' + liveStake : '');
       const allInNote = myStack() > 0 && myStack() < cost ? ' · all-in' : '';
       let actionsHtml = '';
       if (pending && iAmSideShowTarget()) {
         actionsHtml = `
-          <p class="pc-hint">Side-show compares hands — loser packs. Refuse is free.</p>
-          <button type="button" class="cs-hit cs-hit--primary" data-ss-accept>Accept</button>
-          <button type="button" class="cs-hit cs-hit--ghost" data-ss-refuse>Refuse</button>`;
+          <p class="pc-hint">${tHtml('dangal.classics.side_show_compares_hands_loser_packs')}</p>
+          <button type="button" class="cs-hit cs-hit--primary" data-ss-accept>${tHtml('common.accept')}</button>
+          <button type="button" class="cs-hit cs-hit--ghost" data-ss-refuse>${tHtml('dangal.classics.refuse')}</button>`;
       } else if (pending && iAmSideShowAsker()) {
-        actionsHtml = `<p class="pc-hint">Waiting for accept or refuse… Table stays live.</p>`;
+        actionsHtml = `<p class="pc-hint">${tHtml('dangal.classics.waiting_for_accept_or_refuse_table')}</p>`;
       } else if (!mine) {
-        actionsHtml = `<p class="pc-hint pc-wait-act">Watch the pot — your controls return on your turn.</p>`;
+        actionsHtml = `<p class="pc-hint pc-wait-act">${tHtml('dangal.classics.watch_the_pot_your_controls_return')}</p>`;
       } else {
         actionsHtml = `
-            ${canSee ? `<button type="button" class="cs-hit" data-see>See (−${Math.min(fee, myStack())})</button>` : ''}
-            ${canChaal ? `<button type="button" class="cs-hit cs-hit--primary" data-chaal>${seen ? 'Chaal' : 'Blind chaal'} (−${Math.min(cost, myStack())})</button>` : ''}
+            ${canSee ? `<button type="button" class="cs-hit" data-see>${tHtml('dangal.classics.see_value', { value: Math.min(fee, myStack()) })}</button>` : ''}
+            ${canChaal ? `<button type="button" class="cs-hit cs-hit--primary" data-chaal>${seen ? tHtml('dangal.classics.chaal') : tHtml('dangal.classics.blind_chaal')} (−${Math.min(cost, myStack())})</button>` : ''}
             ${
               canRaise
-                ? `<button type="button" class="cs-hit cs-hit--ghost" data-raise="1">Raise +${BOOT}</button>
-                   <button type="button" class="cs-hit cs-hit--ghost" data-raise="2">Raise +${BOOT * 2}</button>`
+                ? `<button type="button" class="cs-hit cs-hit--ghost" data-raise="1">${tHtml('dangal.classics.raise_boot', { BOOT })}</button>
+                   <button type="button" class="cs-hit cs-hit--ghost" data-raise="2">${tHtml('dangal.classics.raise_value', { value: BOOT * 2 })}</button>`
                 : ''
             }
-            ${canSide ? `<button type="button" class="cs-hit cs-hit--ghost" data-ss>Side-show</button>` : ''}
-            ${canShow ? `<button type="button" class="cs-hit" data-show>Show</button>` : ''}
-            ${canPack ? `<button type="button" class="cs-hit" data-pack>Pack</button>` : ''}`;
+            ${canSide ? `<button type="button" class="cs-hit cs-hit--ghost" data-ss>${tHtml('dangal.classics.side_show')}</button>` : ''}
+            ${canShow ? `<button type="button" class="cs-hit" data-show>${tHtml('dangal.classics.show')}</button>` : ''}
+            ${canPack ? `<button type="button" class="cs-hit" data-pack>${tHtml('dangal.classics.pack')}</button>` : ''}`;
       }
       shell.body.innerHTML = `
         <div class="pc-tp">
           ${partyTurnBanner(turnMode, turnLabel, turnSub, { liveOn })}
           <div class="pc-tp-hud" aria-live="polite">
-            <span>You <b>${myStack()}</b></span>
-            <span class="pc-tp-pot">Pot <b>${pot}</b></span>
-            <span>Opp <b>${oppStack()}</b></span>
+            <span>${tHtml('common.you')} <b>${myStack()}</b></span>
+            <span class="pc-tp-pot">${tHtml('dangal.classics.pot')} <b>${pot}</b></span>
+            <span>${tHtml('dangal.classics.opp')} <b>${oppStack()}</b></span>
             <span class="pc-tp-badge ${seen ? 'is-seen' : 'is-blind'}">${badge}</span>
           </div>
           <p class="pc-hint">${esc(sessionHudLine())}</p>
-          <p class="pc-hint">Call ${Math.min(cost, myStack())}${allInNote}${
-            liveStake > 0 ? ' · stake ⚡' + liveStake : ''
-          }${msg ? ' · ' + esc(msg) : ''}</p>
-          <p class="pc-hint">Opponent · ${oppBadge}</p>
+          <p class="pc-hint">${tHtml('dangal.classics.call_value_allinnote_value2_value3', { value: Math.min(cost, myStack()), allInNote, value2: { html: liveStake > 0 ? tHtml('dangal.classics.stake_livestake', { liveStake }) : '' }, value3: msg ? ' · ' + esc(msg) : '' })}</p>
+          <p class="pc-hint">${tHtml('dangal.classics.opponent_oppbadge', { oppBadge: { html: oppBadge } })}</p>
           <div class="pc-hand pc-hand--opp">${paintOppHand()}</div>
-          <p class="pc-hint">You · ${badge.toLowerCase()}</p>
+          <p class="pc-hint">${tHtml('dangal.classics.you_badge', { badge: { html: badge.toLowerCase() } })}</p>
           <div class="pc-hand pc-hand--you">${paintMyHand()}</div>
           <div class="pc-actions pc-tp-actions">${actionsHtml}</div>
-          <p class="pc-hint pc-tp-boot">Boot ${boot} · virtual chips only — not real money</p>
+          <p class="pc-hint pc-tp-boot">${tHtml('dangal.classics.boot_boot_virtual_chips_only_not', { boot })}</p>
         </div>`;
       shell.body.querySelector('[data-see]')?.addEventListener('click', () => doSee());
       shell.body.querySelector('[data-chaal]')?.addEventListener('click', () => doChaal());
@@ -5974,7 +5931,7 @@
       clearSideShow();
       const youWin = !!o.youWin;
       const draw = !!o.draw;
-      const title = o.title || (draw ? 'Split pot' : youWin ? 'You win the hand' : 'Opponent wins the hand');
+      const title = o.title || (draw ? t('dangal.classics.split_pot') : youWin ? t('dangal.classics.you_win_the_hand') : t('dangal.classics.opponent_wins_the_hand'));
       const sub = o.subtitle || '';
       lastHandTitle = title;
       const iBust = myStack() < BOOT;
@@ -5989,20 +5946,20 @@
         bodyActions = '';
       } else if (canNext) {
         if (!liveOn || (liveRoles && liveRoles.host)) {
-          bodyActions = `<button type="button" class="cs-hit" data-next>Next hand</button>`;
+          bodyActions = `<button type="button" class="cs-hit" data-next>${tHtml('dangal.classics.next_hand')}</button>`;
         } else {
-          bodyActions = `<p class="pc-hint">Waiting for host to deal…</p>`;
+          bodyActions = `<p class="pc-hint">${tHtml('dangal.classics.waiting_for_host_to_deal')}</p>`;
         }
-        bodyActions += `<button type="button" class="cs-hit cs-hit--ghost" data-leave>Leave table</button>`;
+        bodyActions += `<button type="button" class="cs-hit cs-hit--ghost" data-leave>${tHtml('dangal.classics.leave_table')}</button>`;
       } else if (canRebuy) {
         bodyActions = `
-          <p class="pc-hint pc-tp-bust">Bust — need ${BOOT} for boot</p>
-          <button type="button" class="cs-hit" data-rebuy>Rebuy +${REBUY_AMT}</button>
-          <button type="button" class="cs-hit cs-hit--ghost" data-leave>Leave table</button>`;
+          <p class="pc-hint pc-tp-bust">${tHtml('dangal.classics.bust_need_boot_for_boot', { BOOT })}</p>
+          <button type="button" class="cs-hit" data-rebuy>${tHtml('dangal.classics.rebuy_rebuy_amt', { REBUY_AMT })}</button>
+          <button type="button" class="cs-hit cs-hit--ghost" data-leave>${tHtml('dangal.classics.leave_table')}</button>`;
       } else {
         bodyActions = `
-          <p class="pc-hint pc-tp-bust">${iBust ? 'You’re bust' : oBust ? 'Opponent bust' : 'Can’t continue'} — table over</p>
-          <button type="button" class="cs-hit" data-leave>Leave table</button>`;
+          <p class="pc-hint pc-tp-bust">${iBust ? tHtml('dangal.classics.you_re_bust') : oBust ? tHtml('dangal.classics.opponent_bust') : tHtml('dangal.classics.can_t_continue')} — ${tHtml('dangal.classics.table_over')}</p>
+          <button type="button" class="cs-hit" data-leave>${tHtml('dangal.classics.leave_table')}</button>`;
       }
 
       const rankBit = o.rankLine ? `<p class="pc-hint">${esc(o.rankLine)}</p>` : '';
@@ -6012,11 +5969,11 @@
           ${rankBit}
           <p class="pc-hint">${esc(sub)}</p>
           <div class="pc-tp-hud">
-            <span>You <b>${myStack()}</b></span>
-            <span>Opp <b>${oppStack()}</b></span>
-            <span>Session <b>${dStr}</b></span>
+            <span>${tHtml('common.you')} <b>${myStack()}</b></span>
+            <span>${tHtml('dangal.classics.opp')} <b>${oppStack()}</b></span>
+            <span>${tHtml('dangal.classics.session')} <b>${dStr}</b></span>
           </div>
-          <p class="pc-hint">Hands played ${handNum} · virtual chips only</p>
+          <p class="pc-hint">${tHtml('dangal.classics.hands_played_handnum_virtual_chips_only', { handNum })}</p>
           <div class="pc-actions pc-tp-actions">${bodyActions}</div>
           <div id="tpChipDelta" class="pc-hint" hidden></div>
         </div>`;
@@ -6058,8 +6015,8 @@
         if (!liveOn) tryPracticeRebuy();
         if (!bothCanBoot()) {
           showBetweenHands({
-            title: 'Table stuck',
-            subtitle: 'Not enough chips for boot',
+            title: t('dangal.classics.table_stuck'),
+            subtitle: t('dangal.classics.not_enough_chips_for_boot'),
             youWin: myStack() >= oppStack(),
             fromRemote: true,
           });
@@ -6068,14 +6025,14 @@
       }
       handOver = false;
       if (!dealFresh()) {
-        showBetweenHands({ title: 'Deal failed', subtitle: 'Boot short', youWin: false, fromRemote: true });
+        showBetweenHands({ title: t('dangal.classics.deal_failed'), subtitle: t('dangal.classics.boot_short'), youWin: false, fromRemote: true });
         return;
       }
       buzz('select');
       if (liveOn && liveRoles && liveRoles.host) {
         publishPrivateDeal('redeal');
       }
-      paint('Hand ' + handNum + ' · boot posted — both blind');
+      paint(t('dangal.classics.hand_handnum_boot_posted_both_blind', { handNum }));
     }
 
     async function leaveTable(wonHint) {
@@ -6090,11 +6047,11 @@
       const won = wonHint != null ? !!wonHint : d > 0;
       if (liveRoles && liveRoles.opp) settleOppUid = liveRoles.opp;
       const settle = await settleTableOnce(won);
-      let settleLine = 'Virtual chips only — not real money';
+      let settleLine = t('dangal.classics.virtual_chips_only_not_real_money');
       if (settle && settle.chipDelta != null) {
         const cd = Number(settle.chipDelta);
         settleLine =
-          (Number.isFinite(cd) ? 'Stake settle ' + (cd > 0 ? '+' : '') + cd + ' · ' : '') + settleLine;
+          (Number.isFinite(cd) ? t('dangal.classics.stake_settle_value_cd', { value: cd > 0 ? '+' : '', cd }) : '') + settleLine;
       }
       if (typeof recordDangalSession === 'function') {
         try {
@@ -6113,12 +6070,9 @@
         you: won ? 1 : 0,
         opp: won ? 0 : 1,
         glyph: '♠',
-        title: 'Table closed',
-        subtitle: 'Session ' + dStr + ' · ' + handNum + ' hands · ' + settleLine,
-        shareText:
-          (d >= 0 ? 'Won ' : 'Lost ') +
-          Math.abs(d) +
-          ' virtual chips on Chaupaal Teen Patti (not real money)',
+        title: t('dangal.classics.table_closed'),
+        subtitle: t('dangal.classics.session_dstr_handnum_hands_settleline', { dStr, handNum, settleLine }),
+        shareText: t(d >= 0 ? 'dangal.classics.tp_share' : 'dangal.classics.tp_share_lost', { count: Math.abs(d) }),
         onAgain: () => openTeenPatti(chat),
       });
     }
@@ -6137,8 +6091,8 @@
         if (liveOn && (myStack() < BOOT || oppStack() < BOOT)) {
           const youWin = oppStack() < BOOT && myStack() >= BOOT;
           showBetweenHands({
-            title: o.title || (youWin ? 'Opponent bust' : myStack() < BOOT ? 'You’re bust' : 'Hand over'),
-            subtitle: o.subtitle || 'Live table ends when a seat can’t post boot',
+            title: o.title || (youWin ? t('dangal.classics.opponent_bust') : myStack() < BOOT ? t('dangal.classics.you_re_bust') : t('dangal.classics.hand_over')),
+            subtitle: o.subtitle || t('dangal.classics.live_table_ends_when_a_seat'),
             youWin,
             draw: !!o.draw,
             rankLine: o.rankLine,
@@ -6161,7 +6115,7 @@
         const oppRank = tpRankName(oppCards());
         shell.body.innerHTML = `
           <div class="pc-tp">
-            <p class="pc-hint">Show · ${esc(youRank)} vs ${esc(oppRank)}</p>
+            <p class="pc-hint">${tHtml('dangal.classics.show_yourank_vs_opprank', { youRank, oppRank })}</p>
             <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
             <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
           </div>`;
@@ -6197,13 +6151,13 @@
 
     function doSee() {
       if (handOver || tableClosed || phase !== 'dealt' || myPacked() || mySeen() || !myTurn() || sideShow) {
-        partyIllegal('Not available now');
+        partyIllegal(t('dangal.classics.not_available_now'));
         return;
       }
       const fee = seeFee();
       if (myStack() <= 0) {
-        partyIllegal('Need chips to see');
-        paint('Need chips to see');
+        partyIllegal(t('dangal.classics.need_chips_to_see'));
+        paint(t('dangal.classics.need_chips_to_see'));
         return;
       }
       if (iAmA()) debit(true, fee);
@@ -6212,18 +6166,18 @@
       betSeq += 1;
       buzz('select');
       pushLive({ act: 'see', by: liveRoles && liveRoles.me });
-      paint('Cards up — still your turn');
+      paint(t('dangal.classics.cards_up_still_your_turn'));
     }
 
     function doChaal() {
       if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) {
-        partyIllegal('Not your chaal');
+        partyIllegal(t('dangal.classics.not_your_chaal'));
         return;
       }
       const cost = chaalCost(mySeen());
       if (myStack() <= 0) {
-        partyIllegal('No chips left');
-        paint('No chips left');
+        partyIllegal(t('dangal.classics.no_chips_left'));
+        paint(t('dangal.classics.no_chips_left'));
         return;
       }
       if (iAmA()) debit(true, cost);
@@ -6231,14 +6185,14 @@
       buzz('select');
       passTurn();
       pushLive({ act: 'chaal', by: liveRoles && liveRoles.me });
-      paint('Chaal in');
+      paint(t('dangal.classics.chaal_in'));
     }
 
     function doRaise(steps) {
       if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       steps = steps === 2 ? 2 : 1;
       if (raiseCount >= MAX_RAISES || stake >= MAX_STAKE) {
-        paint('Raise cap hit');
+        paint(t('dangal.classics.raise_cap_hit'));
         return;
       }
       stake = Math.min(MAX_STAKE, stake + BOOT * steps);
@@ -6249,7 +6203,7 @@
       buzz('select');
       passTurn();
       pushLive({ act: 'raise', by: liveRoles && liveRoles.me, steps });
-      paint('Raised · S=' + stake);
+      paint(t('dangal.classics.raised_s_stake', { stake }));
     }
 
     function doPack() {
@@ -6261,8 +6215,8 @@
       betSeq += 1;
       endHand({
         youWin: false,
-        title: 'Packed',
-        subtitle: 'Opponent takes the pot · ' + sessionHudLine(),
+        title: t('dangal.classics.packed'),
+        subtitle: t('dangal.classics.opponent_takes_the_pot_sessionhudline', { sessionHudLine: sessionHudLine() }),
         act: 'pack',
         fromRemote: false,
       });
@@ -6271,13 +6225,13 @@
     function doShow() {
       if (handOver || tableClosed || phase !== 'dealt' || myPacked() || !myTurn() || sideShow) return;
       if (!mySeen() || !oppSeen() || activeCount() !== 2) {
-        paint('Show needs both seen · 2 players');
+        paint(t('dangal.classics.show_needs_both_seen_2_players'));
         return;
       }
       // Guest lacks opp faces mid-hand — host keeps both and resolves compare.
       if (liveOn && !isHost()) {
         pushLive({ act: 'show_req', by: liveRoles && liveRoles.me });
-        paint('Show…');
+        paint(t('dangal.classics.show_2'));
         return;
       }
       const settled = settleShow();
@@ -6288,8 +6242,8 @@
       endHand({
         youWin,
         draw: settled.split,
-        title: settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
-        subtitle: youRank + ' vs ' + oppRank,
+        title: settled.split ? t('dangal.classics.split_pot') : youWin ? t('dangal.classics.you_win_the_show') : t('dangal.classics.opponent_wins_the_show'),
+        subtitle: t('dangal.classics.yourank_vs_opprank', { youRank, oppRank }),
         rankLine: youRank + ' vs ' + oppRank,
         reveal: true,
         act: 'show',
@@ -6300,7 +6254,7 @@
     function doSideShowAsk() {
       if (handOver || tableClosed || phase !== 'dealt' || sideShow || !myTurn()) return;
       if (!mySeen() || !oppSeen() || myPacked() || oppPacked() || activeCount() !== 2) {
-        paint('Side-show needs both seen');
+        paint(t('dangal.classics.side_show_needs_both_seen'));
         return;
       }
       sideShow = { fromA: iAmA(), status: 'pending', at: Date.now() };
@@ -6308,7 +6262,7 @@
       buzz('select');
       startSsTimeout();
       pushLive({ act: 'sideshow_ask', by: liveRoles && liveRoles.me });
-      paint('Side-show asked');
+      paint(t('dangal.classics.side_show_asked'));
     }
 
     function resolveSideShowCompare() {
@@ -6323,7 +6277,7 @@
         clearSideShow();
         turnIsA = askerA;
         pushLive({ act: 'sideshow_tie' });
-        paint('Side-show tied — both stay');
+        paint(t('dangal.classics.side_show_tied_both_stay'));
         return;
       }
 
@@ -6341,7 +6295,7 @@
 
       shell.body.innerHTML = `
         <div class="pc-tp">
-          <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
+          <p class="pc-hint">${esc(iLost ? t('dangal.classics.you_packed_weaker_hand') : t('dangal.classics.opponent_packed_on_side_show'))}</p>
           <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
           <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
         </div>`;
@@ -6364,8 +6318,8 @@
           betweenTimer = 0;
           endHand({
             youWin: !iLost,
-            title: iLost ? 'Packed on side-show' : 'Won side-show',
-            subtitle: iLost ? 'Weaker hand — opponent takes the pot' : 'Opponent packed — you take the pot',
+            title: iLost ? t('dangal.classics.packed_on_side_show') : t('dangal.classics.won_side_show'),
+            subtitle: iLost ? t('dangal.classics.weaker_hand_opponent_takes_the_pot') : t('dangal.classics.opponent_packed_you_take_the_pot'),
             act: 'sideshow',
             fromRemote: false,
             skipLivePush: true,
@@ -6381,7 +6335,7 @@
         handOver = false;
         phase = 'dealt';
         if (!isHost()) maskOppFaces();
-        paint(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show');
+        paint(iLost ? t('dangal.classics.you_packed_weaker_hand') : t('dangal.classics.opponent_packed_on_side_show'));
       }, 900);
     }
 
@@ -6392,7 +6346,7 @@
       // Guest cannot score opp mid-hand — host compares with both hole cards.
       if (liveOn && !isHost()) {
         pushLive({ act: 'sideshow_accept', by: liveRoles && liveRoles.me });
-        paint('Comparing…');
+        paint(t('dangal.classics.comparing'));
         return;
       }
       resolveSideShowCompare();
@@ -6407,7 +6361,7 @@
       turnIsA = askerA;
       buzz('select');
       pushLive({ act: 'sideshow_refuse', by: liveRoles && liveRoles.me, auto: !!auto });
-      paint(auto ? 'Side-show timed out — refused' : 'Side-show refused — hand continues');
+      paint(auto ? t('dangal.classics.side_show_timed_out_refused') : t('dangal.classics.side_show_refused_hand_continues'));
     }
 
     function applyRemoteAct(val) {
@@ -6450,8 +6404,8 @@
         endHand({
           youWin,
           draw: settled.split,
-          title: settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
-          subtitle: tpRankName(myCards()) + ' vs ' + tpRankName(oppCards()),
+          title: settled.split ? t('dangal.classics.split_pot') : youWin ? t('dangal.classics.you_win_the_show') : t('dangal.classics.opponent_wins_the_show'),
+          subtitle: t('dangal.classics.value_vs_value2', { value: tpRankName(myCards()), value2: tpRankName(oppCards()) }),
           rankLine: tpRankName(myCards()) + ' vs ' + tpRankName(oppCards()),
           reveal: true,
           act: 'show',
@@ -6474,7 +6428,7 @@
         handOver = false;
         phase = 'dealt';
         if (!isHost()) maskOppFaces();
-        paint('Hand ' + handNum + ' · boot posted');
+        paint(t('dangal.classics.hand_handnum_boot_posted', { handNum }));
         return;
       }
 
@@ -6483,7 +6437,7 @@
         phase = 'between';
         const hr = val.handResult || {};
         showBetweenHands({
-          title: hr.title || lastHandTitle || 'Hand over',
+          title: hr.title || lastHandTitle || t('dangal.classics.hand_over'),
           subtitle: sessionHudLine(),
           youWin: hr.youWin != null ? hr.youWin : val.winner === (liveRoles && liveRoles.me),
           draw: !!hr.draw,
@@ -6496,13 +6450,13 @@
 
       if (act === 'sideshow_ask' || (st.sideShow && st.sideShow.status === 'pending')) {
         if (sideShow && sideShow.status === 'pending') startSsTimeout();
-        paint('Side-show requested');
+        paint(t('dangal.classics.side_show_requested'));
         return;
       }
       if (act === 'sideshow_refuse' || act === 'sideshow_tie') {
         clearSsTimer();
         if (!isHost()) maskOppFaces();
-        paint(act === 'sideshow_tie' ? 'Side-show tied — both stay' : 'Side-show refused');
+        paint(act === 'sideshow_tie' ? t('dangal.classics.side_show_tied_both_stay') : t('dangal.classics.side_show_refused'));
         return;
       }
       if (act === 'sideshow_done') {
@@ -6511,7 +6465,7 @@
         if (st.revealed || st.revealHands) {
           shell.body.innerHTML = `
             <div class="pc-tp">
-              <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
+              <p class="pc-hint">${esc(iLost ? t('dangal.classics.you_packed_weaker_hand') : t('dangal.classics.opponent_packed_on_side_show'))}</p>
               <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
               <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
             </div>`;
@@ -6521,11 +6475,11 @@
             if (!isHost()) maskOppFaces();
             handOver = false;
             phase = 'dealt';
-            paint(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show');
+            paint(iLost ? t('dangal.classics.you_packed_weaker_hand') : t('dangal.classics.opponent_packed_on_side_show'));
           }, 900);
         } else {
           if (!isHost()) maskOppFaces();
-          paint('Side-show resolved');
+          paint(t('dangal.classics.side_show_resolved'));
         }
         return;
       }
@@ -6541,7 +6495,7 @@
           endHand({
             youWin,
             draw: split,
-            title: split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+            title: split ? t('dangal.classics.split_pot') : youWin ? t('dangal.classics.you_win_the_show') : t('dangal.classics.opponent_wins_the_show'),
             rankLine: tpRankName(myCards()) + ' vs ' + tpRankName(oppCards()),
             reveal: true,
             fromRemote: true,
@@ -6552,7 +6506,7 @@
             const iLost = myPacked();
             shell.body.innerHTML = `
               <div class="pc-tp">
-                <p class="pc-hint">${esc(iLost ? 'You packed — weaker hand' : 'Opponent packed on side-show')}</p>
+                <p class="pc-hint">${esc(iLost ? t('dangal.classics.you_packed_weaker_hand') : t('dangal.classics.opponent_packed_on_side_show'))}</p>
                 <div class="pc-hand">${oppCards().map(cardFace).join('')}</div>
                 <div class="pc-hand">${myCards().map(cardFace).join('')}</div>
               </div>`;
@@ -6560,7 +6514,7 @@
           const iWon = val.winner === liveRoles.me || (myPacked() ? false : true);
           endHand({
             youWin: !!iWon && !myPacked(),
-            title: myPacked() ? 'Packed' : 'Opponent packed',
+            title: myPacked() ? t('dangal.classics.packed') : t('dangal.classics.opponent_packed'),
             subtitle: sessionHudLine(),
             fromRemote: true,
           });
@@ -6570,12 +6524,12 @@
       }
 
       if (act === 'see' || act === 'chaal' || act === 'raise' || act === 'blind') {
-        paint(act === 'raise' ? 'Opponent raised' : act === 'chaal' ? 'Opponent chaaled' : '');
+        paint(act === 'raise' ? t('dangal.classics.opponent_raised') : act === 'chaal' ? t('dangal.classics.opponent_chaaled') : '');
         return;
       }
       if (st.phase === 'dealt') {
         handOver = false;
-        paint('Boot posted — chaal when ready');
+        paint(t('dangal.classics.boot_posted_chaal_when_ready'));
         return;
       }
       paint();
@@ -6616,7 +6570,7 @@
           debit(false, seeFee());
           seenB = true;
           betSeq += 1;
-          paint('Opponent paid to see');
+          paint(t('dangal.classics.opponent_paid_to_see'));
           scheduleAi();
           return;
         }
@@ -6626,8 +6580,8 @@
           awardPotSeat(true);
           endHand({
             youWin: true,
-            title: 'Opponent packed',
-            subtitle: 'You take the pot',
+            title: t('dangal.classics.opponent_packed'),
+            subtitle: t('dangal.classics.you_take_the_pot'),
             fromRemote: false,
           });
           return;
@@ -6638,12 +6592,12 @@
           raiseCount += 1;
           debit(false, chaalCost(false));
           passTurn();
-          paint('Opponent raised blind');
+          paint(t('dangal.classics.opponent_raised_blind'));
           return;
         }
         debit(false, cost);
         passTurn();
-        paint('Opponent blind chaal');
+        paint(t('dangal.classics.opponent_blind_chaal'));
         return;
       }
 
@@ -6652,7 +6606,7 @@
         sideShow = { fromA: false, status: 'pending', at: Date.now() };
         betSeq += 1;
         startSsTimeout();
-        paint('Opponent asks for a side-show');
+        paint(t('dangal.classics.opponent_asks_for_a_side_show'));
         return;
       }
 
@@ -6662,14 +6616,14 @@
         raiseCount += 1;
         debit(false, chaalCost(true));
         passTurn();
-        paint('Opponent raised');
+        paint(t('dangal.classics.opponent_raised'));
         return;
       }
       const packWeak = loose ? 0.72 : tight ? 0.28 : 0.5;
       if (strength < 20 && (pot > BOOT * 8 || rng() < packWeak)) {
         packedB = true;
         awardPotSeat(true);
-        endHand({ youWin: true, title: 'Opponent packed', subtitle: 'You take the pot', fromRemote: false });
+        endHand({ youWin: true, title: t('dangal.classics.opponent_packed'), subtitle: t('dangal.classics.you_take_the_pot'), fromRemote: false });
         return;
       }
       const showChance = loose ? 0.2 : tight ? 0.48 : 0.35;
@@ -6679,7 +6633,7 @@
         endHand({
           youWin,
           draw: settled.split,
-          title: settled.split ? 'Split pot' : youWin ? 'You win the show' : 'Opponent wins the show',
+          title: settled.split ? t('dangal.classics.split_pot') : youWin ? t('dangal.classics.you_win_the_show') : t('dangal.classics.opponent_wins_the_show'),
           rankLine: tpRankName(handA) + ' vs ' + tpRankName(handB),
           reveal: true,
           fromRemote: false,
@@ -6692,12 +6646,12 @@
         raiseCount += 1;
         debit(false, chaalCost(true));
         passTurn();
-        paint('Opponent raised');
+        paint(t('dangal.classics.opponent_raised'));
         return;
       }
       debit(false, cost);
       passTurn();
-      paint('Opponent chaal');
+      paint(t('dangal.classics.opponent_chaal'));
     }
 
     if (liveOn) {
@@ -6719,8 +6673,8 @@
             }
             endHand({
               youWin: iWon,
-              title: iWon ? 'Opponent left' : 'You forfeited',
-              subtitle: 'Forfeit · pot to remaining seat',
+              title: iWon ? t('dangal.classics.opponent_left') : t('dangal.classics.you_forfeited'),
+              subtitle: t('dangal.classics.forfeit_pot_to_remaining_seat'),
               fromRemote: true,
             });
             applying = false;
@@ -6738,21 +6692,21 @@
         if (liveRoles.host) {
           dealFresh();
           publishPrivateDeal('deal');
-          paint('Hand ' + handNum + ' · boot posted — both blind');
+          paint(t('dangal.classics.hand_handnum_boot_posted_both_blind', { handNum }));
         } else {
           shell.body.innerHTML = partyWaitPanel({
             mode: 'waiting',
-            title: 'Waiting for deal…',
-            sub: 'Live Teen Patti · virtual chips',
-            detail: 'Pot and hands appear when the host posts boot. Stay on this screen.',
+            title: t('dangal.classics.waiting_for_deal'),
+            sub: t('dangal.classics.live_teen_patti_virtual_chips'),
+            detail: t('dangal.classics.pot_and_hands_appear_when_the'),
             hudHtml:
-              '<div class="pc-tp-hud"><span>You <b>—</b></span><span class="pc-tp-pot">Pot <b>—</b></span><span>Opp <b>—</b></span></div>',
+              '<div class="pc-tp-hud"><span>' + tHtml('common.you') + ' <b>—</b></span><span class="pc-tp-pot">' + tHtml('dangal.classics.pot') + ' <b>—</b></span><span>' + tHtml('dangal.classics.opp') + ' <b>—</b></span></div>',
           });
         }
       }
     } else {
       dealFresh();
-      paint('Hand ' + handNum + ' · boot posted — both blind');
+      paint(t('dangal.classics.hand_handnum_boot_posted_both_blind', { handNum }));
     }
   }
 
@@ -6790,18 +6744,18 @@
     let revealTimer = 0;
     const shell = openShell({
       id: 'bluff',
-      title: 'Bluff',
+      title: t('dangal.classics.bluff'),
       subtitle: liveOn
-        ? liveSub() + (liveStake > 0 ? ' · Stake ⚡' + liveStake + ' (virtual)' : ' · Friendly') + ' · 1v1'
+        ? liveSub() + (liveStake > 0 ? t('dangal.classics.stake_livestake_virtual', { liveStake }) : ' · ' + t('dangal.friendly')) + ' · 1v1'
         : practiceSub(
-            'Empty hand · ' + (aiDiff === 'easy' ? 'Easy' : aiDiff === 'hard' ? 'Hard' : 'Medium') + ' AI'
+            t('dangal.classics.empty_hand_value_ai', { value: aiDiff === 'easy' ? t('dangal.classics.lvl.easy') : aiDiff === 'hard' ? t('dangal.classics.lvl.hard') : t('dangal.classics.lvl.medium') })
           ),
       mode: liveOn ? 'live' : 'practice',
       live: liveOn,
       chat,
       accent: '#FF1744',
       bg: '#0A0E10',
-      leaveBody: 'Forfeit this Bluff hand?',
+      leaveBody: t('dangal.classics.forfeit_this_bluff_hand'),
       cleanup: () => {
         if (aiTimer) {
           clearTimeout(aiTimer);
@@ -6986,24 +6940,22 @@
     function pileGraphic() {
       const n = pile.length;
       if (!n) {
-        return `<div class="pc-bluff-pile is-empty" aria-label="Empty pile"><span>Pile</span><b>0</b></div>`;
+        return `<div class="pc-bluff-pile is-empty" aria-label="${tHtml('dangal.classics.empty_pile')}"><span>${tHtml('dangal.classics.pile')}</span><b>0</b></div>`;
       }
       let layers = '';
       const show = Math.min(n, 5);
       for (let i = 0; i < show; i++) {
         layers += `<span class="pc-card pc-back pc-bluff-layer" style="transform:translate(${i * 2}px,${-i * 2}px)"></span>`;
       }
-      return `<div class="pc-bluff-pile" aria-label="Pile ${n} cards">${layers}<b>${n}</b></div>`;
+      return `<div class="pc-bluff-pile" aria-label="${tHtml('dangal.classics.pile_n_cards', { count: n })}">${layers}<b>${n}</b></div>`;
     }
 
     function claimBanner() {
-      if (!lastClaim) return 'No claim yet — first play sets the rank';
-      const who = lastClaim.seatA === iAmA() ? 'You' : 'Opponent';
+      if (!lastClaim) return t('dangal.classics.no_claim_yet_first_play_sets');
+      const who = lastClaim.seatA === iAmA() ? t('dangal.classics.you') : t('dangal.classics.opponent');
       const out =
         pendingOutSeatA != null && pendingOutSeatA === lastClaim.seatA ? ' · LAST PLAY' : '';
-      return `Last claim: ${who} · ${lastClaim.count}× ${lastClaim.rank}${
-        lockedRank ? ' · locked ' + lockedRank : ''
-      }${out}`;
+      return t('dangal.classics.last_claim_who_lastclaimcount_rank_value', { who, lastClaimCount: lastClaim.count, rank: lastClaim.rank, value: lockedRank ? t('dangal.classics.locked_lockedrank', { lockedRank }) : '', out });
     }
 
     function rankOptionsHtml() {
@@ -7024,23 +6976,23 @@
       const mh = myHandCount();
       const oh = oppHandCount();
       return `<div class="pc-bluff-hud" aria-live="polite">
-        <span class="pc-bluff-seat${pressureClass(mh)}">You <b>${mh}</b> · ❤${myLives()}</span>
-        <span class="pc-bluff-seat${pressureClass(oh)}">Opp <b>${oh}</b> · ❤${oppLives()}</span>
-        <span class="pc-bluff-seat">Pile <b>${pile.length}</b></span>
+        <span class="pc-bluff-seat${pressureClass(mh)}">${tHtml('common.you')} <b>${mh}</b> · ❤${myLives()}</span>
+        <span class="pc-bluff-seat${pressureClass(oh)}">${tHtml('dangal.classics.opp')} <b>${oh}</b> · ❤${oppLives()}</span>
+        <span class="pc-bluff-seat">${tHtml('dangal.classics.pile')} <b>${pile.length}</b></span>
       </div>`;
     }
 
     function bluffShareText(finalWin, pathMsg) {
       const path = String(pathMsg || '');
       if (finalWin && /Emptied/i.test(path)) {
-        return 'I emptied my hand on Chaupaal Bluff — called the pile (virtual stakes)';
+        return t('dangal.classics.i_emptied_my_hand_on_chaupaal');
       }
       if (finalWin && /lives/i.test(path)) {
-        return 'I won Bluff on Chaupaal — outlasted on lives (virtual stakes)';
+        return t('dangal.classics.i_won_bluff_on_chaupaal_outlasted');
       }
-      if (finalWin) return 'I won Bluff on Chaupaal — called the pile';
-      if (/Forfeit/i.test(path)) return 'Bluff on Chaupaal — rematch?';
-      return 'Bluff on Chaupaal — next time I call the pile';
+      if (finalWin) return t('dangal.classics.i_won_bluff_on_chaupaal_called');
+      if (/Forfeit/i.test(path)) return t('dangal.classics.bluff_on_chaupaal_rematch');
+      return t('dangal.classics.bluff_on_chaupaal_next_time_i');
     }
 
     async function settleBluffOnce(won) {
@@ -7106,7 +7058,7 @@
             (sub ? ' · ' : '') +
             (Number.isFinite(cd) && cd !== 0
               ? 'Stake ' + (cd > 0 ? '+' : '') + cd + ' virtual'
-              : 'Virtual stakes · not real money');
+              : t('dangal.virtual_stakes_not_real'));
         }
         if (liveOn && liveHandle && !applying) {
           try {
@@ -7132,14 +7084,14 @@
 
     /** Lives floor only — empty hand never ends here (needs call window). */
     function checkLivesEnd() {
-      if (myLives() <= 0) return endGame(false, 'Out of lives');
-      if (oppLives() <= 0) return endGame(true, 'Opponent out of lives');
+      if (myLives() <= 0) return endGame(false, t('dangal.classics.out_of_lives'));
+      if (oppLives() <= 0) return endGame(true, t('dangal.classics.opponent_out_of_lives'));
       return false;
     }
 
     function awardEmptyWin(seatA) {
       const iWin = seatA === iAmA();
-      return endGame(iWin, iWin ? 'Emptied hand' : 'Opponent emptied hand');
+      return endGame(iWin, iWin ? t('dangal.classics.emptied_hand') : t('dangal.classics.opponent_emptied_hand'));
     }
 
     function paint(msg) {
@@ -7157,7 +7109,7 @@
         coachShown = true;
         msg =
           msg ||
-          'Empty your hand — but a call on your last play can still burn you.';
+          t('dangal.classics.empty_your_hand_but_a_call');
       }
       shell.body.innerHTML = `
         <div class="pc-bluff">
@@ -7165,18 +7117,18 @@
             mine ? 'yours' : 'theirs',
             mine
               ? canPassOut
-                ? 'Your turn — Call or Pass'
+                ? t('dangal.classics.your_turn_call_or_pass')
                 : canCall
-                  ? 'Your turn — Call or play'
-                  : 'Your turn — play'
+                  ? t('dangal.classics.your_turn_call_or_play')
+                  : t('dangal.classics.your_turn_play')
               : facingOut && pendingOutSeatA === iAmA()
-                ? 'Waiting — call window'
+                ? t('dangal.classics.waiting_call_window')
                 : liveOn
-                  ? 'Opponent’s turn'
+                  ? t('dangal.classics.opponent_s_turn_2')
                   : typeof practiceTurnStatus === 'function'
                     ? practiceTurnStatus({ myTurn: false }).label
-                    : 'Practice AI thinking…',
-            'Pile ' + pile.length + ' · ❤' + myLives() + '–' + oppLives(),
+                    : t('dangal.classics.practice_ai_thinking'),
+            t('dangal.classics.pile_pilecount_mylives_opplives', { pileCount: pile.length, myLives: myLives(), oppLives: oppLives() }),
             { liveOn }
           )}
           ${hudHtml()}
@@ -7186,28 +7138,28 @@
             msg ||
               (mine
                 ? canPassOut
-                  ? 'Last play on the table — Call or Pass'
+                  ? t('dangal.classics.last_play_on_the_table_call')
                   : canCall
-                    ? 'Call the claim — or play to accept it'
-                    : 'Select 1–3 cards · claim the locked rank'
+                    ? t('dangal.classics.call_the_claim_or_play_to')
+                    : t('dangal.classics.select_1_3_cards_claim_the')
                 : facingOut && pendingOutSeatA === iAmA()
-                  ? 'Waiting — they may Call your last play'
-                  : 'Watch the pile — your controls return on your turn')
+                  ? t('dangal.classics.waiting_they_may_call_your_last')
+                  : t('dangal.classics.watch_the_pile_your_controls_return'))
           )}</p>
           <div class="pc-hand">${you.map(cardFace).join('')}</div>
           ${
             canPlay
-              ? `<label class="pc-hint">Claim
+              ? `<label class="pc-hint">${tHtml('dangal.classics.claim')}
             <select data-rank ${lockedRank ? 'disabled' : ''}>${rankOptionsHtml()}</select>
           </label>
-          <button type="button" class="cs-hit cs-hit--primary" data-play>Play on pile</button>`
+          <button type="button" class="cs-hit cs-hit--primary" data-play>${tHtml('dangal.classics.play_on_pile')}</button>`
               : ''
           }
           <div class="pc-bluff-actions">
-            ${canCall ? `<button type="button" class="cs-hit cs-hit--ghost" data-call>Call bluff</button>` : ''}
-            ${canPassOut ? `<button type="button" class="cs-hit cs-hit--primary" data-pass>Pass — they empty</button>` : ''}
+            ${canCall ? `<button type="button" class="cs-hit cs-hit--ghost" data-call>${tHtml('dangal.classics.call_bluff')}</button>` : ''}
+            ${canPassOut ? `<button type="button" class="cs-hit cs-hit--primary" data-pass>${tHtml('dangal.classics.pass_they_empty')}</button>` : ''}
           </div>
-          <p class="pc-hint pc-tp-boot">Pile · claim · call/pass · last-card risk · virtual stakes</p>
+          <p class="pc-hint pc-tp-boot">${tHtml('dangal.classics.pile_claim_call_pass_last_card')}</p>
         </div>`;
       const rankEl = shell.body.querySelector('[data-rank]');
       if (rankEl) {
@@ -7241,10 +7193,10 @@
       callInFlight = false;
       const cards = (payload.cards || []).slice();
       const honest = !!payload.honest;
-      const verdict = honest ? 'False call!' : 'Caught!';
+      const verdict = honest ? t('dangal.classics.false_call') : t('dangal.classics.caught');
       const detail =
         payload.msg ||
-        (honest ? 'Claim was true — caller loses a life.' : 'Claim was a bluff — claimer loses a life.');
+        (honest ? t('dangal.classics.claim_was_true_caller_loses_a') : t('dangal.classics.claim_was_a_bluff_claimer_loses'));
       if (honest) buzz('win', { noConfetti: true });
       else buzz('lose', { noConfetti: true });
       shell.body.innerHTML = `
@@ -7303,7 +7255,7 @@
         return {
           honest: true,
           cards,
-          msg: 'False call! Claim was true — caller loses a life.',
+          msg: t('dangal.classics.false_call_claim_was_true_caller'),
           claimerIsA,
           callerIsMe,
           emptyWinSeatA: wasPendingOut ? claimerIsA : null,
@@ -7327,7 +7279,7 @@
       return {
         honest: false,
         cards,
-        msg: 'Caught! Bluff revealed — claimer loses a life.',
+        msg: t('dangal.classics.caught_bluff_revealed_claimer_loses_a'),
         claimerIsA,
         callerIsMe,
         emptyWinSeatA: null,
@@ -7341,7 +7293,7 @@
         awardEmptyWin(result.emptyWinSeatA);
         return;
       }
-      paint((result && result.msg ? result.msg + ' ' : '') + 'Fresh claim window.');
+      paint(t('dangal.classics.value_fresh_claim_window', { value: result && result.msg ? result.msg + ' ' : '' }));
     }
 
     function doPlay(selectedSet) {
@@ -7351,18 +7303,18 @@
       let rank = lockedRank || (shell.body.querySelector('[data-rank]') || {}).value || claimPick;
       if (lockedRank) rank = lockedRank;
       if (!selected.size) {
-        partyIllegal('Pick 1–3 cards');
-        paint('Pick 1–3 cards');
+        partyIllegal(t('dangal.classics.pick_1_3_cards'));
+        paint(t('dangal.classics.pick_1_3_cards'));
         return;
       }
       if (!rank) {
-        partyIllegal('Pick a claim rank');
+        partyIllegal(t('dangal.classics.pick_a_claim_rank'));
         return;
       }
       const hand = myHand().slice();
       const played = hand.filter((c) => selected.has(c.id));
       if (!played.length || played.length > 3) {
-        partyIllegal('Pick 1–3 cards');
+        partyIllegal(t('dangal.classics.pick_1_3_cards'));
         return;
       }
       // Playing mid-hand accepts prior claim
@@ -7387,8 +7339,8 @@
       if (checkLivesEnd()) return;
       paint(
         emptied
-          ? `Last play ${cards.length}× ${rank} — they may Call or Pass`
-          : `Played ${cards.length}× ${rank} face-down`
+          ? t('dangal.classics.last_play_cardscount_rank_they_may', { cardsCount: cards.length, rank })
+          : t('dangal.classics.played_cardscount_rank_face_down', { cardsCount: cards.length, rank })
       );
     }
 
@@ -7418,7 +7370,7 @@
       callInFlight = true;
       if (liveOn) {
         pushLive({ act: 'call', callBy: liveRoles.me, by: liveRoles.me, seq });
-        paint('Calling…');
+        paint(t('dangal.classics.calling'));
         return;
       }
       const result = resolveCall(true);
@@ -7520,7 +7472,7 @@
         if (st.turnIsA != null) turnIsA = !!st.turnIsA;
         phase = 'playing';
         applying = false;
-        paint('Dealt — empty your hand, watch lives');
+        paint(t('dangal.classics.dealt_empty_your_hand_watch_lives'));
         return;
       }
 
@@ -7577,7 +7529,7 @@
           }
         }
         applying = false;
-        paint('Call pending…');
+        paint(t('dangal.classics.call_pending'));
         return;
       }
 
@@ -7616,8 +7568,8 @@
       paint(
         act === 'play'
           ? pendingOutSeatA != null && lastClaim && lastClaim.seatA !== iAmA()
-            ? 'Last play — Call or Pass'
-            : 'Opponent played — Call or play to accept'
+            ? t('dangal.classics.last_play_call_or_pass')
+            : t('dangal.classics.opponent_played_call_or_play_to')
           : undefined
       );
     }
@@ -7772,7 +7724,7 @@
 
       const pick = aiPickPlay();
       if (!pick || !pick.cards.length) {
-        paint('Opponent stalled — your turn');
+        paint(t('dangal.classics.opponent_stalled_your_turn'));
         turnIsA = true;
         return;
       }
@@ -7795,8 +7747,8 @@
         if (checkLivesEnd()) return;
         paint(
           emptied
-            ? `Opponent’s last play ${cards.length}× ${pick.claim} — Call or Pass`
-            : `Opponent played ${cards.length}× ${pick.claim}${pick.bluff ? '' : ''} — Call or play`
+            ? t('dangal.classics.opponent_s_last_play_cardscount_claim', { cardsCount: cards.length, claim: pick.claim })
+            : t('dangal.classics.opponent_played_cardscount_claim_value_cal', { cardsCount: cards.length, claim: pick.claim, value: pick.bluff ? '' : '' })
         );
       };
       if (delayBluff) {
@@ -7822,11 +7774,11 @@
               iWon,
               val.status === 'forfeit'
                 ? iWon
-                  ? 'Opponent forfeited'
-                  : 'Forfeit'
+                  ? t('dangal.classics.opponent_forfeited')
+                  : t('dangal.classics.forfeit')
                 : iWon
-                  ? 'Emptied hand'
-                  : 'Opponent emptied hand'
+                  ? t('dangal.classics.emptied_hand')
+                  : t('dangal.classics.opponent_emptied_hand')
             );
             return;
           }
@@ -7840,7 +7792,7 @@
             if (roles && roles.opp) settleOppUid = roles.opp;
             const iWon = !!(info && info.winner === roles.me);
             myPendingPlay = null;
-            endGame(iWon, iWon ? 'Opponent forfeited' : 'Forfeit');
+            endGame(iWon, iWon ? t('dangal.classics.opponent_forfeited') : t('dangal.classics.forfeit'));
           },
         }
       );
@@ -7851,19 +7803,19 @@
         if (liveRoles.host) {
           dealBoth();
           publishPrivateDeal();
-          paint('Dealt — empty your hand, watch lives');
+          paint(t('dangal.classics.dealt_empty_your_hand_watch_lives'));
         } else {
           shell.body.innerHTML = partyWaitPanel({
             mode: 'waiting',
-            title: 'Waiting for deal…',
-            sub: 'Live Bluff',
-            detail: 'Pile and lives appear when cards are dealt. Call window stays honest.',
+            title: t('dangal.classics.waiting_for_deal'),
+            sub: t('dangal.classics.live_bluff'),
+            detail: t('dangal.classics.pile_and_lives_appear_when_cards'),
           });
         }
       }
     } else {
       dealBoth();
-      paint('Empty your hand — but a call on your last play can still burn you.');
+      paint(t('dangal.classics.empty_your_hand_but_a_call'));
       coachShown = true;
     }
   }

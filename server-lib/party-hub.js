@@ -71,9 +71,11 @@ function hydrateHub(hub) {
   return hub;
 }
 
+/** pickBy + the party's content language (host setting; every game room tonight inherits it). */
 function mergeSettings(s) {
   const src = s || {};
-  return { pickBy: src.pickBy === 'vote' ? 'vote' : 'host' };
+  const lang = String(src.contentLang || '').toLowerCase().split(/[-_]/)[0];
+  return { pickBy: src.pickBy === 'vote' ? 'vote' : 'host', contentLang: /^[a-z]{2,3}$/.test(lang) ? lang : '' };
 }
 
 function newHub({ uid, name, settings, chatId, now }) {
@@ -320,6 +322,7 @@ async function pick(adminApp, rtdb, code, uid, b, now, hubTx) {
         seated: plan.seated,
         out: plan.out.concat(offline),
         players: plan.seated.map((id) => ({ id, name: pub.players[id].name })),
+        contentLang: pub.settings.contentLang || '',
         presence: plan.seated.reduce((m, id) => ((m[id] = hub.presence[id] || { at: now, online: true }), m), {}),
       },
     };
@@ -336,7 +339,7 @@ async function pick(adminApp, rtdb, code, uid, b, now, hubTx) {
           (current) => {
             const live = current && current.pub && current.pub.status !== 'closed' && (current.pub.expiresAt || 0) > now;
             if (live && current.pub.hub !== code) throw err('code_taken');
-            return { room: seatedRoom(plan, uid, b.settings, code, now), result: {} };
+            return { room: seatedRoom(plan, uid, Object.assign(plan.contentLang ? { contentLang: plan.contentLang } : {}, b.settings || {}), code, now), result: {} };
           },
           { allowEmpty: true }
         );

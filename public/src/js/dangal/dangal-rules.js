@@ -7,6 +7,32 @@
  * Variant `who`: 'host' (Live host picks, locked at start) · 'both' (both players agree before
  * start) · 'solo' (only matters in solo/practice play).
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.DangalRules = factory();
@@ -18,7 +44,7 @@
   const range = (key, label, def, min, max, who, extra) =>
     Object.assign({ key, label, default: def, range: [min, max], who: who || 'host' }, extra || {});
 
-  const GAMES = {
+  const GAMES = /* i18n-catalog: games.{id}.rules */ {
     tiptap: {
       ruleset: { name: 'Tip Tap match-3', source: 'Our own match-3 puzzle rules', simplified: false },
       variants: [opt('mode', 'Mode', 'campaign', ['campaign', 'daily'], 'solo')],
@@ -460,8 +486,33 @@
     const raw = String(id || '').toLowerCase().replace(/[\s-]+/g, '');
     return ALIASES[raw] || raw;
   }
+  /**
+   * The declaration in the reader's language (catalog keys games.<id>.rules.*). Node has no
+   * catalog, so the server — rules Q&A grounding, Live rooms — reads the English as declared.
+   */
+  const localized = {};
   function get(id) {
-    return GAMES[canon(id)] || null;
+    const key = canon(id);
+    const g = GAMES[key];
+    if (!g) return null;
+    const lang = (typeof globalThis !== 'undefined' && globalThis.currentLang) || 'en';
+    const memo = key + '|' + lang;
+    if (localized[memo]) return localized[memo];
+    const k = (p) => 'games.' + key + '.rules.' + p;
+    const labelsFor = (v) => {
+      if (!v.labels) return v.labels;
+      const out = {};
+      Object.keys(v.labels).forEach((x) => (out[x] = gtx(k('variant.' + v.key + '.labels.' + x), v.labels[x])));
+      return out;
+    };
+    const out = Object.assign({}, g, {
+      ruleset: Object.assign({}, g.ruleset, { name: gtx(k('ruleset.name'), g.ruleset.name), source: gtx(k('ruleset.source'), g.ruleset.source) }),
+      variants: g.variants.map((v) => Object.assign({}, v, { label: gtx(k('variant.' + v.key + '.label'), v.label), labels: labelsFor(v) })),
+      glance: g.glance.map((l, i) => gtx(k('glance.' + (i + 1)), l)),
+      rules: g.rules.map((r, i) => Object.assign({}, r, { h: gtx(k('rules.' + (i + 1) + '.h'), r.h), body: gtx(k('rules.' + (i + 1) + '.body'), r.body) })),
+    });
+    localized[memo] = out;
+    return out;
   }
   function defaults(id) {
     const g = get(id);
@@ -492,8 +543,8 @@
 
   function display(v, value) {
     if (v.labels && v.labels[String(value)] != null) return v.labels[String(value)];
-    if (value === true) return 'On';
-    if (value === false) return 'Off';
+    if (value === true) return gtx('dangal.on', 'On');
+    if (value === false) return gtx('dangal.solo.off', 'Off');
     return String(value);
   }
 
@@ -511,7 +562,7 @@
     const g = get(id);
     return Object.freeze({
       game: canon(id),
-      ruleset: g ? g.ruleset.name : '',
+      ruleset: GAMES[canon(id)] ? GAMES[canon(id)].ruleset.name : '',
       values: Object.freeze(normalize(id, values)),
       locked: true,
     });
@@ -558,16 +609,16 @@
     const glance = g.glance.map((l) => '<li>' + esc(l) + '</li>').join('');
     const rules = g.rules.map((r) => '<p><strong>' + esc(r.h) + '.</strong> ' + esc(r.body) + '</p>').join('');
     const houseHtml = house.length
-      ? '<div class="dangal-rules__house"><div class="dangal-rules__label">House rules in this game</div><ul>' +
+      ? '<div class="dangal-rules__house"><div class="dangal-rules__label">' + esc(gtx('dangal.rules.house_rules_in_game', 'House rules in this game')) + '</div><ul>' +
         house.map((h) => '<li>' + esc(h.text) + '</li>').join('') +
         '</ul></div>'
       : '';
-    const simplified = g.ruleset.simplified ? ' <span class="dangal-rules__tag">Simplified rules</span>' : '';
+    const simplified = g.ruleset.simplified ? ' <span class="dangal-rules__tag">' + esc(gtx('dangal.rules.simplified', 'Simplified rules')) + '</span>' : '';
     return (
       '<div class="dangal-rules" data-dangal-rules-sheet="' + esc(canon(id)) + '">' +
       houseHtml +
       '<ul class="dangal-rules__glance">' + glance + '</ul>' +
-      '<details class="dangal-rules__full"><summary>Full rules</summary>' + rules +
+      '<details class="dangal-rules__full"><summary>' + esc(gtx('dangal.rules.full_rules', 'Full rules')) + '</summary>' + rules +
       '<p class="dangal-rules__source">' + esc(g.ruleset.source) + simplified + '</p></details>' +
       extrasHtml(canon(id), house.length ? normalize(id, o.variants) : null) +
       '</div>'
@@ -600,7 +651,7 @@
     const variants = o.variants || liveVariantsFor(id);
     const html = sheetHtml(id, { variants });
     if (typeof window.openHalfSheet === 'function') {
-      window.openHalfSheet({ id: 'dangalRulesSheet', title: o.title || g.ruleset.name + ' · Rules', accent: 'dangal', snap: 'mid', bodyHtml: html });
+      window.openHalfSheet({ id: 'dangalRulesSheet', title: o.title || gtx('dangal.name_rules', '{{name}} · Rules', { name: g.ruleset.name }), accent: 'dangal', snap: 'mid', bodyHtml: html });
       return true;
     }
     if (typeof window.showToast === 'function') window.showToast(g.glance.join(' · '));
@@ -620,8 +671,8 @@
       btn.type = 'button';
       btn.className = 'game-howto-btn';
       btn.dataset.dangalRules = canon(id);
-      btn.setAttribute('aria-label', 'Rules');
-      btn.textContent = 'Rules';
+      btn.setAttribute('aria-label', gtx('dangal.rules', 'Rules'));
+      btn.textContent = gtx('dangal.rules', 'Rules');
       bar.appendChild(btn);
       return true;
     }

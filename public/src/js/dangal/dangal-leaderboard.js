@@ -54,17 +54,17 @@
   function renderWeeklyHubHtml(entries) {
     const rows = entries || [];
     if (!rows.length) {
-      return '<div class="dangal-friends-board"><div class="dangal-section-label">This week</div><p class="dangal-profile__empty">Play a rated game to open the weekly board.</p></div>';
+      return '<div class="dangal-friends-board"><div class="dangal-section-label">' + tHtml('common.this_week') + '</div><p class="dangal-profile__empty">' + tHtml('dangal.play_a_rated_game_to_open') + '</p></div>';
     }
     const mine = rows.find((e) => e.mine);
     const shareBtn =
       mine && typeof openLeaderboardRankShare === 'function'
-        ? `<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${mine.rank}" data-score="${mine.score || 0}" style="margin-top:8px;width:100%;">Share my rank</button>`
+        ? `<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${mine.rank}" data-score="${mine.score || 0}" style="margin-top:8px;width:100%;">${tHtml('dangal.share_my_rank')}</button>`
         : mine
-          ? `<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${mine.rank}" data-score="${mine.score || 0}" style="margin-top:8px;width:100%;">Share my rank</button>`
+          ? `<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${mine.rank}" data-score="${mine.score || 0}" style="margin-top:8px;width:100%;">${tHtml('dangal.share_my_rank')}</button>`
           : '';
     return (
-      '<div class="dangal-friends-board"><div class="dangal-section-label">This week</div>' +
+      '<div class="dangal-friends-board"><div class="dangal-section-label">' + tHtml('common.this_week') + '</div>' +
       rows
         .map((e) => {
           return (
@@ -88,7 +88,7 @@
   async function mountWeeklyHub(host, uid) {
     if (!host) return;
     if (typeof renderSkeleton === 'function') renderSkeleton(host, { variant: 'list', count: 5 });
-    else host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">Loading week…</p></div>';
+    else host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">' + tHtml('dangal.loading_week') + '</p></div>';
     const load = async () => {
       try {
         const rows = await loadWeeklyHub(uid);
@@ -96,12 +96,12 @@
       } catch (e) {
         if (typeof renderErrorState === 'function') {
           renderErrorState(host, {
-            title: 'Week board unavailable',
-            message: typeof friendlyError === 'function' ? friendlyError(e) : 'Please try again.',
+            title: t('dangal.week_board_unavailable'),
+            message: typeof friendlyError === 'function' ? friendlyError(e) : t('common.please_try_again'),
             onRetry: load,
           });
         } else {
-          host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">Week board unavailable.</p></div>';
+          host.innerHTML = '<div class="dangal-friends-board"><p class="dangal-profile__empty">' + tHtml('dangal.week_board_unavailable_2') + '</p></div>';
         }
       }
     };

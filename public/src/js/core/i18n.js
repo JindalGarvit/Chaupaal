@@ -49,7 +49,7 @@ const LANG_CATALOG = [
 const I18N_RETIRED_LANGS = ['gu', 'kn', 'ml', 'pa', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"de5f842e","id":"2775a026","ja":"0673b3d7","ko":"56677136","mr":"43439d48","pt":"19118eeb","ta":"9db41022","te":"11127969","ur":"41de7b19","zh":"e0fda911"};
+const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"19726a58","id":"2775a026","ja":"0673b3d7","ko":"56677136","mr":"43439d48","pt":"19118eeb","ta":"40370478","te":"11127969","ur":"41de7b19","zh":"e0fda911"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({
@@ -66,10 +66,11 @@ const I18N_GLOSSARY = Object.freeze({
   rajamantri: 'Raja Mantri Chor Sipahi',
   teenpatti: 'Teen Patti',
   carrom: 'Carrom',
-  ludo: 'Ludo',
   tambola: 'Tambola',
   kakuro: 'Kakuro',
   shabdfive: 'Shabd Five',
+  ohno: 'Oh No!',
+  tiptap: 'Tip Tap',
 });
 
 const LANG_CODE_SET = new Set(LANG_CATALOG.map((l) => l.code));
@@ -310,6 +311,24 @@ function i18nLookup(key, lang) {
     if (v != null && v !== '') return { v, code };
   }
   return null;
+}
+
+/** { have, total }: how many English keys under `prefix` the `lang` pack translates (content availability). */
+const i18nCoverageCache = {};
+function i18nCoverage(prefix, lang) {
+  const code = normalizeLang(lang || currentLang);
+  const en = I18N_PACKS.en || {};
+  const pack = Object.assign({}, I18N_EXTRA[code] || {}, I18N_PACKS[code] || {});
+  const ck = code + '|' + prefix + '|' + Object.keys(pack).length;
+  if (i18nCoverageCache[ck]) return i18nCoverageCache[ck];
+  let have = 0;
+  let total = 0;
+  for (const k in en) {
+    if (k.indexOf(prefix) !== 0) continue;
+    total++;
+    if (code === 'en' || (pack[k] != null && pack[k] !== '')) have++;
+  }
+  return (i18nCoverageCache[ck] = { have, total });
 }
 
 function i18nRender(key, vars, fallback, mode) {
@@ -896,6 +915,7 @@ if (typeof window !== 'undefined') {
     getPseudoLocale,
     setPseudoLocale,
     I18N_PSEUDO_LOCALES,
+    i18nCoverage,
   });
 }
 

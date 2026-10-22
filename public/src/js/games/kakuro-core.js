@@ -16,6 +16,32 @@
  *   4 Expert  one-step contradiction (placing a digit leaves some run with no valid combination)
  * Sizes include the clue row/column: Easy 6–7, Medium 7–9, Hard 8–10, Expert 10–12.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -27,7 +53,7 @@
 
   const DIFFS = ['easy', 'medium', 'hard', 'expert'];
   const GRADE = { easy: 1, medium: 2, hard: 3, expert: 4 };
-  const TECH_NAMES = { 1: 'Run combinations', 2: 'Combination filtering', 3: 'Position exclusion', 4: 'Contradiction' };
+  const TECH_NAMES = { 1: gtx('games.ankjod.run_combinations', 'Run combinations'), 2: gtx('games.ankjod.combination_filtering', 'Combination filtering'), 3: gtx('games.ankjod.position_exclusion', 'Position exclusion'), 4: gtx('games.ankjod.contradiction', 'Contradiction') };
   const SPECS = {
     easy: { sizes: [[6, 6], [7, 7], [6, 7], [7, 6]], density: [0.3, 0.38], minWhite: 14 },
     medium: { sizes: [[7, 7], [8, 8], [9, 9], [8, 9]], density: [0.28, 0.36], minWhite: 22 },
@@ -815,7 +841,7 @@
     const g = fromRows(rows);
     for (let i = 0; i < g.white.length; i++) {
       if (g.white[i] && values[i] && values[i] !== g.sol[i]) {
-        return { kind: 'wrong', cell: i, digit: g.sol[i], tech: 0, text: 'This digit doesn’t belong here — it breaks the solution. Clear it and look again.' };
+        return { kind: 'wrong', cell: i, digit: g.sol[i], tech: 0, text: gtx('games.ankjod.this_digit_doesn_t_belong_here', 'This digit doesn’t belong here — it breaks the solution. Clear it and look again.') };
       }
     }
     const filled = values.map((v, i) => (g.white[i] && v ? v : 0));
@@ -844,19 +870,19 @@
       if (w.tech <= 1) {
         const a = runAllowed(g, ra, base);
         const b = runAllowed(g, rd, base);
-        text = runLabel(g, ra) + ' allows ' + a.join(' ') + '; ' + runLabel(g, rd) + ' allows ' + b.join(' ') + '. Only ' + d + ' fits both.';
+        text = gtx('games.ankjod.runlabel_allows_value_runlabel2_allows_val', '{{runLabel}} allows {{value}}; {{runLabel2}} allows {{value2}}. Only {{value3}} fits both.', { runLabel: runLabel(g, ra), value: a.join(' '), runLabel2: runLabel(g, rd), value2: b.join(' '), value3: d });
       } else if (w.tech === 2) {
         text = w.hidden
-          ? runLabel(g, w.run) + ' must use ' + d + ', and this is the only cell in it that can hold ' + d + '.'
-          : runLabel(g, w.run) + ': drop the combinations its cells can’t hold, and this cell can only be ' + d + '.';
+          ? gtx('games.ankjod.runlabel_must_use_value_and_this', '{{runLabel}} must use {{value}}, and this is the only cell in it that can hold {{value}}.', { runLabel: runLabel(g, w.run), value: d })
+          : gtx('games.ankjod.runlabel_drop_the_combinations_its_cells', '{{runLabel}}: drop the combinations its cells can’t hold, and this cell can only be {{value}}.', { runLabel: runLabel(g, w.run), value: d });
       } else if (w.tech === 3) {
-        text = runLabel(g, w.run) + ': try every order of the digits it still allows — this cell is ' + d + ' in all of them.';
+        text = gtx('games.ankjod.runlabel_try_every_order_of_the', '{{runLabel}}: try every order of the digits it still allows — this cell is {{value}} in all of them.', { runLabel: runLabel(g, w.run), value: d });
       } else {
-        text = 'If this cell were ' + (w.tried || 'anything else') + ', a crossing run would have no valid combination left. So it’s ' + d + '.';
+        text = gtx('games.ankjod.if_this_cell_were_value_a', 'If this cell were {{value}}, a crossing run would have no valid combination left. So it’s {{value2}}.', { value: w.tried || gtx('games.ankjod.anything_else', 'anything else'), value2: d });
       }
       return { kind: 'step', cell: pick, digit: d, tech: w.tech, techName: TECH_NAMES[w.tech], text };
     }
-    return { kind: 'none', cell: -1, digit: 0, tech: 0, text: 'No single step found — try the combination helper on the tightest run.' };
+    return { kind: 'none', cell: -1, digit: 0, tech: 0, text: gtx('games.ankjod.no_single_step_found_try_the', 'No single step found — try the combination helper on the tightest run.') };
   }
 
   /** Auto-candidates: every digit both runs still allow, given the placed digits. */

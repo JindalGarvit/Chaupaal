@@ -25,12 +25,12 @@ function openBrickBreakerModeSheet() {
   const st = Hub.streak('brickbreaker');
   const endlessBest = p.pb.brickbreaker_endless || 0;
   const body = `<div class="solo-modes">
-    <button type="button" class="solo-mode solo-mode--primary" data-m="campaign"><b>${p.best >= BE.CAMPAIGN_COUNT ? 'Replay level ' + next : 'Play level ' + next}</b><span>Campaign · ${p.best} of ${BE.CAMPAIGN_COUNT} cleared</span></button>
-    <button type="button" class="solo-mode" data-m="daily"><b>Daily Challenge</b><span>${ds.done ? 'Played today ✓' : ds.started ? 'Practice' : 'New today'}${st ? ' · 🔥 ' + st : ''}</span></button>
-    <button type="button" class="solo-mode" data-m="endless"><b>Endless</b><span>Wave after wave${endlessBest ? ' · Best ' + bbFmt(endlessBest) : ''}</span></button>
-    <div class="solo-hub-row"><button type="button" class="solo-link" data-m="levels">All levels</button><button type="button" class="solo-link" data-m="rules">How to play</button><button type="button" class="solo-link" data-m="settings">Settings</button></div>
+    <button type="button" class="solo-mode solo-mode--primary" data-m="campaign"><b>${p.best >= BE.CAMPAIGN_COUNT ? tHtml('games.brickbreaker.replay_level_next', { next }) : tHtml('games.brickbreaker.play_level_next', { next })}</b><span>${tHtml('games.brickbreaker.campaign_best_of_campaign_count_cleared', { best: p.best, CAMPAIGN_COUNT: BE.CAMPAIGN_COUNT })}</span></button>
+    <button type="button" class="solo-mode" data-m="daily"><b>${tHtml('games.brickbreaker.daily_challenge')}</b><span>${ds.done ? tHtml('games.brickbreaker.played_today') : ds.started ? tHtml('dangal.solo.practice') : tHtml('games.brickbreaker.new_today')}${st ? ' · 🔥 ' + st : ''}</span></button>
+    <button type="button" class="solo-mode" data-m="endless"><b>${tHtml('games.brickbreaker.endless')}</b><span>${tHtml('games.brickbreaker.wave_after_wave_value', { value: endlessBest ? t('games.brickbreaker.best_bbfmt', { bbFmt: bbFmt(endlessBest) }) : '' })}</span></button>
+    <div class="solo-hub-row"><button type="button" class="solo-link" data-m="levels">${tHtml('games.brickbreaker.all_levels')}</button><button type="button" class="solo-link" data-m="rules">${tHtml('games.brickbreaker.how_to_play')}</button><button type="button" class="solo-link" data-m="settings">${tHtml('common.settings')}</button></div>
   </div>`;
-  const x = Hub.sheet({ title: 'Brick Breaker', bodyHtml: body });
+  const x = Hub.sheet({ title: t('games.brickbreaker.rules.ruleset.name'), bodyHtml: body });
   if (!x || !x.el) return openBrickBreaker({ mode: 'campaign', level: next });
   x.el.addEventListener('click', (e) => {
     const b = e.target.closest('[data-m]');
@@ -54,9 +54,9 @@ function openBrickBreakerLevels() {
   for (let n = 1; n <= BE.CAMPAIGN_COUNT; n++) {
     const locked = n > p.level;
     const stars = p.stars[n] || 0;
-    html += `<button type="button" class="solo-level${locked ? ' is-locked' : ''}${stars ? ' is-done' : ''}" data-n="${n}" ${locked ? 'disabled' : ''} aria-label="Level ${n}${locked ? ' locked' : ''}"><b>${locked ? '·' : n}</b><small>${stars ? '★'.repeat(stars) : ''}</small></button>`;
+    html += `<button type="button" class="solo-level${locked ? ' is-locked' : ''}${stars ? ' is-done' : ''}" data-n="${n}" ${locked ? 'disabled' : ''} aria-label="${locked ? tHtml('dangal.level_n_locked', { n }) : tHtml('dangal.level_n', { n })}"><b>${locked ? '·' : n}</b><small>${stars ? '★'.repeat(stars) : ''}</small></button>`;
   }
-  const x = Hub.sheet({ title: 'Levels', bodyHtml: `<div class="solo-levels">${html}</div>` });
+  const x = Hub.sheet({ title: t('games.brickbreaker.levels'), bodyHtml: `<div class="solo-levels">${html}</div>` });
   if (!x || !x.el) return;
   x.el.addEventListener('click', (e) => {
     const b = e.target.closest('[data-n]');
@@ -69,12 +69,12 @@ function openBrickBreakerLevels() {
 function openBrickBreakerDaily(challenge) {
   const Hub = window.SoloHub;
   Hub.openDaily('brickbreaker', {
-    title: 'Brick Breaker Daily',
-    detail: 'One level · 3 lives · highest score wins',
+    title: t('games.brickbreaker.brick_breaker_daily'),
+    detail: t('games.brickbreaker.one_level_3_lives_highest_score'),
     onPlay: async (fresh) => {
       if (!fresh) return openBrickBreaker({ mode: 'daily', practice: true, challenge });
       const r = await Hub.startDaily('brickbreaker');
-      if (!r.scored && typeof showToast === 'function') showToast('You’ve already played today’s Daily on another device — this one is practice');
+      if (!r.scored && typeof showToast === 'function') showToast(t('games.brickbreaker.you_ve_already_played_today_s'));
       openBrickBreaker({ mode: 'daily', practice: !r.scored, challenge });
     },
   });
@@ -85,7 +85,7 @@ function openBrickBreaker(opts) {
   const Hub = window.SoloHub;
   const Core = window.SoloCore;
   const toast = (m) => typeof showToast === 'function' && showToast(m);
-  if (!BE || !Hub || !Core) return toast('Brick Breaker is still loading — try again');
+  if (!BE || !Hub || !Core) return toast(t('games.brickbreaker.brick_breaker_is_still_loading_try'));
   const GAME = 'brickbreaker';
   const o = opts && typeof opts === 'object' ? opts : {};
   const mode = o.mode === 'endless' ? 'endless' : o.mode === 'daily' ? 'daily' : 'campaign';
@@ -100,12 +100,12 @@ function openBrickBreaker(opts) {
 
   let settings = Hub.settings(GAME);
   const POWER_STYLE = {
-    wide: ['#7C4DFF', 'W', 'Wide paddle'],
-    multi: ['#E63946', '×3', 'Multi-ball'],
-    slow: ['#2A9D8F', 'S', 'Slow ball'],
-    laser: ['#F72585', 'L', 'Laser'],
-    sticky: ['#4CC9F0', '◎', 'Sticky paddle'],
-    extra: ['#FFD166', '+1', 'Extra ball'],
+    wide: /* i18n-copy */ ['#7C4DFF', 'W', t('games.brickbreaker.wide_paddle')],
+    multi: ['#E63946', '×3', t('games.brickbreaker.multi_ball')],
+    slow: /* i18n-copy */ ['#2A9D8F', 'S', t('games.brickbreaker.slow_ball')],
+    laser: /* i18n-copy */ ['#F72585', 'L', t('games.brickbreaker.laser')],
+    sticky: /* i18n-copy */ ['#4CC9F0', '◎', t('games.brickbreaker.sticky_paddle')],
+    extra: /* i18n-copy */ ['#FFD166', '+1', t('games.brickbreaker.extra_ball')],
   };
   const ACCENT = '#7C4DFF';
 
@@ -138,11 +138,11 @@ function openBrickBreaker(opts) {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;';
   const begin = typeof beginGameOverlaySession === 'function' ? beginGameOverlaySession : null;
-  const gs = begin ? begin({ type: 'brickbreaker', title: 'Brick Breaker', mode: 'solo', overlay, cleanup: teardown }) : null;
+  const gs = begin ? begin({ type: 'brickbreaker', title: t('games.brickbreaker.rules.ruleset.name'), mode: 'solo', overlay, cleanup: teardown }) : null;
   if (begin && (!gs || !gs.alive())) return;
   if (!begin) {
     const device = document.querySelector('.device');
-    if (!device) return toast('Game container not found');
+    if (!device) return toast(t('games.brickbreaker.game_container_not_found'));
     device.appendChild(overlay);
   }
   if (typeof prepareGameOverlay === 'function') prepareGameOverlay(overlay, { theme: 'dark', gameId: 'brickbreaker', accent: ACCENT });
@@ -175,15 +175,15 @@ function openBrickBreaker(opts) {
   };
 
   function title() {
-    if (mode === 'endless') return 'Endless · Wave ' + (wave + 1);
-    if (mode === 'daily') return practice ? 'Daily · practice' : 'Daily Challenge';
-    return 'Level ' + levelNo + ' of ' + BE.CAMPAIGN_COUNT;
+    if (mode === 'endless') return t('games.brickbreaker.endless_wave_n', { n: wave + 1 });
+    if (mode === 'daily') return practice ? t('games.brickbreaker.daily_practice') : t('games.brickbreaker.daily_challenge');
+    return t('games.brickbreaker.level_levelno_of_campaign_count', { levelNo, CAMPAIGN_COUNT: BE.CAMPAIGN_COUNT });
   }
 
   overlay.innerHTML = `
-    ${gameChromeHtml({ title: 'Brick Breaker', subtitle: title(), backId: 'bbBack', pauseId: 'bbPause', rightHtml: '<span class="game-chrome-metric" id="bbScore">0</span>' })}
+    ${gameChromeHtml({ title: t('games.brickbreaker.rules.ruleset.name'), subtitle: title(), backId: 'bbBack', pauseId: 'bbPause', rightHtml: '<span class="game-chrome-metric" id="bbScore">0</span>' })}
     <div class="bb-stage" id="bbGame">
-      <canvas id="bbCanvas" aria-label="Brick Breaker playfield"></canvas>
+      <canvas id="bbCanvas" aria-label="${tHtml('games.brickbreaker.brick_breaker_playfield')}"></canvas>
       <div class="rr-hud-chip" id="bbLives" aria-live="polite"></div>
       <div class="rr-hud-chip bb-hud-depth" id="bbDepth"></div>
       <div class="bb-fx-chips" id="bbFx"></div>
@@ -248,7 +248,7 @@ function openBrickBreaker(opts) {
     const lv = $('bbLives');
     if (lv) lv.textContent = '● ' + (s.lives + 1);
     const dp = $('bbDepth');
-    if (dp) dp.textContent = mode === 'endless' ? 'Wave ' + (wave + 1) : mode === 'daily' ? 'Daily' : 'Lv ' + levelNo;
+    if (dp) dp.textContent = mode === 'endless' ? t('games.brickbreaker.wave_n', { n: wave + 1 }) : mode === 'daily' ? t('games.brickbreaker.daily') : t('games.brickbreaker.lv_levelno', { levelNo });
     const sub = overlay.querySelector('.game-chrome-subtitle');
     if (sub) sub.textContent = title();
     const fx = $('bbFx');
@@ -322,9 +322,9 @@ function openBrickBreaker(opts) {
         Hub.feedback(GAME, 'coin');
       } else if (ev.t === 'life') {
         Hub.feedback(GAME, 'lose');
-        floats.push({ x: BE.W / 2, y: BE.H / 2, text: 'Ball lost — tap to serve', life: 1.6 });
+        floats.push({ x: BE.W / 2, y: BE.H / 2, text: t('games.brickbreaker.ball_lost_tap_to_serve'), life: 1.6 });
       } else if (ev.t === 'cleared') {
-        floats.push({ x: BE.W / 2, y: BE.H / 2, text: 'Cleared! +' + ev.bonus, life: 1.4 });
+        floats.push({ x: BE.W / 2, y: BE.H / 2, text: t('games.brickbreaker.cleared_bonus', { bonus: ev.bonus }), life: 1.4 });
       }
     });
   }
@@ -457,7 +457,7 @@ function openBrickBreaker(opts) {
     if (running && (s.status === 'serve' || s.balls.some((b) => b.stuck))) {
       g.fillStyle = 'rgba(255,255,255,0.55)';
       g.font = '11px Space Grotesk, sans-serif';
-      g.fillText(s.status === 'serve' ? 'Tap or press Space to serve' : 'Tap to release', BE.W / 2, p.y - 28);
+      g.fillText(s.status === 'serve' ? t('games.brickbreaker.tap_or_press_space_to_serve') : t('games.brickbreaker.tap_to_release'), BE.W / 2, p.y - 28);
     }
     g.restore();
   }
@@ -481,21 +481,21 @@ function openBrickBreaker(opts) {
     let head;
     let line;
     if (mode === 'campaign') {
-      head = 'Level ' + levelNo;
-      line = (p.stars[levelNo] ? 'Best ' + '★'.repeat(p.stars[levelNo]) + ' ' + bbFmt((p.bests[levelNo] || 0)) : 'Break every breakable brick') + ' · 3 balls';
+      head = t('games.brickbreaker.level_levelno', { levelNo });
+      line = t('games.brickbreaker.value_3_balls', { value: (p.stars[levelNo] ? t('games.brickbreaker.best_stars_score', { stars: '★'.repeat(p.stars[levelNo]), score: bbFmt(p.bests[levelNo] || 0) }) : t('games.brickbreaker.break_every_brick')) });
     } else if (mode === 'endless') {
-      head = 'Endless';
-      line = 'Waves keep coming · 3 balls' + (p.pb.brickbreaker_endless ? ' · Best ' + bbFmt(p.pb.brickbreaker_endless) : '');
+      head = t('games.brickbreaker.endless');
+      line = t('games.brickbreaker.waves_keep_coming_3_balls_value', { value: p.pb.brickbreaker_endless ? t('games.brickbreaker.best_bbfmt', { bbFmt: bbFmt(p.pb.brickbreaker_endless) }) : '' });
     } else {
-      head = practice ? 'Daily · practice' : 'Daily Challenge';
-      line = practice ? 'Practice — only your first try today counts' : 'Your first try counts · 3 balls · highest score wins';
+      head = practice ? t('games.brickbreaker.daily_practice') : t('games.brickbreaker.daily_challenge');
+      line = practice ? t('games.brickbreaker.practice_only_your_first_try_today') : t('games.brickbreaker.your_first_try_counts_3_balls');
     }
     const el = showPanel(`<div class="solo-res">
       <div class="solo-res-title">${head}</div>
       ${challenge ? Hub.targetHtml(challenge) : ''}
       <div class="solo-res-line">${line}</div>
-      <div class="solo-res-line solo-res-hint">Drag anywhere to move · tap to serve</div>
-      <div class="solo-actions"><button type="button" class="solo-btn solo-btn--primary" data-go>Start</button></div></div>`);
+      <div class="solo-res-line solo-res-hint">${tHtml('games.brickbreaker.drag_anywhere_to_move_tap_to')}</div>
+      <div class="solo-actions"><button type="button" class="solo-btn solo-btn--primary" data-go>${tHtml('games.brickbreaker.start')}</button></div></div>`);
     el.querySelector('[data-go]').addEventListener('click', () => {
       hidePanel();
       start();
@@ -535,15 +535,15 @@ function openBrickBreaker(opts) {
         if (typeof recordGameResult === 'function') recordGameResult('brickbreaker', won, false, { score, level: levelNo, scoreOnly: true, tipStats: { level: levelNo, score, livesLost: lost } });
       } catch (e) {}
       Hub.feedback(GAME, won ? 'win' : 'lose');
-      const beat = challenge && Number.isFinite(challenge.beatScore) ? (score > challenge.beatScore ? 'You beat the challenge! 🎯' : 'Challenge not beaten this time') : '';
+      const beat = challenge && Number.isFinite(challenge.beatScore) ? (score > challenge.beatScore ? t('games.brickbreaker.you_beat_the_challenge') : t('games.brickbreaker.challenge_not_beaten_this_time')) : '';
       const el = showPanel(
         Hub.resultHtml({
-          title: won ? `Level ${levelNo} cleared` : 'Out of balls',
+          title: won ? t('games.brickbreaker.level_levelno_cleared', { levelNo }) : t('games.brickbreaker.out_of_balls'),
           stars: won ? stars : null,
-          lines: [`<b>${bbFmt(score)}</b> points`, won && score > prevBest && prevBest ? 'New best for this level' : ''],
+          lines: [tHtml('dangal.points_bold', { count: score, shown: bbFmt(score) }), won && score > prevBest && prevBest ? t('dangal.new_best_level') : ''],
           status: beat,
-          primary: won ? (levelNo < BE.CAMPAIGN_COUNT ? 'Next level' : 'Replay') : 'Try again',
-          secondary: won ? 'Replay' : 'Levels',
+          primary: won ? (levelNo < BE.CAMPAIGN_COUNT ? t('games.brickbreaker.next_level') : t('games.brickbreaker.replay')) : t('games.brickbreaker.try_again'),
+          secondary: won ? t('games.brickbreaker.replay') : t('games.brickbreaker.levels'),
           share: won,
           board: true,
         }) + '<p class="solo-note" data-note></p>'
@@ -551,13 +551,13 @@ function openBrickBreaker(opts) {
       Hub.wireResult(el, {
         primary: () => restart(won && levelNo < BE.CAMPAIGN_COUNT ? levelNo + 1 : levelNo),
         secondary: () => (won ? restart(levelNo) : (close(), openBrickBreakerLevels())),
-        share: () => Hub.share(GAME, { title: 'Level ' + levelNo, line: `${'★'.repeat(stars)} ${bbFmt(score)} pts`, score, params: { lv: levelNo } }),
-        board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'level', levelNo), { title: 'Level ' + levelNo }),
+        share: () => Hub.share(GAME, { title: t('games.brickbreaker.level_levelno', { levelNo }), line: `${'★'.repeat(stars)} ${bbFmt(score)} pts`, score, params: { lv: levelNo } }),
+        board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'level', levelNo), { title: t('games.brickbreaker.level_levelno', { levelNo }) }),
         close: () => (close(), openBrickBreakerModeSheet()),
       });
       if (won && score > prevBest && Hub.signedIn()) {
         const n = el.querySelector('[data-note]');
-        n.textContent = 'Checking your score…';
+        n.textContent = t('games.brickbreaker.checking_your_score');
         const res = await Hub.submit(GAME, Core.boardId(GAME, 'level', levelNo), run);
         if (n.isConnected) n.textContent = Hub.submitNote(res);
       }
@@ -576,22 +576,22 @@ function openBrickBreaker(opts) {
       Hub.feedback(GAME, 'lose');
       const el = showPanel(
         Hub.resultHtml({
-          title: 'Game over',
-          lines: [`<b>${bbFmt(score)}</b> points`, `Reached wave ${wave + 1}`, score > prev && prev ? 'New personal best' : ''],
-          primary: 'Play again',
+          title: t('games.brickbreaker.game_over'),
+          lines: [tHtml('dangal.points_bold', { count: score, shown: bbFmt(score) }), t('games.brickbreaker.reached_wave', { n: wave + 1 }), score > prev && prev ? t('dangal.new_personal_best') : ''],
+          primary: t('games.brickbreaker.play_again'),
           share: score > 0,
           board: true,
         }) + '<p class="solo-note" data-note></p>'
       );
       Hub.wireResult(el, {
         primary: () => restart(0),
-        share: () => Hub.share(GAME, { title: 'Endless', line: `${bbFmt(score)} pts · wave ${wave + 1}`, score, params: { mode: 'endless' } }),
-        board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'endless'), { title: 'Endless' }),
+        share: () => Hub.share(GAME, { title: t('games.brickbreaker.endless'), line: t('games.brickbreaker.bbfmt_pts_wave_value', { bbFmt: bbFmt(score), value: wave + 1 }), score, params: { mode: 'endless' } }),
+        board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'endless'), { title: t('games.brickbreaker.endless') }),
         close: () => (close(), openBrickBreakerModeSheet()),
       });
       if (score > prev && Hub.signedIn()) {
         const n = el.querySelector('[data-note]');
-        n.textContent = 'Checking your score…';
+        n.textContent = t('games.brickbreaker.checking_your_score');
         const res = await Hub.submit(GAME, Core.boardId(GAME, 'endless'), run);
         if (n.isConnected) n.textContent = Hub.submitNote(res);
       }
@@ -601,9 +601,9 @@ function openBrickBreaker(opts) {
     Hub.feedback(GAME, 'complete');
     const el = showPanel(
       Hub.resultHtml({
-        title: practice ? 'Daily · practice' : 'Daily Challenge',
-        lines: [`<b>${bbFmt(score)}</b> points`, s.status === 'cleared' ? 'Level cleared' : 'Out of balls', `🔥 ${Hub.streak(GAME)} day streak`],
-        primary: 'Practice again',
+        title: practice ? t('games.brickbreaker.daily_practice') : t('games.brickbreaker.daily_challenge'),
+        lines: [tHtml('dangal.points_bold', { count: score, shown: bbFmt(score) }), s.status === 'cleared' ? t('games.brickbreaker.level_cleared') : t('games.brickbreaker.out_of_balls'), tHtml('dangal.day_streak_fire', { count: Hub.streak(GAME) })],
+        primary: t('games.brickbreaker.practice_again'),
         share: true,
         board: true,
       }) + '<p class="solo-note" data-note></p>'
@@ -613,21 +613,21 @@ function openBrickBreaker(opts) {
         close();
         openBrickBreaker({ mode: 'daily', practice: true });
       },
-      share: () => Hub.share(GAME, { title: 'Daily ' + Core.dayKeyOf(dayNo), line: bbFmt(score) + ' pts', score, params: { mode: 'daily' } }),
-      board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'daily', dayNo), { title: 'Brick Breaker Daily' }),
+      share: () => Hub.share(GAME, { title: t('games.brickbreaker.daily_daykeyof', { dayKeyOf: Core.dayKeyOf(dayNo) }), line: bbFmt(score) + ' pts', score, params: { mode: 'daily' } }),
+      board: () => Hub.openBoard(GAME, Core.boardId(GAME, 'daily', dayNo), { title: t('games.brickbreaker.brick_breaker_daily') }),
       close: () => (close(), openBrickBreakerModeSheet()),
     });
     const n = el.querySelector('[data-note]');
     if (practice) {
-      n.textContent = 'Practice run — only your first try today counts.';
+      n.textContent = t('games.brickbreaker.practice_run_only_your_first_try');
       return;
     }
-    if (Hub.signedIn()) n.textContent = 'Checking your score…';
+    if (Hub.signedIn()) n.textContent = t('games.brickbreaker.checking_your_score');
     const res = await Hub.finishDaily(GAME, run, { score, line: bbFmt(score) + ' pts' });
     note = Hub.submitNote(res.scored ? res : { ranked: false, reason: 'practice' });
     if (n.isConnected) n.textContent = note;
     const lines = el.querySelectorAll('.solo-res-line');
-    if (lines[2]) lines[2].textContent = `🔥 ${Hub.streak(GAME)} day streak`;
+    if (lines[2]) lines[2].textContent = t('games.brickbreaker.streak_day_streak', { streak: Hub.streak(GAME) });
   }
 
   function restart(n) {
@@ -718,8 +718,8 @@ function openBrickBreaker(opts) {
     running = false;
     const ask =
       typeof confirmLeaveGame === 'function'
-        ? confirmLeaveGame({ title: 'Leave Brick Breaker?', body: mode === 'daily' && !practice ? 'Your Daily try ends here and won’t count.' : 'This run won’t be saved.' })
-        : Promise.resolve(window.confirm('Leave Brick Breaker?'));
+        ? confirmLeaveGame({ title: t('games.brickbreaker.leave_brick_breaker'), body: mode === 'daily' && !practice ? t('games.brickbreaker.your_daily_try_ends_here_and') : t('games.brickbreaker.this_run_won_t_be_saved') })
+        : Promise.resolve(window.confirm(t('games.brickbreaker.leave_brick_breaker')));
     Promise.resolve(ask).then((ok) => {
       if (ok) return leave();
       running = wasRunning;
@@ -741,8 +741,8 @@ function openBrickBreaker(opts) {
 if (typeof registerGame === 'function') {
   registerGame({
     id: 'brickbreaker',
-    name: 'Brick Breaker',
-    desc: 'Campaign · Endless · Daily · Solo',
+    name: t('games.brickbreaker.rules.ruleset.name'),
+    desc: t('games.brickbreaker.campaign_endless_daily_solo'),
     icon: '🧱',
     ratingKey: 'brickbreaker',
     gameType: 'solo',
@@ -776,7 +776,7 @@ if (typeof registerGame === 'function') {
         openBrickBreakerModeSheet();
       } catch (err) {
         console.error('[brickbreaker] launch failed', err);
-        if (typeof showToast === 'function') showToast('Could not open Brick Breaker');
+        if (typeof showToast === 'function') showToast(t('games.brickbreaker.could_not_open_brick_breaker'));
       }
     },
   });

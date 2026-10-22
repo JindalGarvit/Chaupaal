@@ -98,10 +98,10 @@
     const playing = o.isPlaying != null ? !!o.isPlaying : !shell.gameOver;
     const liveHandle = o.liveHandle != null ? o.liveHandle : shell.liveHandle;
     const live = !!(o.live || liveHandle);
-    const title = o.title || 'Leave game?';
-    const body = o.body || 'This practice run will end.';
+    const title = o.title || t('dangal.leave_game');
+    const body = o.body || t('dangal.this_practice_run_will_end');
     const forfeitBody =
-      o.forfeitBody || 'Leaving now counts as a forfeit for your opponent.';
+      o.forfeitBody || t('dangal.leaving_now_counts_as_a_forfeit');
     const reason = o.reason || 'dismissed';
 
     const finishLeave = () => {

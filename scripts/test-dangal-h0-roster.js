@@ -17,7 +17,8 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const { readWithCopy } = require('./lib/i18n-source');
+const read = (p) => readWithCopy(p);
 
 // ---------- (a) Kakuro ----------
 const ank = read('public/src/js/games/ank-jod.js');
@@ -41,9 +42,9 @@ shipped.forEach((f) => assert(!/Ank Jod|AnkJod'|'Ank\s?Jod/.test(read(f).replace
 
 assert(/ankjod: \{ primary: '#[0-9A-F]{6}'[^}]*label: 'Kakuro'/.test(ds), 'GAME_IDENTITY label = Kakuro');
 assert(/GAME_LABELS\.kakuro = GAME_IDENTITY\.ankjod\.label/.test(ds), 'kakuro alias shares the identity label');
-assert(/ankjod: 'Kakuro'/.test(gameUi) && /kakuro: 'Kakuro'/.test(gameUi), 'game-ui labels read Kakuro for both ids');
+assert(/ankjod: t\('dangal\.kakuro'\)/.test(gameUi) && /kakuro: t\('dangal\.kakuro'\)/.test(gameUi) && /\nKakuro\n/.test(gameUi), 'game-ui labels read Kakuro for both ids');
 assert(/ankjod: \[[\s\S]{0,400}(run|clue)/.test(gameUi), 'how-to uses global Kakuro terms (runs / clues)');
-assert(/registerGame\(\{\s*id: 'ankjod',\s*name: 'Kakuro'/.test(ank), 'registerGame: id ankjod, name Kakuro');
+assert(/registerGame\(\{\s*id: 'ankjod',\s*name: t\('games\.ankjod\.kakuro'\)/.test(ank) && /\nKakuro\n/.test(ank), 'registerGame: id ankjod, name Kakuro');
 assert(/registerGame\(\{\s*id: 'kakuro'/.test(ank) && /aliases: \['kakuro'\]/.test(ank), 'kakuro alias id registered');
 assert(/window\.openKakuro = openAnkJod/.test(ank) && /window\.openAnkJod = openAnkJod/.test(ank), 'openKakuro + legacy openAnkJod launchers');
 assert(/sum/i.test(ank.slice(0, 400)) && /run/i.test(ank.slice(0, 400)), 'file header explains sums + runs');

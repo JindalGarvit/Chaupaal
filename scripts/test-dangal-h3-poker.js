@@ -22,7 +22,7 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const read = (p) => require('./lib/i18n-source').withCopy(fs.readFileSync(path.join(root, p), 'utf8'));
 
 const C = require(path.join(root, 'public/src/js/games/poker-core.js'));
 const Engine = require(path.join(root, 'server-lib/poker-engine.js'));

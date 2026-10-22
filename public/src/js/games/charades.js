@@ -10,7 +10,7 @@
   'use strict';
 
   const GAME = 'charades';
-  const LABEL = 'Charades';
+  const LABEL = t('dangal.identity.charades.label');
   const SETTINGS_KEY = 'chaupaal_charades_settings';
   const TEAMS_KEY = 'chaupaal_charades_teams';
 
@@ -19,12 +19,12 @@
   const esc = (s) => (window.PartyKit ? PartyKit.esc(s) : String(s == null ? '' : s));
 
   const KIND = {
-    movie: '🎥 Movie',
-    song: '🎵 Song',
-    tv: '📺 TV show',
-    person: '🧑 Famous person',
-    phrase: '💬 Saying',
-    action: '🏃 Action',
+    movie: t('games.charades.kind_movie'),
+    song: t('games.charades.kind_song'),
+    tv: t('games.charades.tv_show_2'),
+    person: t('games.charades.famous_person'),
+    phrase: t('games.charades.kind_saying'),
+    action: t('games.charades.kind_action'),
   };
 
   function lang() {
@@ -35,6 +35,16 @@
   function isHi() {
     return String(lang()).indexOf('hi') === 0;
   }
+
+  /** Titles show in the room content language (my UI language in Pass & Play), English beside them. */
+  function contentLang() {
+    return Kit() && Kit().roomContentLang ? Kit().roomContentLang() : lang();
+  }
+  function primaryOf(t) {
+    const l = String(contentLang()).split('-')[0];
+    return (l !== 'en' && t[l]) || t.en;
+  }
+  const DIFF = { easy: t('games.charades.easy'), medium: t('games.charades.medium'), hard: t('games.charades.hard') };
 
   function packLabel(p) {
     return p ? (isHi() && p.hi ? p.hi + ' · ' + p.en : p.en) : '';
@@ -92,7 +102,7 @@
   }
 
   function goalLine(s) {
-    return s.goal === 'points' ? 'First to ' + s.targetPoints : s.turnsPerTeam + ' turns each';
+    return s.goal === 'points' ? t('games.charades.first_to_targetpoints', { targetPoints: s.targetPoints }) : t('games.charades.turnsperteam_turns_each', { turnsPerTeam: s.turnsPerTeam });
   }
 
   function metaLine(s) {
@@ -110,39 +120,39 @@
 
   function howToCardHtml() {
     return `<details class="pk-howto">
-      <summary>How to play · 20 seconds</summary>
+      <summary>${tHtml('games.charades.how_to_play_20_seconds')}</summary>
       <ol>
-        <li>Split into <strong>two teams</strong>. Teams take turns.</li>
-        <li>The actor secretly sees a title and acts it out — <strong>no talking, no mouthing</strong>.</li>
-        <li>Teammates shout guesses before the timer ends. Actor taps <strong>Got it ✓</strong> for +1.</li>
-        <li>Stuck? <strong>Pass</strong> for a new title (1 per turn by default).</li>
+        <li>${tHtml('games.charades.howto_teams')}</li>
+        <li>${tHtml('games.charades.the_actor_secretly_sees_a_title')} <strong>${tHtml('games.charades.no_talking_no_mouthing')}</strong>.</li>
+        <li>${tHtml('games.charades.teammates_shout_guesses_before_the_timer')} <strong>${tHtml('games.charades.got_it')}</strong> ${tHtml('games.charades.for_1')}</li>
+        <li>${tHtml('games.charades.stuck')} <strong>${tHtml('games.charades.pass')}</strong> ${tHtml('games.charades.for_a_new_title_1_per')}</li>
       </ol>
-      <div class="pk-howto-score">Gesture cheat sheet</div>
+      <div class="pk-howto-score">${tHtml('games.charades.gesture_cheat_sheet')}</div>
       ${gesturesHtml()}
     </details>`;
   }
 
   function openGestures() {
-    Kit().openSheet({ title: 'Gestures', bodyHtml: gesturesHtml() + '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-ok>Got it</button>', onMount: (sheet, close) => sheet.querySelector('[data-ok]').addEventListener('click', close) });
+    Kit().openSheet({ title: t('games.charades.gestures'), bodyHtml: gesturesHtml() + '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-ok>' + tHtml('games.charades.got_it_2') + '</button>', onMount: (sheet, close) => sheet.querySelector('[data-ok]').addEventListener('click', close) });
   }
 
   /** The actor's private title card. */
   function titleCardHtml(t, extra) {
-    if (!t) return '<div class="ch-card ch-card--empty">Dealing…</div>';
+    if (!t) return '<div class="ch-card ch-card--empty">' + tHtml('games.charades.dealing') + '</div>';
     const pack = Core().packs.getPack(t.pack);
-    const primary = isHi() ? t.hi || t.en : t.en;
-    const secondary = isHi() ? t.en : '';
+    const primary = primaryOf(t);
+    const secondary = primary !== t.en ? t.en : '';
     return `<div class="ch-card">
       <div class="ch-card-kind">${esc(KIND[t.kind] || '🎭')} · ${esc(pack ? packLabel(pack) : '')}</div>
       <div class="ch-card-title">${esc(primary)}</div>
       ${secondary && secondary !== primary ? `<div class="ch-card-alt">${esc(secondary)}</div>` : ''}
-      <div class="ch-card-diff ch-card-diff--${esc(t.difficulty)}">${esc(t.difficulty)}</div>
-      ${extra || '<div class="ch-card-tip">Act it out — no talking!</div>'}
+      <div class="ch-card-diff ch-card-diff--${esc(t.difficulty)}">${esc(DIFF[t.difficulty] || t.difficulty)}</div>
+      ${extra || '<div class="ch-card-tip">' + tHtml('games.charades.act_it_out_no_talking') + '</div>'}
     </div>`;
   }
 
   function titleText(t) {
-    return t ? (isHi() ? t.hi || t.en : t.en) : '';
+    return t ? primaryOf(t) : '';
   }
 
   // ---------------- settings ----------------
@@ -155,17 +165,17 @@
           <span class="im-pack-name">${esc(packLabel(p))}</span>
           <span class="im-pack-count">${p.titles.length}</span></label>`;
     Kit().openSheet({
-      title: 'Categories',
+      title: t('games.charades.categories'),
       bodyHtml: `<div class="im-packs ch-cats">${P.PACKS.filter((p) => !p.regional).map(tile).join('')}</div>
-      <div class="pk-section">India packs · optional</div>
+      <div class="pk-section">${tHtml('games.charades.india_packs_optional')}</div>
       <div class="im-packs ch-cats">${P.PACKS.filter((p) => p.regional).map(tile).join('')}</div>
       <div class="pk-field-help" data-cat-err></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         sheet.querySelector('[data-save]').addEventListener('click', () => {
           const ids = Array.from(sheet.querySelectorAll('[data-cat]:checked')).map((el) => el.dataset.cat);
           if (!ids.length) {
-            sheet.querySelector('[data-cat-err]').textContent = 'Pick at least one category';
+            sheet.querySelector('[data-cat-err]').textContent = t('games.charades.pick_at_least_one_category');
             return;
           }
           close();
@@ -180,39 +190,39 @@
     const K = Kit();
     const C = Core();
     K.openSheet({
-      title: 'Game settings',
+      title: t('games.charades.game_settings'),
       bodyHtml: `
         <div class="pk-field">
-          <div class="pk-field-label">Time per turn</div>
+          <div class="pk-field-label">${tHtml('games.charades.time_per_turn')}</div>
           ${K.segHtml('turnSec', s.turnSec, C.TURN_SEC.map((v) => [v, v + 's']))}
         </div>
         <div class="pk-field">
-          <div class="pk-field-label">Game length</div>
-          ${K.segHtml('goal', s.goal, [['turns', 'Turns each'], ['points', 'First to…']])}
+          <div class="pk-field-label">${tHtml('games.charades.game_length')}</div>
+          ${K.segHtml('goal', s.goal, /* i18n-copy */ [['turns', t('games.charades.turns_each')], ['points', t('games.charades.first_to')]])}
           <div data-goal-turns>${K.segHtml('turnsPerTeam', s.turnsPerTeam, C.TURNS_PER_TEAM.map((v) => [v, String(v)]))}</div>
           <div data-goal-points>${K.segHtml('targetPoints', s.targetPoints, C.TARGETS.map((v) => [v, v + ' pts']))}</div>
         </div>
-        <button type="button" class="im-pack-row" data-cats>🗂️ Categories: <strong data-cats-n>${customTitles ? 'Your pack' : (s.categories || []).length}</strong> <span class="im-chev">›</span></button>
+        <button type="button" class="im-pack-row" data-cats>${tHtml('games.charades.categories_2')} <strong data-cats-n>${customTitles ? tHtml('games.charades.your_pack') : (s.categories || []).length}</strong> <span class="im-chev">›</span></button>
         ${
           K.aiOn() || K.savedPacks(GAME).length || customTitles
-            ? `<button type="button" class="pk-row-btn" data-make>${customTitles ? '✨ Your pack · ' + customTitles.length + ' titles' : K.aiOn() ? '✨ Make a pack about…' : 'Your saved packs'}<span class="pk-chev" aria-hidden="true">›</span></button>`
+            ? `<button type="button" class="pk-row-btn" data-make>${customTitles ? tHtml('games.charades.your_pack_customtitlescount_titles', { customTitlesCount: customTitles.length }) : K.aiOn() ? tHtml('games.charades.make_a_pack_about') : tHtml('games.charades.your_saved_packs')}<span class="pk-chev" aria-hidden="true">›</span></button>`
             : ''
         }
         <details class="pk-advanced">
-          <summary>Advanced</summary>
+          <summary>${tHtml('games.charades.advanced')}</summary>
           <div class="pk-field">
-            <div class="pk-field-label">Passes per turn</div>
-            ${K.segHtml('passes', s.passes, [[0, 'None'], [1, '1'], [2, '2'], [3, '3']])}
+            <div class="pk-field-label">${tHtml('games.charades.rules.variant.passes.label')}</div>
+            ${K.segHtml('passes', s.passes, [[0, t('games.charades.none')], [1, '1'], [2, '2'], [3, '3']])}
           </div>
           <div class="pk-field">
-            <label class="pk-toggle"><input type="checkbox" data-speed ${s.speed ? 'checked' : ''}> Speed round — chain titles until time runs out</label>
+            <label class="pk-toggle"><input type="checkbox" data-speed ${s.speed ? 'checked' : ''}> ${tHtml('games.charades.speed_round_chain_titles_until_time')}</label>
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Difficulty</div>
-            ${K.segHtml('difficulty', s.difficulty, [['all', 'Mixed'], ['easy', 'Easy'], ['medium', 'Medium'], ['hard', 'Hard']])}
+            <div class="pk-field-label">${tHtml('games.charades.difficulty')}</div>
+            ${K.segHtml('difficulty', s.difficulty, /* i18n-copy */ [['all', t('games.charades.mixed')], ['easy', t('games.charades.easy')], ['medium', t('games.charades.medium')], ['hard', t('games.charades.hard')]])}
           </div>
         </details>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         const paintGoal = () => {
           sheet.querySelector('[data-goal-turns]').hidden = s.goal !== 'turns';
@@ -267,21 +277,21 @@
     const passed = last.passed.map((t) => `<div class="ch-title-row is-passed">↷ ${esc(titleText(t))}</div>`).join('');
     const missed = last.missed ? `<div class="ch-title-row is-missed">⏱ ${esc(titleText(last.missed))}</div>` : '';
     const head =
-      last.reason === 'got' ? 'Got it! +1' : last.reason === 'left' ? 'The actor left' : last.points ? 'Time’s up! +' + last.points : 'Time’s up!';
+      last.reason === 'got' ? t('games.charades.got_it_1') : last.reason === 'left' ? t('games.charades.the_actor_left') : last.points ? t('games.charades.time_s_up_points', { points: last.points }) : t('games.charades.time_s_up');
     return `<div class="ch-summary">
       <div class="pk-result-title">${esc(head)}</div>
-      <div class="pk-sub">${esc(nm(last.actor))} acted for ${esc(Core().teamName(settings, last.team))}</div>
+      <div class="pk-sub">${tHtml('games.charades.actor_acted_for_team', { actor: nm(last.actor), team: Core().teamName(settings, last.team) })}</div>
       <div class="ch-titles">${got}${passed}${missed}</div>
     </div>`;
   }
 
   function finalHtml(st, settings, nm) {
-    const title = st.winner === -1 ? 'It’s a tie!' : Core().teamName(settings, st.winner) + ' win!';
+    const title = st.winner === -1 ? t('games.charades.it_s_a_tie') : t('games.charades.teamname_win', { teamName: Core().teamName(settings, st.winner) });
     return `<div class="ch-final">
       <div class="pk-result-glyph" aria-hidden="true">${st.winner === -1 ? '🤝' : '🏆'}</div>
       <div class="pk-result-title">${esc(title)}</div>
       <div class="ch-final-score">${st.teamScores[0]} – ${st.teamScores[1]}</div>
-      ${st.mvp ? `<div class="ch-mvp">🎭 MVP actor: <strong>${esc(nm(st.mvp))}</strong></div>` : ''}
+      ${st.mvp ? `<div class="ch-mvp">${tHtml('games.charades.mvp_actor')} <strong>${esc(nm(st.mvp))}</strong></div>` : ''}
       ${scoreStripHtml(st, settings, nm)}
     </div>`;
   }
@@ -290,7 +300,7 @@
     const hi = Math.max(st.teamScores[0], st.teamScores[1]);
     const lo = Math.min(st.teamScores[0], st.teamScores[1]);
     const score = hi + '–' + lo;
-    const head = st.winner === -1 ? 'Charades ended in a ' + score + ' tie' : Core().teamName(settings, st.winner) + ' won Charades ' + score;
+    const head = st.winner === -1 ? t('games.charades.charades_ended_in_a_score_tie', { score }) : t('games.charades.teamname_won_charades_score', { teamName: Core().teamName(settings, st.winner), score });
     Kit().shareLine(GAME, LABEL, head + (st.mvp ? ' · MVP actor ' + nm(st.mvp) : '') + ' 🎭');
   }
 
@@ -299,14 +309,14 @@
   function open(ctx) {
     const c = ctx || {};
     if (!Core() || !Kit()) {
-      if (typeof showToast === 'function') showToast(LABEL + ' is still loading — try again');
+      if (typeof showToast === 'function') showToast(t('games.charades.label_is_still_loading_try_again', { LABEL }));
       return;
     }
     if ((c.source === 'chat_group' || c.isGroup) && c.chat) {
       startRoom({ chat: c.chat });
       return;
     }
-    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
+    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: t('games.charades.party'), confirmLeave: () => false });
     if (c.mode === 'pass') renderPassSetup(shell);
     else renderHome(shell);
   }
@@ -316,10 +326,10 @@
       Kit().homeHtml({
         game: GAME,
         icon: '🎭',
-        title: 'Act it out. No talking.',
-        sub: '4–16 players · two teams · movies, songs, shows & more',
+        title: t('games.charades.act_it_out_no_talking_2'),
+        sub: t('games.charades.4_16_players_two_teams_movies'),
         howToHtml: howToCardHtml(),
-        roomSub: 'Together or on a video call',
+        roomSub: t('games.charades.together_or_on_a_video_call'),
       })
     );
     body.querySelector('[data-mode="pass"]').addEventListener('click', () => renderPassSetup(shell));
@@ -335,13 +345,13 @@
     const settings = loadSettings();
     const body = shell.render(`<div class="pk-page">
       <div class="pk-setup-head">
-        <div class="pk-title">Pick teams</div>
-        <button type="button" class="pk-icon-btn" data-settings aria-label="Game settings">⚙︎</button>
+        <div class="pk-title">${tHtml('games.charades.pick_teams')}</div>
+        <button type="button" class="pk-icon-btn" data-settings aria-label="${tHtml('games.charades.game_settings')}">⚙︎</button>
       </div>
       <div data-editor></div>
       <div class="pk-meta" data-meta></div>
       <div class="im-error" data-err role="alert"></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${tHtml('games.charades.start')}</button>
     </div>`);
     shell.setBack(() => renderHome(shell));
     const editor = Kit().mountTeamEditor(body.querySelector('[data-editor]'), {
@@ -367,7 +377,7 @@
     body.querySelector('[data-start]').addEventListener('click', () => {
       const names = editor.list();
       if (names[0].length < 2 || names[1].length < 2) {
-        body.querySelector('[data-err]').textContent = 'Each team needs at least 2 players';
+        body.querySelector('[data-err]').textContent = t('games.charades.each_team_needs_at_least_2');
         return;
       }
       saveTeams(names);
@@ -389,7 +399,7 @@
   }
 
   function passNm(session) {
-    return (id) => session.players[id] || 'Someone';
+    return (id) => session.players[id] || t('common.someone');
   }
 
   function passAct(session, action) {
@@ -410,17 +420,17 @@
   function renderPassReady(shell, session) {
     const nm = passNm(session);
     const st = session.pub;
-    shell.setSubtitle('Turn ' + st.turnNo);
+    shell.setSubtitle(t('games.charades.turn_turnno', { turnNo: st.turnNo }));
     const body = shell.render(`<div class="pk-page">
       ${scoreStripHtml(st, session.settings, nm)}
-      <div class="pk-progress">${esc(Core().teamName(session.settings, st.team))} · actor</div>
+      <div class="pk-progress">${tHtml('games.charades.team_actor', { team: Core().teamName(session.settings, st.team) })}</div>
       <div data-cover></div>
     </div>`);
     Kit().mountPassCover(body.querySelector('[data-cover]'), {
-      lead: 'Hand the phone to',
+      lead: t('games.charades.hand_the_phone_to'),
       name: nm(st.actor),
       revealHtml: () => titleCardHtml(Core().reveal(session.hidden.current)),
-      doneLabel: 'Start timer ▶',
+      doneLabel: t('games.charades.start_timer'),
       onDone: () => {
         passAct(session, { type: 'start' });
         renderPassActing(shell, session);
@@ -440,17 +450,17 @@
     }
     const body = shell.render(`<div class="pk-page ch-acting">
       ${scoreStripHtml(st, s, nm)}
-      <div class="pk-progress">${esc(nm(st.actor))} is acting · no talking!</div>
+      <div class="pk-progress">${tHtml('games.charades.name_is_acting', { name: bidi(nm(st.actor)) })}</div>
       <div class="pk-timer ch-timer" data-timer></div>
-      ${s.speed ? `<div class="ch-counter">Got ${st.turnGot.length} this turn</div>` : ''}
+      ${s.speed ? `<div class="ch-counter">${tHtml('games.charades.got_turngotcount_this_turn', { turnGotCount: st.turnGot.length })}</div>` : ''}
       ${notice ? `<div class="ch-notice" role="status">${esc(notice)}</div>` : ''}
-      <button type="button" class="ch-got" data-got>Got it ✓</button>
+      <button type="button" class="ch-got" data-got>${tHtml('games.charades.got_it')}</button>
       <div class="pk-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-pass ${st.passesLeft > 0 ? '' : 'disabled'}>Pass${s.passes ? ' (' + st.passesLeft + ' left)' : ''}</button>
-        <button type="button" class="pk-btn pk-btn--ghost" data-pause>${session.pausedLeft != null ? 'Resume' : 'Pause'}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-pass ${st.passesLeft > 0 ? '' : 'disabled'}>${tHtml('games.charades.pass_value', { value: s.passes ? t('games.charades.passesleft_left', { passesLeft: st.passesLeft }) : '' })}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-pause>${session.pausedLeft != null ? tHtml('common.shortcut_dangal_resume') : tHtml('dangal.party.pause')}</button>
       </div>
-      <button type="button" class="pk-peek${notice ? ' is-nudge' : ''}" data-peek aria-label="Actor: hold to see the title">👁 Actor: hold to see the title</button>
-      <button type="button" class="pk-link" data-gestures>? Gestures</button>
+      <button type="button" class="pk-peek${notice ? ' is-nudge' : ''}" data-peek aria-label="${tHtml('games.charades.actor_hold_to_see_the_title_2')}">${tHtml('games.charades.actor_hold_to_see_the_title')}</button>
+      <button type="button" class="pk-link" data-gestures>${tHtml('games.charades.gestures_2')}</button>
     </div>`);
     const timerEl = body.querySelector('[data-timer]');
     session.clock = Kit().countdown(timerEl, {
@@ -477,12 +487,12 @@
     body.querySelector('[data-got]').addEventListener('click', () => {
       if (!passAct(session, { type: 'got' })) return;
       Kit().ding();
-      if (session.pub.phase === 'acting') renderPassActing(shell, session, 'New title! Hold 👁 to see it');
+      if (session.pub.phase === 'acting') renderPassActing(shell, session, t('games.charades.new_title_hold_to_see_it'));
       else routePass(shell, session);
     });
     body.querySelector('[data-pass]').addEventListener('click', () => {
       if (!passAct(session, { type: 'pass' })) return;
-      renderPassActing(shell, session, 'New title! Hold 👁 to see it');
+      renderPassActing(shell, session, t('games.charades.new_title_hold_to_see_it'));
     });
   }
 
@@ -497,8 +507,8 @@
     const body = shell.render(`<div class="pk-page">
       ${turnSummaryHtml(st.lastTurn, session.settings, nm)}
       ${scoreStripHtml(st, session.settings, nm)}
-      <div class="pk-sub">Next up: ${esc(Core().teamName(session.settings, nextTeam))} · ${esc(nm(nextActor))} acts</div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Next turn</button>
+      <div class="pk-sub">${tHtml('games.charades.next_up_nextteam_nextactor_acts', { nextTeam: Core().teamName(session.settings, nextTeam), nextActor: nm(nextActor) })}</div>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${tHtml('games.charades.next_turn')}</button>
       ${Kit().badCardHtml(card)}
     </div>`);
     if (card) Kit().wireBadCard(body, card);
@@ -513,17 +523,17 @@
     const st = session.pub;
     if (session.clock) session.clock.stop();
     shell.guard = false;
-    shell.setSubtitle('Final');
+    shell.setSubtitle(t('games.charades.final'));
     const roster = Object.keys(session.players).map((id) => ({ id, name: session.players[id] }));
     Kit().reportPass(GAME, { players: roster, scores: st.actorPoints || {}, state: { teams: st.teams, teamScores: st.teamScores, winner: st.winner } });
     const body = shell.render(`<div class="pk-page">
       ${turnSummaryHtml(st.lastTurn, session.settings, nm)}
       ${finalHtml(st, session.settings, nm)}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${tHtml('games.charades.play_again')}</button>
       ${Kit().passHubButtonHtml()}
       <div class="pk-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-        <button type="button" class="pk-btn pk-btn--ghost" data-setup>Teams &amp; settings</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-setup>${tHtml('games.charades.teams_settings')}</button>
       </div>
     </div>`);
     try {
@@ -588,15 +598,15 @@
               <div class="pk-team-name">${esc(Core().teamName(s, i))} · ${t.length}</div>
               ${t
                 .map(
-                  (p) => `<${isHost ? 'button type="button"' : 'div'} class="pk-lobby-row ch-member" ${isHost ? `data-move="${esc(p.id)}" data-to="${1 - i}" aria-label="Move ${esc(p.name)} to the other team"` : ''}>
-                  <span class="pk-dot" data-presence="${esc(p.id)}"></span>${Kit().identityHtml(p.seat || 0, p.name)}<span>${esc(p.name)}</span>${p.id === ctrl.view.pub.host ? '<span class="pk-badge">Host</span>' : ''}${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''}${isHost ? '<span class="pk-chev" aria-hidden="true">⇄</span>' : ''}
+                  (p) => `<${isHost ? 'button type="button"' /* i18n-ignore */ : 'div'} class="pk-lobby-row ch-member" ${isHost ? `data-move="${esc(p.id)}" data-to="${1 - i}" aria-label="${tHtml('games.charades.move_name_to_other_team', { name: bidi(p.name) })}"` : ''}>
+                  <span class="pk-dot" data-presence="${esc(p.id)}"></span>${Kit().identityHtml(p.seat || 0, p.name)}<span>${esc(p.name)}</span>${p.id === ctrl.view.pub.host ? '<span class="pk-badge">' + tHtml('games.charades.host') + '</span>' : ''}${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">' + tHtml('common.you') + '</span>' : ''}${isHost ? '<span class="pk-chev" aria-hidden="true">⇄</span>' : ''}
                 </${isHost ? 'button' : 'div'}>`
                 )
                 .join('')}
             </div>`
           )
           .join('')}</div>
-          ${isHost ? '<div class="pk-hint">Tap a player to switch teams</div><button type="button" class="pk-chip pk-teams-shuffle" data-shuffle>🔀 Shuffle teams</button>' : ''}`;
+          ${isHost ? '<div class="pk-hint">' + tHtml('games.charades.tap_a_player_to_switch_teams') + '</div><button type="button" class="pk-chip pk-teams-shuffle" data-shuffle>' + tHtml('games.charades.shuffle_teams') + '</button>' : ''}`;
       },
       onLobbyMount: (ctrl, body) => {
         body.querySelectorAll('[data-move]').forEach((btn) =>
@@ -605,10 +615,10 @@
         body.querySelector('[data-shuffle]')?.addEventListener('click', () => ctrl.act('shuffleTeams'));
       },
       canStart: (ctrl, players) => {
-        if (players.length < Core().MIN_PLAYERS) return { ok: false, label: 'Need ' + (Core().MIN_PLAYERS - players.length) + ' more to start' };
+        if (players.length < Core().MIN_PLAYERS) return { ok: false, label: t('games.charades.need_value_more_to_start', { value: Core().MIN_PLAYERS - players.length }) };
         const teams = lobbyTeams(ctrl, players);
-        if (teams.some((t) => t.length < Core().MIN_PER_TEAM)) return { ok: false, label: 'Each team needs 2+ players' };
-        return { ok: true, label: 'Start' };
+        if (teams.some((t) => t.length < Core().MIN_PER_TEAM)) return { ok: false, label: t('games.charades.each_team_needs_2_players') };
+        return { ok: true, label: t('games.charades.start') };
       },
       holdKey: (ctrl, st) => {
         const sec = ctrl.view.secret;
@@ -652,7 +662,7 @@
     const myTeam = Core().teamOf(st, me);
     const isActor = st.actor === me;
     const onTurn = myTeam === st.team;
-    ctrl.shell.setSubtitle('Room ' + ctrl.view.code + ' · Turn ' + st.turnNo);
+    ctrl.shell.setSubtitle(t('games.charades.room_code_turn_turnno', { code: ctrl.view.code, turnNo: st.turnNo }));
     const timed = st.phase === 'ready' || st.phase === 'acting' || st.phase === 'turnEnd';
     const top = `${ctrl.hostBar(timed)}${ctrl.pausedNote()}${scoreStripHtml(st, s, nm)}`;
     const teamLabel = Core().teamName(s, st.team);
@@ -660,23 +670,23 @@
     if (st.phase === 'ready') {
       if (isActor) {
         const body = ctrl.render(`<div class="pk-page">${top}
-          <div class="pk-progress">You’re acting for ${esc(teamLabel)}</div>
+          <div class="pk-progress">${tHtml('games.charades.you_re_acting_for_teamlabel', { teamLabel })}</div>
           <div data-cover></div>
           <div class="pk-timer" data-timer></div>
         </div>`);
         ctrl.wire(body);
         K.mountPassCover(body.querySelector('[data-cover]'), {
-          lead: 'Your title',
+          lead: t('games.charades.your_title'),
           name: nm(me),
           revealHtml: () => titleCardHtml(sec && sec.title),
-          doneLabel: 'Start timer ▶',
+          doneLabel: t('games.charades.start_timer'),
           onDone: () => ctrl.act('go'),
         });
         return;
       }
       const body = ctrl.render(`<div class="pk-page">${top}
-        <div class="pk-title">${esc(nm(st.actor))} is up</div>
-        <div class="pk-sub">${esc(teamLabel)}${onTurn ? ' — that’s your team. Get ready to guess!' : ' — your team watches this one.'}</div>
+        <div class="pk-title">${tHtml('games.charades.name_is_up', { name: bidi(nm(st.actor)) })}</div>
+        <div class="pk-sub">${esc(teamLabel)}${onTurn ? ' ' + tHtml('games.charades.that_s_your_team_get_ready') : ' ' + tHtml('games.charades.your_team_watches_this_one')}</div>
         <div class="pk-timer" data-timer></div>
       </div>`);
       ctrl.wire(body);
@@ -687,13 +697,13 @@
       const got = st.turnGot.map((t) => `<div class="ch-title-row is-got">✓ ${esc(titleText(t))}</div>`).join('');
       if (isActor) {
         const body = ctrl.render(`<div class="pk-page ch-acting">${top}
-          <div class="pk-progress">You’re acting · no talking!</div>
+          <div class="pk-progress">${tHtml('games.charades.you_re_acting_no_talking')}</div>
           <div class="pk-timer ch-timer" data-timer></div>
-          ${s.speed ? `<div class="ch-counter">Got ${st.turnGot.length} this turn</div>` : ''}
-          <button type="button" class="ch-got" data-got>Got it ✓</button>
-          <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-pass ${st.passesLeft > 0 ? '' : 'disabled'}>Pass${s.passes ? ' (' + st.passesLeft + ' left)' : ''}</button></div>
-          <button type="button" class="pk-peek" data-peek aria-label="Hold to see your title">👁 Hold to see your title</button>
-          <button type="button" class="pk-link" data-gestures>? Gestures</button>
+          ${s.speed ? `<div class="ch-counter">${tHtml('games.charades.got_turngotcount_this_turn', { turnGotCount: st.turnGot.length })}</div>` : ''}
+          <button type="button" class="ch-got" data-got>${tHtml('games.charades.got_it')}</button>
+          <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-pass ${st.passesLeft > 0 ? '' : 'disabled'}>${tHtml('games.charades.pass_value', { value: s.passes ? t('games.charades.passesleft_left', { passesLeft: st.passesLeft }) : '' })}</button></div>
+          <button type="button" class="pk-peek" data-peek aria-label="${tHtml('games.charades.hold_to_see_your_title_2')}">${tHtml('games.charades.hold_to_see_your_title')}</button>
+          <button type="button" class="pk-link" data-gestures>${tHtml('games.charades.gestures_2')}</button>
           <div class="ch-titles">${got}</div>
         </div>`);
         ctrl.wire(body);
@@ -704,15 +714,15 @@
         return;
       }
       const body = ctrl.render(`<div class="pk-page ch-acting">${top}
-        <div class="pk-progress">${esc(nm(st.actor))} is acting for ${esc(teamLabel)}</div>
+        <div class="pk-progress">${tHtml('games.charades.actor_is_acting_for_teamlabel', { actor: nm(st.actor), teamLabel })}</div>
         <div class="pk-timer ch-timer" data-timer></div>
         ${
           onTurn
-            ? `<div class="pk-sub">Shout it out — or type your guess</div>
-               <div class="im-clue-form"><input class="pk-input" data-keep="guess" data-guess maxlength="80" placeholder="Your guess" autocomplete="off" enterkeyhint="send" aria-label="Your guess">
-               <button type="button" class="pk-btn pk-btn--primary" data-send>Guess</button></div>
+            ? `<div class="pk-sub">${tHtml('games.charades.shout_it_out_or_type_your')}</div>
+               <div class="im-clue-form"><input class="pk-input" data-keep="guess" data-guess maxlength="80" placeholder="${tHtml('games.charades.your_guess')}" autocomplete="off" enterkeyhint="send" aria-label="${tHtml('games.charades.your_guess')}">
+               <button type="button" class="pk-btn pk-btn--primary" data-send>${tHtml('games.charades.guess')}</button></div>
                <div class="im-error" data-err role="status"></div>`
-            : '<div class="pk-wait">Watch and enjoy — it’s the other team’s turn.</div>'
+            : '<div class="pk-wait">' + tHtml('games.charades.watch_and_enjoy_it_s_the') + '</div>'
         }
         <div class="ch-titles">${got}</div>
       </div>`);
@@ -726,7 +736,7 @@
           const out = await ctrl.act('guess', { text }, err);
           if (!out) return;
           input.value = '';
-          err.textContent = out.matched ? 'You got it! +1' : 'Not quite — keep going';
+          err.textContent = out.matched ? t('games.charades.you_got_it_1') : t('games.charades.not_quite_keep_going');
         };
         body.querySelector('[data-send]').addEventListener('click', send);
         input.addEventListener('keydown', (e) => e.key === 'Enter' && send());
@@ -741,9 +751,9 @@
       const body = ctrl.render(`<div class="pk-page">${ctrl.hostBar(true)}${ctrl.pausedNote()}
         ${turnSummaryHtml(st.lastTurn, s, nm)}
         ${scoreStripHtml(st, s, nm)}
-        <div class="pk-sub">Next up: ${esc(Core().teamName(s, nextTeam))}${nextActor ? ' · ' + esc(nm(nextActor)) + ' acts' : ''}</div>
+        <div class="pk-sub">${tHtml('games.charades.next_up_nextteam_value', { nextTeam: Core().teamName(s, nextTeam), value: nextActor ? t('games.charades.value_acts', { value: esc(nm(nextActor)) }) : '' })}</div>
         <div class="pk-timer" data-timer></div>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>Next turn</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${tHtml('games.charades.next_turn')}</button>
         ${K.badCardHtml(lastCard(st.lastTurn))}
       </div>`);
       ctrl.wire(body);
@@ -756,7 +766,7 @@
       const body = ctrl.render(`<div class="pk-page">
         ${turnSummaryHtml(st.lastTurn, s, nm)}
         ${finalHtml(st, s, nm)}
-        ${K.roomResultActions(ctrl, { nextLabel: 'Play again', waitLabel: 'Waiting for the host to start a new game…', card: lastCard(st.lastTurn) })}
+        ${K.roomResultActions(ctrl, { nextLabel: t('games.charades.play_again'), waitLabel: t('games.charades.waiting_for_the_host_to_start'), card: lastCard(st.lastTurn) })}
       </div>`);
       K.wireRoomResultActions(ctrl, body, { nextOp: 'start', onShare: () => shareFinal(st, s, nm), card: lastCard(st.lastTurn) });
       if (ctrl.view.celebrated !== pub.roundNo) {
@@ -777,7 +787,7 @@
     registerGame({
       id: 'charades',
       name: LABEL,
-      desc: 'Act it out, no talking — two teams race the clock',
+      desc: t('games.charades.act_it_out_no_talking_two'),
       icon: '🎭',
       gameType: 'multiplayer',
       genre: 'party',
@@ -788,7 +798,7 @@
       selfChat: false,
       order: 22,
       meta: {
-        kit: 'party-kit.js (Pass & Play + Room)',
+        kit: t('games.charades.party_kit_js_pass_play_room'),
         dealing: 'party_room → server-lib/party-deal.js; only the actor reads the title',
         packs: 'data/charades-packs.js',
       },

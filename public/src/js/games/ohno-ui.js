@@ -17,10 +17,24 @@
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('ohno.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
   }
-  const LABEL = 'Oh No!';
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.uno.' + key, p || fallback) : fill(fallback, p);
+  }
+  const LABEL = t('games.uno.title');
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
@@ -51,20 +65,20 @@
     return colorLabel(O.colorOf(card)) + ' ' + valueLabel(O.valueOf(card));
   }
   function roundWinLine(name, isMe) {
-    return isMe ? tr('youWinRound', 'You win the round') : name + ' ' + tr('winsRound', 'wins the round');
+    return isMe ? tr('youWinRound', 'You win the round') : tr('name_wins_the_round', '{{name}} wins the round', { name });
   }
   function targetLabel(n) {
-    return n ? tr('playTo', 'Play to') + ' ' + n : tr('singleRound', 'Single round');
+    return n ? tr('play_to_n', 'Play to {{n}}', { n }) : tr('singleRound', 'Single round');
   }
   const HOUSE = [
-    ['stacking', 'Stacking', 'Draw Two on Draw Two, Draw Four on Draw Four'],
-    ['stackMix', 'Stacking mix', 'Draw Two and Draw Four stack together (needs Stacking)'],
-    ['jumpIn', 'Jump-In', 'Play an identical card out of turn'],
-    ['sevenZero', '7-0', '7 swaps hands with a player you pick; 0 passes every hand along'],
-    ['drawUntil', 'Draw until playable', 'Keep drawing until you get a card you can play'],
-    ['forcePlay', 'Force play', 'A playable drawn card must be played'],
-    ['noBluff', 'No bluffing', 'Draw Four is always legal and can’t be challenged'],
-    ['quick', 'Quick round', 'Deal 5 cards instead of 7'],
+    /* i18n-copy */ ['stacking', t('games.uno.stacking'), t('games.uno.draw_two_on_draw_two_draw')],
+    /* i18n-copy */ ['stackMix', t('games.uno.stacking_mix'), t('games.uno.draw_two_and_draw_four_stack')],
+    /* i18n-copy */ ['jumpIn', t('games.uno.jump_in'), t('games.uno.play_an_identical_card_out_of')],
+    ['sevenZero', '7-0', t('games.uno.7_swaps_hands_with_a_player')],
+    /* i18n-copy */ ['drawUntil', t('games.uno.draw_until_playable'), t('games.uno.keep_drawing_until_you_get_a')],
+    /* i18n-copy */ ['forcePlay', t('games.uno.force_play'), t('games.uno.a_playable_drawn_card_must_be')],
+    /* i18n-copy */ ['noBluff', t('games.uno.no_bluffing'), t('games.uno.draw_four_is_always_legal_and')],
+    /* i18n-copy */ ['quick', t('games.uno.quick_round'), t('games.uno.deal_5_cards_instead_of_7')],
   ];
   function houseRules(s) {
     return HOUSE.filter(([k]) => s[k]).map(([k, name]) => tr('house.' + k, name));
@@ -129,37 +143,37 @@
     const n = (i) => nameOf(i);
     switch (e.type) {
       case 'play':
-        return n(e.seat) + ' ' + tr('played', 'played') + ' ' + cardLabel(e.card) + (Core().isWild(e.card) ? ' → ' + colorLabel(e.color) : '');
+        return tr('name_played_label_value', '{{name}} played {{label}}{{value}}', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)), label: cardLabel(e.card), value: (Core().isWild(e.card) ? ' → ' + colorLabel(e.color) : '') });
       case 'draw':
-        return e.forced ? n(e.seat) + ' ' + tr('draws', 'draws') + ' ' + e.n : n(e.seat) + ' ' + tr('drew', 'drew') + (e.n > 1 ? ' ' + e.n : ' ' + tr('aCard', 'a card'));
+        return e.forced ? tr('name_draws_n', '{{name}} draws {{n}}', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)), n: e.n }) : tr('name_drew_value', '{{name}} drew{{value}}', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)), value: (e.n > 1 ? ' ' + e.n : ' ' + tr('aCard', 'a card')) });
       case 'skip':
-        return n(e.seat) + ' ' + tr('isSkipped', 'is skipped');
+        return tr('name_is_skipped', '{{name}} is skipped', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)) });
       case 'reverse':
         return tr('reversed', 'Direction reversed');
       case 'color':
-        return n(e.seat) + ' ' + tr('picked', 'picked') + ' ' + colorLabel(e.color);
+        return tr('name_picked_label', '{{name}} picked {{label}}', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)), label: colorLabel(e.color) });
       case 'challenge':
-        return n(e.seat) + ' ' + tr('challenged', 'challenged') + ' ' + n(e.target) + ' — ' + (e.guilty ? tr('bluffCaught', 'caught bluffing!') : tr('wasLegal', 'it was legal'));
+        return tr('name_challenged_name2_value', '{{name}} challenged {{name2}} — {{value}}', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)), name2: n(e.target), value: (e.guilty ? tr('bluffCaught', 'caught bluffing!') : tr('wasLegal', 'it was legal')) });
       case 'ohno':
         return n(e.seat) + ': “' + tr('shout', 'Oh No!') + '”';
       case 'catch':
-        return n(e.seat) + ' ' + tr('caught', 'caught') + ' ' + n(e.target) + '! +2';
+        return tr('name_caught_name2_2', '{{name}} caught {{name2}}! +2', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)), name2: n(e.target) });
       case 'jump':
-        return n(e.seat) + ' ' + tr('jumpedIn', 'jumped in!');
+        return tr('name_jumped_in', '{{name}} jumped in!', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)) });
       case 'swap':
-        return n(e.seat) + ' ' + tr('swapped', 'swapped hands with') + ' ' + n(e.target);
+        return tr('name_swapped_hands_with_name2', '{{name}} swapped hands with {{name2}}', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)), name2: n(e.target) });
       case 'rotate':
         return tr('rotated', 'Everyone passed their hand along');
       case 'reshuffle':
         return tr('reshuffled', 'Discards reshuffled into the draw pile');
       case 'pass':
-        return n(e.seat) + ' ' + tr('kept', 'kept the card');
+        return tr('name_kept_the_card', '{{name}} kept the card', { name: (typeof bidi === 'function' ? bidi(n(e.seat)) : n(e.seat)) });
       case 'round_over':
         return roundWinLine(n(e.seat), e.seat === me) + ' · +' + e.points;
       case 'takeover':
         return n(e.seat) + ' ' + (e.reason === 'afk' ? tr('afkBot', 'is away — a bot takes over') : tr('leftBot', 'left — a bot takes over'));
       case 'round_start':
-        return tr('round', 'Round') + ' ' + e.round;
+        return tr('round_round', 'Round {{round}}', { round: e.round });
       default:
         return '';
     }
@@ -237,7 +251,7 @@
           return `<div class="on-opp${turn ? ' is-turn' : ''}${s.forfeit ? ' is-out' : ''}" data-seat="${i}">
             <span class="on-av">${s.bot ? '🤖' : initial}${turn && left ? `<svg class="on-ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" style="animation-duration:${left}ms"/></svg>` : ''}</span>
             <span class="on-opp-name" title="${esc(s.name)}">${esc(compact && s.bot ? s.name.split(' · ')[0] : s.name)}</span>
-            <span class="on-opp-meta"><span class="on-count" aria-label="${esc(s.count + ' ' + tr('cards', 'cards'))}">🂠 ${s.count}</span>${s.bot ? `<span class="cl-tag">${esc(tr('bot', 'Bot'))}</span>` : ''}${o.live && !s.bot ? `<span class="pk-dot" data-presence="${esc(s.id)}"></span>` : ''}</span>
+            <span class="on-opp-meta"><span class="on-count" aria-label="${esc(tr('cards_2', '{count, plural, one {# card} other {# cards}}', { count: s.count }))}">🂠 ${s.count}</span>${s.bot ? `<span class="cl-tag">${esc(tr('bot', 'Bot'))}</span>` : ''}${o.live && !s.bot ? `<span class="pk-dot" data-presence="${esc(s.id)}"></span>` : ''}</span>
             ${s.called && s.count === 1 ? `<span class="on-called">${esc(tr('shout', 'Oh No!'))}</span>` : ''}
             ${vulnerable && ui.me >= 0 ? `<button type="button" class="on-catch" data-catch="${i}">${esc(tr('catch', 'Catch!'))}</button>` : ''}
           </div>`;
@@ -253,15 +267,15 @@
         return roundWinLine(nameOf(w), w === ui.me);
       }
       const mine = p.turn === ui.me;
-      if (p.phase === 'color') return mine ? tr('pickColour', 'Pick the starting colour') : nameOf(p.turn) + ' ' + tr('picksColour', 'is picking a colour');
+      if (p.phase === 'color') return mine ? tr('pickColour', 'Pick the starting colour') : tr('name_is_picking_a_colour', '{{name}} is picking a colour', { name: (typeof bidi === 'function' ? bidi(nameOf(p.turn)) : nameOf(p.turn)) });
       if (p.phase === 'challenge') {
         const by = p.wd4 ? p.wd4.by : -1;
-        return mine ? nameOf(by) + ' ' + tr('playedFour', 'played Draw Four — challenge or draw') + ' ' + (p.pending || 4) : nameOf(p.turn) + ' ' + tr('decides', 'decides: challenge or draw');
+        return mine ? tr('name_played_draw_four_challenge_or_draw', '{{name}} played Draw Four — challenge or draw {{value}}', { name: (typeof bidi === 'function' ? bidi(nameOf(by)) : nameOf(by)), value: p.pending || 4 }) : tr('name_decides_challenge_or_draw', '{{name}} decides: challenge or draw', { name: (typeof bidi === 'function' ? bidi(nameOf(p.turn)) : nameOf(p.turn)) });
       }
-      if (p.pending > 0) return mine ? tr('stackOrDraw', 'Stack a draw card or draw') + ' ' + p.pending : nameOf(p.turn) + ' ' + tr('facesDraw', 'faces +') + p.pending;
+      if (p.pending > 0) return mine ? tr('stack_a_draw_card_or_draw_pending', 'Stack a draw card or draw {{pending}}', { pending: p.pending }) : tr('name_faces_pending', '{{name}} faces +{{pending}}', { name: (typeof bidi === 'function' ? bidi(nameOf(p.turn)) : nameOf(p.turn)), pending: p.pending });
       if (p.phase === 'drawn' && mine) return tr('playDrawn', 'Play the card you drew, or keep it');
       if (mine) return tr('yourTurn', 'Your turn');
-      return nameOf(p.turn) + ' ' + tr('isPlaying', 'is playing…');
+      return tr('name_is_playing', '{{name}} is playing…', { name: (typeof bidi === 'function' ? bidi(nameOf(p.turn)) : nameOf(p.turn)) });
     }
 
     function handHtml() {
@@ -286,7 +300,7 @@
           return cardHtml(c, { i: k, playable: can || jump, lift: can || jump, jump, style, dim: p.turn === ui.me && !can && !jump && !p.roundOver });
         })
         .join('');
-      return `<div class="on-hand${n > 14 ? ' is-scroll' : ''}" data-hand role="group" aria-label="${esc(tr('yourHand', 'Your hand') + ' · ' + n)}">${cards}</div>`;
+      return `<div class="on-hand${n > 14 ? ' is-scroll' : ''}" data-hand role="group" aria-label="${esc(tr('your_hand_n', 'Your hand · {{n}}', { n }))}">${cards}</div>`;
     }
 
     function actionsHtml() {
@@ -303,9 +317,9 @@
       }
       if (mine && p.phase === 'challenge') {
         out.push(`<button type="button" class="pk-btn pk-btn--primary" data-challenge>${esc(tr('challenge', 'Challenge'))}</button>`);
-        out.push(`<button type="button" class="pk-btn pk-btn--ghost" data-accept>${esc(tr('drawN', 'Draw') + ' ' + (p.pending || 4))}</button>`);
+        out.push(`<button type="button" class="pk-btn pk-btn--ghost" data-accept>${esc(tr('draw_value', 'Draw {{value}}', { value: p.pending || 4 }))}</button>`);
       } else if (mine && p.pending > 0 && p.phase === 'play') {
-        out.push(`<button type="button" class="pk-btn pk-btn--ghost" data-draw>${esc(tr('drawN', 'Draw') + ' ' + p.pending)}</button>`);
+        out.push(`<button type="button" class="pk-btn pk-btn--ghost" data-draw>${esc(tr('draw_pending', 'Draw {{pending}}', { pending: p.pending }))}</button>`);
       } else if (mine && p.phase === 'drawn' && !p.settings.forcePlay) {
         out.push(`<button type="button" class="pk-btn pk-btn--ghost" data-pass>${esc(tr('keep', 'Keep it'))}</button>`);
       }
@@ -315,7 +329,7 @@
     function peekHtml() {
       const pk = ui.priv && ui.priv.peek;
       if (!pk) return '';
-      return `<div class="on-peek" role="status"><div class="on-peek-title">${esc(tr('peekTitle', 'You saw') + ' ' + nameOf(pk.seat) + tr('peekHand', '’s hand'))}</div><div class="on-peek-cards">${(pk.hand || [])
+      return `<div class="on-peek" role="status"><div class="on-peek-title">${esc(tr('you_saw_name_s_hand', 'You saw {{name}}’s hand', { name: (typeof bidi === 'function' ? bidi(nameOf(pk.seat)) : nameOf(pk.seat)) }))}</div><div class="on-peek-cards">${(pk.hand || [])
         .map((c) => cardHtml(c, { small: true }))
         .join('')}</div></div>`;
     }
@@ -327,7 +341,7 @@
       const canDraw = ui.me >= 0 && p.turn === ui.me && p.phase === 'play' && !p.roundOver && !p.over;
       const col = p.color ? O.COLOR_HEX[p.color] : '#888';
       return `<div class="on-center">
-        <button type="button" class="on-pile${canDraw ? ' is-ready' : ''}" data-drawpile ${canDraw ? '' : 'disabled'} aria-label="${esc(tr('drawPile', 'Draw pile') + ' · ' + p.drawCount)}">
+        <button type="button" class="on-pile${canDraw ? ' is-ready' : ''}" data-drawpile ${canDraw ? '' : 'disabled'} aria-label="${esc(tr('draw_pile_drawcount', 'Draw pile · {{drawCount}}', { drawCount: p.drawCount }))}">
           ${cardHtml(null, { back: true })}<span class="on-pile-n">${p.drawCount}</span>${canDraw && !(p.pending > 0) ? `<span class="on-pile-cta">${esc(tr('draw', 'Draw'))}</span>` : ''}
         </button>
         <div class="on-discard" data-discard style="--cur:${col}">
@@ -348,8 +362,8 @@
       const mine = !p.roundOver && !p.over && p.turn === ui.me;
       const houses = houseRules(p.settings);
       host.innerHTML = `<div class="on-table${p.seats.length > 6 ? ' is-crowded' : ''}">
-        <div class="on-top-row"><span class="on-round">${esc(tr('round', 'Round') + ' ' + p.round + ' · ' + targetLabel(p.settings.target))}</span>${
-          houses.length ? `<button type="button" class="pk-link on-house-link" data-house>${esc(tr('houseRules', 'House rules') + ' · ' + houses.length)}</button>` : ''
+        <div class="on-top-row"><span class="on-round">${esc(tr('round_round_label', 'Round {{round}} · {{label}}', { round: p.round, label: targetLabel(p.settings.target) }))}</span>${
+          houses.length ? `<button type="button" class="pk-link on-house-link" data-house>${esc(tr('house_rules_length', 'House rules · {{length}}', { length: houses.length }))}</button>` : ''
         }</div>
         ${oppsHtml()}
         ${centerHtml()}
@@ -607,7 +621,7 @@
   }
   function leaderboardHtml(p, me, chip) {
     const order = p.ranking && p.over ? p.ranking : p.seats.map((s, i) => i).sort((a, b) => p.scores[b] - p.scores[a]);
-    return `<div class="cl-sub">${esc(p.over ? tr('final', 'Final standings') : tr('leaderboard', 'Match · ') + targetLabel(p.settings.target))}</div><div class="cl-ranking">${order
+    return `<div class="cl-sub">${esc(p.over ? tr('final', 'Final standings') : tr('match_label', 'Match · {{label}}', { label: targetLabel(p.settings.target) }))}</div><div class="cl-ranking">${order
       .map(
         (i, k) => `<div class="cl-rank-row${k === 0 ? ' is-first' : ''}"><span class="cl-rank-place">${esc(CK().placeLabel(k + 1))}</span><span class="cl-rank-name">${esc(i === me ? tr('you', 'You') : p.seats[i].name)}${p.seats[i].bot ? ' 🤖' : ''}${
           p.seats[i].forfeit ? ' · ' + esc(tr('left', 'left')) : ''
@@ -617,8 +631,8 @@
   }
   function shareText(p, me) {
     const win = p.ranking ? p.ranking[0] : p.lastRound ? p.lastRound.winner : -1;
-    const who = win === me ? tr('iWon', 'I won') : (p.seats[win] ? p.seats[win].name : '') + ' ' + tr('won', 'won');
-    return who + ' ' + LABEL + ' · ' + (p.scores[win] || 0) + ' ' + tr('pts', 'pts') + ' · ' + p.seats.length + ' ' + tr('players', 'players');
+    const who = win === me ? tr('iWon', 'I won') : tr('value_won', '{{value}} won', { value: (p.seats[win] ? p.seats[win].name : '') });
+    return tr('name_label_value_pts_players', '{{name}} {{LABEL}} · {{value}} pts · {length, plural, one {# player} other {# players}}', { name: (typeof bidi === 'function' ? bidi(who) : who), LABEL, value: p.scores[win] || 0, length: p.seats.length });
   }
 
   // ---------------- local (vs bots) ----------------
@@ -636,7 +650,7 @@
     const rng = C.seededRng(C.newSeed());
     const me = { id: 'me', name: (K && K.myName()) || tr('you', 'You') };
     const players = [me];
-    for (let i = 1; i < n; i++) players.push({ id: 'bot' + i, name: tr('bot', 'Bot') + ' ' + i + ' · ' + C.levelLabel(set.level), bot: true, level: set.level, persona: set.style });
+    for (let i = 1; i < n; i++) players.push({ id: 'bot' + i, name: tr('bot_i_label', 'Bot {{i}} · {{label}}', { i, label: C.levelLabel(set.level) }), bot: true, level: set.level, persona: set.style });
     const st = O.newMatch(players, O.mergeSettings(set), rng);
     const style = set.style === 'bluffer' ? { bluff: 0.6 } : { bluff: 0 };
     let timer = null;
@@ -644,7 +658,7 @@
     const shell = K.openShell({
       gameId: GAME,
       title: LABEL,
-      subtitle: C.levelLabel(set.level) + ' · ' + n + ' ' + tr('players', 'players'),
+      subtitle: tr('label_players', '{{label}} · {n, plural, one {# player} other {# players}}', { label: C.levelLabel(set.level), n }),
       confirmLeave: () => !st.over && (st.round > 1 || st.seq > 2),
       leaveBody: tr('leaveLocal', 'This match will end.'),
       onClose: () => clearTimeout(timer),
@@ -676,12 +690,12 @@
           const hand = p.seats && p.seats[0] && p.seats[0].hand;
           if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { tipStats: { cardsLeft: Array.isArray(hand) ? hand.length : undefined } });
         }
-        el.innerHTML = `<div class="cl-result"><div class="cl-result-title">${esc(p.ranking[0] === 0 ? tr('youWin', 'You win!') : p.seats[p.ranking[0]].name + ' ' + tr('wins', 'wins!'))}</div>${roundSummaryHtml(p, 0)}${leaderboardHtml(p, 0)}
+        el.innerHTML = `<div class="cl-result"><div class="cl-result-title">${esc(p.ranking[0] === 0 ? tr('youWin', 'You win!') : tr('name_wins', '{{name}} wins!', { name: (typeof bidi === 'function' ? bidi(p.seats[p.ranking[0]].name) : p.seats[p.ranking[0]].name) }))}</div>${roundSummaryHtml(p, 0)}${leaderboardHtml(p, 0)}
           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${esc(tr('again', 'Play again'))}</button>
           <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-share>${esc(tr('share', 'Share'))}</button><button type="button" class="pk-btn pk-btn--ghost" data-home>${esc(tr('change', 'Change setup'))}</button></div></div>`;
         el.querySelector('[data-again]').addEventListener('click', () => K.closeThen(shell, () => startLocal(set)));
         el.querySelector('[data-home]').addEventListener('click', () => K.closeThen(shell, () => openHome({})));
-        el.querySelector('[data-share]').addEventListener('click', () => C.shareWin(GAME, LABEL, shareText(p, 0) + ' · vs ' + C.levelLabel(set.level) + ' ' + tr('bots', 'bots')));
+        el.querySelector('[data-share]').addEventListener('click', () => C.shareWin(GAME, LABEL, tr('sharetext_vs_label_bots', '{{shareText}} · vs {{label}} bots', { shareText: shareText(p, 0), label: C.levelLabel(set.level) })));
       },
     });
     function refresh() {
@@ -724,7 +738,7 @@
         ${K.segHtml('level', s.level, Core().LEVELS.map((l) => [l, CK().levelLabel(l)]))}
         <div class="cl-sub">${esc(tr('match', 'Match'))}</div>
         ${K.segHtml('target', s.target, Core().TARGETS.map((n) => [n, n ? String(n) : tr('oneRound', '1 round')]))}
-        <details class="cl-advanced"><summary>${esc(tr('more', 'More options'))}</summary>
+        <details class="cl-advanced"><summary>${esc(tr('more_more_options', 'More options'))}</summary>
           <div class="cl-sub">${esc(tr('botStyle', 'Bot style'))}</div>
           ${K.segHtml('style', s.style, [['honest', tr('honest', 'Honest')], ['bluffer', tr('bluffer', 'Bluffer')]])}
           <p class="cl-note">${esc(tr('bluffNote', 'Bluffer bots sometimes play Draw Four illegally — challenge them.'))}</p>
@@ -760,7 +774,7 @@
     const s = Core().mergeSettings((ctrl.view.pub && ctrl.view.pub.settings) || {});
     const raw = (ctrl.view.pub && ctrl.view.pub.settings) || {};
     const bits = [targetLabel(s.target)];
-    if (raw.bots) bits.push(raw.bots + ' ' + (raw.bots === 1 ? tr('botOne', 'bot') : tr('bots', 'bots')) + ' · ' + CK().levelLabel(raw.botLevel || 'normal'));
+    if (raw.bots) bits.push(tr('bots_label', '{bots, plural, one {# bot} other {# bots}} · {{label}}', { bots: raw.bots, label: CK().levelLabel(raw.botLevel || 'normal') }));
     bits.push(CK().stakeLabel(Number(raw.stake) || 0));
     return bits.join(' · ');
   }
@@ -806,11 +820,11 @@
     const s = pub.settings || {};
     const bots = Math.max(0, Math.min(Number(s.bots) || 0, 10 - players.length));
     const rows = players.map(
-      (p) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${p.id === pub.host ? '<span class="pk-badge">Host</span>' : ''}${
-        p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''
+      (p) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${p.id === pub.host ? '<span class="pk-badge">' + tHtml('games.uno.host') + '</span>' : ''}${
+        p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">' + tHtml('games.uno.you') + '</span>' : ''
       }</div>`
     );
-    for (let i = 0; i < bots; i++) rows.push(`<div class="pk-lobby-row is-bot"><span class="pk-dot is-online"></span><span>🤖 ${esc(tr('bot', 'Bot') + ' ' + (i + 1) + ' · ' + CK().levelLabel(s.botLevel || 'normal'))}</span></div>`);
+    for (let i = 0; i < bots; i++) rows.push(`<div class="pk-lobby-row is-bot"><span class="pk-dot is-online"></span><span>🤖 ${esc(tr('bot_n_label', 'Bot {{n}} · {{label}}', { n: (i + 1), label: CK().levelLabel(s.botLevel || 'normal') }))}</span></div>`);
     const house = houseRules(Core().mergeSettings(s));
     return `<div class="pk-lobby-list">${rows.join('')}</div><div class="cl-house"><div class="cl-sub">${esc(tr('houseRulesInGame', 'House rules in this game'))}</div>${
       house.length ? `<ul>${house.map((h) => '<li>' + esc(h) + '</li>').join('')}</ul>` : `<p class="cl-note">${esc(tr('standardOnly', 'None — standard rules'))}</p>`
@@ -820,19 +834,19 @@
     const s = (ctrl.view.pub && ctrl.view.pub.settings) || {};
     const total = players.length + Math.max(0, Math.min(Number(s.bots) || 0, 10 - players.length));
     if (total < 2) return { ok: false, label: tr('addBotOrFriend', 'Add a bot or invite a friend') };
-    return { ok: true, label: tr('start', 'Start') + ' · ' + total + ' ' + tr('players', 'players') };
+    return { ok: true, label: tr('start_players', 'Start · {total, plural, one {# player} other {# players}}', { total }) };
   }
   const ERR = {
-    NOT_YOUR_TURN: 'Wait for your turn',
-    ILLEGAL_CARD: 'That card doesn’t match',
-    TOO_LATE: 'Too late!',
-    PICK_COLOR: 'Pick a colour',
-    PICK_PLAYER: 'Pick a player',
-    MUST_PLAY: 'House rule: you must play the card you drew',
-    CANT_CALL: 'Call “Oh No!” when you’re down to two cards',
-    PHASE: 'Not right now',
-    ROUND_OVER: 'The round is over',
-    NOT_IN_HAND: 'That card isn’t in your hand any more',
+    NOT_YOUR_TURN: t('games.uno.wait_for_your_turn'),
+    ILLEGAL_CARD: t('games.uno.that_card_doesn_t_match'),
+    TOO_LATE: t('games.uno.tooLate'),
+    PICK_COLOR: t('games.uno.pickColourTitle'),
+    PICK_PLAYER: t('games.uno.pick_a_player'),
+    MUST_PLAY: t('games.uno.house_rule_you_must_play_the'),
+    CANT_CALL: t('games.uno.call_oh_no_when_you_re'),
+    PHASE: t('games.uno.not_right_now'),
+    ROUND_OVER: t('games.uno.the_round_is_over'),
+    NOT_IN_HAND: t('games.uno.that_card_isn_t_in_your'),
   };
   function errorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
@@ -882,7 +896,7 @@
             return `<span class="cl-rank-chips ${r.chipDelta > 0 ? 'is-up' : 'is-down'}">${r.chipDelta > 0 ? '+' : ''}${r.chipDelta}</span>`;
           };
           const win = p.seats[p.ranking[0]];
-          el.innerHTML = `<div class="cl-result"><div class="cl-result-title">${esc(p.ranking[0] === meIdx ? tr('youWin', 'You win!') : win.name + ' ' + tr('wins', 'wins!'))}</div>${roundSummaryHtml(p, meIdx)}${leaderboardHtml(p, meIdx, chip)}${Kit().roomResultActions(ctrl, {
+          el.innerHTML = `<div class="cl-result"><div class="cl-result-title">${esc(p.ranking[0] === meIdx ? tr('youWin', 'You win!') : tr('name_wins', '{{name}} wins!', { name: (typeof bidi === 'function' ? bidi(win.name) : win.name) }))}</div>${roundSummaryHtml(p, meIdx)}${leaderboardHtml(p, meIdx, chip)}${Kit().roomResultActions(ctrl, {
             nextLabel: tr('rematch', 'Rematch'),
             waitLabel: tr('waitRematch', 'Waiting for the host to start a rematch…'),
           })}</div>`;
@@ -940,7 +954,7 @@
         <div class="pk-hero-sub">${esc(tr('tag', 'Match colours and numbers, empty your hand, shout “Oh No!” at one card.'))}</div>
       </div>
       <div class="pk-modes">
-        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('botTitle', 'Play vs bots'))}</span><span class="pk-mode-sub">${esc(s.players + ' ' + tr('players', 'players') + ' · ' + CK().levelLabel(s.level) + ' · ' + targetLabel(s.target))}</span></button>
+        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('botTitle', 'Play vs bots'))}</span><span class="pk-mode-sub">${esc(tr('players_label_label2', '{players, plural, one {# player} other {# players}} · {{label}} · {{label2}}', { players: s.players, label: CK().levelLabel(s.level), label2: targetLabel(s.target) }))}</span></button>
         <button type="button" class="pk-mode" data-go="friends"><span class="pk-mode-title">${esc(tr('friendTitle', 'Play with friends'))}</span><span class="pk-mode-sub">${esc(tr('friendSub', 'Live, 2–10 players · bots fill empty seats'))}</span></button>
         <div class="cl-home-links">
           <button type="button" class="pk-link" data-go="join">${esc(tr('join', 'Have a room code? Join'))}</button>
@@ -981,8 +995,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'uno',
-      name: 'Oh No!',
-      desc: 'Shedding card game · 2–10 players · bots · Live rooms',
+      name: t('games.uno.rules.rules.6.h'),
+      desc: t('games.uno.shedding_card_game_2_10_players'),
       icon: '🃏',
       ratingKey: 'uno',
       gameType: 'party',

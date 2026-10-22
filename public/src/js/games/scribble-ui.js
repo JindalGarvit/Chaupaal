@@ -12,7 +12,7 @@
   'use strict';
 
   const GAME = 'scribble';
-  const LABEL = 'Scribble';
+  const LABEL = t('dangal.identity.scribble.label');
   const ROOM_KEY = 'chaupaal_scribble_room';
   const FLUSH_MS = 110;
   const Core = () => window.ScribbleCore;
@@ -20,7 +20,23 @@
   const CK = () => window.ClassicsKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  const tr = (key, fallback) => (typeof t === 'function' ? t('scribble.' + key, fallback) : fallback);
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  const tr = (key, fallback, params) => {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.scribble.' + key, p || fallback) : fill(fallback, p);
+  };
   const toast = (m) => typeof showToast === 'function' && showToast(m);
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function readJson(k, d) {
@@ -293,10 +309,10 @@
   function toolsHtml() {
     const C = Core();
     return `<div class="sc-tools" data-tools>
-      <div class="sc-palette">${C.PALETTE.map((c, i) => `<button type="button" class="sc-swatch${i === 0 ? ' is-on' : ''}" data-color="${c}" style="background:${c}" aria-label="${esc(tr('colour', 'Colour') + ' ' + c)}"></button>`).join('')}
+      <div class="sc-palette">${C.PALETTE.map((c, i) => `<button type="button" class="sc-swatch${i === 0 ? ' is-on' : ''}" data-color="${c}" style="background:${c}" aria-label="${esc(tr('colour_c', 'Colour {{c}}', { c }))}"></button>`).join('')}
         <label class="sc-swatch sc-custom" aria-label="${esc(tr('customColour', 'Custom colour'))}"><input type="color" data-custom value="#3366ff"></label></div>
       <div class="sc-toolrow">
-        ${C.BRUSHES.map((w, i) => `<button type="button" class="sc-tool sc-size${i === 1 ? ' is-on' : ''}" data-size="${w}" aria-label="${esc(tr('brush', 'Brush') + ' ' + (i + 1))}"><i style="width:${Math.min(22, 4 + w / 2)}px;height:${Math.min(22, 4 + w / 2)}px"></i></button>`).join('')}
+        ${C.BRUSHES.map((w, i) => `<button type="button" class="sc-tool sc-size${i === 1 ? ' is-on' : ''}" data-size="${w}" aria-label="${esc(tr('brush_n', 'Brush {{n}}', { n: (i + 1) }))}"><i style="width:${Math.min(22, 4 + w / 2)}px;height:${Math.min(22, 4 + w / 2)}px"></i></button>`).join('')}
         <button type="button" class="sc-tool" data-mode="eraser" aria-label="${esc(tr('eraser', 'Eraser'))}">🧽</button>
         <button type="button" class="sc-tool" data-mode="fill" aria-label="${esc(tr('fill', 'Fill'))}">🪣</button>
         <button type="button" class="sc-tool" data-cmd="undo" aria-label="${esc(tr('undo', 'Undo'))}">↶</button>
@@ -348,9 +364,9 @@
   function lobbySummary(ctrl) {
     const s = Core().mergeSettings((ctrl.view.pub && ctrl.view.pub.settings) || {});
     const raw = (ctrl.view.pub && ctrl.view.pub.settings) || {};
-    const bits = [s.rounds + ' ' + tr('rounds', 'rounds'), s.drawTime + 's', s.hints + ' ' + (s.hints === 1 ? tr('hint', 'hint') : tr('hintsL', 'hints'))];
+    const bits = [tr('rounds_2', '{rounds, plural, one {# round} other {# rounds}}', { rounds: s.rounds }), s.drawTime + 's', tr('hints', '{hints, plural, one {# hint} other {# hints}}', { hints: s.hints })];
     if (s.customOnly) bits.push(tr('customOnly', 'Custom words only'));
-    else bits.push(s.packs.length + ' ' + tr('packs', 'packs') + (s.customWords.length ? ' + ' + s.customWords.length + ' ' + tr('custom', 'custom') : ''));
+    else bits.push(tr('packs_value', '{length, plural, one {# pack} other {# packs}}{{value}}', { length: s.packs.length, value: (s.customWords.length ? ' + ' + s.customWords.length + ' ' + tr('custom', 'custom') : '') }));
     if (CK()) bits.push(CK().stakeLabel(Number(raw.stake) || 0));
     return bits.join(' · ');
   }
@@ -414,9 +430,9 @@
         const check = () => {
           const out = C.parseCustomWords(area.value);
           note.textContent = out.words.length
-            ? out.words.length + ' ' + tr('wordsOk', 'words') + (out.rejected.length ? ' · ' + out.rejected.length + ' ' + tr('rejected', 'removed by the word filter') : '')
+            ? tr('words_value', '{length, plural, one {# word} other {# words}}{{value}}', { length: out.words.length, value: (out.rejected.length ? ' · ' + out.rejected.length + ' ' + tr('rejected', 'removed by the word filter') : '') })
             : out.rejected.length
-              ? out.rejected.length + ' ' + tr('rejected', 'removed by the word filter')
+              ? tr('length_removed_by_the_word_filter', '{{length}} removed by the word filter', { length: out.rejected.length })
               : '';
           return out;
         };
@@ -435,7 +451,7 @@
           if (!words || !words.length) return toast(tr('aiFail', 'Couldn’t make that pack — try another theme'));
           area.value = (area.value.trim() ? area.value.trim() + ', ' : '') + words.join(', ');
           check();
-          toast(words.length + ' ' + tr('aiAdded', 'words added'));
+          toast(tr('words_added', '{length, plural, one {# word} other {# words}} added', { length: words.length }));
         });
         el.querySelector('[data-save]').addEventListener('click', async () => {
           const packs = Array.from(el.querySelectorAll('[data-pack]:checked')).map((b) => b.dataset.pack);
@@ -465,26 +481,26 @@
     return `<div class="pk-lobby-list">${players
       .map(
         (p) =>
-          `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${p.id === pub.host ? '<span class="pk-badge">Host</span>' : ''}${
-            p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : host ? `<button type="button" class="pk-link sc-remove" data-remove="${esc(p.id)}">${esc(tr('remove', 'Remove'))}</button>` : ''
+          `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span><span>${esc(p.name)}</span>${p.id === pub.host ? '<span class="pk-badge">' + tHtml('games.scribble.host') + '</span>' : ''}${
+            p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">' + tHtml('games.scribble.you') + '</span>' : host ? `<button type="button" class="pk-link sc-remove" data-remove="${esc(p.id)}">${esc(tr('remove', 'Remove'))}</button>` : ''
           }</div>`
       )
       .join('')}</div>`;
   }
   function canStart(ctrl, players) {
     if (players.length < 2) return { ok: false, label: tr('need2', 'Invite at least 1 friend to start') };
-    return { ok: true, label: tr('start', 'Start') + ' · ' + players.length + ' ' + tr('players', 'players') };
+    return { ok: true, label: tr('start_players', 'Start · {length, plural, one {# player} other {# players}}', { length: players.length }) };
   }
   const ERR = {
-    WORD_BLOCKED: 'You can’t give away the word',
-    BLOCKED: 'Keep it friendly',
-    NOT_DRAWER: 'It’s not your turn to draw',
-    TOO_FEW: 'Vote-kick needs at least 3 players — ask the host',
-    BAD_TARGET: 'You can’t do that to this player',
-    BAD_CHOICE: 'Pick one of the three words',
-    PHASE: 'Not right now',
+    WORD_BLOCKED: t('games.scribble.you_can_t_give_away_the'),
+    BLOCKED: t('games.scribble.keep_it_friendly'),
+    NOT_DRAWER: t('games.scribble.it_s_not_your_turn_to'),
+    TOO_FEW: t('games.scribble.vote_kick_needs_at_least_3'),
+    BAD_TARGET: t('games.scribble.you_can_t_do_that_to'),
+    BAD_CHOICE: t('games.scribble.pick_one_of_the_three_words'),
+    PHASE: t('games.scribble.not_right_now'),
     EMPTY: '',
-    REMOVED: 'You were removed from this room',
+    REMOVED: t('games.scribble.you_were_removed_from_this_room'),
   };
   function errorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
@@ -500,9 +516,9 @@
   }
   function chatLineHtml(st, c, me) {
     const who = c.u === me ? tr('you', 'You') : nameOf(st, c.u);
-    if (c.k === 'correct') return `<li class="sc-msg is-correct">${esc(c.u === me ? tr('youGuessed', 'You guessed the word!') : who + ' ' + tr('guessed', 'guessed the word!'))}</li>`;
+    if (c.k === 'correct') return `<li class="sc-msg is-correct">${esc(c.u === me ? tr('youGuessed', 'You guessed the word!') : tr('name_guessed_the_word', '{{name}} guessed the word!', { name: (typeof bidi === 'function' ? bidi(who) : who) }))}</li>`;
     if (c.k === 'sys') {
-      const txt = { drawing: who + ' ' + tr('isDrawing', 'is drawing now'), skip: who + tr('skipped', '’s turn was skipped'), kicked: who + ' ' + tr('wasRemoved', 'was removed'), joined: who + ' ' + tr('joined', 'joined') }[c.c] || '';
+      const txt = { drawing: tr('name_is_drawing_now', '{{name}} is drawing now', { name: (typeof bidi === 'function' ? bidi(who) : who) }), skip: tr('name_s_turn_was_skipped', '{{name}}’s turn was skipped', { name: (typeof bidi === 'function' ? bidi(who) : who) }), kicked: tr('name_was_removed', '{{name}} was removed', { name: (typeof bidi === 'function' ? bidi(who) : who) }), joined: tr('name_joined', '{{name}} joined', { name: (typeof bidi === 'function' ? bidi(who) : who) }) }[c.c] || '';
       return txt ? `<li class="sc-msg is-sys">${esc(txt)}</li>` : '';
     }
     if (c.k === 'close') return `<li class="sc-msg is-close">${esc(c.t)}</li>`;
@@ -525,7 +541,7 @@
       onMount(el, close) {
         el.querySelector('[data-vk]')?.addEventListener('click', async () => {
           const out = await ctrl.act('votekick', { target: id });
-          if (out) toast(out.kicked ? name + ' ' + tr('wasRemoved', 'was removed') : tr('voted', 'Vote counted') + ' · ' + out.count + '/' + out.need);
+          if (out) toast(out.kicked ? tr('name_was_removed', '{{name}} was removed', { name }) : tr('vote_counted_count_need', 'Vote counted · {{count}}/{{need}}', { count: out.count, need: out.need }));
           close();
         });
         el.querySelector('[data-hk]')?.addEventListener('click', async () => {
@@ -604,7 +620,7 @@
         m.myWord = text.toLowerCase();
         CK() && CK().fx && CK().fx('win');
       } else if (out.close) {
-        m.notes.push({ after: lastI, turnKey: st && st.turnKey, text: '“' + text + '” ' + tr('soClose', 'is so close!') });
+        m.notes.push({ after: lastI, turnKey: st && st.turnKey, text: tr('text_is_so_close', '“{{text}}” is so close!', { text }) });
         paintChat();
       }
     });
@@ -659,14 +675,14 @@
           if (old) old.remove().catch(() => {});
         }
       }
-      body.querySelector('[data-round]').textContent = tr('round', 'Round') + ' ' + st.round + '/' + st.rounds;
+      body.querySelector('[data-round]').textContent = tr('round_round_rounds', 'Round {{round}}/{{rounds}}', { round: st.round, rounds: st.rounds });
       const secret = ctrl.view.secret && ctrl.view.secret.turnKey === st.turnKey ? ctrl.view.secret : null;
       const wordEl = body.querySelector('[data-word]');
       if (st.phase === 'draw') {
         if (drawing && secret && secret.word) wordEl.innerHTML = `${esc(tr('draw', 'Draw'))}: <b>${esc(secret.word.toUpperCase())}</b>`;
         else if (st.guessed[me] && m.myWord) wordEl.innerHTML = `<b>${esc(m.myWord.toUpperCase())}</b> ✓`;
         else if (st.pattern) wordEl.innerHTML = `<span class="sc-pattern">${esc(st.pattern.replace(/_/g, '＿').split('').join(' '))}</span> <small>${st.pattern.replace(/[^a-z_]/gi, '').length}</small>`;
-      } else if (st.phase === 'pick') wordEl.textContent = drawing ? tr('pickWord', 'Pick a word') : nameOf(st, st.drawer) + ' ' + tr('isPicking', 'is picking…');
+      } else if (st.phase === 'pick') wordEl.textContent = drawing ? tr('pickWord', 'Pick a word') : tr('name_is_picking', '{{name}} is picking…', { name: (typeof bidi === 'function' ? bidi(nameOf(st, st.drawer)) : nameOf(st, st.drawer)) });
       else wordEl.textContent = '';
 
       const tools = body.querySelector('[data-toolhost]');
@@ -689,7 +705,7 @@
           const pts = st.scores[id] || 0;
           const turnPts = st.turnPts[id];
           return `<li class="sc-player${id === st.drawer ? ' is-drawer' : ''}${st.guessed[id] ? ' is-guessed' : ''}${id === me ? ' is-me' : ''}"><button type="button" data-player="${esc(id)}" ${id === me ? 'disabled' : ''}>
-            <span class="pk-dot" data-presence="${esc(id)}"></span><span class="sc-pname">${esc(id === me ? tr('you', 'You') : p.name)}</span>${id === st.drawer ? '<span aria-label="drawing">✏️</span>' : st.guessed[id] ? '<span aria-label="guessed">✓</span>' : ''}
+            <span class="pk-dot" data-presence="${esc(id)}"></span><span class="sc-pname">${esc(id === me ? tr('you', 'You') : p.name)}</span>${id === st.drawer ? '<span aria-label="' + tHtml('games.scribble.drawing') + '">✏️</span>' : st.guessed[id] ? '<span aria-label="' + tHtml('games.scribble.guessed_2') + '">✓</span>' : ''}
             <b>${pts}</b>${turnPts ? `<em>+${turnPts}</em>` : ''}${(st.votes || {})[id] ? `<small>⚑${st.votes[id]}</small>` : ''}</button></li>`;
         })
         .join('');
@@ -712,7 +728,7 @@
           html = `<div class="sc-pick"><div class="sc-ov-title">${esc(tr('chooseWord', 'Choose a word to draw'))}</div>${secret.choices
             .map((w, i) => `<button type="button" class="sc-choice" data-pick="${i}"><b>${esc(w)}</b><small>${esc(diff[i] || '')}</small></button>`)
             .join('')}</div>`;
-        } else html = `<div class="sc-ov-title">${esc(nameOf(st, st.drawer) + ' ' + tr('isChoosing', 'is choosing a word…'))}</div>`;
+        } else html = `<div class="sc-ov-title">${esc(tr('name_is_choosing_a_word', '{{name}} is choosing a word…', { name: (typeof bidi === 'function' ? bidi(nameOf(st, st.drawer)) : nameOf(st, st.drawer)) }))}</div>`;
       } else if (st.phase === 'reveal') {
         const recap = Object.keys(st.turnPts)
           .sort((a, b) => st.turnPts[b] - st.turnPts[a])
@@ -759,7 +775,7 @@
       .join('');
     const top = rank[0];
     const body = ctrl.render(`<div class="pk-page sc-over"><div class="cl-result">
-      <div class="cl-result-title">${esc(top === me ? tr('youWin', 'You win!') : nameOf(st, top) + ' ' + tr('wins', 'wins!'))}</div>
+      <div class="cl-result-title">${esc(top === me ? tr('youWin', 'You win!') : tr('name_wins', '{{name}} wins!', { name: (typeof bidi === 'function' ? bidi(nameOf(st, top)) : nameOf(st, top)) }))}</div>
       <ol class="cl-rank sc-rank">${rows}</ol>
       ${Kit().roomResultActions(ctrl, { nextLabel: tr('again', 'Play again'), waitLabel: tr('waitAgain', 'Waiting for the host to start another game…') })}
     </div></div>`);
@@ -898,8 +914,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'scribble',
-      name: 'Scribble',
-      desc: 'Draw & guess · 2–12 players · Live rooms',
+      name: t('games.scribble.rules.ruleset.name'),
+      desc: t('games.scribble.draw_guess_2_12_players_live'),
       icon: '🎨',
       ratingKey: 'scribble',
       gameType: 'party',

@@ -55,14 +55,14 @@
   function showPostGame(result) {
     const r = result || {};
     const won = r.won || r.winnerUid === (typeof getCurrentUid === 'function' ? getCurrentUid() : '');
-    const title = r.isDraw ? 'Draw' : won ? 'You won' : 'Game over';
+    const title = r.isDraw ? t('dangal.classics.draw') : won ? t('dangal.you_won_2') : t('dangal.game_over');
     if (typeof showGameResult === 'function') {
       showGameResult({
         title,
         subtitle: r.gameType ? (typeof getGameIdentity === 'function' ? getGameIdentity(r.gameType)?.label : r.gameType) : '',
         actions: [
-          { label: 'Done', primary: true, id: 'done' },
-          { label: 'Rematch', primary: false, id: 'again' },
+          { label: t('common.done'), primary: true, id: 'done' },
+          { label: t('dangal.classics.rematch'), primary: false, id: 'again' },
         ],
       });
       return;

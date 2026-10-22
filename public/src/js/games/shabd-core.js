@@ -10,6 +10,32 @@
  *   recomputed, never double-counted. Practice / archive / challenges have separate totals.
  * - Challenge links carry the word encrypted with a per-link salt and a checksum.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.ShabdCore = factory();
@@ -80,13 +106,13 @@
       Object.keys(cnt).forEach((l) => (need[l] = Math.max(need[l] || 0, cnt[l])));
     });
     const ord = ['1st', '2nd', '3rd', '4th', '5th'];
-    for (let i = 0; i < LEN; i++) if (greens[i] && g[i] !== greens[i]) return ord[i] + ' letter must be ' + greens[i];
+    for (let i = 0; i < LEN; i++) if (greens[i] && g[i] !== greens[i]) return gtx('games.wordguess.value_letter_must_be_value2', '{{value}} letter must be {{value2}}', { value: ord[i], value2: greens[i] });
     const have = {};
     for (let i = 0; i < LEN; i++) have[g[i]] = (have[g[i]] || 0) + 1;
     const letters = Object.keys(need).sort();
     for (let i = 0; i < letters.length; i++) {
       const l = letters[i];
-      if ((have[l] || 0) < need[l]) return need[l] > 1 ? 'Guess must contain ' + need[l] + '× ' + l : 'Guess must contain ' + l;
+      if ((have[l] || 0) < need[l]) return need[l] > 1 ? gtx('games.wordguess.guess_must_contain_value_l', 'Guess must contain {{value}}× {{l}}', { value: need[l], l }) : gtx('games.wordguess.guess_must_contain_l', 'Guess must contain {{l}}', { l });
     }
     return null;
   }
@@ -229,7 +255,7 @@
     const rows = (guesses || []).map((g) => evaluate(g, answer).map((s) => e[s]).join(''));
     const won = rows.length > 0 && norm(guesses[guesses.length - 1]) === norm(answer);
     const score = (won ? rows.length : 'X') + '/' + MAX_GUESSES + (opt.hard ? '*' : '');
-    let title = 'Shabd Five';
+    let title = gtx('games.wordguess.shabd_five', 'Shabd Five');
     if (opt.mode === 'practice') title += ' · Practice';
     else if (opt.mode === 'challenge') title += ' · Challenge';
     else if (opt.puzzle != null) title += ' #' + opt.puzzle;
@@ -400,7 +426,7 @@
     const ord = ['1st', '2nd', '3rd', '4th', '5th'];
     const list = (guesses || []).map(norm).filter((g) => g.length === LEN);
     if (!list.length) {
-      return { text: 'Start with a word that uses common, different letters — two or three vowels is a good opener.', facts: { guesses: [], left: null } };
+      return { text: gtx('games.wordguess.start_with_a_word_that_uses', 'Start with a word that uses common, different letters — two or three vowels is a good opener.'), facts: { guesses: [], left: null } };
     }
     const k = knowledge(list, answer);
     const greens = k.greens.map((l, i) => (l ? ord[i] + ' is ' + l : '')).filter(Boolean);
@@ -411,12 +437,12 @@
     const left = typeof countFn === 'function' ? countFn((w) => consistent(w, k)) : null;
     const open = k.greens.map((l, i) => (l ? '' : ord[i])).filter(Boolean);
     const bits = [];
-    if (greens.length) bits.push('Known: ' + greens.join(', ') + '.');
-    if (ambers.length) bits.push('In the word somewhere else: ' + ambers.join(', ') + '.');
-    if (grey.length) bits.push('Ruled out: ' + grey.join(' ') + '.');
-    if (left != null) bits.push(left === 1 ? 'Only one word fits everything so far.' : left + ' words still fit.');
-    if (open.length && ambers.length) bits.push('Next: try the amber letters in the open spots (' + open.join(', ') + ').');
-    else if (open.length) bits.push('Next: test fresh letters in the open spots (' + open.join(', ') + ').');
+    if (greens.length) bits.push(gtx('games.wordguess.known_value', 'Known: {{value}}.', { value: greens.join(', ') }));
+    if (ambers.length) bits.push(gtx('games.wordguess.in_the_word_somewhere_else_ambers', 'In the word somewhere else: {{ambers}}.', { ambers: ambers.join(', ') }));
+    if (grey.length) bits.push(gtx('games.wordguess.ruled_out_grey', 'Ruled out: {{grey}}.', { grey: grey.join(' ') }));
+    if (left != null) bits.push(left === 1 ? gtx('games.wordguess.only_one_word_fits_everything_so', 'Only one word fits everything so far.') : gtx('games.wordguess.left_words_still_fit', '{{left}} words still fit.', { left }));
+    if (open.length && ambers.length) bits.push(gtx('games.wordguess.next_try_the_amber_letters_in', 'Next: try the amber letters in the open spots ({{open}}).', { open: open.join(', ') }));
+    else if (open.length) bits.push(gtx('games.wordguess.next_test_fresh_letters_in_the', 'Next: test fresh letters in the open spots ({{open}}).', { open: open.join(', ') }));
     return { text: bits.join(' '), facts: { guesses: list, greens, ambers, ruledOut: grey, openSpots: open, left } };
   }
 

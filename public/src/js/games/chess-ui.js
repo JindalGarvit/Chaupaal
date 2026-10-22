@@ -27,24 +27,24 @@
     variant: 'standard',
   };
   const TC_PRESETS = [
-    { cat: 'Bullet', id: '1+0', min: 1, inc: 0 },
-    { cat: 'Bullet', id: '2+1', min: 2, inc: 1 },
-    { cat: 'Blitz', id: '3+0', min: 3, inc: 0 },
-    { cat: 'Blitz', id: '3+2', min: 3, inc: 2 },
-    { cat: 'Blitz', id: '5+0', min: 5, inc: 0 },
-    { cat: 'Rapid', id: '10+0', min: 10, inc: 0 },
-    { cat: 'Rapid', id: '15+10', min: 15, inc: 10 },
-    { cat: 'Classical', id: '30+0', min: 30, inc: 0 },
+    { cat: t('games.chess.bullet'), id: '1+0', min: 1, inc: 0 },
+    { cat: t('games.chess.bullet'), id: '2+1', min: 2, inc: 1 },
+    { cat: t('games.chess.blitz'), id: '3+0', min: 3, inc: 0 },
+    { cat: t('games.chess.blitz'), id: '3+2', min: 3, inc: 2 },
+    { cat: t('games.chess.blitz'), id: '5+0', min: 5, inc: 0 },
+    { cat: t('games.chess.rapid'), id: '10+0', min: 10, inc: 0 },
+    { cat: t('games.chess.rapid'), id: '15+10', min: 15, inc: 10 },
+    { cat: t('games.chess.classical'), id: '30+0', min: 30, inc: 0 },
   ];
   const DAILY = [
-    { id: 'daily1', days: 1, label: '1 day / move' },
-    { id: 'daily3', days: 3, label: '3 days / move' },
+    { id: 'daily1', days: 1, label: t('games.chess.1_day_move') },
+    { id: 'daily3', days: 3, label: t('games.chess.3_days_move') },
   ];
   const THEMES = {
-    classic: { label: 'Classic', light: '#f0d9b5', dark: '#b58863' },
-    green: { label: 'Green', light: '#eeeed2', dark: '#769656' },
-    slate: { label: 'Slate', light: '#dee3e6', dark: '#8ca2ad' },
-    contrast: { label: 'High contrast', light: '#ffffff', dark: '#3d3d3d' },
+    classic: { label: t('games.chess.classic'), light: '#f0d9b5', dark: '#b58863' },
+    green: { label: t('games.chess.green'), light: '#eeeed2', dark: '#769656' },
+    slate: { label: t('games.chess.slate'), light: '#dee3e6', dark: '#8ca2ad' },
+    contrast: { label: t('games.chess.high_contrast'), light: '#ffffff', dark: '#3d3d3d' },
   };
   const VS = '\uFE0E';
   const GLYPHS = {
@@ -52,27 +52,27 @@
     outline: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
   };
   const PIECE_NAMES = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
-  const BUCKET_LABEL = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapid', classical: 'Classical', daily: 'Daily' };
+  const BUCKET_LABEL = { bullet: t('games.chess.bullet'), blitz: t('games.chess.blitz'), rapid: t('games.chess.rapid'), classical: t('games.chess.classical'), daily: t('games.chess.daily') };
   const REASON_TEXT = {
-    checkmate: 'Checkmate',
-    stalemate: 'Stalemate',
-    insufficient: 'Insufficient material',
-    fivefold: 'Fivefold repetition',
-    seventyfive: '75-move rule',
-    threefold: 'Threefold repetition',
-    fifty: '50-move rule',
-    agreement: 'Draw agreed',
-    resignation: 'Resignation',
-    timeout: 'Time out',
-    timeout_insufficient: 'Time out — opponent can’t mate, so it’s a draw',
-    abandoned: 'Opponent left the game',
-    abandoned_insufficient: 'Opponent left — draw by insufficient material',
-    aborted: 'Game aborted',
-    no_first_move: 'Aborted — no first move',
-    opponent_left: 'Aborted — opponent left',
-    no_show: 'Opponent didn’t join',
-    both_left: 'Void — both players left. No chips or rating moved',
-    cancelled: 'Challenge cancelled',
+    checkmate: t('games.chess.checkmate'),
+    stalemate: t('games.chess.stalemate'),
+    insufficient: t('games.chess.insufficient_material'),
+    fivefold: t('games.chess.fivefold_repetition'),
+    seventyfive: t('games.chess.75_move_rule'),
+    threefold: t('games.chess.threefold_repetition'),
+    fifty: t('games.chess.50_move_rule'),
+    agreement: t('games.chess.draw_agreed'),
+    resignation: t('games.chess.resignation'),
+    timeout: t('games.chess.time_out'),
+    timeout_insufficient: t('games.chess.time_out_opponent_can_t_mate'),
+    abandoned: t('games.chess.opponent_left_the_game'),
+    abandoned_insufficient: t('games.chess.opponent_left_draw_by_insufficient_materia'),
+    aborted: t('games.chess.game_aborted'),
+    no_first_move: t('games.chess.aborted_no_first_move'),
+    opponent_left: t('games.chess.aborted_opponent_left'),
+    no_show: t('games.chess.opponent_didn_t_join'),
+    both_left: t('games.chess.void_both_players_left_no_chips'),
+    cancelled: t('games.chess.challenge_cancelled'),
   };
 
   // ---------------- small utils ----------------
@@ -112,7 +112,7 @@
   function myName() {
     const p = typeof userProfile !== 'undefined' ? userProfile : null;
     const u = typeof currentUser !== 'undefined' ? currentUser : null;
-    return String((p && (p.name || p.displayName)) || (u && u.displayName) || 'You').trim().slice(0, 24);
+    return String((p && (p.name || p.displayName)) || (u && u.displayName) || t('dangal.classics.you')).trim().slice(0, 24);
   }
   function deviceId() {
     try {
@@ -144,9 +144,9 @@
     return m + 'm';
   }
   function tcLabel(tc) {
-    if (!tc) return 'No clock';
-    if (tc.days) return tc.days === 1 ? 'Daily · 1 day' : 'Daily · ' + tc.days + ' days';
-    if (!tc.base && !tc.min) return 'No clock';
+    if (!tc) return t('games.chess.no_clock');
+    if (tc.days) return t('games.chess.daily_days', { days: tc.days });
+    if (!tc.base && !tc.min) return t('games.chess.no_clock');
     const min = tc.min != null ? tc.min : tc.base / 60000;
     const inc = tc.inc != null && tc.min != null ? tc.inc : (tc.inc || 0) / 1000;
     return (Math.round(min * 10) / 10) + '+' + inc;
@@ -159,12 +159,12 @@
   }
   function speakSan(san, color) {
     const who = color === 'w' ? 'White' : 'Black';
-    if (/^O-O-O/.test(san)) return who + ' castles queenside';
-    if (/^O-O/.test(san)) return who + ' castles kingside';
+    if (/^O-O-O/.test(san)) return t('games.chess.who_castles_queenside', { who });
+    if (/^O-O/.test(san)) return t('games.chess.who_castles_kingside', { who });
     const m = /^([KQRBN])?([a-h]?[1-8]?)(x)?([a-h][1-8])(=([QRBN]))?([+#])?/.exec(san) || [];
     const piece = m[1] ? PIECE_NAMES[m[1].toLowerCase()] : 'pawn';
     let s = who + ' ' + piece + (m[3] ? ' takes ' : ' to ') + (m[4] || '');
-    if (m[6]) s += ', promotes to ' + PIECE_NAMES[m[6].toLowerCase()];
+    if (m[6]) s += t('games.chess.promotes_to_value', { value: PIECE_NAMES[m[6].toLowerCase()] });
     if (m[7] === '#') s += ', checkmate';
     else if (m[7] === '+') s += ', check';
     return s;
@@ -327,10 +327,10 @@
   }
   function liveErrorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
-    if (code === 'OFFLINE') return 'You’re offline — reconnect to keep playing';
-    if (code === 'RATE_LIMITED') return 'Slow down a little and try again';
-    if (code === 'NOT_IN_MATCH') return 'This game is for two other players';
-    return (e && e.message) || 'Something went wrong — try again';
+    if (code === 'OFFLINE') return t('games.chess.you_re_offline_reconnect_to_keep');
+    if (code === 'RATE_LIMITED') return t('games.chess.slow_down_a_little_and_try');
+    if (code === 'NOT_IN_MATCH') return t('games.chess.this_game_is_for_two_other');
+    return (e && e.message) || t('games.chess.something_went_wrong_try_again');
   }
 
   // ---------------- panel (full-screen sheet on the device) ----------------
@@ -343,8 +343,8 @@
     const backId = 'chessPanelBack' + Date.now().toString(36);
     el.innerHTML =
       (typeof gameChromeHtml === 'function'
-        ? gameChromeHtml({ title: opts.title || 'Chess', subtitle: opts.subtitle || '', backId, rightHtml: opts.rightHtml || '' })
-        : `<div class="chess-panel__head"><button type="button" id="${backId}" class="game-tap-target">‹</button><b>${esc(opts.title || 'Chess')}</b></div>`) +
+        ? gameChromeHtml({ title: opts.title || t('games.chess.rules.ruleset.name'), subtitle: opts.subtitle || '', backId, rightHtml: opts.rightHtml || '' })
+        : `<div class="chess-panel__head"><button type="button" id="${backId}" class="game-tap-target">‹</button><b>${esc(opts.title || t('games.chess.rules.ruleset.name'))}</b></div>`) +
       '<div class="chess-panel__body"></div>';
     device.appendChild(el);
     if (typeof prepareGameOverlay === 'function') prepareGameOverlay(el, { theme: 'dark', gameId: GAME });
@@ -378,7 +378,7 @@
           .filter(Boolean)
           .map((it) => `<button type="button" class="chess-sheet__item game-tap-target" data-id="${esc(it.id)}"${it.disabled ? ' disabled' : ''}>${esc(it.label)}${it.hint ? `<small>${esc(it.hint)}</small>` : ''}</button>`)
           .join('')}</div>
-        <button type="button" class="chess-sheet__cancel game-tap-target" data-id="">${esc((opts && opts.cancelLabel) || 'Close')}</button>
+        <button type="button" class="chess-sheet__cancel game-tap-target" data-id="">${esc((opts && opts.cancelLabel) || t('common.close'))}</button>
       </div>`;
       device.appendChild(el);
       const done = (v) => {
@@ -394,7 +394,7 @@
   }
 
   function confirmSheet(title, body, okLabel) {
-    return pickSheet(title, [{ id: 'ok', label: okLabel || 'OK' }], { note: body, cancelLabel: 'Keep playing' }).then((v) => v === 'ok');
+    return pickSheet(title, [{ id: 'ok', label: okLabel || 'OK' }], { note: body, cancelLabel: t('games.chess.keep_playing') }).then((v) => v === 'ok');
   }
 
   // ---------------- board view ----------------
@@ -412,7 +412,7 @@
     const el = document.createElement('div');
     el.className = 'chess-board2';
     el.setAttribute('role', 'grid');
-    el.setAttribute('aria-label', 'Chess board');
+    el.setAttribute('aria-label', t('games.chess.chess_board'));
     host.appendChild(el);
     let view = null;
     let selected = null;
@@ -477,11 +477,11 @@
         const pick = document.createElement('div');
         pick.className = 'cb-promo';
         pick.setAttribute('role', 'dialog');
-        pick.setAttribute('aria-label', 'Promote to');
+        pick.setAttribute('aria-label', t('games.chess.promote_to'));
         pick.innerHTML =
           ['q', 'r', 'b', 'n']
             .map((t) => `<button type="button" class="cb-promo__btn game-tap-target" data-p="${t}" aria-label="${PIECE_NAMES[t]}"><span class="cb-pc cb-pc--${color}">${glyphFor({ type: t, color }, settings().pieces)}</span></button>`)
-            .join('') + '<button type="button" class="cb-promo__x game-tap-target" data-p="" aria-label="Cancel">×</button>';
+            .join('') + '<button type="button" class="cb-promo__x game-tap-target" data-p="" aria-label="' + tHtml('common.cancel') + '">×</button>';
         host.appendChild(pick);
         pick.addEventListener('click', (e) => {
           const b = e.target.closest('[data-p]');
@@ -656,7 +656,7 @@
   }
 
   function moveListHtml(sans, startBlack, viewPly, cls) {
-    if (!sans.length) return '<div class="chess-moves__empty">Moves appear here</div>';
+    if (!sans.length) return '<div class="chess-moves__empty">' + tHtml('games.chess.moves_appear_here') + '</div>';
     let n = 1;
     const rows = [];
     let row = [];
@@ -683,7 +683,7 @@
     const line = pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
     const area = `0,${H} ` + line + ` ${W},${H}`;
     const cx = cur ? (cur / values.length) * W : 0;
-    return `<svg class="chess-graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evaluation graph">
+    return `<svg class="chess-graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${tHtml('games.chess.evaluation_graph')}">
       <rect x="0" y="0" width="${W}" height="${H}" fill="#2a2f45"/>
       <polygon points="${area}" fill="#e8e6df"/>
       <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="#888" stroke-width="0.5"/>
@@ -706,8 +706,8 @@
       const el = document.createElement('div');
       el.className = 'chess-sheet';
       const cats = [...new Set(TC_PRESETS.map((t) => t.cat))];
-      el.innerHTML = `<div class="chess-sheet__panel chess-tc" role="dialog" aria-label="Time control">
-        <div class="chess-sheet__title">Time control</div>
+      el.innerHTML = `<div class="chess-sheet__panel chess-tc" role="dialog" aria-label="${tHtml('games.chess.rules.variant.time.label')}">
+        <div class="chess-sheet__title">${tHtml('games.chess.rules.variant.time.label')}</div>
         ${cats
           .map(
             (cat) => `<div class="chess-tc__cat">${cat}</div><div class="chess-tc__grid">${TC_PRESETS.filter((t) => t.cat === cat)
@@ -715,18 +715,18 @@
               .join('')}</div>`
           )
           .join('')}
-        ${o.noDaily ? '' : `<div class="chess-tc__cat">Daily</div><div class="chess-tc__grid">${DAILY.map((d) => `<button type="button" class="chess-chip game-tap-target" data-days="${d.days}">${d.label}</button>`).join('')}</div>`}
-        <details class="chess-adv"><summary>Advanced</summary>
+        ${o.noDaily ? '' : `<div class="chess-tc__cat">${tHtml('games.chess.rules.rules.6.h')}</div><div class="chess-tc__grid">${DAILY.map((d) => `<button type="button" class="chess-chip game-tap-target" data-days="${d.days}">${d.label}</button>`).join('')}</div>`}
+        <details class="chess-adv"><summary>${tHtml('games.chess.advanced')}</summary>
           <div class="chess-tc__custom">
-            <label>Minutes <input type="number" min="0.5" max="180" step="0.5" value="7" data-cmin inputmode="decimal"></label>
-            <label>Increment (s) <input type="number" min="0" max="60" step="1" value="5" data-cinc inputmode="numeric"></label>
-            <button type="button" class="chess-chip game-tap-target" data-custom>Use custom</button>
+            <label>${tHtml('games.chess.minutes')} <input type="number" min="0.5" max="180" step="0.5" value="7" data-cmin inputmode="decimal"></label>
+            <label>${tHtml('games.chess.increment_s')} <input type="number" min="0" max="60" step="1" value="5" data-cinc inputmode="numeric"></label>
+            <button type="button" class="chess-chip game-tap-target" data-custom>${tHtml('games.chess.use_custom')}</button>
           </div>
-          <button type="button" class="chess-toggle game-tap-target" data-960 aria-pressed="${chess960}">Chess960 (Fischer Random): ${chess960 ? 'On' : 'Off'}</button>
-          ${o.noRated ? '' : `<button type="button" class="chess-toggle game-tap-target" data-rated aria-pressed="${rated}">Rated: ${rated ? 'On' : 'Off'}</button>`}
-          <button type="button" class="chess-chip game-tap-target" data-none>No clock (unrated)</button>
+          <button type="button" class="chess-toggle game-tap-target" data-960 aria-pressed="${chess960}">${tHtml('games.chess.chess960_fischer_random_value', { value: chess960 ? 'On' : 'Off' })}</button>
+          ${o.noRated ? '' : `<button type="button" class="chess-toggle game-tap-target" data-rated aria-pressed="${rated}">${tHtml('games.chess.rated_value', { value: rated ? 'On' : 'Off' })}</button>`}
+          <button type="button" class="chess-chip game-tap-target" data-none>${tHtml('games.chess.no_clock_unrated')}</button>
         </details>
-        <button type="button" class="chess-sheet__cancel game-tap-target" data-cancel>Cancel</button>
+        <button type="button" class="chess-sheet__cancel game-tap-target" data-cancel>${tHtml('common.cancel')}</button>
       </div>`;
       device.appendChild(el);
       const done = (v) => {
@@ -735,32 +735,32 @@
       };
       el.addEventListener('click', (e) => {
         if (e.target === el || e.target.closest('[data-cancel]')) return done(null);
-        const t = e.target.closest('button');
-        if (!t) return;
-        if (t.hasAttribute('data-960')) {
+        const _t = e.target.closest('button');
+        if (!_t) return;
+        if (_t.hasAttribute('data-960')) {
           chess960 = !chess960;
-          t.setAttribute('aria-pressed', String(chess960));
-          t.textContent = 'Chess960 (Fischer Random): ' + (chess960 ? 'On' : 'Off');
+          _t.setAttribute('aria-pressed', String(chess960));
+          _t.textContent = t('games.chess.chess960_fischer_random_value', { value: chess960 ? 'On' : 'Off' });
           return;
         }
-        if (t.hasAttribute('data-rated')) {
+        if (_t.hasAttribute('data-rated')) {
           rated = !rated;
-          t.setAttribute('aria-pressed', String(rated));
-          t.textContent = 'Rated: ' + (rated ? 'On' : 'Off');
+          _t.setAttribute('aria-pressed', String(rated));
+          _t.textContent = t('games.chess.rated_value', { value: rated ? 'On' : 'Off' });
           return;
         }
-        if (t.dataset.days) {
-          const days = Number(t.dataset.days);
-          return done({ min: 0, inc: 0, days, label: 'daily' + days, chess960, rated });
+        if (_t.dataset.days) {
+          const days = Number(_t.dataset.days);
+          return done({ min: 0, inc: 0, days, label: t('games.chess.daily_days', { days }), chess960, rated });
         }
-        if (t.hasAttribute('data-none')) return done({ min: 0, inc: 0, days: 0, label: 'none', chess960, rated: false });
-        if (t.hasAttribute('data-custom')) {
+        if (_t.hasAttribute('data-none')) return done({ min: 0, inc: 0, days: 0, label: 'none', chess960, rated: false });
+        if (_t.hasAttribute('data-custom')) {
           const min = Math.max(0.5, Math.min(180, Number(el.querySelector('[data-cmin]').value) || 5));
           const inc = Math.max(0, Math.min(60, Math.round(Number(el.querySelector('[data-cinc]').value) || 0)));
           return done({ min, inc, days: 0, label: min + '+' + inc, chess960, rated });
         }
-        if (t.dataset.min) {
-          const min = Number(t.dataset.min), inc = Number(t.dataset.inc) || 0;
+        if (_t.dataset.min) {
+          const min = Number(_t.dataset.min), inc = Number(_t.dataset.inc) || 0;
           return done({ min, inc, days: 0, label: min + '+' + inc, chess960, rated });
         }
       });
@@ -800,40 +800,40 @@
   // ---------------- licences + settings ----------------
 
   function openLicences() {
-    const p = openPanel({ title: 'Licences', subtitle: 'Chess' });
+    const p = openPanel({ title: t('games.chess.licences'), subtitle: t('games.chess.rules.ruleset.name') });
     if (!p) return;
     p.body.innerHTML = `<div class="chess-doc">
-      <h3>Chess engine</h3>
-      <p>The chess engine, bots, game review and rules core are original Chaupaal code (no third-party engine is bundled). We chose our own engine instead of Stockfish so the app does not ship GPL-licensed code.</p>
-      <h3>Opening names</h3>
-      <p>ECO codes and opening names are standard public-domain chess nomenclature.</p>
-      <h3>chess.js</h3>
-      <p>Used only in development tests to cross-check our move generator. © Jeff Hlywa — BSD 2-Clause licence. Not shipped to your device.</p>
-      <h3>Rules</h3>
-      <p>${esc((typeof federationHonestyLine === 'function' && federationHonestyLine(GAME)) || 'Rules based on the Laws of Chess')}. Chaupaal is not affiliated with any chess federation.</p>
+      <h3>${tHtml('games.chess.chess_engine')}</h3>
+      <p>${tHtml('games.chess.the_chess_engine_bots_game_review')}</p>
+      <h3>${tHtml('games.chess.opening_names')}</h3>
+      <p>${tHtml('games.chess.eco_codes_and_opening_names_are')}</p>
+      <h3>${tHtml('games.chess.chess_js')}</h3>
+      <p>${tHtml('games.chess.used_only_in_development_tests_to')}</p>
+      <h3>${tHtml('games.chess.rules')}</h3>
+      <p>${tHtml('games.chess.rules_source_not_affiliated', { source: (typeof federationHonestyLine === 'function' && federationHonestyLine(GAME)) || t('games.chess.rules_based_on_the_laws_of') })}</p>
     </div>`;
   }
 
   function openSettings(onChange) {
-    const p = openPanel({ title: 'Chess settings', onClose: onChange });
+    const p = openPanel({ title: t('games.chess.chess_settings'), onClose: onChange });
     if (!p) return;
     function paint() {
       const s = settings();
       const toggle = (key, label, hint) =>
-        `<button type="button" class="chess-toggle game-tap-target" data-key="${key}" aria-pressed="${!!s[key]}">${esc(label)}: ${s[key] ? 'On' : 'Off'}${hint ? `<small>${esc(hint)}</small>` : ''}</button>`;
+        `<button type="button" class="chess-toggle game-tap-target" data-key="${key}" aria-pressed="${!!s[key]}">${esc(label)}: ${s[key] ? tHtml('games.chess.on') : tHtml('games.chess.off')}${hint ? `<small>${esc(hint)}</small>` : ''}</button>`;
       p.body.innerHTML = `<div class="chess-settings">
-        <div class="chess-tc__cat">Board</div>
+        <div class="chess-tc__cat">${tHtml('common.board')}</div>
         <div class="chess-tc__grid">${Object.keys(THEMES).map((k) => `<button type="button" class="chess-chip game-tap-target${s.theme === k ? ' is-on' : ''}" data-theme="${k}">${THEMES[k].label}</button>`).join('')}</div>
-        <div class="chess-tc__cat">Pieces</div>
-        <div class="chess-tc__grid"><button type="button" class="chess-chip game-tap-target${s.pieces === 'solid' ? ' is-on' : ''}" data-pieces="solid">Solid</button><button type="button" class="chess-chip game-tap-target${s.pieces === 'outline' ? ' is-on' : ''}" data-pieces="outline">Classic</button></div>
-        <div class="chess-tc__cat">Play</div>
+        <div class="chess-tc__cat">${tHtml('games.chess.pieces')}</div>
+        <div class="chess-tc__grid"><button type="button" class="chess-chip game-tap-target${s.pieces === 'solid' ? ' is-on' : ''}" data-pieces="solid">${tHtml('games.chess.solid')}</button><button type="button" class="chess-chip game-tap-target${s.pieces === 'outline' ? ' is-on' : ''}" data-pieces="outline">${tHtml('games.chess.classic')}</button></div>
+        <div class="chess-tc__cat">${tHtml('common.saathi_cta_play')}</div>
         ${toggle('autoClaim', 'Auto-claim draws', 'Threefold repetition and the 50-move rule end the game automatically')}
         ${toggle('autoQueen', 'Auto-queen', 'Skip the promotion picker')}
         ${toggle('premove', 'Premoves', 'Queue a move during your opponent’s turn (Bullet and Blitz)')}
         ${toggle('legalDots', 'Show legal moves')}
         ${toggle('coords', 'Coordinates')}
         ${toggle('sound', 'Sounds')}
-        <button type="button" class="chess-link game-tap-target" data-licences>Licences</button>
+        <button type="button" class="chess-link game-tap-target" data-licences>${tHtml('games.chess.licences')}</button>
       </div>`;
     }
     paint();
@@ -896,7 +896,7 @@
     overlay.className = 'chess-play2 game-overlay game-overlay--dark';
     const gs = beginGameOverlaySession({
       type: GAME,
-      title: 'Chess',
+      title: t('games.chess.rules.ruleset.name'),
       mode: mode === 'practice' ? 'practice' : 'live',
       chat: cfg.chat,
       overlay,
@@ -938,18 +938,18 @@
     };
 
     overlay.innerHTML = `
-      ${typeof gameChromeHtml === 'function' ? gameChromeHtml({ title: 'Chess', subtitle: '', backId: 'chess2Back', rightHtml: '<button type="button" id="chess2More" class="game-chrome-action game-tap-target" aria-label="More options">⋯</button>' }) : ''}
+      ${typeof gameChromeHtml === 'function' ? gameChromeHtml({ title: t('games.chess.rules.ruleset.name'), subtitle: '', backId: 'chess2Back', rightHtml: '<button type="button" id="chess2More" class="game-chrome-action game-tap-target" aria-label="' + tHtml('common.more_options') + '">⋯</button>' }) : ''}
       <div class="chess2-banner" data-banner hidden role="status"></div>
       <div class="chess2-rail" data-rail="top"></div>
       <div class="chess2-boardwrap"><div class="chess2-board" data-board></div></div>
       <div class="chess2-rail" data-rail="bottom"></div>
       <div class="chess2-opening" data-opening></div>
-      <div class="chess-moves" data-moves aria-label="Move list"></div>
+      <div class="chess-moves" data-moves aria-label="${tHtml('games.chess.move_list')}"></div>
       <div class="chess2-nav" data-nav>
-        <button type="button" class="game-tap-target" data-nav-go="first" aria-label="First move">«</button>
-        <button type="button" class="game-tap-target" data-nav-go="prev" aria-label="Previous move">‹</button>
-        <button type="button" class="game-tap-target" data-nav-go="next" aria-label="Next move">›</button>
-        <button type="button" class="game-tap-target" data-nav-go="last" aria-label="Latest move">»</button>
+        <button type="button" class="game-tap-target" data-nav-go="first" aria-label="${tHtml('games.chess.first_move')}">«</button>
+        <button type="button" class="game-tap-target" data-nav-go="prev" aria-label="${tHtml('games.chess.previous_move')}">‹</button>
+        <button type="button" class="game-tap-target" data-nav-go="next" aria-label="${tHtml('games.chess.next_move')}">›</button>
+        <button type="button" class="game-tap-target" data-nav-go="last" aria-label="${tHtml('games.chess.latest_move')}">»</button>
       </div>
       <div class="chess2-actions" data-actions></div>
       <div class="chess2-result" data-result hidden></div>
@@ -982,7 +982,7 @@
     function botLabel(level, persona) {
       const info = S ? S.levelInfo(level) : { level, approx: 0 };
       const pName = persona && S && S.PERSONAS[persona] ? S.PERSONAS[persona].label + ' ' : '';
-      return `${pName}Bot · Level ${info.level}${info.approx ? ' (≈' + info.approx + ')' : ''}`;
+      return t('games.chess.pname_bot_level_level_value', { pName, level: info.level, value: info.approx ? ' (≈' + info.approx + ')' : '' });
     }
 
     function premoveAllowed() {
@@ -1090,19 +1090,19 @@
       const on = movesEl.querySelector('.is-on');
       if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       const op = chess960 ? null : ecoName(sans);
-      $('[data-opening]').textContent = chess960 ? 'Chess960' : op ? op.eco + ' · ' + op.name : '';
+      $('[data-opening]').textContent = chess960 ? t('games.chess.rules.rules.7.h') : op ? op.eco + ' · ' + op.name : '';
       paintActions();
       paintSubtitle();
     }
     function paintSubtitle() {
       if (!subtitleEl) return;
       let sub;
-      if (mode === 'practice') sub = 'Practice · ' + (tc && tc.min ? tc.min + '+' + tc.inc : 'No clock') + (chess960 ? ' · 960' : '');
-      else if (mode === 'spectate') sub = 'Watching · delayed';
+      if (mode === 'practice') sub = t('games.chess.practice_tc', { tc: tc && tc.min ? tc.min + '+' + tc.inc : t('games.chess.no_clock') }) + (chess960 ? ' · 960' : '');
+      else if (mode === 'spectate') sub = t('games.chess.watching_delayed');
       else if (pub) {
         const b = pub.bucket ? BUCKET_LABEL[pub.bucket] : '';
-        sub = [pub.tc.days ? tcLabel(pub.tc) : pub.tc.base ? tcLabel(pub.tc) : 'No clock', pub.rated ? 'Rated ' + b : 'Casual', pub.variant === 'chess960' ? '960' : '', pub.stake ? '⚡' + pub.stake : ''].filter(Boolean).join(' · ');
-      } else sub = 'Connecting…';
+        sub = [pub.tc.days ? tcLabel(pub.tc) : pub.tc.base ? tcLabel(pub.tc) : t('games.chess.no_clock'), pub.rated ? t('games.chess.rated_b', { b }) : t('games.chess.casual'), pub.variant === 'chess960' ? '960' : '', pub.stake ? '⚡' + pub.stake : ''].filter(Boolean).join(' · ');
+      } else sub = t('dangal.classics.connecting');
       subtitleEl.textContent = sub;
     }
     function banner(text, actionsHtml) {
@@ -1120,25 +1120,25 @@
       const a = $('[data-actions]');
       if (!a) return;
       if (ended || role !== 'player') {
-        a.innerHTML = role === 'spectator' && !ended ? '<span class="chess2-note">Watching — moves appear a few plies late</span>' : '';
+        a.innerHTML = role === 'spectator' && !ended ? '<span class="chess2-note">' + tHtml('games.chess.watching_moves_appear_a_few_plies') + '</span>' : '';
         return;
       }
       const btn = (id, label, primary, disabled) => `<button type="button" class="chess2-btn game-tap-target${primary ? ' chess2-btn--primary' : ''}" data-act="${id}"${disabled ? ' disabled' : ''}>${esc(label)}</button>`;
       const parts = [];
       if (mode === 'practice') {
         const claim = !settings().autoClaim && game.claimable();
-        if (claim) parts.push(btn('claim', 'Claim draw', true));
-        parts.push(btn('hint', hintOn ? 'Hint shown' : 'Hint', false, game.turn() !== myColor || botBusy));
-        parts.push(btn('undo', 'Undo', false, !game.history().length || botBusy));
-        parts.push(btn('resign', 'Resign'));
+        if (claim) parts.push(btn('claim', t('games.chess.claim_draw'), true));
+        parts.push(btn('hint', hintOn ? t('games.chess.hint_shown') : t('games.chess.hint'), false, game.turn() !== myColor || botBusy));
+        parts.push(btn('undo', t('games.chess.undo'), false, !game.history().length || botBusy));
+        parts.push(btn('resign', t('dangal.classics.resign')));
       } else if (pub && pub.status === 'playing') {
         const myMoves = myColor === 'w' ? Math.ceil(pub.ply / 2) : Math.floor(pub.ply / 2);
-        if (pub.claimable) parts.push(btn('claim', 'Claim draw', true));
-        if (myMoves === 0) parts.push(btn('abort', 'Abort'));
-        else parts.push(btn('draw', pub.drawOffer && pub.drawOffer.by === me ? 'Draw offered' : 'Offer draw', false, pub.drawOffer && pub.drawOffer.by === me));
-        parts.push(btn('resign', 'Resign'));
+        if (pub.claimable) parts.push(btn('claim', t('games.chess.claim_draw'), true));
+        if (myMoves === 0) parts.push(btn('abort', t('games.chess.rules.rules.5.h')));
+        else parts.push(btn('draw', pub.drawOffer && pub.drawOffer.by === me ? t('games.chess.draw_offered') : t('games.chess.offer_draw'), false, pub.drawOffer && pub.drawOffer.by === me));
+        parts.push(btn('resign', t('dangal.classics.resign')));
       } else if (pub && pub.status === 'waiting') {
-        parts.push(btn('cancel', 'Cancel challenge'));
+        parts.push(btn('cancel', t('games.chess.cancel_challenge')));
       }
       a.innerHTML = parts.join('');
     }
@@ -1277,10 +1277,10 @@
         orientationSet = true;
       }
       if (pub.drawOffer && pub.drawOffer.by !== me && pub.status === 'playing') {
-        banner(names()[myColor === 'w' ? 'b' : 'w'] + ' offers a draw', '<button type="button" class="game-tap-target" data-draw="yes">Accept</button><button type="button" class="game-tap-target" data-draw="no">Decline</button>');
+        banner(t('games.chess.value_offers_a_draw', { value: names()[myColor === 'w' ? 'b' : 'w'] }), '<button type="button" class="game-tap-target" data-draw="yes">' + tHtml('common.accept') + '</button><button type="button" class="game-tap-target" data-draw="no">' + tHtml('games.chess.decline') + '</button>');
       } else if (pub.status === 'waiting') {
         const mins = Math.max(0, Math.ceil((pub.deadline - serverNow()) / 60000));
-        banner(`Waiting for ${L.oppName || 'your opponent'} to join · ${mins} min`);
+        banner(t('games.chess.waiting_for_value_to_join_mins', { value: L.oppName || t('games.chess.your_opponent'), mins }));
       } else banner('');
       if (pub.status === 'playing' && premove && game.turn() === myColor) {
         const pm = premove;
@@ -1315,7 +1315,7 @@
         const pol = window.DangalLivePolicy ? window.DangalLivePolicy.policyFor(GAME) : null;
         const rs = pol ? window.DangalLivePolicy.reconnectStatus(presence[opp], now, pol) : null;
         if (rs && rs.warn) {
-          banner(`${names()[myColor === 'w' ? 'b' : 'w']} lost connection — ${window.DangalLivePolicy.countdownText(rs.msLeft)} to come back`);
+          banner(t('games.chess.value_lost_connection_countdowntext_to_com', { value: names()[myColor === 'w' ? 'b' : 'w'], countdownText: window.DangalLivePolicy.countdownText(rs.msLeft) }));
         } else if (rs && !pub.drawOffer && $('[data-banner]') && /lost connection/.test($('[data-banner]').textContent)) banner('');
         if (rs && rs.expired) need = need || gap > 3000;
       }
@@ -1327,7 +1327,7 @@
 
     function subscribe() {
       if (typeof rtdb === 'undefined' || !rtdb) {
-        toast('Live needs a connection — try again');
+        toast(t('games.chess.live_needs_a_connection_try_again'));
         return;
       }
       const base = rtdb.ref('games/chess/' + L.matchId);
@@ -1339,7 +1339,7 @@
         else applyPub(v);
       };
       node.on('value', onVal, () => {
-        if (role !== 'spectator') toast('Couldn’t load the game — check your connection');
+        if (role !== 'spectator') toast(t('games.chess.couldn_t_load_the_game_check'));
       });
       subs.push(() => node.off('value', onVal));
       try {
@@ -1378,8 +1378,8 @@
       specNames = { w: nm[v.white] || 'White', b: nm[v.black] || 'Black' };
       if (v.status !== 'playing' && v.status !== 'waiting' && !resultShown) {
         ended = { result: v.result, reason: v.reason, winner: v.result === '1-0' ? 'w' : v.result === '0-1' ? 'b' : null };
-        banner((v.result || '') + ' · ' + (REASON_TEXT[v.reason] || 'Game over'));
-      } else banner(v.delayPlies ? `Watching · ${v.delayPlies} moves behind` : 'Watching');
+        banner((v.result || '') + ' · ' + (REASON_TEXT[v.reason] || t('games.chess.game_over')));
+      } else banner(v.delayPlies ? t('games.chess.watching_delayplies_moves_behind', { delayPlies: v.delayPlies }) : t('games.chess.watching'));
       paint();
     }
 
@@ -1408,7 +1408,7 @@
         if (!gs.alive()) return;
         if (r && r.role === 'spectator') {
           role = 'other-device';
-          toast('This game is open on another device — watching here');
+          toast(t('games.chess.this_game_is_open_on_another'));
         }
         subscribe();
       } catch (e) {
@@ -1425,7 +1425,7 @@
       const drew = !out.winner && out.result === '1/2-1/2';
       const aborted = out.result === '*' || /abort|no_show|cancel|opponent_left/.test(out.reason || '');
       const nm = names();
-      const title = aborted ? 'Game aborted' : drew ? 'Draw' : role === 'spectator' ? (out.winner === 'w' ? nm.w : nm.b) + ' won' : won ? 'You won' : `${nm[myColor === 'w' ? 'b' : 'w']} won`;
+      const title = aborted ? t('games.chess.game_aborted') : drew ? t('dangal.classics.draw') : role === 'spectator' ? (out.winner === 'w' ? nm.w : nm.b) + ' won' : won ? t('games.chess.you_won') : `${nm[myColor === 'w' ? 'b' : 'w']} won`;
       return { won, drew, aborted, title, sub: REASON_TEXT[out.reason] || out.reason || '' };
     }
     function paintSettlement() {
@@ -1434,42 +1434,42 @@
       const s = pub.settlement[me];
       if (!s) return;
       const parts = [];
-      if (s.chipDelta) parts.push(`Virtual chips ${s.chipDelta > 0 ? '+' : ''}${s.chipDelta}`);
+      if (s.chipDelta) parts.push(t('games.chess.virtual_chips_value_chipdelta', { value: s.chipDelta > 0 ? '+' : '', chipDelta: s.chipDelta }));
       if (pub.settlement.rated && s.eloDelta != null) parts.push(`${BUCKET_LABEL[pub.settlement.bucket] || ''} rating ${s.eloDelta >= 0 ? '+' : ''}${s.eloDelta}`.trim());
-      if (!parts.length) parts.push(pub.rated ? 'Rated game settled' : 'Casual game · unrated');
-      el.textContent = parts.join(' · ') + ' · not real money';
+      if (!parts.length) parts.push(pub.rated ? t('games.chess.rated_game_settled') : t('games.chess.casual_game_unrated'));
+      el.textContent = t('games.chess.parts_not_real_money', { parts: parts.join(' · ') });
       el.hidden = false;
     }
     function showResult() {
       if (resultShown) return;
       resultShown = true;
-      const t = resultTexts();
+      const _t = resultTexts();
       const box = $('[data-result]');
       const hist = game.history();
       const canReview = hist.length >= 2;
       const actions = [];
-      if (mode === 'practice') actions.push({ id: 'again', label: 'Play again', primary: true });
-      else if (mode === 'live') actions.push({ id: 'again', label: 'Rematch', primary: true });
-      if (canReview) actions.push({ id: 'review', label: 'Review game', primary: false });
-      if (hist.length) actions.push({ id: 'share', label: 'Share', primary: false });
-      if (mode === 'live' && L.opp) actions.push({ id: 'chat', label: 'Chat', primary: false });
+      if (mode === 'practice') actions.push({ id: 'again', label: t('games.chess.play_again'), primary: true });
+      else if (mode === 'live') actions.push({ id: 'again', label: t('games.chess.rematch'), primary: true });
+      if (canReview) actions.push({ id: 'review', label: t('games.chess.review_game'), primary: false });
+      if (hist.length) actions.push({ id: 'share', label: t('common.share'), primary: false });
+      if (mode === 'live' && L.opp) actions.push({ id: 'chat', label: t('common.chat'), primary: false });
       const shareStats = {
-        scoreLine: t.aborted ? 'Aborted' : t.drew ? 'Draw' : t.won ? 'Win' : 'Loss',
-        meta: (subtitleEl && subtitleEl.textContent) || 'Chess',
+        scoreLine: _t.aborted ? t('games.chess.aborted_2') : _t.drew ? t('dangal.classics.draw') : _t.won ? t('games.chess.win') : t('games.chess.loss'),
+        meta: (subtitleEl && subtitleEl.textContent) || t('games.chess.rules.ruleset.name'),
         vs: 'vs ' + names()[myColor === 'w' ? 'b' : 'w'],
-        text: `Chaupaal Chess: ${t.aborted ? 'aborted' : t.drew ? 'draw' : t.won ? 'I won' : 'tough loss'} vs ${names()[myColor === 'w' ? 'b' : 'w']} · ${t.sub}\n${game.history().join(' ').slice(0, 300)}`,
+        text: t('games.chess.chaupaal_chess_value_vs_value2_sub', { value: _t.aborted ? t('games.chess.aborted') : _t.drew ? t('games.chess.draw') : _t.won ? t('games.chess.i_won') : t('games.chess.tough_loss'), value2: names()[myColor === 'w' ? 'b' : 'w'], sub: _t.sub, value3: game.history().join(' ').slice(0, 300) }),
       };
       const html =
         typeof gameResultHtml === 'function'
           ? gameResultHtml({
               gameId: GAME,
-              glyph: t.aborted ? '·' : t.drew ? '=' : t.won ? '✓' : '·',
-              title: t.title,
-              subtitle: t.sub,
+              glyph: _t.aborted ? '·' : _t.drew ? '=' : _t.won ? '✓' : '·',
+              title: _t.title,
+              subtitle: _t.sub,
               shareCardHtml: typeof buildGameShareCard === 'function' ? buildGameShareCard(GAME, shareStats) : '',
               actions: role === 'spectator' ? [] : actions,
             })
-          : `<div class="chess2-result__card"><b>${esc(t.title)}</b><div>${esc(t.sub)}</div>${actions.map((a) => `<button type="button" data-action="${a.id}">${esc(a.label)}</button>`).join('')}</div>`;
+          : `<div class="chess2-result__card"><b>${esc(_t.title)}</b><div>${esc(_t.sub)}</div>${actions.map((a) => `<button type="button" data-action="${a.id}">${esc(a.label)}</button>`).join('')}</div>`;
       box.innerHTML = html + '<div class="chess-chip-delta" data-settle hidden></div>';
       box.hidden = false;
       paintSettlement();
@@ -1491,20 +1491,20 @@
     function shareGame(stats) {
       const pgn = game.pgn({ Event: 'Chaupaal Chess', White: names().w, Black: names().b });
       if (typeof shareGameResult === 'function') shareGameResult(GAME, Object.assign({}, stats, { text: stats.text + '\n\n' + pgn }));
-      else copyText(pgn, 'PGN copied');
+      else copyText(pgn, t('games.chess.pgn_copied'));
     }
     function restartPractice() {
       try {
         window.__dangalLaunchCtx = { gameId: GAME, gameType: GAME, mode: 'practice', matchId: '', opponentUid: 'ai', stake: 0, source: 'manch', practiceKind: 'vsAi', skipPracticeSetup: true, startedAt: Date.now() };
       } catch (e) {}
       gs.close();
-      playGame({ mode: 'practice', chat: { name: 'Practice', id: 'ai' }, practice: Object.assign({}, P, { startFen: P.retryFen || undefined }) });
+      playGame({ mode: 'practice', chat: { name: t('dangal.solo.practice'), id: 'ai' }, practice: Object.assign({}, P, { startFen: P.retryFen || undefined }) });
     }
     let rematchAsked = false;
     function requestRematch() {
       if (rematchAsked) return;
       rematchAsked = true;
-      toast('Rematch requested — colours swap');
+      toast(t('games.chess.rematch_requested_colours_swap'));
       liveCall('rematch', { matchId: L.matchId })
         .then((r) => {
           if (r && r.nextMatchId && pub && pub.rematch) goRematch(r.nextMatchId);
@@ -1526,36 +1526,36 @@
 
     // ---- actions ----
     overlay.addEventListener('click', async (e) => {
-      const t = e.target.closest('[data-act],[data-nav-go],[data-ply],[data-draw]');
-      if (!t) return;
-      if (t.dataset.ply) {
-        const n = Number(t.dataset.ply);
+      const _t = e.target.closest('[data-act],[data-nav-go],[data-ply],[data-draw]');
+      if (!_t) return;
+      if (_t.dataset.ply) {
+        const n = Number(_t.dataset.ply);
         viewPly = n >= game.history().length ? null : n;
         board.clear();
         paint();
         return;
       }
-      if (t.dataset.navGo) {
+      if (_t.dataset.navGo) {
         const total = game.history().length;
         let cur = viewPly == null ? total : viewPly;
-        if (t.dataset.navGo === 'first') cur = 0;
-        else if (t.dataset.navGo === 'prev') cur = Math.max(0, cur - 1);
-        else if (t.dataset.navGo === 'next') cur = Math.min(total, cur + 1);
+        if (_t.dataset.navGo === 'first') cur = 0;
+        else if (_t.dataset.navGo === 'prev') cur = Math.max(0, cur - 1);
+        else if (_t.dataset.navGo === 'next') cur = Math.min(total, cur + 1);
         else cur = total;
         viewPly = cur >= total ? null : cur;
         board.clear();
         paint();
         return;
       }
-      if (t.dataset.draw) {
-        liveCall('respond_draw', { matchId: L.matchId, accept: t.dataset.draw === 'yes' }).catch((err) => toast(liveErrorText(err)));
+      if (_t.dataset.draw) {
+        liveCall('respond_draw', { matchId: L.matchId, accept: _t.dataset.draw === 'yes' }).catch((err) => toast(liveErrorText(err)));
         banner('');
         return;
       }
-      const act = t.dataset.act;
+      const act = _t.dataset.act;
       if (act === 'hint') {
         if (game.turn() !== myColor) return;
-        t.disabled = true;
+        _t.disabled = true;
         try {
           const r = await Engine.analyse({ startFen, chess960, moves: game.history({ verbose: true }).map((v) => v.lan), timeMs: 700 });
           if (r && r.move && gs.alive()) {
@@ -1564,7 +1564,7 @@
             paintActions();
           }
         } catch (err) {
-          toast('Hint unavailable right now');
+          toast(t('games.chess.hint_unavailable_right_now'));
         }
         return;
       }
@@ -1588,12 +1588,12 @@
       }
       if (act === 'draw') {
         liveCall('offer_draw', { matchId: L.matchId })
-          .then(() => toast('Draw offered'))
+          .then(() => toast(t('games.chess.draw_offered')))
           .catch((err) => toast(liveErrorText(err)));
         return;
       }
       if (act === 'abort') {
-        const ok = await confirmSheet('Abort game?', 'Before your first move: no rating change and no chips.', 'Abort');
+        const ok = await confirmSheet(t('games.chess.abort_game'), t('games.chess.before_your_first_move_no_rating'), t('games.chess.rules.rules.5.h'));
         if (!ok) return;
         liveCall('abort', { matchId: L.matchId }).catch((err) => toast(liveErrorText(err)));
         return;
@@ -1604,7 +1604,7 @@
         return;
       }
       if (act === 'resign') {
-        const ok = await confirmSheet('Resign?', mode === 'practice' ? 'You lose this practice game.' : 'You lose this game.', 'Resign');
+        const ok = await confirmSheet(t('games.chess.resign'), mode === 'practice' ? t('games.chess.you_lose_this_practice_game') : t('games.chess.you_lose_this_game'), t('dangal.classics.resign'));
         if (!ok) return;
         if (mode === 'practice') finishPractice({ result: myColor === 'w' ? '0-1' : '1-0', reason: 'resignation', winner: myColor === 'w' ? 'b' : 'w' });
         else liveCall('resign', { matchId: L.matchId }).catch((err) => toast(liveErrorText(err)));
@@ -1614,21 +1614,21 @@
     overlay.querySelector('#chess2More')?.addEventListener('click', openMore);
     async function openMore() {
       const items = [
-        { id: 'flip', label: 'Flip board' },
-        { id: 'pgn', label: 'Copy PGN' },
-        { id: 'fen', label: 'Copy FEN' },
-        isLive && L.matchId ? { id: 'watch', label: 'Copy watch link', hint: 'Friends can spectate with a short delay' } : null,
-        { id: 'settings', label: 'Settings' },
-        { id: 'rules', label: 'Rules' },
-        { id: 'licences', label: 'Licences' },
+        { id: 'flip', label: t('games.chess.flip_board') },
+        { id: 'pgn', label: t('games.chess.copy_pgn') },
+        { id: 'fen', label: t('games.chess.copy_fen') },
+        isLive && L.matchId ? { id: 'watch', label: t('games.chess.copy_watch_link'), hint: t('games.chess.friends_can_spectate_with_a_short') } : null,
+        { id: 'settings', label: t('common.settings') },
+        { id: 'rules', label: t('games.chess.rules') },
+        { id: 'licences', label: t('games.chess.licences') },
       ];
-      const pick = await pickSheet('Chess', items, { note: isLive ? 'Hints are off in rated and Live games.' : '' });
+      const pick = await pickSheet(t('games.chess.rules.ruleset.name'), items, { note: isLive ? t('games.chess.hints_are_off_in_rated_and') : '' });
       if (pick === 'flip') {
         orientation = orientation === 'w' ? 'b' : 'w';
         paint();
-      } else if (pick === 'pgn') copyText(game.pgn({ Event: 'Chaupaal Chess', White: names().w, Black: names().b }), 'PGN copied');
-      else if (pick === 'fen') copyText(shownGame().fen(), 'FEN copied');
-      else if (pick === 'watch') copyText(location.origin + '/?section=dangal&chess_watch=' + encodeURIComponent(L.matchId), 'Watch link copied');
+      } else if (pick === 'pgn') copyText(game.pgn({ Event: 'Chaupaal Chess', White: names().w, Black: names().b }), t('games.chess.pgn_copied'));
+      else if (pick === 'fen') copyText(shownGame().fen(), t('games.chess.fen_copied'));
+      else if (pick === 'watch') copyText(location.origin + '/?section=dangal&chess_watch=' + encodeURIComponent(L.matchId), t('games.chess.watch_link_copied'));
       else if (pick === 'settings') openSettings(() => paint());
       else if (pick === 'rules' && window.DangalRules) window.DangalRules.openSheet(GAME, { variants: { chess960 } });
       else if (pick === 'licences') openLicences();
@@ -1640,12 +1640,12 @@
         return;
       }
       if (mode === 'practice') {
-        const ok = await confirmSheet('Leave practice?', 'This game won’t be saved.', 'Leave');
+        const ok = await confirmSheet(t('games.chess.leave_practice'), t('games.chess.this_game_won_t_be_saved'), t('dangal.leave'));
         if (ok) gs.close();
         return;
       }
       const myMoves = myColor === 'w' ? Math.ceil(pub.ply / 2) : Math.floor(pub.ply / 2);
-      const ok = await confirmSheet(myMoves ? 'Resign and leave?' : 'Abort and leave?', myMoves ? 'Leaving a Live game counts as a loss.' : 'No rating change and no chips before your first move.', 'Leave');
+      const ok = await confirmSheet(myMoves ? t('games.chess.resign_and_leave') : t('games.chess.abort_and_leave'), myMoves ? t('games.chess.leaving_a_live_game_counts_as') : t('games.chess.no_rating_change_and_no_chips'), t('dangal.leave'));
       if (!ok) return;
       liveCall(myMoves ? 'resign' : 'abort', { matchId: L.matchId }).catch(() => {});
       gs.close();
@@ -1671,19 +1671,19 @@
   function copyText(text, done) {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => toast(done), () => toast('Couldn’t copy'));
+        navigator.clipboard.writeText(text).then(() => toast(done), () => toast(t('games.chess.couldn_t_copy')));
         return;
       }
     } catch (e) {}
-    toast('Couldn’t copy');
+    toast(t('games.chess.couldn_t_copy'));
   }
 
   // ---------------- review ----------------
 
   async function openReview(o) {
-    const p = openPanel({ title: 'Game review', subtitle: 'Analysing…' });
+    const p = openPanel({ title: t('games.chess.game_review'), subtitle: t('games.chess.analysing') });
     if (!p) return;
-    p.body.innerHTML = '<div class="chess-review__loading"><div class="chess-progress"><span data-progress></span></div><p>Our engine is checking every move…</p></div>';
+    p.body.innerHTML = '<div class="chess-review__loading"><div class="chess-progress"><span data-progress></span></div><p>' + tHtml('games.chess.our_engine_is_checking_every_move') + '</p></div>';
     let analysis;
     try {
       await loadLazy('games/chess-review.js');
@@ -1692,14 +1692,14 @@
         if (bar) bar.style.width = Math.round(f * 100) + '%';
       });
     } catch (e) {
-      if (p.alive()) p.body.innerHTML = '<p class="chess-doc">Review isn’t available right now. Try again in a moment.</p>';
+      if (p.alive()) p.body.innerHTML = '<p class="chess-doc">' + tHtml('games.chess.review_isn_t_available_right_now') + '</p>';
       return;
     }
     if (!p.alive()) return;
     const R = window.ChessReview;
     const rev = R.buildReview({ startFen: o.startFen, chess960: o.chess960, moves: o.moves, analysis });
     const sub = p.el.querySelector('.game-chrome__subtitle, .game-chrome-subtitle, [data-chrome-subtitle]');
-    if (sub) sub.textContent = `Accuracy · White ${rev.accuracy.w ?? '—'} · Black ${rev.accuracy.b ?? '—'}`;
+    if (sub) sub.textContent = t('games.chess.accuracy_white_value_black_value2', { value: rev.accuracy.w ?? '—', value2: rev.accuracy.b ?? '—' });
     renderViewer(p, {
       startFen: o.startFen,
       chess960: o.chess960,
@@ -1726,10 +1726,10 @@
       <div class="chess-viewer__info" data-info aria-live="polite"></div>
       <div class="chess-moves" data-vmoves></div>
       <div class="chess2-nav">
-        <button type="button" class="game-tap-target" data-go="first" aria-label="First move">«</button>
-        <button type="button" class="game-tap-target" data-go="prev" aria-label="Previous move">‹</button>
-        <button type="button" class="game-tap-target" data-go="next" aria-label="Next move">›</button>
-        <button type="button" class="game-tap-target" data-go="last" aria-label="Last move">»</button>
+        <button type="button" class="game-tap-target" data-go="first" aria-label="${tHtml('games.chess.first_move')}">«</button>
+        <button type="button" class="game-tap-target" data-go="prev" aria-label="${tHtml('games.chess.previous_move')}">‹</button>
+        <button type="button" class="game-tap-target" data-go="next" aria-label="${tHtml('games.chess.next_move')}">›</button>
+        <button type="button" class="game-tap-target" data-go="last" aria-label="${tHtml('games.chess.last_move')}">»</button>
       </div>
       <div class="chess2-actions" data-vactions></div>
     </div>`;
@@ -1769,11 +1769,11 @@
         const m = rev.moves[ply - 1];
         if (!m) {
           const op = window.ChessEco ? window.ChessEco.lookup(hist.map((h) => h.san)) : null;
-          info.innerHTML = `<div class="chess-viewer__acc"><span>White ${rev.accuracy.w ?? '—'}%</span><span>Black ${rev.accuracy.b ?? '—'}%</span></div>${op ? `<div class="chess2-opening">${esc(op.eco + ' · ' + op.name)}</div>` : ''}<div class="chess-key">${rev.keyMoments.map((k) => `<button type="button" class="chess-chip game-tap-target" data-ply="${k.ply + 1}">${esc((k.brilliant ? '!! ' : '') + k.san)}</button>`).join('')}</div>`;
+          info.innerHTML = `<div class="chess-viewer__acc"><span>${tHtml('games.chess.white_value', { value: rev.accuracy.w ?? '—' })}</span><span>${tHtml('games.chess.black_value', { value: rev.accuracy.b ?? '—' })}</span></div>${op ? `<div class="chess2-opening">${esc(op.eco + ' · ' + op.name)}</div>` : ''}<div class="chess-key">${rev.keyMoments.map((k) => `<button type="button" class="chess-chip game-tap-target" data-ply="${k.ply + 1}">${esc((k.brilliant ? '!! ' : '') + k.san)}</button>`).join('')}</div>`;
         } else {
           const fb = window.ChessReview.coachFallback(m);
           const c = coach[m.ply];
-          info.innerHTML = `<div class="chess-badge chess-badge--${m.brilliant ? 'brilliant' : m.cls}">${esc(m.brilliant ? 'Brilliant' : m.label)} · ${esc(m.san)} · ${esc(m.evalAfter)}</div>
+          info.innerHTML = `<div class="chess-badge chess-badge--${m.brilliant ? 'brilliant' : m.cls}">${esc(m.brilliant ? t('games.chess.brilliant') : m.label)} · ${esc(m.san)} · ${esc(m.evalAfter)}</div>
             <p class="chess-coach">${esc(c ? c.text : fb.text)}</p>
             ${(c ? c.tips : fb.tips).map((t) => `<div class="chess-tip">${esc(t)}</div>`).join('')}`;
         }
@@ -1784,52 +1784,52 @@
       const m = rev ? rev.moves[ply - 1] : null;
       act.innerHTML = rev
         ? [
-            m ? '<button type="button" class="chess2-btn game-tap-target" data-v="explain">Explain</button>' : '',
-            m ? '<button type="button" class="chess2-btn chess2-btn--primary game-tap-target" data-v="retry">Retry this position</button>' : '',
-            '<button type="button" class="chess2-btn game-tap-target" data-v="flip">Flip</button>',
-            rev.brilliant ? '<button type="button" class="chess2-btn game-tap-target" data-v="sharebrill">Share brilliant move</button>' : '',
+            m ? '<button type="button" class="chess2-btn game-tap-target" data-v="explain">' + tHtml('games.chess.explain') + '</button>' : '',
+            m ? '<button type="button" class="chess2-btn chess2-btn--primary game-tap-target" data-v="retry">' + tHtml('games.chess.retry_this_position') + '</button>' : '',
+            '<button type="button" class="chess2-btn game-tap-target" data-v="flip">' + tHtml('games.chess.flip') + '</button>',
+            rev.brilliant ? '<button type="button" class="chess2-btn game-tap-target" data-v="sharebrill">' + tHtml('games.chess.share_brilliant_move') + '</button>' : '',
           ].join('')
         : [
-            '<button type="button" class="chess2-btn chess2-btn--primary game-tap-target" data-v="engine">Engine</button>',
-            '<button type="button" class="chess2-btn game-tap-target" data-v="flip">Flip</button>',
-            '<button type="button" class="chess2-btn game-tap-target" data-v="pgn">Copy PGN</button>',
-            '<button type="button" class="chess2-btn game-tap-target" data-v="fen">Copy FEN</button>',
+            '<button type="button" class="chess2-btn chess2-btn--primary game-tap-target" data-v="engine">' + tHtml('games.chess.engine') + '</button>',
+            '<button type="button" class="chess2-btn game-tap-target" data-v="flip">' + tHtml('games.chess.flip') + '</button>',
+            '<button type="button" class="chess2-btn game-tap-target" data-v="pgn">' + tHtml('games.chess.copy_pgn') + '</button>',
+            '<button type="button" class="chess2-btn game-tap-target" data-v="fen">' + tHtml('games.chess.copy_fen') + '</button>',
           ].join('');
     }
     p.body.addEventListener('click', async (e) => {
-      const t = e.target.closest('[data-ply],[data-go],[data-v]');
-      if (!t) return;
+      const _t = e.target.closest('[data-ply],[data-go],[data-v]');
+      if (!_t) return;
       const moves = rev ? v.moves : analysisMoves;
-      if (t.dataset.ply) ply = Number(t.dataset.ply);
-      else if (t.dataset.go) {
-        if (t.dataset.go === 'first') ply = 0;
-        else if (t.dataset.go === 'prev') ply = Math.max(0, ply - 1);
-        else if (t.dataset.go === 'next') ply = Math.min(moves.length, ply + 1);
+      if (_t.dataset.ply) ply = Number(_t.dataset.ply);
+      else if (_t.dataset.go) {
+        if (_t.dataset.go === 'first') ply = 0;
+        else if (_t.dataset.go === 'prev') ply = Math.max(0, ply - 1);
+        else if (_t.dataset.go === 'next') ply = Math.min(moves.length, ply + 1);
         else ply = moves.length;
         engineLine = '';
-      } else if (t.dataset.v === 'flip') orientation = orientation === 'w' ? 'b' : 'w';
-      else if (t.dataset.v === 'retry') {
+      } else if (_t.dataset.v === 'flip') orientation = orientation === 'w' ? 'b' : 'w';
+      else if (_t.dataset.v === 'retry') {
         const m = rev.moves[ply - 1];
         p.close();
         playGame({
           mode: 'practice',
-          chat: { name: 'Practice', id: 'ai' },
+          chat: { name: t('dangal.solo.practice'), id: 'ai' },
           practice: { level: v.level || 5, persona: '', color: m.color, tc: { min: 0, inc: 0 }, chess960: v.chess960, startFen: m.before, retryFen: m.before },
         });
         return;
-      } else if (t.dataset.v === 'explain') {
+      } else if (_t.dataset.v === 'explain') {
         const m = rev.moves[ply - 1];
         if (!m || coach[m.ply]) return;
-        t.disabled = true;
-        t.textContent = 'Thinking…';
+        _t.disabled = true;
+        _t.textContent = t('games.chess.thinking');
         coach[m.ply] = await explainMove(m);
-      } else if (t.dataset.v === 'sharebrill') {
+      } else if (_t.dataset.v === 'sharebrill') {
         const b = rev.brilliant;
-        const stats = { scoreLine: 'Brilliant move', meta: 'Chess review', vs: '', text: `I found a brilliant move in Chaupaal Chess: ${b.san}!!` };
+        const stats = { scoreLine: t('games.chess.brilliant_move'), meta: t('games.chess.chess_review'), vs: '', text: t('games.chess.i_found_a_brilliant_move_in', { san: b.san }) };
         if (typeof shareGameResult === 'function') shareGameResult(GAME, stats);
         return;
-      } else if (t.dataset.v === 'engine') {
-        t.disabled = true;
+      } else if (_t.dataset.v === 'engine') {
+        _t.disabled = true;
         try {
           const r = await Engine.analyse({ startFen: v.startFen, chess960: v.chess960, moves: moves.slice(0, ply), timeMs: 900 });
           const g = gameAt(v.startFen, v.chess960, moves, ply);
@@ -1840,15 +1840,15 @@
             sans.push(x.san);
           }
           const pov = gameAt(v.startFen, v.chess960, moves, ply).turn() === 'w' ? 1 : -1;
-          const evalText = r.mate ? 'Mate in ' + Math.abs(r.mate) : ((r.score * pov) / 100 >= 0 ? '+' : '') + ((r.score * pov) / 100).toFixed(1);
+          const evalText = r.mate ? t('games.chess.mate_in_value', { value: Math.abs(r.mate) }) : ((r.score * pov) / 100 >= 0 ? '+' : '') + ((r.score * pov) / 100).toFixed(1);
           engineLine = `${evalText} · ${sans.slice(0, 8).join(' ')} (depth ${r.depth})`;
         } catch (err) {
-          engineLine = 'Engine unavailable right now';
+          engineLine = t('games.chess.engine_unavailable_right_now');
         }
-      } else if (t.dataset.v === 'pgn') {
+      } else if (_t.dataset.v === 'pgn') {
         const g = gameAt(v.startFen, v.chess960, moves);
-        return copyText(g.pgn({ Event: 'Chaupaal analysis' }), 'PGN copied');
-      } else if (t.dataset.v === 'fen') return copyText(gameAt(v.startFen, v.chess960, moves, ply).fen(), 'FEN copied');
+        return copyText(g.pgn({ Event: 'Chaupaal analysis' }), t('games.chess.pgn_copied'));
+      } else if (_t.dataset.v === 'fen') return copyText(gameAt(v.startFen, v.chess960, moves, ply).fen(), t('games.chess.fen_copied'));
       paint();
     });
     paint();
@@ -1868,7 +1868,7 @@
           hook: 'coachExplain',
           input: {
             gameId: GAME,
-            situation: `${m.color === 'w' ? 'White' : 'Black'} played ${m.san} (${m.label}). Evaluation after: ${m.evalAfter}.`,
+            situation: t('games.chess.value_played_san_label_evaluation_after', { value: m.color === 'w' ? t('games.chess.white') : t('games.chess.black'), san: m.san, label: m.label, evalAfter: m.evalAfter }),
             move: m.san,
             engineText: fb.text,
             engineTips: fb.tips,
@@ -1887,7 +1887,7 @@
 
   async function openAnalysis(opts) {
     const o = opts || {};
-    const p = openPanel({ title: 'Analysis board', subtitle: 'Free play · engine on demand' });
+    const p = openPanel({ title: t('games.chess.analysis_board'), subtitle: t('games.chess.free_play_engine_on_demand') });
     if (!p) return;
     let startFen = window.ChessCore.START_FEN;
     let moves = [];
@@ -1904,9 +1904,9 @@
           startFen = g.fen();
           chess960 = g.chess960;
         } catch (e) {
-          toast('That FEN isn’t valid');
+          toast(t('games.chess.that_fen_isn_t_valid'));
         }
-      } else toast('That PGN has an illegal move');
+      } else toast(t('games.chess.that_pgn_has_an_illegal_move'));
     }
     renderViewer(p, { startFen, chess960, moves, orientation: 'w' });
   }
@@ -1917,11 +1917,11 @@
       if (!device) return resolve(null);
       const el = document.createElement('div');
       el.className = 'chess-sheet';
-      el.innerHTML = `<div class="chess-sheet__panel" role="dialog" aria-label="Import game">
-        <div class="chess-sheet__title">Import PGN or FEN</div>
-        <textarea class="chess-import" rows="6" placeholder="Paste a PGN or a FEN" data-text></textarea>
-        <button type="button" class="chess2-btn chess2-btn--primary game-tap-target" data-ok>Open in analysis</button>
-        <button type="button" class="chess-sheet__cancel game-tap-target" data-cancel>Cancel</button>
+      el.innerHTML = `<div class="chess-sheet__panel" role="dialog" aria-label="${tHtml('games.chess.import_game')}">
+        <div class="chess-sheet__title">${tHtml('games.chess.import_pgn_or_fen')}</div>
+        <textarea class="chess-import" rows="6" placeholder="${tHtml('games.chess.paste_a_pgn_or_a_fen')}" data-text></textarea>
+        <button type="button" class="chess2-btn chess2-btn--primary game-tap-target" data-ok>${tHtml('games.chess.open_in_analysis')}</button>
+        <button type="button" class="chess-sheet__cancel game-tap-target" data-cancel>${tHtml('common.cancel')}</button>
       </div>`;
       device.appendChild(el);
       const done = (v) => {
@@ -1944,13 +1944,13 @@
 
   async function openDaily() {
     if (!persistable(myUid())) {
-      toast('Sign in to play Daily chess');
+      toast(t('games.chess.sign_in_to_play_daily_chess'));
       return;
     }
-    const p = openPanel({ title: 'Daily chess', subtitle: '1 or 3 days per move · we’ll notify you' });
+    const p = openPanel({ title: t('games.chess.daily_chess'), subtitle: t('games.chess.1_or_3_days_per_move') });
     if (!p) return;
     async function load() {
-      p.body.innerHTML = '<p class="chess-doc">Loading…</p>';
+      p.body.innerHTML = '<p class="chess-doc">' + tHtml('common.loading') + '</p>';
       let data = { games: [], seeks: [] };
       try {
         data = await liveCall('daily_list', {});
@@ -1963,37 +1963,37 @@
       const rows = (data.games || [])
         .map((g) => {
           const opp = g.white === me ? g.black : g.white;
-          const nm = (g.names && g.names[opp]) || 'Opponent';
-          return `<button type="button" class="chess-daily__row game-tap-target" data-open="${esc(g.matchId)}" data-opp="${esc(opp)}" data-name="${esc(nm)}"><b>${esc(nm)}</b><span>${g.myTurn ? 'Your move · ' + fmtDaily(g.deadline - Date.now()) + ' left' : 'Their move'}</span></button>`;
+          const nm = (g.names && g.names[opp]) || t('dangal.opponent');
+          return `<button type="button" class="chess-daily__row game-tap-target" data-open="${esc(g.matchId)}" data-opp="${esc(opp)}" data-name="${esc(nm)}"><b>${esc(nm)}</b><span>${g.myTurn ? tHtml('games.chess.your_move_value_left', { value: fmtDaily(g.deadline - Date.now()) }) : tHtml('games.chess.their_move')}</span></button>`;
         })
         .join('');
       p.body.innerHTML = `<div class="chess-daily">
-        ${rows || '<p class="chess-doc">No Daily games yet.</p>'}
-        <div class="chess-tc__cat">Find an opponent</div>
-        <div class="chess-tc__grid">${DAILY.map((d) => `<button type="button" class="chess-chip game-tap-target" data-seek="${d.days}">${(data.seeks || []).indexOf(d.days) >= 0 ? 'Searching… ' : ''}${d.label}</button>`).join('')}</div>
-        ${(data.seeks || []).length ? '<button type="button" class="chess-link game-tap-target" data-cancel-seek>Stop searching</button>' : ''}
-        <p class="chess-note">Daily games are rated separately. Invite a friend from “Play a friend” and pick Daily.</p>
+        ${rows || '<p class="chess-doc">' + tHtml('games.chess.no_daily_games_yet') + '</p>'}
+        <div class="chess-tc__cat">${tHtml('games.chess.find_an_opponent')}</div>
+        <div class="chess-tc__grid">${DAILY.map((d) => `<button type="button" class="chess-chip game-tap-target" data-seek="${d.days}">${(data.seeks || []).indexOf(d.days) >= 0 ? tHtml('games.chess.searching') + ' ' : ''}${d.label}</button>`).join('')}</div>
+        ${(data.seeks || []).length ? '<button type="button" class="chess-link game-tap-target" data-cancel-seek>' + tHtml('games.chess.stop_searching') + '</button>' : ''}
+        <p class="chess-note">${tHtml('games.chess.daily_games_are_rated_separately_invite')}</p>
       </div>`;
     }
     p.body.addEventListener('click', async (e) => {
-      const t = e.target.closest('[data-open],[data-seek],[data-cancel-seek]');
-      if (!t) return;
-      if (t.dataset.open) {
+      const _t = e.target.closest('[data-open],[data-seek],[data-cancel-seek]');
+      if (!_t) return;
+      if (_t.dataset.open) {
         p.close();
-        playGame({ mode: 'live', chat: { name: t.dataset.name, id: t.dataset.opp }, live: { matchId: t.dataset.open, opp: t.dataset.opp, host: false, oppName: t.dataset.name } });
+        playGame({ mode: 'live', chat: { name: _t.dataset.name, id: _t.dataset.opp }, live: { matchId: _t.dataset.open, opp: _t.dataset.opp, host: false, oppName: _t.dataset.name } });
         return;
       }
-      if (t.dataset.seek) {
+      if (_t.dataset.seek) {
         try {
-          const r = await liveCall('daily_seek', { days: Number(t.dataset.seek), name: myName() });
-          toast(r.matched ? 'Opponent found — game on!' : 'Searching — we’ll notify you when a game starts');
+          const r = await liveCall('daily_seek', { days: Number(_t.dataset.seek), name: myName() });
+          toast(r.matched ? t('games.chess.opponent_found_game_on') : t('games.chess.searching_we_ll_notify_you_when'));
         } catch (err) {
           toast(liveErrorText(err));
         }
         load();
         return;
       }
-      if (t.hasAttribute('data-cancel-seek')) {
+      if (_t.hasAttribute('data-cancel-seek')) {
         await liveCall('daily_cancel', {}).catch(() => {});
         load();
       }
@@ -2005,14 +2005,14 @@
 
   async function challengeFriend() {
     if (typeof openFriendPickerSheet !== 'function') {
-      toast('Open a chat with a friend to challenge them');
+      toast(t('games.chess.open_a_chat_with_a_friend'));
       return;
     }
-    const friend = await openFriendPickerSheet({ title: 'Play a friend', subtitle: 'Live or Daily · virtual chips only' });
+    const friend = await openFriendPickerSheet({ title: t('games.chess.play_a_friend'), subtitle: t('games.chess.live_or_daily_virtual_chips_only') });
     if (!friend) return;
     const uid = friend.uid || friend.id || '';
     if (!persistable(uid)) {
-      toast('Pick a real friend to challenge');
+      toast(t('games.chess.pick_a_real_friend_to_challenge'));
       return;
     }
     const tc = await timeSheet({ defaultMin: 5, defaultInc: 0 });
@@ -2044,37 +2044,37 @@
       await loadLazy('games/chess-search.js');
     } catch (e) {}
     const S = window.ChessSearch;
-    const p = openPanel({ title: 'Chess', subtitle: ratingLine() });
+    const p = openPanel({ title: t('games.chess.rules.ruleset.name'), subtitle: ratingLine() });
     if (!p) return;
     function paint() {
       const s = settings();
       const lvl = S ? S.levelInfo(s.level) : { level: s.level, approx: 0 };
       p.body.innerHTML = `<div class="chess-home">
-        <div class="chess-home__glance">Play a bot</div>
-        <div class="chess-tc__cat">Level · ≈${lvl.approx || '—'} (approximate)</div>
-        <div class="chess-levels">${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<button type="button" class="chess-chip game-tap-target${s.level === n ? ' is-on' : ''}" data-level="${n}" aria-label="Level ${n}">${n}</button>`).join('')}</div>
-        <div class="chess-tc__cat">Time control</div>
+        <div class="chess-home__glance">${tHtml('games.chess.play_a_bot')}</div>
+        <div class="chess-tc__cat">${tHtml('games.chess.level_value_approximate', { value: lvl.approx || '—' })}</div>
+        <div class="chess-levels">${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<button type="button" class="chess-chip game-tap-target${s.level === n ? ' is-on' : ''}" data-level="${n}" aria-label="${tHtml('dangal.level_n', { n })}">${n}</button>`).join('')}</div>
+        <div class="chess-tc__cat">${tHtml('games.chess.rules.variant.time.label')}</div>
         <div class="chess-tc__grid">${['3+2', '5+0', '10+0', '15+10', 'none']
-          .map((id) => `<button type="button" class="chess-chip game-tap-target${s.practiceTc === id ? ' is-on' : ''}" data-tc="${id}">${id === 'none' ? 'No clock' : id}</button>`)
+          .map((id) => `<button type="button" class="chess-chip game-tap-target${s.practiceTc === id ? ' is-on' : ''}" data-tc="${id}">${id === 'none' ? tHtml('games.chess.no_clock') : id}</button>`)
           .join('')}</div>
-        <button type="button" class="chess2-btn chess2-btn--primary chess-home__start game-tap-target" data-start>Start</button>
-        <details class="chess-adv"><summary>More options</summary>
-          <div class="chess-tc__cat">Play as</div>
-          <div class="chess-tc__grid">${[['w', 'White'], ['b', 'Black'], ['random', 'Random']].map(([k, l]) => `<button type="button" class="chess-chip game-tap-target${s.side === k ? ' is-on' : ''}" data-side="${k}">${l}</button>`).join('')}</div>
-          <div class="chess-tc__cat">Bot style</div>
-          <div class="chess-tc__grid">${[['', 'Balanced'], ['aggressive', 'Aggressive'], ['solid', 'Solid'], ['tricky', 'Tricky'], ['friendly', 'Friendly']].map(([k, l]) => `<button type="button" class="chess-chip game-tap-target${s.persona === k ? ' is-on' : ''}" data-persona="${k}">${l}</button>`).join('')}</div>
-          <div class="chess-tc__cat">Variant</div>
-          <div class="chess-tc__grid"><button type="button" class="chess-chip game-tap-target${s.variant !== 'chess960' ? ' is-on' : ''}" data-variant="standard">Standard</button><button type="button" class="chess-chip game-tap-target${s.variant === 'chess960' ? ' is-on' : ''}" data-variant="chess960">Chess960</button></div>
-          <div class="chess-tc__cat">Longer clocks</div>
+        <button type="button" class="chess2-btn chess2-btn--primary chess-home__start game-tap-target" data-start>${tHtml('games.chess.start')}</button>
+        <details class="chess-adv"><summary>${tHtml('common.more_options')}</summary>
+          <div class="chess-tc__cat">${tHtml('games.chess.play_as')}</div>
+          <div class="chess-tc__grid">${/* i18n-copy */ [['w', t('games.chess.white')], ['b', t('games.chess.black')], ['random', t('games.chess.random')]].map(([k, l]) => `<button type="button" class="chess-chip game-tap-target${s.side === k ? ' is-on' : ''}" data-side="${k}">${l}</button>`).join('')}</div>
+          <div class="chess-tc__cat">${tHtml('games.chess.bot_style')}</div>
+          <div class="chess-tc__grid">${/* i18n-copy */ [['', t('games.chess.balanced')], ['aggressive', t('games.chess.aggressive')], ['solid', t('games.chess.solid')], ['tricky', t('games.chess.tricky')], ['friendly', t('games.chess.friendly')]].map(([k, l]) => `<button type="button" class="chess-chip game-tap-target${s.persona === k ? ' is-on' : ''}" data-persona="${k}">${l}</button>`).join('')}</div>
+          <div class="chess-tc__cat">${tHtml('games.chess.variant')}</div>
+          <div class="chess-tc__grid"><button type="button" class="chess-chip game-tap-target${s.variant !== 'chess960' ? ' is-on' : ''}" data-variant="standard">${tHtml('games.chess.standard')}</button><button type="button" class="chess-chip game-tap-target${s.variant === 'chess960' ? ' is-on' : ''}" data-variant="chess960">${tHtml('games.chess.rules.rules.7.h')}</button></div>
+          <div class="chess-tc__cat">${tHtml('games.chess.longer_clocks')}</div>
           <div class="chess-tc__grid">${['1+0', '2+1', '3+0', '30+0'].map((id) => `<button type="button" class="chess-chip game-tap-target${s.practiceTc === id ? ' is-on' : ''}" data-tc="${id}">${id}</button>`).join('')}</div>
         </details>
         <div class="chess-home__more">
-          <button type="button" class="chess-link game-tap-target" data-go="friend">Play a friend</button>
-          <button type="button" class="chess-link game-tap-target" data-go="daily">Daily games</button>
-          <button type="button" class="chess-link game-tap-target" data-go="analysis">Analysis board</button>
-          <button type="button" class="chess-link game-tap-target" data-go="import">Import PGN / FEN</button>
-          <button type="button" class="chess-link game-tap-target" data-go="settings">Settings</button>
-          <button type="button" class="chess-link game-tap-target" data-go="licences">Licences</button>
+          <button type="button" class="chess-link game-tap-target" data-go="friend">${tHtml('games.chess.play_a_friend')}</button>
+          <button type="button" class="chess-link game-tap-target" data-go="daily">${tHtml('games.chess.daily_games')}</button>
+          <button type="button" class="chess-link game-tap-target" data-go="analysis">${tHtml('games.chess.analysis_board')}</button>
+          <button type="button" class="chess-link game-tap-target" data-go="import">${tHtml('games.chess.import_pgn_fen')}</button>
+          <button type="button" class="chess-link game-tap-target" data-go="settings">${tHtml('common.settings')}</button>
+          <button type="button" class="chess-link game-tap-target" data-go="licences">${tHtml('games.chess.licences')}</button>
         </div>
       </div>`;
     }
@@ -2110,7 +2110,7 @@
 
   function ratingLine() {
     const r = typeof getGameRating === 'function' ? getGameRating(GAME) : null;
-    return r ? `Practice · Rating ${r}` : 'Practice vs bots';
+    return r ? t('games.chess.practice_rating_r', { r }) : t('games.chess.practice_vs_bots');
   }
 
   function startPracticeFromSettings(chat) {
@@ -2118,7 +2118,7 @@
     const preset = TC_PRESETS.find((t) => t.id === s.practiceTc);
     playGame({
       mode: 'practice',
-      chat: chat || { name: 'Practice', id: 'ai' },
+      chat: chat || { name: t('dangal.solo.practice'), id: 'ai' },
       practice: {
         level: s.level,
         persona: s.persona,
@@ -2140,7 +2140,7 @@
     try {
       await ready();
     } catch (e) {
-      toast('Chess couldn’t load — check your connection');
+      toast(t('games.chess.chess_couldn_t_load_check_your'));
       return;
     }
     loadLazy('games/chess-search.js').catch(() => {});
@@ -2153,7 +2153,7 @@
     if (live) {
       const mid = String(raw.dangalMatchId || launch.matchId || '').trim();
       if (!mid) {
-        toast('Challenge link broken — open Practice instead');
+        toast(t('games.chess.challenge_link_broken_open_practice_instea'));
         return;
       }
       const roles = DangalLive.roles ? DangalLive.roles(raw, launch) : { host: launch.source !== 'challenge' };
@@ -2169,7 +2169,7 @@
       (launch.skipPracticeSetup !== false && (launch.practiceKind === 'vsAi' || launch.mode === 'practice') && launch.source !== 'manch_home');
     if (quick) {
       await loadLazy('games/chess-search.js').catch(() => {});
-      startPracticeFromSettings({ name: 'Practice', id: 'ai' });
+      startPracticeFromSettings({ name: t('dangal.solo.practice'), id: 'ai' });
       return;
     }
     openHome(raw);
@@ -2180,7 +2180,7 @@
     await loadLazy('games/chess-eco.js').catch(() => {});
     const mid = String(matchId || '').replace(/[^\w.-]/g, '').slice(0, 120);
     if (!mid) return;
-    playGame({ mode: 'spectate', chat: { name: 'Watch', id: '' }, live: { matchId: mid } });
+    playGame({ mode: 'spectate', chat: { name: t('games.chess.watch'), id: '' }, live: { matchId: mid } });
   }
 
   /** Deep links: /?section=dangal&chess=<matchId> (Daily “Your move”) or &chess_watch=<matchId>. */
@@ -2203,7 +2203,7 @@
       else
         ready().then(() => {
           loadLazy('games/chess-search.js').catch(() => {});
-          playGame({ mode: 'live', chat: { name: 'Daily', id: '' }, live: { matchId: mid.replace(/[^\w.-]/g, ''), opp: '', host: false } });
+          playGame({ mode: 'live', chat: { name: t('games.chess.rules.rules.6.h'), id: '' }, live: { matchId: mid.replace(/[^\w.-]/g, ''), opp: '', host: false } });
         });
     }, 500);
   }

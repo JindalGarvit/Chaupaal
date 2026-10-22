@@ -8,15 +8,29 @@
   'use strict';
 
   const GAME = 'bluff';
-  const LABEL = 'Bluff';
+  const LABEL = t('dangal.identity.bluff.label');
   const SETUP_KEY = 'chaupaal_bluff_setup';
   const Core = () => window.BluffCore;
   const CK = () => window.ClassicsKit;
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('bluff.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.bluff.' + key, p || fallback) : fill(fallback, p);
   }
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function toast(msg) {
@@ -71,7 +85,7 @@
     const C = Core();
     const sz = opt.size || 'md';
     if (!c) return `<span class="pkr-card pkr-card--${sz} pkr-card--back" aria-hidden="true"></span>`;
-    if (C.isJoker(c)) return `<span class="pkr-card pkr-card--${sz} bl-joker${opt.cls ? ' ' + opt.cls : ''}" role="img" aria-label="Joker"><b>★</b><i>JK</i></span>`;
+    if (C.isJoker(c)) return `<span class="pkr-card pkr-card--${sz} bl-joker${opt.cls ? ' ' + opt.cls : ''}" role="img" aria-label="${tHtml('games.bluff.joker')}"><b>★</b><i>JK</i></span>`;
     const r = C.rankOf(c);
     const s = C.suitOf(c);
     const red = s === 'H' || s === 'D';
@@ -273,7 +287,7 @@
           const k = sel.indexOf(c);
           if (k >= 0) sel.splice(k, 1);
           else if (sel.length < (L().max || vm.maxPlay)) sel.push(c);
-          else return toast(tr('maxN', 'Up to') + ' ' + (L().max || vm.maxPlay) + ' ' + tr('perPlay', 'cards per play'));
+          else return toast(tr('up_to_value_cards_per_play', 'Up to {{value}} cards per play', { value: L().max || vm.maxPlay }));
           if (vm.rank < 0 && pick < 0 && sel.length === 1 && !Core().isJoker(c)) pick = Core().rankOf(c);
           fx('tap');
           paintHand();
@@ -301,7 +315,7 @@
               .join('')}</div>`
           : `<div class="bl-locked">${esc(tr('claimLocked', 'You must claim'))} <b>${esc(rankName(r, 2))}</b></div>`;
         const n = sel.length;
-        const label = n && r >= 0 ? tr('playAs', 'Play') + ' ' + Core().claimText(n, r) : lead && r < 0 ? tr('pickFirst', 'Pick a rank') : tr('pickCards', 'Pick cards');
+        const label = n && r >= 0 ? tr('play_claimtext', 'Play {{claimText}}', { claimText: Core().claimText(n, r) }) : lead && r < 0 ? tr('pickFirst', 'Pick a rank') : tr('pickCards', 'Pick cards');
         el.innerHTML = `${picker}
           <div class="pkr-bar">
             ${l.pass ? `<button type="button" class="pkr-act pkr-act--ghost" data-a="pass" ${dis}>${esc(tr('pass', 'Pass'))}</button>` : ''}
@@ -347,10 +361,10 @@
       if (!vm.over && log.length) {
         const line = log
           .map((e) => {
-            if (e.k === 'pass') return nameOf(e.s) + ' ' + tr('passedW', 'passed');
+            if (e.k === 'pass') return tr('name_passed', '{{name}} passed', { name: (typeof bidi === 'function' ? bidi(nameOf(e.s)) : nameOf(e.s)) });
             if (e.k === 'discard') return tr('setAsideLog', 'Everyone passed — pile set aside');
-            if (e.k === 'out') return nameOf(e.s) + ' ' + tr('isOut', 'is out') + ' (#' + e.place + ')';
-            if (e.k === 'lead' && e.r != null) return nameOf(e.s) + ' ' + tr('ledW', 'led') + ' ' + rankName(e.r, 2);
+            if (e.k === 'out') return tr('name_is_out_place', '{{name}} is out (#{{place}})', { name: (typeof bidi === 'function' ? bidi(nameOf(e.s)) : nameOf(e.s)), place: e.place });
+            if (e.k === 'lead' && e.r != null) return tr('name_led_name2', '{{name}} led {{name2}}', { name: (typeof bidi === 'function' ? bidi(nameOf(e.s)) : nameOf(e.s)), name2: rankName(e.r, 2) });
             return '';
           })
           .filter(Boolean)
@@ -418,14 +432,14 @@
   }
 
   const ERRORS = {
-    not_your_turn: 'Not your turn',
-    window_open: 'Wait — the Bluff window is open',
-    no_cards: 'Pick at least one card',
-    too_many: 'Too many cards for one play',
-    pick_rank: 'Pick a rank to claim',
-    no_pass: 'No passing in Sequence — you must play',
-    must_lead: 'You lead — play at least one card',
-    too_late: 'Too late — someone called first',
+    not_your_turn: t('games.bluff.not_your_turn'),
+    window_open: t('games.bluff.wait_the_bluff_window_is_open'),
+    no_cards: t('games.bluff.pick_at_least_one_card'),
+    too_many: t('games.bluff.too_many_cards_for_one_play'),
+    pick_rank: t('games.bluff.pick_a_rank_to_claim'),
+    no_pass: t('games.bluff.no_passing_in_sequence_you_must'),
+    must_lead: t('games.bluff.you_lead_play_at_least_one'),
+    too_late: t('games.bluff.too_late_someone_called_first'),
   };
 
   // ---------------- practice vs bots ----------------
@@ -436,7 +450,7 @@
     const s = Object.assign(loadSetup(), opts || {});
     const me = (K && K.myName()) || tr('you', 'You');
     const players = [{ id: 'me', name: me }];
-    for (let i = 0; i < s.bots; i++) players.push({ id: 'bot' + (i + 1), name: tr('bot', 'Bot') + ' ' + (i + 1) + ' · ' + levelLabel(s.level), bot: true, level: s.level });
+    for (let i = 0; i < s.bots; i++) players.push({ id: 'bot' + (i + 1), name: tr('bot_n_label', 'Bot {{n}} · {{label}}', { n: (i + 1), label: levelLabel(s.level) }), bot: true, level: s.level });
     const rng = CK().seededRng(CK().newSeed());
     const st = C.newGame(players, { style: s.style, windowSec: s.windowSec, jokers: s.jokers, placements: s.placements }, rng, { dealer: Math.floor(rng() * players.length) });
     const timers = [];
@@ -448,7 +462,7 @@
     const shell = K.openShell({
       gameId: GAME,
       title: LABEL,
-      subtitle: tr('practice', 'Practice') + ' · ' + styleLabel(s.style),
+      subtitle: tr('practice_label', 'Practice · {{label}}', { label: styleLabel(s.style) }),
       confirmLeave: () => !st.over && st.playNo > 2,
       leaveBody: tr('leaveLocal', 'This practice game will end.'),
       onClose: () => {
@@ -525,7 +539,7 @@
           if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { mode: 'practice', level: s.level, style: s.style, tipStats: { caught: my.caught || 0, goodCalls: my.good || 0, badCalls: my.bad || 0 } });
         }
         const place = st.seats[0].place || st.ranking.indexOf(0) + 1;
-        el.innerHTML = `<div class="cl-result"><div class="rm-result-line">${esc(won ? tr('youWon', 'You emptied your hand — you win!') : tr('placeN', 'You finished') + ' #' + place)}</div>
+        el.innerHTML = `<div class="cl-result"><div class="rm-result-line">${esc(won ? tr('youWon', 'You emptied your hand — you win!') : tr('you_finished_place', 'You finished #{{place}}', { place }))}</div>
           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${esc(tr('again', 'Play again'))}</button>
           <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-home>${esc(tr('change', 'Change table'))}</button></div></div>`;
         el.querySelector('[data-again]').addEventListener('click', () => K.closeThen(shell, () => startLocal(s)));
@@ -593,8 +607,8 @@
   }
   function lobbySummary(ctrl) {
     const s = roomSettings(ctrl);
-    const bits = [styleLabel(s.style), s.windowSec + 's ' + tr('windowShort', 'window')];
-    if (Number(s.bots) > 0) bits.push(s.bots + ' ' + (Number(s.bots) === 1 ? tr('botOne', 'bot') : tr('botMany', 'bots')) + ' · ' + levelLabel(s.botLevel));
+    const bits = [styleLabel(s.style), tr('windowsec_s_window', '{{windowSec}}s window', { windowSec: s.windowSec })];
+    if (Number(s.bots) > 0) bits.push(tr('bots_label', '{bots, plural, one {# bot} other {# bots}} · {{label}}', { bots: s.bots, label: levelLabel(s.botLevel) }));
     else if (Number(s.stake)) bits.push('⚡' + s.stake);
     if (s.jokers) bits.push(tr('jokersWild', 'jokers wild'));
     return bits.join(' · ');
@@ -746,7 +760,7 @@
         <div class="pk-hero-sub">${esc(tr('tag', 'Play cards face down and say what they are. Call “Bluff!” when you smell a lie. First to empty their hand wins.'))}</div>
       </div>
       <div class="pk-modes">
-        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('vsBots', 'Practice vs bots'))}</span><span class="pk-mode-sub">${esc(styleLabel(s.style) + ' · ' + s.bots + ' ' + tr('botMany', 'bots') + ' · ' + levelLabel(s.level))}</span></button>
+        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('vsBots', 'Practice vs bots'))}</span><span class="pk-mode-sub">${esc(tr('label_bots_label2', '{{label}} · {bots, plural, one {# bot} other {# bots}} · {{label2}}', { label: styleLabel(s.style), bots: s.bots, label2: levelLabel(s.level) }))}</span></button>
         <button type="button" class="pk-mode" data-go="friends"><span class="pk-mode-title">${esc(tr('friends', 'Play friends'))}</span><span class="pk-mode-sub">${esc(tr('friendsSub', 'Live table for 3–8 · bots can fill seats'))}</span></button>
         <div class="cl-home-links">
           <button type="button" class="pk-link" data-go="change">${esc(tr('change', 'Change table'))}</button>
@@ -785,8 +799,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'bluff',
-      name: 'Bluff',
-      desc: 'Face-down claims · call Bluff! · 3–8 players · bots',
+      name: t('games.bluff.rules.ruleset.name'),
+      desc: t('games.bluff.face_down_claims_call_bluff_3'),
       icon: '🎭',
       gameType: 'dual',
       genre: 'cards',
@@ -797,7 +811,7 @@
       ownHome: true,
       order: 35,
       meta: {
-        core: 'bluff-core.js (Sequence + Follow the rank, challenge window, bots — shared with the server)',
+        core: t('games.bluff.bluff_core_js_sequence_follow_the'),
         live: 'party_room → server-lib/bluff-engine.js; server deal, face-down cards never leave the server, timed Bluff window race',
       },
       launch: openGame,

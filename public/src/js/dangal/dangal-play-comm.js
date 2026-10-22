@@ -63,12 +63,12 @@
   async function startCall(chat, video) {
     const chatId = chatIdOf(chat);
     if (!chatId) {
-      if (typeof showToast === 'function') showToast('Open a friend challenge to talk in-game');
+      if (typeof showToast === 'function') showToast(t('dangal.open_a_friend_challenge_to_talk'));
       return false;
     }
     if (typeof isMehfilOpen === 'function' && isMehfilOpen()) {
       if (typeof showToast === 'function') {
-        showToast('Already in Mehfil — leave the room first to use game voice');
+        showToast(t('dangal.already_in_mehfil_leave_the_room'));
       }
       return false;
     }
@@ -97,7 +97,7 @@
     }
     if (!tokenPayload?.configured || !tokenPayload.token) {
       if (typeof showToast === 'function') {
-        showToast('Voice isn’t live yet — chat still works. Add Agora keys when ready.');
+        showToast(t('dangal.voice_isn_t_live_yet_chat'));
       }
       return false;
     }
@@ -149,16 +149,16 @@
         <div class="play-comm-video play-comm-video--me" data-play-comm-local hidden></div>
       </div>
       <div class="play-comm-dock">
-        <button type="button" class="play-comm-btn" data-comm="chat" aria-label="Chat">${hasChat ? '💬' : '👤'}</button>
-        <button type="button" class="play-comm-btn" data-comm="mic" aria-label="Voice">🎤</button>
-        <button type="button" class="play-comm-btn" data-comm="cam" aria-label="Video">📹</button>
-        <button type="button" class="play-comm-btn is-hang" data-comm="hang" hidden aria-label="Leave call">✕</button>
+        <button type="button" class="play-comm-btn" data-comm="chat" aria-label="${tHtml('common.chat')}">${hasChat ? '💬' : '👤'}</button>
+        <button type="button" class="play-comm-btn" data-comm="mic" aria-label="${tHtml('dangal.voice')}">🎤</button>
+        <button type="button" class="play-comm-btn" data-comm="cam" aria-label="${tHtml('dangal.video')}">📹</button>
+        <button type="button" class="play-comm-btn is-hang" data-comm="hang" hidden aria-label="${tHtml('dangal.leave_call')}">✕</button>
       </div>
       <div class="play-comm-sheet" data-comm-sheet hidden>
         <div class="play-comm-msgs" data-comm-msgs></div>
         <form class="play-comm-form" data-comm-form>
-          <input type="text" maxlength="400" placeholder="${hasChat ? 'Message…' : 'Challenge a friend to talk'}" ${hasChat ? '' : 'disabled'} />
-          <button type="submit" ${hasChat ? '' : 'disabled'}>Send</button>
+          <input type="text" maxlength="400" placeholder="${hasChat ? tHtml('dangal.message') : tHtml('dangal.challenge_a_friend_to_talk')}" ${hasChat ? '' : 'disabled'} />
+          <button type="submit" ${hasChat ? '' : 'disabled'}>${tHtml('common.send')}</button>
         </form>
       </div>`;
     host.appendChild(dock);
@@ -177,12 +177,12 @@
 
     async function pickFriendAndChat() {
       if (typeof openFriendPickerSheet !== 'function') {
-        if (typeof showToast === 'function') showToast('Open this game from a chat to talk');
+        if (typeof showToast === 'function') showToast(t('dangal.open_this_game_from_a_chat'));
         return;
       }
-      const f = await openFriendPickerSheet({ title: 'Talk while you play', subtitle: 'Challenge a friend' });
+      const f = await openFriendPickerSheet({ title: t('dangal.talk_while_you_play'), subtitle: t('dangal.challenge_a_friend') });
       if (!f) return;
-      if (typeof showToast === 'function') showToast('Send a challenge from Baithak to play & talk together');
+      if (typeof showToast === 'function') showToast(t('dangal.send_a_challenge_from_baithak_to'));
     }
 
     dock.querySelector('[data-comm="chat"]').addEventListener('click', async () => {
@@ -219,7 +219,7 @@
         }
         if (typeof haptic === 'function') haptic('light');
       } catch (err) {
-        if (typeof showToast === 'function') showToast('Couldn’t send');
+        if (typeof showToast === 'function') showToast(t('dangal.couldn_t_send'));
       }
     });
 

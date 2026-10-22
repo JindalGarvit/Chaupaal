@@ -473,7 +473,7 @@
         }
         ctx.stroke();
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillText(d.edge ? 'Spike as the ball passes the bat' : 'Flat as the ball passes the bat', 10, 36);
+        ctx.fillText(d.edge ? t('games.streetcricket.spike_as_the_ball_passes_the') : t('games.streetcricket.flat_as_the_ball_passes_the'), 10, 36);
         return;
       }
       // stumps front view with the umpire's-call band
@@ -491,9 +491,9 @@
       ctx.fillStyle = COLORS.stump;
       for (let i = -1; i <= 1; i++) ctx.fillRect(cx + i * unitX * 0.9 - 2, base - unitH, 4, unitH);
       ctx.fillRect(cx - unitX, base - unitH - 3, unitX * 2, 3);
-      const t = d.track;
-      const px = cx + clamp(t.x, -3, 3) * unitX;
-      const py = base - clamp(t.h, 0, 2.2) * unitH;
+      const _t = d.track;
+      const px = cx + clamp(_t.x, -3, 3) * unitX;
+      const py = base - clamp(_t.h, 0, 2.2) * unitH;
       ctx.fillStyle = COLORS.ball;
       ctx.beginPath();
       ctx.arc(px, py, 7, 0, Math.PI * 2);
@@ -502,9 +502,9 @@
       ctx.lineWidth = 1.2;
       ctx.stroke();
       const rows = [
-        ['Pitching', t.pitched === 'outside_leg' ? 'Outside leg' : 'In line'],
-        ['Impact', 'In line'],
-        ['Wickets', t.band === 'hitting' ? 'Hitting' : t.band === 'umpires_call' ? 'Umpire’s call' : 'Missing'],
+        /* i18n-copy */ [t('games.streetcricket.pitching'), _t.pitched === 'outside_leg' ? t('games.streetcricket.outside_leg') : t('games.streetcricket.in_line')],
+        /* i18n-copy */ [t('games.streetcricket.impact'), t('games.streetcricket.in_line')],
+        /* i18n-copy */ [t('games.streetcricket.wickets_2'), _t.band === 'hitting' ? t('games.streetcricket.hitting') : _t.band === 'umpires_call' ? t('games.streetcricket.drs.umpiresCall') : t('games.streetcricket.missing')],
       ];
       ctx.font = '600 11px system-ui, sans-serif';
       rows.forEach((r, i) => {
@@ -642,7 +642,7 @@
           api.outcome(L.ev, { speed: k });
           sound = was;
         }, wait);
-        s.label = 'Replay';
+        s.label = t('games.streetcricket.replay');
         kick();
         setTimeout(() => {
           if (s.replaying) {
@@ -658,8 +658,8 @@
         const u = umpire || { bandIn: 0.8, bandOut: 1.2 };
         s.drs =
           appeal.kind === 'caught'
-            ? { kind: 'caught', edge: !!appeal.edge, title: 'Review · caught behind', caption: 'Simulated edge detection' }
-            : { kind: 'lbw', track: appeal.track || { x: 0, h: 0.5, band: 'hitting', pitched: 'in_line' }, bandIn: u.bandIn, bandOut: u.bandOut, title: 'Review · LBW', caption: 'Simulated ball-tracking · shaded band = umpire’s call' };
+            ? { kind: 'caught', edge: !!appeal.edge, title: t('games.streetcricket.review_caught_behind'), caption: t('games.streetcricket.simulated_edge_detection') }
+            : { kind: 'lbw', track: appeal.track || { x: 0, h: 0.5, band: 'hitting', pitched: 'in_line' }, bandIn: u.bandIn, bandOut: u.bandOut, title: t('games.streetcricket.review_lbw'), caption: t('games.streetcricket.simulated_ball_tracking_shaded_band_umpire') };
         kick();
       },
       clearDrs() {
@@ -711,7 +711,7 @@
       u.rate = o.fan ? 1.12 : 0.98;
       u.pitch = o.fan ? 1.15 : 1;
       u.volume = 0.9;
-      if (o.lang) u.lang = o.lang;
+      u.lang = o.lang || (typeof getTtsLang === 'function' ? getTtsLang(typeof currentLang !== 'undefined' ? currentLang : 'en') : 'en-US');
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(u);
       return true;

@@ -57,9 +57,10 @@ assert(suites.every((f) => listed.indexOf(f) >= 0 || toRun.indexOf(f) >= 0), 'ev
   const ratings = read('public/src/js/features/dangal-ratings.js');
   const modeLabels = (ratings.match(/kind: 'mode'[^}]*/g) || []).map((s) => '').length;
   const modeBlock = ratings.slice(ratings.indexOf('const modeFilters = ['), ratings.indexOf('const genreFilters'));
-  const labels = Array.from(modeBlock.matchAll(/label: '([^']+)'/g)).map((m) => m[1]);
+  const rt = require('./lib/i18n-node-shim').runtime;
+  const labels = Array.from(modeBlock.matchAll(/label: (?:'([^']+)'|t\('([\w.]+)'\))/g)).map((m) => m[1] || rt.t(m[2]));
   const sections = ['Solo', 'Boards', 'Words', 'Cards', 'Sports', 'Party'];
-  assert(modeLabels >= 0 && labels.length === 5 && labels.every((l) => sections.indexOf(l) < 0) && /'1 player'/.test(modeBlock) && /'2 players'/.test(modeBlock) && /'Groups'/.test(modeBlock), 'D4: Manch mode chips say 1 player / 2 players / Groups (no second “Solo”)');
+  assert(modeLabels >= 0 && labels.length === 5 && labels.every((l) => sections.indexOf(l) < 0) && ['1 player', '2 players', 'Groups'].every((l) => labels.indexOf(l) >= 0), 'D4: Manch mode chips say 1 player / 2 players / Groups (no second “Solo”)');
 
   // Opponent sheet: a double tap must not stack sheets whose buttons share ids.
   const reg = read('public/src/js/games/game-registry.js');

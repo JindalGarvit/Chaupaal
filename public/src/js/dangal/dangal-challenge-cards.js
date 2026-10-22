@@ -13,15 +13,15 @@
 
   function formatMode(mode) {
     const labels = {
-      singles: 'Singles',
-      doubles: 'Doubles',
-      standard: 'Standard',
-      fischer_random: 'Fischer Random',
-      classic: 'Classic',
-      quick: 'Quick',
-      blaze: 'Blaze',
-      doublesided: 'Flip',
-      flip: 'Flip',
+      singles: t('dangal.challenge_mode.singles'),
+      doubles: t('dangal.challenge_mode.doubles'),
+      standard: t('dangal.challenge_mode.standard'),
+      fischer_random: t('dangal.fischer_random'),
+      classic: t('dangal.challenge_mode.classic'),
+      quick: t('dangal.challenge_mode.quick'),
+      blaze: t('dangal.challenge_mode.blaze'),
+      doublesided: t('dangal.challenge_mode.flip'),
+      flip: t('dangal.challenge_mode.flip'),
     };
     return labels[mode] || mode || '';
   }
@@ -58,7 +58,7 @@
       timeInc: Number(cfg.timeInc ?? cfg.inc ?? cfg.timeControl?.inc) || 0,
       chess960: !!(cfg.chess960 ?? cfg.timeControl?.chess960),
     };
-    const text = identity.label ? 'Challenge: ' + identity.label : 'Game challenge';
+    const text = identity.label ? t('dangal.challenge_label', { label: identity.label }) : t('dangal.game_challenge');
     if (typeof sendRealtimeMessage === 'function') {
       await sendRealtimeMessage(chatId, text, false, null, att);
     } else if (typeof db !== 'undefined' && db) {
@@ -89,11 +89,11 @@
       const detail = [
       att.timeControl,
       formatMode(att.unoVariant || att.ludoMode || att.mode),
-      att.stake > 0 ? '⚡' + att.stake + ' virtual' : 'Friendly',
+      att.stake > 0 ? t('dangal.stake_virtual', { stake: att.stake }) : t('dangal.friendly'),
     ]
       .filter(Boolean)
       .join(' · ');
-    const statusMap = { accepted: 'Accepted', declined: 'Declined', pending: expired ? 'Expired' : 'Awaiting…' };
+    const statusMap = { accepted: t('dangal.challenge_status.accepted'), declined: t('dangal.challenge_status.declined'), pending: expired ? t('dangal.challenge_status.expired') : t('dangal.challenge_status.awaiting') };
     return (
       '<div class="baithak-challenge-card" style="--challenge-color:' +
       esc(color) +
@@ -115,19 +115,19 @@
         ? gameMarkHtml(att.gameType, { size: 28, color: color })
         : esc(att.gameIcon || '🎮')) +
       '</span><div><strong>' +
-      esc(att.gameName || 'Game') +
+      esc(att.gameName || t('dangal.game')) +
       '</strong><span class="baithak-challenge-card__from">' +
-      esc(isReceiver ? 'Challenges you' : 'You sent a challenge') +
+      esc(isReceiver ? t('dangal.challenges_you') : t('dangal.you_sent_a_challenge')) +
       '</span></div></div>' +
       (detail ? '<div class="baithak-challenge-card__detail">' + esc(detail) + '</div>' : '') +
       '<div class="baithak-challenge-card__footer">' +
       (retired
-        ? '<button type="button" class="dangal-challenge-accept" data-retired="1">Game retired</button>'
+        ? '<button type="button" class="dangal-challenge-accept" data-retired="1">' + tHtml('dangal.game_retired') + '</button>'
         : isReceiver && pending
-        ? '<button type="button" class="dangal-challenge-accept">Accept</button>' +
-          '<button type="button" class="dangal-challenge-decline">Decline</button>'
+        ? '<button type="button" class="dangal-challenge-accept">' + tHtml('common.accept') + '</button>' +
+          '<button type="button" class="dangal-challenge-decline">' + tHtml('dangal.decline') + '</button>'
         : !isReceiver && att.status === 'accepted'
-          ? '<button type="button" class="dangal-challenge-accept" data-join="1">Play</button>'
+          ? '<button type="button" class="dangal-challenge-accept" data-join="1">' + tHtml('common.saathi_cta_play') + '</button>'
           : '<span class="baithak-challenge-card__status">' + esc(statusMap[att.status] || att.status || '') + '</span>') +
       '</div></div>'
     );
@@ -154,12 +154,12 @@
           const ok = await DangalEconomy.canAffordStake(stakeWanted);
           if (!ok) {
             if (typeof showToast === 'function') {
-              showToast('Not enough virtual chips for ⚡' + stakeWanted + ' — ask for Friendly (0)');
+              showToast(t('dangal.not_enough_virtual_chips_for_stakewanted', { stakeWanted }));
             }
             return;
           }
         } catch (e) {
-          if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try again');
+          if (typeof showToast === 'function') showToast(t('dangal.couldn_t_check_chip_balance_try_2'));
           return;
         }
       }
@@ -188,12 +188,12 @@
       }
       if (!mid || (typeof isPersistableUid === 'function' && !isPersistableUid(opp))) {
         if (typeof showToast === 'function') {
-          showToast('Challenge link broken — try Practice from Manch');
+          showToast(t('dangal.challenge_link_broken_try_practice_from'));
         }
         return;
       }
       const chat = {
-        name: openChat.name || att.gameName || 'Opponent',
+        name: openChat.name || att.gameName || t('dangal.opponent'),
         id: openChat.id,
         firestoreId: openChat.firestoreId || openChat.id,
         uid: opp,
@@ -225,7 +225,7 @@
           timeControlLabel: att.timeControl || '',
           chatId: openChat.firestoreId || openChat.id || '',
         });
-      } else if (typeof showToast === 'function') showToast('Opening ' + (att.gameName || 'game'));
+      } else if (typeof showToast === 'function') showToast(t('dangal.opening_value', { value: att.gameName || t('dangal.classics.game') }));
     });
     card.querySelector('.dangal-challenge-decline')?.addEventListener('click', () => {
       att.status = 'declined';
@@ -245,7 +245,7 @@
         });
       }
       card.querySelector('.baithak-challenge-card__footer').innerHTML =
-        '<span class="baithak-challenge-card__status">Declined</span>';
+        '<span class="baithak-challenge-card__status">' + tHtml('dangal.declined') + '</span>';
     });
   }
 

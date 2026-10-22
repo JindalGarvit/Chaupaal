@@ -11,7 +11,7 @@
   'use strict';
 
   const GAME = 'werewolf';
-  const LABEL = 'Werewolf';
+  const LABEL = t('dangal.identity.werewolf.label');
   const SETTINGS_KEY = 'chaupaal_werewolf_settings';
   const NAMES_KEY = 'chaupaal_werewolf_names';
   const VOICE_KEY = 'chaupaal_werewolf_voice';
@@ -22,8 +22,22 @@
   const Kit = () => window.PartyKit;
   const esc = (s) => (window.PartyKit ? PartyKit.esc(s) : String(s == null ? '' : s));
 
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('werewolf.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.werewolf.' + key, p || fallback) : fill(fallback, p);
   }
 
   function lang() {
@@ -79,7 +93,7 @@
     const set = Core().mergeSettings(s);
     switch (role) {
       case 'wolf':
-        return tr('tip.wolf', 'Each night, choose someone to take with the other ' + rp('wolf', th) + '. By day, blend in.');
+        return tr('tip.wolf', 'Each night, choose someone to take with the other {{wolves}}. By day, blend in.', { wolves: rp('wolf', th) });
       case 'seer':
         return tr('tip.seer', 'Each night, check one player to learn which side they’re on.');
       case 'doctor':
@@ -95,7 +109,7 @@
       case 'bodyguard':
         return tr('tip.bodyguard', 'Each night, guard someone else — not the same person two nights running.');
       default:
-        return tr('tip.villager', 'Find the ' + rp('wolf', th) + ' by talking and voting. At night, note who you suspect.');
+        return tr('tip.villager', 'Find the {{wolves}} by talking and voting. At night, note who you suspect.', { wolves: rp('wolf', th) });
     }
   }
 
@@ -103,9 +117,9 @@
     const w = rp('wolf', th);
     return {
       wolf: tr('glossary.wolf', 'Picks someone to take each night. Wins when they match the rest.'),
-      seer: tr('glossary.seer', 'Checks one player a night: ' + w + ' or not?'),
+      seer: tr('glossary.seer', 'Checks one player a night: {{wolves}} or not?', { wolves: w }),
       doctor: tr('glossary.doctor', 'Protects one player a night.'),
-      villager: tr('glossary.villager', 'No night power — finds the ' + w + ' by talking.'),
+      villager: tr('glossary.villager', 'No night power — finds the {{wolves}} by talking.', { wolves: w }),
       hunter: tr('glossary.hunter', 'Takes someone down with them when eliminated.'),
       witch: tr('glossary.witch', 'One save potion and one sleep potion per game.'),
       tanner: tr('glossary.tanner', 'Plays alone — wins only by being voted out.'),
@@ -169,10 +183,7 @@
     const set = Core().mergeSettings(s);
     const extras = Core().OPTIONAL.filter((r) => set[r]).map((r) => rn(r, set));
     return (
-      Core().theme(set).label +
-      ' · ' + (set.wolves ? set.wolves + ' ' + rp('wolf', set) : 'Auto-balanced') +
-      (extras.length ? ' · +' + extras.join(', ') : '') +
-      ' · ' + Math.round(set.discussSec / 60) + ' min talk'
+      t('games.werewolf.value_value2_value3_value4_min_talk', { value: Core().theme(set).label, value2: set.wolves ? set.wolves + ' ' + rp('wolf', set) : 'Auto-balanced', value3: extras.length ? ' · +' + extras.join(', ') : '', value4: Math.round(set.discussSec / 60) })
     );
   }
 
@@ -188,58 +199,58 @@
     const n = () => (opts.count ? opts.count() : 8);
     const roleRow = (r) => `<div class="pk-field">
         <div class="pk-field-label">${esc(ri(r, s))} ${esc(rn(r, s))} <span class="ww-help">— ${esc(roleBlurb(r, s))}</span></div>
-        ${K.segHtml(r, s[r], [[false, 'Off'], [true, 'On']])}
+        ${K.segHtml(r, s[r], [[false, t('dangal.solo.off')], [true, t('games.werewolf.on')]])}
       </div>`;
     K.openSheet({
-      title: 'Game settings',
+      title: t('games.werewolf.game_settings'),
       bodyHtml: `
         <div class="pk-field">
-          <div class="pk-field-label">Discussion time</div>
-          ${K.segHtml('discussSec', s.discussSec, C.DISCUSS_OPTIONS.map((x) => [x, x / 60 + ' min']))}
+          <div class="pk-field-label">${tHtml('games.werewolf.discussion_time')}</div>
+          ${K.segHtml('discussSec', s.discussSec, C.DISCUSS_OPTIONS.map((x) => [x, tr('minutes_short', '{{n}} min', { n: x / 60 })]))}
         </div>
         <div class="pk-field">
-          <div class="pk-field-label">Show a player’s role when they’re out</div>
-          ${K.segHtml('reveal', s.reveal, [[true, 'Yes'], [false, 'No']])}
+          <div class="pk-field-label">${tHtml('games.werewolf.show_a_player_s_role_when')}</div>
+          ${K.segHtml('reveal', s.reveal, /* i18n-copy */ [[true, t('games.werewolf.yes')], [false, t('games.werewolf.no')]])}
         </div>
         <div class="pk-field" data-voice-field>
-          <div class="pk-field-label">Narrator voice &amp; sounds (this phone)</div>
-          ${K.segHtml('voice', voice.voice, [['on', 'On'], ['off', 'Off']])}
+          <div class="pk-field-label">${tHtml('games.werewolf.narrator_voice_sounds_this_phone')}</div>
+          ${K.segHtml('voice', voice.voice, [['on', t('games.werewolf.on')], ['off', t('dangal.solo.off')]])}
         </div>
         <details class="pk-advanced">
-          <summary>Advanced</summary>
+          <summary>${tHtml('games.werewolf.rules.rules.4.h')}</summary>
           <div class="pk-field">
-            <div class="pk-field-label">Theme</div>
+            <div class="pk-field-label">${tHtml('games.werewolf.rules.variant.theme.label')}</div>
             ${K.segHtml('theme', s.theme, [['werewolf', '🐺 Werewolf'], ['mafia', '🕴️ Mafia']])}
           </div>
           <div class="pk-field">
             <div class="pk-field-label" data-wolf-label>${esc(rp('wolf', s))}</div>
-            ${K.segHtml('wolves', s.wolves, [[0, 'Auto'], [1, '1'], [2, '2'], [3, '3'], [4, '4']])}
+            ${K.segHtml('wolves', s.wolves, [[0, t('games.werewolf.auto')], [1, '1'], [2, '2'], [3, '3'], [4, '4']])}
           </div>
-          <div class="pk-field-help">${esc(rn('seer', s))} and ${esc(rn('doctor', s))} are always in. Extra roles:</div>
+          <div class="pk-field-help">${tHtml('games.werewolf.value_and_value2_are_always_in', { value: rn('seer', s), value2: rn('doctor', s) })}</div>
           ${C.OPTIONAL.map(roleRow).join('')}
           <div data-balance>${balanceHtml(n(), s)}</div>
           <div class="pk-field">
-            <div class="pk-field-label">${esc(rn('doctor', s))} can protect the same player two nights running</div>
-            ${K.segHtml('doctorRepeat', s.doctorRepeat, [[false, 'No'], [true, 'Yes']])}
+            <div class="pk-field-label">${tHtml('games.werewolf.doctor_repeat', { role: rn('doctor', s) })}</div>
+            ${K.segHtml('doctorRepeat', s.doctorRepeat, /* i18n-copy */ [[false, t('games.werewolf.no')], [true, t('games.werewolf.yes')]])}
           </div>
           ${
             opts.room
               ? `<div class="pk-field">
-            <div class="pk-field-label">Night timer</div>
+            <div class="pk-field-label">${tHtml('games.werewolf.night_timer')}</div>
             ${K.segHtml('nightSec', s.nightSec, C.NIGHT_OPTIONS.map((x) => [x, x + 's']))}
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Vote timer</div>
+            <div class="pk-field-label">${tHtml('games.werewolf.vote_timer')}</div>
             ${K.segHtml('voteSec', s.voteSec, C.VOTE_OPTIONS.map((x) => [x, x + 's']))}
           </div>`
               : `<div class="pk-field">
-            <div class="pk-field-label">Day vote</div>
-            ${K.segHtml('voteStyle', s.voteStyle, [['quick', 'Point on 3'], ['secret', 'Secret pass-around']])}
-            <div class="pk-field-help">Point on 3: everyone points at once and the phone holder taps the result.</div>
+            <div class="pk-field-label">${tHtml('games.werewolf.day_vote')}</div>
+            ${K.segHtml('voteStyle', s.voteStyle, /* i18n-copy */ [['quick', t('games.werewolf.point_on_3')], ['secret', t('games.werewolf.secret_pass_around')]])}
+            <div class="pk-field-help">${tHtml('games.werewolf.point_on_3_everyone_points_at')}</div>
           </div>`
           }
         </details>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         const all = Object.assign(s, {});
         K.wireSegs(sheet, all, (key) => {
@@ -299,7 +310,7 @@
       if (v) {
         u.voice = v;
         u.lang = v.lang;
-      } else u.lang = want === 'en' ? 'en-US' : want;
+      } else u.lang = typeof getTtsLang === 'function' ? getTtsLang(want) : want === 'en' ? 'en-US' : want;
       u.rate = 0.95;
       u.pitch = 0.95;
       speechSynthesis.speak(u);
@@ -334,7 +345,7 @@
 
   function muteBtnHtml() {
     const on = !muted();
-    return `<button type="button" class="ww-mute" data-ww-mute aria-pressed="${!on}" aria-label="${on ? 'Mute narrator' : 'Unmute narrator'}">${on ? '🔊' : '🔇'}</button>`;
+    return `<button type="button" class="ww-mute" data-ww-mute aria-pressed="${!on}" aria-label="${on ? tHtml('games.werewolf.mute_narrator') : tHtml('games.werewolf.unmute_narrator')}">${on ? '🔊' : '🔇'}</button>`;
   }
 
   function wireMute(body, shell, kind) {
@@ -355,7 +366,7 @@
     return `<div class="ww-card ww-card--${esc(team)}">
       <div class="ww-card-icon" aria-hidden="true">${esc(ri(role, th))}</div>
       <div class="ww-card-role">${esc(rn(role, th))}</div>
-      <div class="ww-card-team">${team === 'tanner' ? 'Plays alone' : 'Team ' + esc(teamLabel(team, th))}</div>
+      <div class="ww-card-team">${team === 'tanner' ? tHtml('games.werewolf.plays_alone') : tHtml('games.werewolf.team_th', { th: teamLabel(team, th) })}</div>
       <div class="ww-card-tip">${esc(roleTip(role, s))}</div>
       ${extra || ''}
     </div>`;
@@ -363,15 +374,15 @@
 
   function packHtml(wolves, me, nm, th) {
     const others = (wolves || []).filter((id) => id !== me);
-    if (!others.length) return `<div class="ww-card-pack">You’re the only ${esc(rn('wolf', th))}.</div>`;
-    return `<div class="ww-card-pack">The other ${esc(rp('wolf', th))}: <strong>${others.map((id) => esc(nm(id))).join(', ')}</strong></div>`;
+    if (!others.length) return `<div class="ww-card-pack">${tHtml('games.werewolf.you_re_the_only_th', { th: rn('wolf', th) })}</div>`;
+    return `<div class="ww-card-pack">${tHtml('games.werewolf.the_other_th', { th: rp('wolf', th) })} <strong>${others.map((id) => esc(nm(id))).join(', ')}</strong></div>`;
   }
 
   function glossaryHtml(s) {
     const th = themeId(s);
     return `<div class="ww-glossary">${Core().ROLE_IDS.map(
       (r) => `<div class="ww-glossary-row"><span aria-hidden="true">${esc(ri(r, th))}</span><span class="ww-glossary-name">${esc(rn(r, th))}${
-        Core().OPTIONAL.indexOf(r) >= 0 ? ' <em>optional</em>' : ''
+        Core().OPTIONAL.indexOf(r) >= 0 ? ' <em>' + tHtml('games.werewolf.optional') + '</em>' : ''
       }</span><span class="ww-glossary-text">${esc(roleBlurb(r, th))}</span></div>`
     ).join('')}</div>`;
   }
@@ -380,14 +391,14 @@
     const th = themeId(s);
     const w = rp('wolf', th);
     return `<details class="pk-howto">
-      <summary>How to play · 20 seconds</summary>
+      <summary>${tHtml('games.werewolf.how_to_play_20_seconds')}</summary>
       <ol>
-        <li>Everyone secretly gets a role. The ${esc(w)} know each other.</li>
-        <li><strong>Night:</strong> the ${esc(w)} pick someone to take; the ${esc(rn('seer', th))} checks a player; the ${esc(rn('doctor', th))} protects one.</li>
-        <li><strong>Day:</strong> hear who was taken, talk it over, then vote someone out.</li>
-        <li>The ${esc(teamLabel('village', th))} wins when every one of the ${esc(w)} is out. The ${esc(w)} win when they match everyone else.</li>
+        <li>${tHtml('games.werewolf.everyone_secretly_gets_a_role_the', { w })}</li>
+        <li><strong>${tHtml('games.werewolf.night')}</strong> ${tHtml('games.werewolf.the_w_pick_someone_to_take', { w, th: rn('seer', th), th2: rn('doctor', th) })}</li>
+        <li><strong>${tHtml('games.werewolf.day')}</strong> ${tHtml('games.werewolf.hear_who_was_taken_talk_it')}</li>
+        <li>${tHtml('games.werewolf.the_th_wins_when_every_one', { th: teamLabel('village', th), w })}</li>
       </ol>
-      <div class="pk-howto-score">Role guide</div>
+      <div class="pk-howto-score">${tHtml('games.werewolf.role_guide')}</div>
       ${glossaryHtml(s)}
     </details>`;
   }
@@ -404,7 +415,7 @@
           <span class="ww-person-name">${esc(nm(id))}${id === o.me ? ' (you)' : ''}</span>
           ${role ? `<span class="ww-person-role">${esc(ri(role, pub.theme))} ${esc(rn(role, pub.theme))}</span>` : ''}
           ${noms ? `<span class="ww-person-noms">☝ ${noms}</span>` : ''}
-          ${alive ? '' : '<span class="ww-person-out">out</span>'}
+          ${alive ? '' : '<span class="ww-person-out">' + tHtml('games.werewolf.out') + '</span>'}
         </div>`;
       })
       .join('')}</div>`;
@@ -442,7 +453,7 @@
     const ids = Object.keys(entryRoles || {});
     if (!ids.length) return '';
     return `<div class="ww-reveal-roles">${ids
-      .map((id) => `<span>${esc(nm(id))} was the ${esc(ri(entryRoles[id], pub.theme))} ${esc(rn(entryRoles[id], pub.theme))}</span>`)
+      .map((id) => `<span>${tHtml('games.werewolf.id_was_the_theme_theme2', { id: nm(id), theme: ri(entryRoles[id], pub.theme), theme2: rn(entryRoles[id], pub.theme) })}</span>`)
       .join('')}</div>`;
   }
 
@@ -452,18 +463,18 @@
     const rows = result.recap.map((r) => {
       if (r.t === 'night') {
         const bits = [];
-        bits.push('the ' + rp('wolf', th) + ' went for ' + (r.victim ? nm(r.victim) : 'nobody') + (r.tied ? ' (tie, picked at random)' : ''));
+        bits.push(t('games.werewolf.the_rp_went_for_value_value2', { rp: rp('wolf', th), value: r.victim ? nm(r.victim) : t('games.werewolf.nobody'), value2: r.tied ? t('games.werewolf.tie_picked_at_random') : '' }));
         if (r.doctor) bits.push(rn('doctor', th) + ' protected ' + nm(r.doctor));
         if (r.bodyguard) bits.push(rn('bodyguard', th) + ' guarded ' + nm(r.bodyguard));
         if (r.seer) bits.push(rn('seer', th) + ' checked ' + nm(r.seer.target) + ' (' + team(r.seer.team) + ')');
-        if (r.witchSave) bits.push(rn('witch', th) + '’s save potion worked');
-        if (r.witchKill) bits.push(rn('witch', th) + ' used the sleep potion on ' + nm(r.witchKill));
-        const end = r.taken.length ? r.taken.map(nm).join(' & ') + ' out' : 'nobody out';
-        return `<li class="ww-recap-night"><strong>Night ${r.night}</strong> — ${esc(bits.join('; '))} → ${esc(end)}</li>`;
+        if (r.witchSave) bits.push(t('games.werewolf.rn_s_save_potion_worked', { rn: rn('witch', th) }));
+        if (r.witchKill) bits.push(t('games.werewolf.rn_used_the_sleep_potion_on', { rn: rn('witch', th), nm: nm(r.witchKill) }));
+        const end = r.taken.length ? r.taken.map(nm).join(' & ') + ' out' : t('games.werewolf.nobody_out');
+        return `<li class="ww-recap-night"><strong>${tHtml('games.werewolf.night_night', { night: r.night })}</strong> — ${esc(bits.join('; '))} → ${esc(end)}</li>`;
       }
-      if (r.t === 'day') return `<li class="ww-recap-day"><strong>Day ${r.day}</strong> — ${esc(r.out ? nm(r.out) + ' voted out' : r.tie ? 'tie twice — nobody out' : 'nobody voted out')}</li>`;
-      if (r.t === 'shot') return `<li class="ww-recap-day">${esc(rn('hunter', th))} ${esc(nm(r.by))} ${esc(r.target ? 'took ' + nm(r.target) + ' down' : 'held fire')}</li>`;
-      if (r.t === 'left') return `<li class="ww-recap-day">${esc(nm(r.id))} left the game</li>`;
+      if (r.t === 'day') return `<li class="ww-recap-day"><strong>${tHtml('games.werewolf.day_day', { day: r.day })}</strong> — ${esc(r.out ? t('games.werewolf.nm_voted_out', { nm: nm(r.out) }) : r.tie ? t('games.werewolf.tie_twice_nobody_out') : t('games.werewolf.nobody_voted_out'))}</li>`;
+      if (r.t === 'shot') return `<li class="ww-recap-day">${esc(rn('hunter', th))} ${esc(nm(r.by))} ${esc(r.target ? 'took ' + nm(r.target) + ' down' : t('games.werewolf.held_fire'))}</li>`;
+      if (r.t === 'left') return `<li class="ww-recap-day">${tHtml('games.werewolf.name_left', { name: bidi(nm(r.id)) })}</li>`;
       return '';
     });
     return `<ol class="ww-recap">${rows.join('')}</ol>`;
@@ -489,8 +500,8 @@
     return `<div class="ww-over">
       <div class="pk-result-glyph" aria-hidden="true">${esc(winIcon(res, th))}</div>
       <div class="pk-result-title">${esc(winTitle(res, pub, nm))}</div>
-      <div class="pk-sub">${res.nights} night${res.nights === 1 ? '' : 's'}</div>
-      <div class="pk-section">Who was who</div>
+      <div class="pk-sub">${tHtml('games.werewolf.n_nights', { count: res.nights })}</div>
+      <div class="pk-section">${tHtml('games.werewolf.who_was_who')}</div>
       <div class="ww-roles">${order
         .map((id) => {
           const role = res.roles[id];
@@ -499,19 +510,19 @@
             <span aria-hidden="true">${esc(ri(role, th))}</span>
             <span class="ww-roles-name">${esc(nm(id))}${id === me ? ' (you)' : ''}</span>
             <span class="ww-roles-role">${esc(rn(role, th))}</span>
-            ${won ? '<span class="ww-roles-won">won</span>' : ''}
+            ${won ? '<span class="ww-roles-won">' + tHtml('games.werewolf.won') + '</span>' : ''}
           </div>`;
         })
         .join('')}</div>
       ${
         sus.length
-          ? `<div class="pk-section">Most suspected</div><div class="ww-suspects">${sus
+          ? `<div class="pk-section">${tHtml('games.werewolf.most_suspected')}</div><div class="ww-suspects">${sus
               .map((x) => `<div class="ww-suspect"><span>${esc(nm(x.id))}</span><span>${x.n} ☝</span><span>${esc(ri(x.role, th))} ${esc(rn(x.role, th))}</span></div>`)
-              .join('')}</div><div class="pk-field-help">Village suspicion from the night-time “who do you suspect?” picks.</div>`
+              .join('')}</div><div class="pk-field-help">${tHtml('games.werewolf.village_suspicion_from_the_night_time')}</div>`
           : ''
       }
       <details class="ww-recap-wrap" open>
-        <summary>Night-by-night recap</summary>
+        <summary>${tHtml('games.werewolf.night_by_night_recap')}</summary>
         ${recapHtml(res, pub, nm)}
       </details>
     </div>`;
@@ -529,10 +540,10 @@
     let potions = '';
     if (step.role === 'witch') {
       const victimLine = w.victim
-        ? 'The ' + rp('wolf', th) + ' chose <strong>' + esc(nm(w.victim)) + '</strong>.'
-        : 'You don’t know who the ' + esc(rp('wolf', th)) + ' chose yet.';
+        ? tHtml('games.werewolf.wolves_chose', { wolves: rp('wolf', th), name: { html: '<strong>' + esc(nm(w.victim)) + '</strong>' } })
+        : t('games.werewolf.you_don_t_know_who_the', { value: esc(rp('wolf', th)) });
       potions = `<div class="ww-potions">
-        ${w.save ? `<div class="ww-potion-note">${victimLine}</div><button type="button" class="pk-chip ww-potion" data-save aria-pressed="false">🧪 Use the save potion${w.victim ? ' on ' + esc(nm(w.victim)) : ' on whoever is attacked'}</button>` : '<div class="ww-potion-note">Save potion used.</div>'}
+        ${w.save ? `<div class="ww-potion-note">${victimLine}</div><button type="button" class="pk-chip ww-potion" data-save aria-pressed="false">${tHtml('games.werewolf.use_the_save_potion_value', { value: { html: w.victim ? ' on ' + esc(nm(w.victim)) : tHtml('games.werewolf.on_whoever_is_attacked') } })}</button>` : '<div class="ww-potion-note">' + tHtml('games.werewolf.save_potion_used') + '</div>'}
       </div>`;
     }
     return `<div class="ww-night-face">
@@ -541,7 +552,7 @@
       ${extras || ''}
       ${potions}
       <div data-night-picker></div>
-      ${step.optional ? '<button type="button" class="pk-chip ww-none" data-none aria-pressed="false">No one tonight</button>' : ''}
+      ${step.optional ? '<button type="button" class="pk-chip ww-none" data-none aria-pressed="false">' + tHtml('games.werewolf.no_one_tonight') + '</button>' : ''}
     </div>`;
   }
 
@@ -593,14 +604,14 @@
   function open(ctx) {
     const c = ctx || {};
     if (!Core() || !Kit()) {
-      if (typeof showToast === 'function') showToast(LABEL + ' is still loading — try again');
+      if (typeof showToast === 'function') showToast(t('games.werewolf.label_is_still_loading_try_again', { LABEL }));
       return;
     }
     if ((c.source === 'chat_group' || c.isGroup) && c.chat) {
       startRoom({ chat: c.chat });
       return;
     }
-    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => !!shell.wwPlaying, leaveBody: 'This game will end for everyone on this phone.' });
+    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: t('games.werewolf.party'), confirmLeave: () => !!shell.wwPlaying, leaveBody: t('games.werewolf.this_game_will_end_for_everyone') });
     if (c.mode === 'pass') renderPassSetup(shell);
     else renderHome(shell);
   }
@@ -613,11 +624,11 @@
       Kit().homeHtml({
         game: GAME,
         icon: '🐺',
-        title: 'Who are the ' + rp('wolf', s) + '?',
-        sub: '5–20 players · best with 7+ · secret roles, night and day',
+        title: t('games.werewolf.who_are_the_rp', { rp: rp('wolf', s) }),
+        sub: t('games.werewolf.5_20_players_best_with_7'),
         howToHtml: howToCardHtml(s),
-        passSub: 'One phone, 5–16 players',
-        roomSub: 'Everyone on their own phone, 5–20',
+        passSub: t('games.werewolf.one_phone_5_16_players'),
+        roomSub: t('games.werewolf.everyone_on_their_own_phone_5'),
       })
     );
     body.querySelector('[data-mode="pass"]').addEventListener('click', () => renderPassSetup(shell));
@@ -635,13 +646,13 @@
     mood(shell, null);
     const body = shell.render(`<div class="pk-page">
       <div class="pk-setup-head">
-        <div class="pk-title">Who’s playing?</div>
-        <button type="button" class="pk-icon-btn" data-settings aria-label="Game settings">⚙︎</button>
+        <div class="pk-title">${tHtml('games.werewolf.who_s_playing')}</div>
+        <button type="button" class="pk-icon-btn" data-settings aria-label="${tHtml('games.werewolf.game_settings')}">⚙︎</button>
       </div>
-      <div class="pk-sub">Best with 7+ players.</div>
+      <div class="pk-sub">${tHtml('games.werewolf.best_with_7_players')}</div>
       <div data-editor></div>
       <div data-meta></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${tHtml('games.werewolf.start')}</button>
     </div>`);
     shell.setBack(() => renderHome(shell));
     const editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), {
@@ -678,7 +689,7 @@
 
   function nameOf(session, id) {
     const p = session.players.find((x) => x.id === id);
-    return p ? p.name : 'Someone';
+    return p ? p.name : t('common.someone');
   }
 
   function startPassGame(shell, session) {
@@ -714,13 +725,13 @@
     const secret = g.secrets[id];
     const nm = (x) => nameOf(session, x);
     const body = shell.render(`<div class="pk-page">
-      <div class="pk-progress">Role ${index + 1} of ${order.length}</div>
+      <div class="pk-progress">${tHtml('games.werewolf.role_value_of_ordercount', { value: index + 1, orderCount: order.length })}</div>
       <div data-cover></div>
     </div>`);
     Kit().mountPassCover(body.querySelector('[data-cover]'), {
       name: nm(id),
       revealHtml: () => roleCardHtml(secret.role, session.settings, secret.role === 'wolf' ? packHtml(secret.wolves, id, nm, session.settings) : ''),
-      doneLabel: index === order.length - 1 ? 'Hide & start' : 'Hide & pass',
+      doneLabel: index === order.length - 1 ? t('games.werewolf.hide_start') : t('games.werewolf.hide_pass'),
       onDone: () => renderPassDeal(shell, session, index + 1),
     });
   }
@@ -731,10 +742,10 @@
     mood(shell, 'night');
     sfx('ui.turn');
     const body = shell.render(`<div class="pk-page ww-stage">
-      <div class="ww-top"><div class="pk-progress">Night ${pub.night}</div>${muteBtnHtml()}</div>
+      <div class="ww-top"><div class="pk-progress">${tHtml('games.werewolf.night_night', { night: pub.night })}</div>${muteBtnHtml()}</div>
       ${narrationHtml(line, '🌙')}
-      <div class="pk-sub">Everyone takes a turn with the phone — every role has something to tap, so nobody can tell who’s who.</div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>Start the night</button>
+      <div class="pk-sub">${tHtml('games.werewolf.everyone_takes_a_turn_with_the')}</div>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${tHtml('games.werewolf.start_the_night')}</button>
     </div>`);
     wireMute(body, shell, 'night');
     say(line);
@@ -761,14 +772,14 @@
     const pack = step.role === 'wolf' ? packVotesHtml(step.pack, id, nm, session.settings) : '';
     let choice = { target: null, save: false };
     const body = shell.render(`<div class="pk-page">
-      <div class="pk-progress">Night ${g.pub.night} · ${idx + 1} of ${order.length}</div>
+      <div class="pk-progress">${tHtml('games.werewolf.night_night_value_of_ordercount', { night: g.pub.night, value: idx + 1, orderCount: order.length })}</div>
       <div data-cover></div>
     </div>`);
     Kit().mountPassVote(body.querySelector('[data-cover]'), {
       name: nm(id),
       bodyHtml: nightFaceHtml(step, session.settings, nm, pack),
-      doneLabel: 'Confirm',
-      coverTitle: 'Your night turn',
+      doneLabel: t('common.confirm'),
+      coverTitle: t('games.werewolf.your_night_turn'),
       coverIcon: '🌙',
       onMount: (face, setReady) => {
         setReady(false);
@@ -794,16 +805,16 @@
   function renderPassNightHold(shell, session, idx, id, step, out) {
     const nm = (x) => nameOf(session, x);
     const th = themeId(session.settings);
-    let msg = 'Your choice is locked in.';
+    let msg = t('games.werewolf.your_choice_is_locked_in');
     const check = step.role === 'seer' && out && out.result ? session.g.hidden.seerLog.slice(-1)[0] : null;
-    if (check) msg = nm(check.target) + (check.team === 'wolves' ? ' is one of the ' + rp('wolf', th) + '!' : ' is not one of the ' + rp('wolf', th) + '.');
+    if (check) msg = nm(check.target) + (check.team === 'wolves' ? t('games.werewolf.is_one_of_the_rp', { rp: rp('wolf', th) }) : t('games.werewolf.is_not_one_of_the_rp', { rp: rp('wolf', th) }));
     const body = shell.render(`<div class="pk-page">
-      <div class="pk-progress">Night ${session.g.pub.night || ''}</div>
+      <div class="pk-progress">${tHtml('games.werewolf.night_value', { value: session.g.pub.night || '' })}</div>
       <div class="pk-card is-revealed ww-hold"><div class="pk-card-face">
         <div class="ww-hold-icon" aria-hidden="true">${step.role === 'seer' ? '🔮' : '✓'}</div>
         <div class="ww-hold-msg" data-hold-msg>${esc(msg)}</div>
       </div></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pass disabled>Hide & pass</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pass disabled>${tHtml('games.werewolf.hide_pass')}</button>
     </div>`);
     const btn = body.querySelector('[data-pass]');
     const stopAway = Kit().coverWhenAway(body, () => {
@@ -828,11 +839,11 @@
     mood(shell, 'day');
     sfx(entry && entry.taken.length ? 'ui.lose' : 'ui.check');
     const body = shell.render(`<div class="pk-page ww-stage">
-      <div class="ww-top"><div class="pk-progress">Morning ${entry ? entry.n : ''}</div>${muteBtnHtml()}</div>
+      <div class="ww-top"><div class="pk-progress">${tHtml('games.werewolf.morning_value', { value: entry ? entry.n : '' })}</div>${muteBtnHtml()}</div>
       ${narrationHtml(line, '🌅')}
       ${roleRevealLine(entry && entry.roles, pub, nm)}
       ${aliveListHtml(pub, nm, { roles: publicRoles(pub) })}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>Continue</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${tHtml('games.werewolf.continue')}</button>
     </div>`);
     wireMute(body, shell, 'day');
     say(line);
@@ -861,14 +872,14 @@
     const by = pub.hunter;
     const body = shell.render(`<div class="pk-page ww-stage">
       <div class="ww-top"><div class="pk-progress">${esc(ri('hunter', th))} ${esc(rn('hunter', th))}</div>${muteBtnHtml()}</div>
-      ${narrationHtml(nm(by) + ' was the ' + rn('hunter', th) + ' — and gets one last shot.', ri('hunter', th))}
-      <div class="pk-sub">${esc(nm(by))}, tap who you take with you.</div>
+      ${narrationHtml(tHtml('games.werewolf.nm_was_the_rn_and_gets', { nm: nm(by), rn: rn('hunter', th) }), ri('hunter', th))}
+      <div class="pk-sub">${tHtml('games.werewolf.hunter_take', { name: bidi(nm(by)) })}</div>
       <div data-picker></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-shoot disabled>Pick someone</button>
-      <button type="button" class="pk-link" data-hold>Hold fire</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-shoot disabled>${tHtml('games.werewolf.pick_someone')}</button>
+      <button type="button" class="pk-link" data-hold>${tHtml('games.werewolf.hold_fire')}</button>
     </div>`);
     wireMute(body, shell, 'day');
-    say(nm(by) + ' was the ' + rn('hunter', th) + ' — and gets one last shot.');
+    say(t('games.werewolf.nm_was_the_rn_and_gets', { nm: nm(by), rn: rn('hunter', th) }));
     let target = null;
     const btn = body.querySelector('[data-shoot]');
     Kit().mountPicker(body.querySelector('[data-picker]'), {
@@ -876,16 +887,16 @@
       onPick: (ids) => {
         target = ids[0];
         btn.disabled = !target;
-        btn.textContent = 'Take ' + nm(target);
+        btn.textContent = t('games.werewolf.take_nm', { nm: nm(target) });
       },
     });
-    const shoot = async (t) => {
-      passAct(session, { type: 'shoot', target: t });
+    const shoot = async (_t) => {
+      passAct(session, { type: 'shoot', target: _t });
       const e = lastOf(session.g.pub, 'shot');
       const line = narrate(e, th, nm);
-      sfx(t ? 'ui.capture' : 'ui.check');
+      sfx(_t ? 'ui.capture' : 'ui.check');
       say(line);
-      await Kit().bigReveal({ icon: ri('hunter', th), title: line, sub: e.role ? nm(e.target) + ' was the ' + rn(e.role, th) : '', ms: 3200, host: shell.el });
+      await Kit().bigReveal({ icon: ri('hunter', th), title: line, sub: e.role ? t('games.werewolf.nm_was_the_rn', { nm: nm(e.target), rn: rn(e.role, th) }) : '', ms: 3200, host: shell.el });
       passRoute(shell, session);
     };
     btn.addEventListener('click', () => target && shoot(target));
@@ -900,15 +911,15 @@
     let endsAt = Date.now() + session.settings.discussSec * 1000;
     let pausedLeft = null;
     const body = shell.render(`<div class="pk-page ww-stage">
-      <div class="ww-top"><div class="pk-progress">Day ${pub.day}</div>${muteBtnHtml()}</div>
+      <div class="ww-top"><div class="pk-progress">${tHtml('games.werewolf.day_day', { day: pub.day })}</div>${muteBtnHtml()}</div>
       ${narrationHtml(line, '☀️')}
       <div class="pk-timer" data-timer></div>
       <div class="pk-row">
-        <button type="button" class="pk-chip" data-pause>Pause</button>
-        <button type="button" class="pk-chip" data-extend>+1 min</button>
+        <button type="button" class="pk-chip" data-pause>${tHtml('games.werewolf.pause')}</button>
+        <button type="button" class="pk-chip" data-extend>${tHtml('games.werewolf.1_min')}</button>
       </div>
       ${aliveListHtml(pub, nm, { roles: publicRoles(pub) })}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-vote>Start the vote</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-vote>${tHtml('games.werewolf.start_the_vote')}</button>
     </div>`);
     wireMute(body, shell, 'day');
     say(line);
@@ -923,11 +934,11 @@
     body.querySelector('[data-pause]').addEventListener('click', (e) => {
       if (pausedLeft == null) {
         pausedLeft = Math.max(0, endsAt - Date.now());
-        e.currentTarget.textContent = 'Resume';
+        e.currentTarget.textContent = t('common.shortcut_dangal_resume');
       } else {
         endsAt = Date.now() + pausedLeft;
         pausedLeft = null;
-        e.currentTarget.textContent = 'Pause';
+        e.currentTarget.textContent = t('games.werewolf.pause');
       }
     });
     body.querySelector('[data-extend]').addEventListener('click', () => {
@@ -948,12 +959,12 @@
     if (session.settings.voteStyle === 'secret') return renderPassSecretVote(shell, session, 0);
     const tieLine = tie ? narrate(tie, pub.theme, nm) : '';
     const body = shell.render(`<div class="pk-page ww-stage">
-      <div class="ww-top"><div class="pk-progress">Day ${pub.day} · vote${pub.revote ? ' again' : ''}</div>${muteBtnHtml()}</div>
+      <div class="ww-top"><div class="pk-progress">${tHtml('games.werewolf.day_day_vote_value', { day: pub.day, value: pub.revote ? t('games.werewolf.again') : '' })}</div>${muteBtnHtml()}</div>
       ${tie ? narrationHtml(tieLine, '⚖️') : ''}
-      <div class="pk-title">Count to three — and point!</div>
-      <div class="pk-sub">Tap whoever got the most fingers. Tap two or more for a tie.</div>
+      <div class="pk-title">${tHtml('games.werewolf.count_to_three_and_point')}</div>
+      <div class="pk-sub">${tHtml('games.werewolf.tap_whoever_got_the_most_fingers')}</div>
       <div data-picker></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>Nobody is out</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${tHtml('games.werewolf.nobody_is_out')}</button>
     </div>`);
     wireMute(body, shell, 'day');
     say(tie ? tieLine : tr('line.point', 'Count to three, and point!'));
@@ -964,7 +975,7 @@
       multi: true,
       onPick: (ids) => {
         picked = ids;
-        btn.textContent = !ids.length ? 'Nobody is out' : ids.length === 1 ? nm(ids[0]) + ' is out' : 'It’s a tie' + (pub.revote ? ' — nobody is out' : ' — vote again');
+        btn.textContent = !ids.length ? t('games.werewolf.nobody_is_out') : ids.length === 1 ? t('games.werewolf.nm_is_out', { nm: nm(ids[0]) }) : t('games.werewolf.it_s_a_tie_value', { value: pub.revote ? t('games.werewolf.nobody_is_out_2') : t('games.werewolf.vote_again') });
       },
     });
     btn.addEventListener('click', () => {
@@ -993,12 +1004,12 @@
     const id = order[idx];
     let choice = null;
     const body = shell.render(`<div class="pk-page">
-      <div class="pk-progress">Secret vote · ${idx + 1} of ${order.length}</div>
+      <div class="pk-progress">${tHtml('games.werewolf.secret_vote_value_of_ordercount', { value: idx + 1, orderCount: order.length })}</div>
       <div data-cover></div>
     </div>`);
     Kit().mountPassVote(body.querySelector('[data-cover]'), {
       name: nm(id),
-      bodyHtml: `<div class="pk-title">Who should be out?</div><div data-picker></div><button type="button" class="pk-chip ww-none" data-skip>No one</button>`,
+      bodyHtml: `<div class="pk-title">${tHtml('games.werewolf.who_should_be_out')}</div><div data-picker></div><button type="button" class="pk-chip ww-none" data-skip>${tHtml('games.werewolf.no_one')}</button>`,
       onMount: (face, setReady) => {
         const skip = face.querySelector('[data-skip]');
         const mount = () =>
@@ -1032,13 +1043,13 @@
     const line = narrate(e, pub.theme, nm);
     sfx(e && e.out ? 'ui.lose' : 'ui.check');
     const body = shell.render(`<div class="pk-page ww-stage">
-      <div class="ww-top"><div class="pk-progress">Day ${pub.day}</div>${muteBtnHtml()}</div>
+      <div class="ww-top"><div class="pk-progress">${tHtml('games.werewolf.day_day', { day: pub.day })}</div>${muteBtnHtml()}</div>
       ${narrationHtml(line, e && e.out ? '⚖️' : '🤝')}
       ${e && e.out && e.role ? roleRevealLine({ [e.out]: e.role }, pub, nm) : ''}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>Continue</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${tHtml('games.werewolf.continue')}</button>
     </div>`);
     wireMute(body, shell, 'day');
-    say(line + (e && e.out && e.role ? ' ' + nm(e.out) + ' was the ' + rn(e.role, pub.theme) + '.' : ''));
+    say(line + (e && e.out && e.role ? t('games.werewolf.nm_was_the_rn_2', { nm: nm(e.out), rn: rn(e.role, pub.theme) }) : ''));
     body.querySelector('[data-go]').addEventListener('click', () => {
       hush();
       passAct(session, { type: 'continue' });
@@ -1054,16 +1065,16 @@
     const line = winTitle(pub.result, pub, nm);
     sfx('ui.win');
     say(line);
-    shell.setSubtitle('Game over');
+    shell.setSubtitle(t('games.werewolf.game_over'));
     Kit().reportPass(GAME, { players: session.players, state: { result: pub.result } });
     const body = shell.render(`<div class="pk-page">
       <div class="ww-top">${muteBtnHtml()}</div>
       ${overHtml(pub, nm)}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${tHtml('games.werewolf.play_again')}</button>
       ${Kit().passHubButtonHtml()}
       <div class="pk-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-        <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-setup>${tHtml('games.werewolf.players_settings')}</button>
       </div>
     </div>`);
     wireMute(body, shell, 'day');
@@ -1104,8 +1115,8 @@
         }),
       canStart: (ctrl, players) =>
         players.length < Core().MIN_PLAYERS
-          ? { ok: false, label: 'Need ' + (Core().MIN_PLAYERS - players.length) + ' more to start' }
-          : { ok: true, label: 'Start · ' + rolesLine(players.length, ctrl.view.pub.settings) },
+          ? { ok: false, label: t('games.werewolf.need_value_more_to_start', { value: Core().MIN_PLAYERS - players.length }) }
+          : { ok: true, label: t('games.werewolf.start_rolesline', { rolesLine: rolesLine(players.length, ctrl.view.pub.settings) }) },
       onLobbyMount: (ctrl, body) => {
         const n = ctrl.players().length;
         const hint = document.createElement('div');
@@ -1122,7 +1133,7 @@
       renderPending: renderRoomSpectator,
       errorText: (e) => {
         const code = String((e && e.code) || '').toUpperCase();
-        if (['NOT_ALLOWED', 'BLOCKED', 'SLOW_DOWN', 'MAX_EXTENDS', 'EMPTY', 'ALREADY_CHECKED', 'NOT_HUNTER', 'PHASE'].indexOf(code) >= 0 && e.message) return e.message;
+        if (['NOT_ALLOWED', t('dangal.party.blocked'), 'SLOW_DOWN', 'MAX_EXTENDS', 'EMPTY', 'ALREADY_CHECKED', 'NOT_HUNTER', 'PHASE'].indexOf(code) >= 0 && e.message) return e.message;
         return Kit().roomErrorText(e);
       },
     });
@@ -1167,10 +1178,10 @@
 
   function spectatorPanel(ctrl, st, sec) {
     return `<div class="ww-spectator">
-      <div class="pk-section">You’re out — watching</div>
-      <div class="pk-sub">Roles stay secret until the end. No hints to the table!</div>
+      <div class="pk-section">${tHtml('games.werewolf.you_re_out_watching')}</div>
+      <div class="pk-sub">${tHtml('games.werewolf.roles_stay_secret_until_the_end')}</div>
       ${aliveListHtml(st, ctrl.name, { roles: publicRoles(st), me: ctrl.uid })}
-      ${chatBox(ctrl, 'dead', sec.deadChat, { title: 'Spectators’ chat', placeholder: 'Chat with the others who are out' })}
+      ${chatBox(ctrl, 'dead', sec.deadChat, { title: t('games.werewolf.spectators_chat'), placeholder: t('games.werewolf.chat_with_the_others_who_are') })}
     </div>`;
   }
 
@@ -1178,12 +1189,12 @@
     mood(ctrl.shell, st.phase === 'night' || st.phase === 'reveal' ? 'night' : 'day');
     const last = st.log.slice(-1)[0];
     const body = ctrl.render(`<div class="pk-page ww-stage">
-      <div class="ww-top"><div class="pk-progress">Game in progress · ${esc(st.phase === 'night' ? 'Night ' + st.night : 'Day ' + (st.day || 1))}</div>${muteBtnHtml()}</div>
-      <div class="pk-sub">You’ll be dealt in when the next game starts. Until then you can watch.</div>
+      <div class="ww-top"><div class="pk-progress">${tHtml('games.werewolf.game_in_progress_value', { value: st.phase === 'night' ? t('games.werewolf.night_night', { night: st.night }) : t('games.werewolf.day_value', { value: st.day || 1 }) })}</div>${muteBtnHtml()}</div>
+      <div class="pk-sub">${tHtml('games.werewolf.you_ll_be_dealt_in_when')}</div>
       ${last ? narrationHtml(narrate(last, st.theme, ctrl.name), st.phase === 'night' ? '🌙' : '☀️') : ''}
       ${aliveListHtml(st, ctrl.name, { roles: publicRoles(st), presence: true })}
-      ${st.chat && st.chat.length ? chatBox(ctrl, 'dayview', st.chat, { title: 'Village chat', disabled: 'Watching' }) : ''}
-      <button type="button" class="pk-link" data-leave>Leave room</button>
+      ${st.chat && st.chat.length ? chatBox(ctrl, 'dayview', st.chat, { title: t('games.werewolf.village_chat'), disabled: tr('watching', 'Watching') }) : ''}
+      <button type="button" class="pk-link" data-leave>${tHtml('games.werewolf.leave_room')}</button>
     </div>`);
     wireMute(body, ctrl.shell, st.phase === 'night' ? 'night' : 'day');
     body.querySelector('[data-leave]').addEventListener('click', ctrl.leave);
@@ -1202,8 +1213,8 @@
     const alive = Core().isAlive(st, me);
     const kind = st.phase === 'night' || st.phase === 'reveal' ? 'night' : 'day';
     mood(ctrl.shell, kind);
-    ctrl.shell.setSubtitle('Room ' + ctrl.view.code + ' · ' + (st.phase === 'night' || st.phase === 'reveal' ? 'Night ' + Math.max(1, st.night) : 'Day ' + st.day));
-    const peek = alive && st.phase !== 'over' ? '<button type="button" class="pk-peek" data-peek aria-label="Hold to peek at your role">👁 Hold to peek at your role</button>' : '';
+    ctrl.shell.setSubtitle(tr('room_code_value', 'Room {{code}} · {{value}}', { code: ctrl.view.code, value: (st.phase === 'night' || st.phase === 'reveal' ? tr('night_value', 'Night {{value}}', { value: Math.max(1, st.night) }) : tr('day_day', 'Day {{day}}', { day: st.day })) }));
+    const peek = alive && st.phase !== 'over' ? '<button type="button" class="pk-peek" data-peek aria-label="' + tHtml('games.werewolf.hold_to_peek_at_your_role_2') + '">' + tHtml('games.werewolf.hold_to_peek_at_your_role') + '</button>' : '';
     const wirePeek = (body) =>
       K.mountHoldPeek(body.querySelector('[data-peek]'), () => roleCardHtml(sec.role, settings, sec.role === 'wolf' ? packHtml(sec.wolves, me, nm, settings) : ''));
     const timed = st.phase !== 'over';
@@ -1221,21 +1232,21 @@
       const ready = st.players.filter((id) => pub.seen && pub.seen[id]).length;
       if (!(pub.seen && pub.seen[me])) {
         const body = ctrl.render(`<div class="pk-page">
-          <div class="pk-progress">${ready}/${st.players.length} ready</div>
+          <div class="pk-progress">${tHtml('dangal.ready_of', { n: ready, total: st.players.length })}</div>
           <div data-cover></div>
         </div>`);
         K.mountPassCover(body.querySelector('[data-cover]'), {
-          lead: 'Your role',
+          lead: t('games.werewolf.your_role'),
           name: nm(me),
           revealHtml: () => roleCardHtml(sec.role, settings, sec.role === 'wolf' ? packHtml(sec.wolves, me, nm, settings) : ''),
-          doneLabel: 'I’ve seen it',
+          doneLabel: t('games.werewolf.i_ve_seen_it'),
           onDone: () => ctrl.act('seen'),
         });
         return;
       }
       const body = ctrl.render(`<div class="pk-page ww-stage">${top}
-        <div class="pk-title">Waiting for everyone to see their role</div>
-        <div class="pk-sub">${ready}/${st.players.length} ready</div>
+        <div class="pk-title">${tHtml('games.werewolf.waiting_for_everyone_to_see_their')}</div>
+        <div class="pk-sub">${tHtml('dangal.ready_of', { n: ready, total: st.players.length })}</div>
         ${peek}
       </div>`);
       finish(body);
@@ -1243,7 +1254,7 @@
     }
 
     if (st.phase === 'night') {
-      const status = `<div class="pk-sub">${st.actedN}/${st.alive.length} done</div>`;
+      const status = `<div class="pk-sub">${tHtml('dangal.done_of', { n: st.actedN, total: st.alive.length })}</div>`;
       if (!alive) {
         const body = ctrl.render(`<div class="pk-page ww-stage">${top}
           ${narrationHtml(narrate({ t: 'night' }, th), '🌙')}${status}${deadBlock}</div>`);
@@ -1253,19 +1264,19 @@
       const step = sec.step;
       const wolfBits =
         sec.role === 'wolf'
-          ? `${packVotesHtml(sec.pack, me, nm, settings)}${chatBox(ctrl, 'wolf', sec.wolfChat, { title: rp('wolf', th) + ' only', placeholder: 'Whisper to the pack…' })}`
+          ? `${packVotesHtml(sec.pack, me, nm, settings)}${chatBox(ctrl, 'wolf', sec.wolfChat, { title: t('games.werewolf.rp_only', { rp: rp('wolf', th) }), placeholder: t('games.werewolf.whisper_to_the_pack') })}`
           : '';
       const seerBits =
         sec.role === 'seer' && sec.seerLog && sec.seerLog.length
           ? `<div class="ww-seerlog">${sec.seerLog
-              .map((x) => `<div>Night ${x.night}: ${esc(nm(x.target))} — ${x.team === 'wolves' ? esc(rn('wolf', th)) + ' 🐾' : 'not a ' + esc(rn('wolf', th))}</div>`)
+              .map((x) => `<div>${tHtml('games.werewolf.night_night_target_value', { night: x.night, target: nm(x.target), value: x.team === 'wolves' ? esc(rn('wolf', th)) + ' 🐾' : t('games.werewolf.not_a_value', { value: esc(rn('wolf', th)) }) })}</div>`)
               .join('')}</div>`
           : '';
       if (sec.myNight || !step) {
         const body = ctrl.render(`<div class="pk-page ww-stage">${top}
           ${narrationHtml(narrate({ t: 'night' }, th), '🌙')}
           ${flavourHtml(ctrl, st)}
-          <div class="ww-locked">✓ ${sec.myNight && sec.myNight.target ? 'You chose ' + esc(nm(sec.myNight.target)) : 'Locked in'}${sec.myNight && sec.myNight.save ? ' · save potion ready' : ''}</div>
+          <div class="ww-locked">✓ ${sec.myNight && sec.myNight.target ? tHtml('games.werewolf.you_chose_target', { target: nm(sec.myNight.target) }) : tHtml('games.werewolf.locked_in')}${sec.myNight && sec.myNight.save ? ' ' + tHtml('games.werewolf.save_potion_ready') : ''}</div>
           ${seerBits}${status}${wolfBits}${peek}
         </div>`);
         finish(body);
@@ -1275,7 +1286,7 @@
       const draft = ctrl.view.wwDraft && ctrl.view.wwDraft.night === st.night ? ctrl.view.wwDraft : (ctrl.view.wwDraft = { night: st.night, target: null, save: false });
       const body = ctrl.render(`<div class="pk-page ww-stage">${top}
         ${nightFaceHtml(step, settings, nm, '')}
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-confirm disabled>Confirm</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-confirm disabled>${tHtml('common.confirm')}</button>
         <div class="pk-error" data-err></div>
         ${seerBits}${status}${wolfBits}${peek}
       </div>`);
@@ -1296,7 +1307,7 @@
         const out = await ctrl.act('night', { target: draft.target, save: draft.save }, body.querySelector('[data-err]'));
         if (out && out.team) {
           const w = out.team === 'wolves';
-          K.bigReveal({ icon: '🔮', title: nm(draft.target) + (w ? ' is one of the ' + rp('wolf', th) + '!' : ' is not one of the ' + rp('wolf', th)), ms: 3000, host: ctrl.shell.el });
+          K.bigReveal({ icon: '🔮', title: nm(draft.target) + (w ? t('games.werewolf.is_one_of_the_rp', { rp: rp('wolf', th) }) : t('games.werewolf.is_not_one_of_the_rp_2', { rp: rp('wolf', th) })), ms: 3000, host: ctrl.shell.el });
         }
       });
       return;
@@ -1310,8 +1321,8 @@
         ${flavourHtml(ctrl, st)}
         ${roleRevealLine(roles, st, nm)}
         ${aliveListHtml(st, nm, { roles: publicRoles(st), me, presence: true })}
-        ${ctrl.isHost() ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-advance>Continue</button>' : '<div class="pk-wait">Carrying on in a moment…</div>'}
-        ${alive ? chatBox(ctrl, 'day', st.chat, { title: 'Village chat' }) : ''}
+        ${ctrl.isHost() ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-advance>' + tHtml('games.werewolf.continue') + '</button>' : '<div class="pk-wait">' + tHtml('games.werewolf.carrying_on_in_a_moment') + '</div>'}
+        ${alive ? chatBox(ctrl, 'day', st.chat, { title: t('games.werewolf.village_chat') }) : ''}
         ${deadBlock}${peek}
       </div>`);
       finish(body);
@@ -1321,9 +1332,9 @@
     if (st.phase === 'hunter') {
       const mine = st.hunter === me;
       const body = ctrl.render(`<div class="pk-page ww-stage">${top}
-        ${narrationHtml(nm(st.hunter) + ' was the ' + rn('hunter', th) + ' — and gets one last shot.', ri('hunter', th))}
-        ${mine ? '<div data-picker></div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-shoot disabled>Pick someone</button><button type="button" class="pk-link" data-hold>Hold fire</button>' : '<div class="pk-wait">Waiting for the shot…</div>'}
-        ${alive ? chatBox(ctrl, 'day', st.chat, { title: 'Village chat' }) : ''}
+        ${narrationHtml(tHtml('games.werewolf.nm_was_the_rn_and_gets', { nm: nm(st.hunter), rn: rn('hunter', th) }), ri('hunter', th))}
+        ${mine ? '<div data-picker></div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-shoot disabled>' + tHtml('games.werewolf.pick_someone') + '</button><button type="button" class="pk-link" data-hold>' + tHtml('games.werewolf.hold_fire') + '</button>' : '<div class="pk-wait">' + tHtml('games.werewolf.waiting_for_the_shot') + '</div>'}
+        ${alive ? chatBox(ctrl, 'day', st.chat, { title: t('games.werewolf.village_chat') }) : ''}
         ${!mine ? deadBlock : ''}${peek}
       </div>`);
       finish(body);
@@ -1335,7 +1346,7 @@
           onPick: (ids) => {
             target = ids[0];
             btn.disabled = !target;
-            btn.textContent = 'Take ' + nm(target);
+            btn.textContent = t('games.werewolf.take_nm', { nm: nm(target) });
           },
         });
         btn.addEventListener('click', () => target && ctrl.act('shoot', { target }));
@@ -1347,7 +1358,7 @@
     if (st.phase === 'day') {
       const myNom = st.nominations[me] || null;
       const hostTools = ctrl.isHost()
-        ? `<div class="pk-row"><button type="button" class="pk-chip" data-extend>+1 min</button><button type="button" class="pk-chip" data-advance>Start the vote</button></div>`
+        ? `<div class="pk-row"><button type="button" class="pk-chip" data-extend>${tHtml('games.werewolf.1_min')}</button><button type="button" class="pk-chip" data-advance>${tHtml('games.werewolf.start_the_vote')}</button></div>`
         : '';
       const body = ctrl.render(`<div class="pk-page ww-stage">${top}
         ${narrationHtml(narrate({ t: 'day' }, th, nm), '☀️')}
@@ -1355,7 +1366,7 @@
         ${aliveListHtml(st, nm, { roles: publicRoles(st), me, noms: st.nominations, presence: true })}
         ${
           alive
-            ? `<div class="pk-section">Nominate someone for the vote</div><div data-picker></div>${myNom ? '<button type="button" class="pk-link" data-unnominate>Take back my nomination</button>' : ''}${chatBox(ctrl, 'day', st.chat, { title: 'Village chat' })}`
+            ? `<div class="pk-section">${tHtml('games.werewolf.nominate_someone_for_the_vote')}</div><div data-picker></div>${myNom ? '<button type="button" class="pk-link" data-unnominate>' + tHtml('games.werewolf.take_back_my_nomination') + '</button>' : ''}${chatBox(ctrl, 'day', st.chat, { title: t('games.werewolf.village_chat') })}`
             : ''
         }
         ${deadBlock}${peek}
@@ -1378,15 +1389,15 @@
       const tie = st.revote ? lastOf(st, 'tie') : null;
       const body = ctrl.render(`<div class="pk-page ww-stage">${top}
         ${tie ? narrationHtml(narrate(tie, th, nm), '⚖️') : ''}
-        <div class="pk-title">${alive ? (mine ? 'Vote locked in' : 'Who should be out?') : 'The village is voting'}</div>
-        <div class="pk-sub">${st.voted.length}/${st.alive.length} voted</div>
+        <div class="pk-title">${alive ? (mine ? tHtml('games.werewolf.vote_locked_in') : tHtml('games.werewolf.who_should_be_out')) : tHtml('games.werewolf.the_village_is_voting')}</div>
+        <div class="pk-sub">${tHtml('dangal.voted_of', { n: st.voted.length, total: st.alive.length })}</div>
         ${
           alive
-            ? `<div data-picker></div><button type="button" class="pk-chip ww-none" data-skip aria-pressed="${mine === 'skip'}">No one</button>${mine ? `<div class="ww-locked">✓ You voted ${mine === 'skip' ? 'for no one' : esc(nm(mine))} — tap to change</div>` : ''}`
+            ? `<div data-picker></div><button type="button" class="pk-chip ww-none" data-skip aria-pressed="${mine === 'skip'}">${tHtml('games.werewolf.no_one')}</button>${mine ? `<div class="ww-locked">${tHtml('games.werewolf.you_voted_value_tap_to_change', { value: { html: mine === 'skip' ? tHtml('games.werewolf.for_no_one') : esc(nm(mine)) } })}</div>` : ''}`
             : ''
         }
         <div class="pk-error" data-err></div>
-        ${alive ? chatBox(ctrl, 'day', st.chat, { title: 'Village chat' }) : ''}
+        ${alive ? chatBox(ctrl, 'day', st.chat, { title: t('games.werewolf.village_chat') }) : ''}
         ${deadBlock}${peek}
       </div>`);
       finish(body);
@@ -1406,8 +1417,8 @@
       const body = ctrl.render(`<div class="pk-page">
         <div class="ww-top">${muteBtnHtml()}</div>
         ${overHtml(st, nm, me)}
-        ${chatBox(ctrl, 'day', st.chat, { title: 'Chat' })}
-        ${K.roomResultActions(ctrl, { nextLabel: 'Play again', waitLabel: 'Waiting for the host to start a new game…' })}
+        ${chatBox(ctrl, 'day', st.chat, { title: t('common.chat') })}
+        ${K.roomResultActions(ctrl, { nextLabel: t('games.werewolf.play_again'), waitLabel: t('games.werewolf.waiting_for_the_host_to_start') })}
       </div>`);
       wireMute(body, ctrl.shell, 'day');
       wireRoomChat(ctrl, body);
@@ -1424,11 +1435,11 @@
   /** Wolves may change their pick until the night ends (the pack decides together). */
   function wireRePick(ctrl, body, step) {
     const host = document.createElement('div');
-    host.innerHTML = '<button type="button" class="pk-link" data-repick>Change my pick</button>';
+    host.innerHTML = '<button type="button" class="pk-link" data-repick>' + tHtml('games.werewolf.change_my_pick') + '</button>';
     body.querySelector('.ww-locked')?.after(host.firstElementChild);
     body.querySelector('[data-repick]')?.addEventListener('click', () => {
       const sheet = Kit().openSheet({
-        title: 'Change your pick',
+        title: t('games.werewolf.change_your_pick'),
         bodyHtml: '<div data-picker></div>',
         onMount(el, close) {
           Kit().mountPicker(el.querySelector('[data-picker]'), {
@@ -1453,7 +1464,7 @@
     registerGame({
       id: 'werewolf',
       name: LABEL,
-      desc: 'Secret roles — find the Werewolves before they take the village',
+      desc: t('games.werewolf.secret_roles_find_the_werewolves_before'),
       icon: '🐺',
       gameType: 'multiplayer',
       genre: 'party',
@@ -1464,9 +1475,9 @@
       selfChat: false,
       order: 24,
       meta: {
-        kit: 'party-kit.js (Pass & Play + Room)',
+        kit: t('games.werewolf.party_kit_js_pass_play_room'),
         dealing: 'party_room → server-lib/werewolf-engine.js; roles, night choices and wolf chat readable only by their owners',
-        themes: 'Werewolf | Mafia',
+        themes: t('games.werewolf.werewolf_mafia'),
       },
       launch,
     });

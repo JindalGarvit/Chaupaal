@@ -20,6 +20,32 @@
  * Score: 10 per hit point on break (G 50, X 15, M 20) + combo (2 × bricks since the paddle last
  * touched a ball) · level clear 100 + 50 per ball in reserve.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -77,7 +103,7 @@
     ['1111G11111', '1111111111', '1111111111', '1111111111'],
     ['1111111111', '1111X11111', '1111111111'],
     ['U11111111U', 'U11111111U', '1111111111', '1111111111'],
-    ['MMMMMMMMMM', '1111111111', '1111111111'],
+    [gtx('games.brickbreaker.mmmmmmmmmm', 'MMMMMMMMMM'), '1111111111', '1111111111'],
     ['2222222222', '2P111111P2', '2111111112', '1111111111'],
     ['0011111100', '0111111110', '1111G11111', '0111111110', '0011111100'],
     ['1111111111', '1X111111X1', '1222222221', '1111111111'],
@@ -86,12 +112,12 @@
     ['1111111111', '1G1G1G1G1G', '2222222222', '1111111111'],
     ['UU111111UU', 'U21111112U', 'U21P11P12U', 'U21111112U', '1111111111'],
     ['1111111111', '11X11X11X1', '1X111111X1', '1222222221', '1111111111'],
-    ['MMMMMMMMMM', '2P111111P2', '1212121212', '1111G11111', '1111111111'],
+    [gtx('games.brickbreaker.mmmmmmmmmm', 'MMMMMMMMMM'), '2P111111P2', '1212121212', '1111G11111', '1111111111'],
     ['2222222222', '2X1P11P1X2', '2M111111M2', '2G111111G2', '2111111112', '1111111111'],
     ['0003333000', '0031111300', '0311P11130', '3111111113', '1111111111'],
     ['11U1111U11', '1111111111', '2X222222X2', '1111111111'],
     ['3000000003', '3311111133', '1112GG2111', '1111111111', 'P11111111P'],
-    ['MMMMMMMMMM', '0000000000', '3333333333', '1X11111X11', '1111111111'],
+    [gtx('games.brickbreaker.mmmmmmmmmm', 'MMMMMMMMMM'), '0000000000', '3333333333', '1X11111X11', '1111111111'],
     ['UUU0000UUU', '1112222111', '11P1111P11', '1111111111'],
     ['1231321231', '3211231321', '1111111111', 'X11111111X'],
     ['0GGGGGGGG0', '0U222222U0', '0U1P11P1U0', '0U111111U0', '1111111111'],

@@ -12,7 +12,7 @@
   'use strict';
 
   const GAME = 'mostlikely';
-  const LABEL = 'Most Likely To?';
+  const LABEL = t('dangal.identity.mostlikely.label');
   const PASS_KEY = 'chaupaal_mostlikely_settings';
   const ROOM_KEY = 'chaupaal_mostlikely_room_settings';
   const NAMES_KEY = 'chaupaal_mostlikely_names';
@@ -47,6 +47,11 @@
 
   function isHi() {
     return String(lang()).indexOf('hi') === 0;
+  }
+
+  function hiUi(k) {
+    const P = window.MOSTLIKELY_PACKS;
+    return P && typeof P.uiText === 'function' ? P.uiText('hi', k) : '';
   }
 
   function loadSettings(where) {
@@ -112,11 +117,11 @@
     const C = Core();
     return [
       C.MODE_LABELS[s.mode],
-      s.rounds ? s.rounds + ' rounds' : 'Endless',
+      s.rounds ? t('games.mostlikely.n_rounds', { count: s.rounds }) : t('games.mostlikely.endless'),
       C.activePacks(s, lang()).length + ' packs',
-      s.reveal === 'anon' ? 'anonymous %' : 'names shown',
-      s.mode === 'nhie' ? (C.fingersOn(s) ? 'five fingers' : 'casual') : '',
-      where === 'pass' && s.voting === 'quick' ? 'count of 3' : '',
+      s.reveal === 'anon' ? t('games.mostlikely.reveal_anon') : t('games.mostlikely.reveal_names'),
+      s.mode === 'nhie' ? (C.fingersOn(s) ? t('games.mostlikely.five_fingers') : t('games.mostlikely.casual')) : '',
+      where === 'pass' && s.voting === 'quick' ? t('games.mostlikely.count_of_3') : '',
     ]
       .filter(Boolean)
       .join(' · ');
@@ -130,23 +135,23 @@
 
   function mltShort(prompt) {
     if (!prompt) return '';
-    const t = String(prompt.en || '').replace(/\?+$/, '');
-    return prompt.custom && /^(who|which)\b/i.test(t) ? t : 'most likely to ' + t;
+    const _t = String(prompt.en || '').replace(/\?+$/, '');
+    return prompt.custom && /^(who|which)\b/i.test(_t) ? _t : t('games.mostlikely.most_likely_to_value', { value: _t });
   }
 
   // ---------------- how-to ----------------
 
   function howToCardHtml() {
     return `<details class="pk-howto">
-      <summary>How to play · 20 seconds</summary>
+      <summary>${tHtml('games.mostlikely.how_to_play_20_seconds')}</summary>
       <ol>
-        <li><strong>Most Likely To:</strong> read the prompt — “Who’s most likely to forget their own birthday?” — and secretly vote for one player.</li>
-        <li>The tally is revealed and the winner is crowned 👑 (ties share it). They get 15 seconds to defend themselves.</li>
-        <li><strong>Would You Rather:</strong> secretly pick A or B, and guess which side most people chose.</li>
-        <li>Points (optional): +1 if you voted with the room, or +1 for guessing the majority.</li>
-        <li><strong>Never Have I Ever:</strong> “Never have I ever… missed a flight.” Tap <em>I have</em> or <em>Never</em>. Five fingers each — every “I have” costs one; the last hand standing wins.</li>
+        <li><strong>${tHtml('games.mostlikely.most_likely_to_2')}</strong> ${tHtml('games.mostlikely.read_the_prompt_who_s_most')}</li>
+        <li>${tHtml('games.mostlikely.the_tally_is_revealed_and_the')}</li>
+        <li><strong>${tHtml('games.mostlikely.would_you_rather_2')}</strong> ${tHtml('games.mostlikely.secretly_pick_a_or_b_and')}</li>
+        <li>${tHtml('games.mostlikely.points_optional_1_if_you_voted')}</li>
+        <li><strong>${tHtml('games.mostlikely.never_have_i_ever')}</strong> ${tHtml('games.mostlikely.nhie_howto_line')}</li>
       </ol>
-      <div class="pk-howto-score">Playful, never mean — no prompts about looks, money, religion or anything unkind.</div>
+      <div class="pk-howto-score">${tHtml('games.mostlikely.playful_never_mean_no_prompts_about')}</div>
     </details>`;
   }
 
@@ -156,22 +161,22 @@
     const sel = new Set(s.packs || []);
     const P = Core().packs;
     Kit().openSheet({
-      title: 'Packs',
+      title: t('games.mostlikely.packs'),
       bodyHtml: `<div class="im-packs">${P.PACKS.map((p) => {
-        const modes = [p.likely.length ? 'Most Likely' : '', p.rather.length ? 'Would You Rather' : '', p.never.length ? 'Never Have I Ever' : ''].filter(Boolean).join(' + ');
+        const modes = [p.likely.length ? t('games.mostlikely.mode_mlt_short') : '', p.rather.length ? t('games.mostlikely.mode_wyr') : '', p.never.length ? t('games.mostlikely.mode_nhie') : ''].filter(Boolean).join(' + ');
         return `<label class="im-pack"><input type="checkbox" data-pack="${esc(p.id)}" ${sel.has(p.id) ? 'checked' : ''}>
           <span class="im-pack-icon" aria-hidden="true">${esc(p.icon)}</span>
-          <span class="im-pack-name">${esc(packLabel(p))}${p.regional ? ' <em class="ml-regional">Regional</em>' : ''}<span class="ml-pack-modes">${esc(modes)}</span></span>
+          <span class="im-pack-name">${esc(packLabel(p))}${p.regional ? ' <em class="ml-regional">' + tHtml('games.mostlikely.regional') + '</em>' : ''}<span class="ml-pack-modes">${esc(modes)}</span></span>
           <span class="im-pack-count">${p.likely.length + p.rather.length + p.never.length}</span></label>`;
       }).join('')}</div>
       <div class="pk-field-help" data-pack-err></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         sheet.querySelector('[data-save]').addEventListener('click', () => {
           const ids = Array.from(sheet.querySelectorAll('[data-pack]:checked')).map((el) => el.dataset.pack);
           const usable = Core().packs.packsFor(s.mode).some((p) => ids.indexOf(p.id) >= 0);
           if (!ids.length || !usable) {
-            sheet.querySelector('[data-pack-err]').textContent = 'Pick at least one pack for ' + Core().MODE_LABELS[s.mode];
+            sheet.querySelector('[data-pack-err]').textContent = t('games.mostlikely.pick_at_least_one_pack_for', { value: Core().MODE_LABELS[s.mode] });
             return;
           }
           close();
@@ -183,8 +188,8 @@
 
   function customLabel(c) {
     if (c.mode === 'wyr') return c.prompt.a.en + ' / ' + c.prompt.b.en;
-    if (c.mode === 'nhie') return 'Never have I ever ' + c.prompt.en;
-    return 'Most likely to ' + c.prompt.en;
+    if (c.mode === 'nhie') return t('games.mostlikely.never_have_i_ever_en', { en: c.prompt.en });
+    return t('games.mostlikely.most_likely_to_en', { en: c.prompt.en });
   }
 
   const CUSTOM_ICON = { mlt: '👉', wyr: '🤔', nhie: '🙊' };
@@ -193,20 +198,20 @@
   function openCustoms(list, mode, onChange) {
     const K = Kit();
     K.openSheet({
-      title: 'Custom prompts',
-      bodyHtml: `<div class="pk-field-help">Only for this session — never saved.</div>
+      title: t('games.mostlikely.custom_prompts'),
+      bodyHtml: `<div class="pk-field-help">${tHtml('games.mostlikely.only_for_this_session_never_saved')}</div>
         ${
           mode === 'wyr'
-            ? `<input class="pk-input" data-a maxlength="80" placeholder="Option A" aria-label="Option A">
-               <input class="pk-input ml-mt" data-b maxlength="80" placeholder="Option B" aria-label="Option B">`
+            ? `<input class="pk-input" data-a maxlength="80" placeholder="${tHtml('games.mostlikely.option_a')}" aria-label="${tHtml('games.mostlikely.option_a')}">
+               <input class="pk-input ml-mt" data-b maxlength="80" placeholder="${tHtml('games.mostlikely.option_b')}" aria-label="${tHtml('games.mostlikely.option_b')}">`
             : mode === 'nhie'
-              ? `<input class="pk-input" data-text maxlength="120" placeholder="Never have I ever… (e.g. missed a flight)" aria-label="Never have I ever">`
-              : `<input class="pk-input" data-text maxlength="120" placeholder="…most likely to (e.g. sing in the shower)" aria-label="Most likely to">`
+              ? `<input class="pk-input" data-text maxlength="120" placeholder="${tHtml('games.mostlikely.never_have_i_ever_e_g')}" aria-label="${tHtml('games.mostlikely.never_have_i_ever_2')}">`
+              : `<input class="pk-input" data-text maxlength="120" placeholder="${tHtml('games.mostlikely.most_likely_to_e_g_sing')}" aria-label="${tHtml('games.mostlikely.most_likely_to_3')}">`
         }
         <div class="pk-error" data-err></div>
-        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-add>Add prompt</button>
+        <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-add>${tHtml('games.mostlikely.add_prompt')}</button>
         <div class="ml-custom-list" data-list></div>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         const listEl = sheet.querySelector('[data-list]');
         const paint = () => {
@@ -214,11 +219,11 @@
             ? list
                 .map(
                   (c, i) => `<div class="ml-custom-row"><span class="ml-custom-mode">${CUSTOM_ICON[c.mode] || '👉'}</span><span class="ml-custom-text">${esc(customLabel(c))}</span>${
-                    c.used ? '<span class="ml-custom-used">played</span>' : ''
-                  }<button type="button" class="pk-player-remove" data-rm="${i}" aria-label="Remove">✕</button></div>`
+                    c.used ? '<span class="ml-custom-used">' + tHtml('games.mostlikely.played') + '</span>' : ''
+                  }<button type="button" class="pk-player-remove" data-rm="${i}" aria-label="${tHtml('common.remove')}">✕</button></div>`
                 )
                 .join('')
-            : '<div class="pk-hint">No custom prompts yet.</div>';
+            : '<div class="pk-hint">' + tHtml('games.mostlikely.no_custom_prompts_yet') + '</div>';
           listEl.querySelectorAll('[data-rm]').forEach((b) =>
             b.addEventListener('click', () => {
               list.splice(Number(b.dataset.rm), 1);
@@ -254,55 +259,55 @@
     const room = opts.context === 'room';
     const seg = (name, value, a, b) => K.segHtml(name, value, [[true, a], [false, b]]);
     K.openSheet({
-      title: 'Game settings',
+      title: t('games.mostlikely.game_settings'),
       bodyHtml: `
         <div class="pk-field">
-          <div class="pk-field-label">Rounds</div>
-          ${K.segHtml('rounds', s.rounds, C.ROUND_OPTIONS.map((r) => [r, r ? String(r) : 'Endless']))}
+          <div class="pk-field-label">${tHtml('games.mostlikely.rules.variant.rounds.label')}</div>
+          ${K.segHtml('rounds', s.rounds, C.ROUND_OPTIONS.map((r) => [r, r ? String(r) : t('games.mostlikely.endless')]))}
         </div>
-        <button type="button" class="im-pack-row" data-packs>🗂️ Packs: <strong data-packs-n>${C.activePacks(s, lang()).length}</strong> <span class="im-chev">›</span></button>
+        <button type="button" class="im-pack-row" data-packs>${tHtml('games.mostlikely.packs_2')} <strong data-packs-n>${C.activePacks(s, lang()).length}</strong> <span class="im-chev">›</span></button>
         <details class="pk-advanced">
-          <summary>Advanced</summary>
+          <summary>${tHtml('games.mostlikely.advanced')}</summary>
           <div class="pk-field">
-            <div class="pk-field-label">Points</div>
-            ${seg('scoring', s.scoring, 'On', 'Off')}
-            <div class="pk-field-help">+1 for voting with the room (Most Likely) or guessing the majority (Would You Rather). Never Have I Ever: five fingers each — every “I have” costs one, last hand standing wins. Off = casual.</div>
+            <div class="pk-field-label">${tHtml('games.mostlikely.points')}</div>
+            ${seg('scoring', s.scoring, t('games.mostlikely.on'), t('games.mostlikely.off'))}
+            <div class="pk-field-help">${tHtml('games.mostlikely.1_for_voting_with_the_room')}</div>
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Reveal</div>
-            ${K.segHtml('reveal', s.reveal, [['names', 'Show names'], ['anon', 'Anonymous %']])}
-            <div class="pk-field-help">Anonymous shows only the totals — never who voted for what. Most Likely points and Never Have I Ever fingers are off in anonymous rounds.</div>
+            <div class="pk-field-label">${tHtml('games.mostlikely.reveal')}</div>
+            ${K.segHtml('reveal', s.reveal, /* i18n-copy */ [['names', t('games.mostlikely.show_names')], ['anon', t('games.mostlikely.anonymous')]])}
+            <div class="pk-field-help">${tHtml('games.mostlikely.anonymous_shows_only_the_totals_never')}</div>
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Vote for yourself (Most Likely)</div>
-            ${seg('selfVote', s.selfVote, 'Allowed', 'Not allowed')}
+            <div class="pk-field-label">${tHtml('games.mostlikely.vote_for_yourself_most_likely')}</div>
+            ${seg('selfVote', s.selfVote, t('games.mostlikely.allowed'), t('games.mostlikely.not_allowed'))}
           </div>
           <div class="pk-field">
-            <div class="pk-field-label">Defend yourself (Most Likely)</div>
-            ${seg('defence', s.defence, 'On', 'Off')}
-            <div class="pk-field-help">15 seconds for the crowned player to plead their case</div>
+            <div class="pk-field-label">${tHtml('games.mostlikely.defend_yourself_most_likely')}</div>
+            ${seg('defence', s.defence, t('games.mostlikely.on'), t('games.mostlikely.off'))}
+            <div class="pk-field-help">${tHtml('games.mostlikely.15_seconds_for_the_crowned_player')}</div>
           </div>
           ${
             room
               ? ''
               : `<div class="pk-field">
-            <div class="pk-field-label">Voting</div>
-            ${K.segHtml('voting', s.voting, [['secret', 'Secret pass-around'], ['quick', 'Count of 3, point']])}
-            <div class="pk-field-help">Quick: everyone points (or raises hands) on three and one person taps the count.</div>
+            <div class="pk-field-label">${tHtml('games.mostlikely.voting')}</div>
+            ${K.segHtml('voting', s.voting, /* i18n-copy */ [['secret', t('games.mostlikely.secret_pass_around')], ['quick', t('games.mostlikely.count_of_3_point')]])}
+            <div class="pk-field-help">${tHtml('games.mostlikely.quick_everyone_points_or_raises_hands')}</div>
           </div>`
           }
           ${
             opts.customs
-              ? `<button type="button" class="im-pack-row" data-customs>✍️ Custom prompts: <strong data-customs-n>${opts.customs.length}</strong> <span class="im-chev">›</span></button>`
+              ? `<button type="button" class="im-pack-row" data-customs>${tHtml('games.mostlikely.custom_prompts_2')} <strong data-customs-n>${opts.customs.length}</strong> <span class="im-chev">›</span></button>`
               : ''
           }
           ${
             opts.onPack && (K.aiOn() || K.savedPacks(GAME).length)
-              ? `<button type="button" class="pk-row-btn" data-make>${K.aiOn() ? '✨ Make a pack about…' : 'Your saved packs'}<span class="pk-chev" aria-hidden="true">›</span></button>`
+              ? `<button type="button" class="pk-row-btn" data-make>${K.aiOn() ? tHtml('games.mostlikely.make_a_pack_about') : tHtml('games.mostlikely.your_saved_packs')}<span class="pk-chev" aria-hidden="true">›</span></button>`
               : ''
           }
         </details>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         K.wireSegs(sheet, s);
         sheet.querySelector('[data-packs]').addEventListener('click', () =>
@@ -339,7 +344,7 @@
 
   /** Hindi readers can add the English line; everyone else just reads English. */
   function langBtn() {
-    return isHi() ? `<button type="button" class="ml-lang" data-lang-toggle aria-pressed="${both()}" aria-label="Also show English">A/अ</button>` : '';
+    return isHi() && hiUi('toggle') ? `<button type="button" class="ml-lang" data-lang-toggle aria-pressed="${both()}" aria-label="${tHtml('games.mostlikely.also_show_english')}">${esc(hiUi('toggle'))}</button>` : '';
   }
 
   function wireLang(body, rerender) {
@@ -356,33 +361,33 @@
     return `<span class="ml-opt-tag">${side.toUpperCase()}</span><span class="ml-opt-text">${esc(l.primary)}${l.secondary ? `<span class="ml-opt-sub">${esc(l.secondary)}</span>` : ''}</span>`;
   }
 
-  /** Statement in the reader's language: i18n key `nhie.<pack>:n<i>`, English source as the fallback. */
+  /** Statement in the reader's language: i18n key `games.mostlikely.nhie.<pack>.n<i>`, English source as the fallback. */
   function nhieText(prompt) {
     const en = String((prompt && prompt.en) || '').replace(/[.!]+$/, '');
     if (!prompt || prompt.custom || !prompt.key || typeof t !== 'function') return en;
-    return t('nhie.' + prompt.key, en);
+    return t('games.mostlikely.nhie.' + String(prompt.key).replace(':', '.').replace(/-/g, '_'), en);
   }
 
   function nhieLine(prompt) {
-    const lead = typeof t === 'function' ? t('nhie_lead', 'Never have I ever…') : 'Never have I ever…';
+    const lead = typeof t === 'function' ? t('nhie_lead', 'Never have I ever…') : t('games.mostlikely.never_have_i_ever_3');
     return lead + ' ' + nhieText(prompt);
   }
 
   function promptHtml(prompt, mode) {
     const C = Core();
-    const tag = prompt && prompt.custom ? '<span class="ml-tag">Custom</span>' : '';
+    const tag = prompt && prompt.custom ? '<span class="ml-tag">' + tHtml('games.mostlikely.custom') + '</span>' : '';
     if (mode === 'nhie') {
       return `<div class="ml-prompt ml-prompt--nhie">${tag}
-        <div class="ml-prompt-lead">${esc(typeof t === 'function' ? t('nhie_lead', 'Never have I ever…') : 'Never have I ever…')}</div>
+        <div class="ml-prompt-lead">${esc(typeof t === 'function' ? t('nhie_lead', 'Never have I ever…') : t('games.mostlikely.never_have_i_ever_3'))}</div>
         <div class="ml-prompt-q">${esc(nhieText(prompt))}</div>
       </div>`;
     }
     if (mode === 'wyr') {
       return `<div class="ml-prompt ml-prompt--wyr">${langBtn()}${tag}
-        <div class="ml-prompt-q">Would you rather…</div>
+        <div class="ml-prompt-q">${tHtml('games.mostlikely.would_you_rather')}</div>
         <div class="ml-options">
           <div class="ml-opt ml-opt--a">${optionHtml('a', prompt.a)}</div>
-          <div class="ml-or">or</div>
+          <div class="ml-or">${tHtml('common.or')}</div>
           <div class="ml-opt ml-opt--b">${optionHtml('b', prompt.b)}</div>
         </div>
       </div>`;
@@ -398,18 +403,18 @@
   function voteControlsHtml(mode) {
     if (mode === 'nhie') {
       return `<div class="ml-choose">
-        <div class="ml-choices ml-choices--nhie"><button type="button" class="ml-choice ml-choice--have" data-answer="have">🙋 I have</button><button type="button" class="ml-choice ml-choice--never" data-answer="never">😇 Never</button></div>
+        <div class="ml-choices ml-choices--nhie"><button type="button" class="ml-choice ml-choice--have" data-answer="have">${tHtml('games.mostlikely.i_have_2')}</button><button type="button" class="ml-choice ml-choice--never" data-answer="never">${tHtml('games.mostlikely.never_2')}</button></div>
       </div>`;
     }
     if (mode === 'wyr') {
       return `<div class="ml-choose">
-        <div class="pk-section">Your pick</div>
+        <div class="pk-section">${tHtml('games.mostlikely.your_pick')}</div>
         <div class="ml-choices"><button type="button" class="ml-choice" data-pick="a">A</button><button type="button" class="ml-choice" data-pick="b">B</button></div>
-        <div class="pk-section">Which side will most people pick?</div>
-        <div class="ml-choices ml-choices--guess"><button type="button" class="ml-choice ml-choice--guess" data-guess="a">Most pick A</button><button type="button" class="ml-choice ml-choice--guess" data-guess="b">Most pick B</button></div>
+        <div class="pk-section">${tHtml('games.mostlikely.which_side_will_most_people_pick')}</div>
+        <div class="ml-choices ml-choices--guess"><button type="button" class="ml-choice ml-choice--guess" data-guess="a">${tHtml('games.mostlikely.most_pick_a')}</button><button type="button" class="ml-choice ml-choice--guess" data-guess="b">${tHtml('games.mostlikely.most_pick_b')}</button></div>
       </div>`;
     }
-    return '<div class="pk-section">Tap your vote</div><div data-picker></div>';
+    return '<div class="pk-section">' + tHtml('games.mostlikely.tap_your_vote') + '</div><div data-picker></div>';
   }
 
   function wireVoteControls(root, mode, opts) {
@@ -455,9 +460,9 @@
     const max = Math.max(1, res.topVotes);
     const crowned = res.top.length
       ? `<div class="ml-crown"><span class="ml-crown-icon" aria-hidden="true">👑</span><span class="ml-crown-name">${esc(joinNames(res.top, nm))}</span>
-         <span class="ml-badge">${esc(res.top.length > 1 ? 'Shared crown' : C.badgeFor(prompt))}</span>
-         <span class="ml-crown-sub">${res.topVotes} of ${res.total} vote${res.total === 1 ? '' : 's'}</span></div>`
-      : '<div class="ml-crown ml-crown--none">No votes this round</div>';
+         <span class="ml-badge">${esc(res.top.length > 1 ? t('games.mostlikely.shared_crown') : C.badgeFor(prompt))}</span>
+         <span class="ml-crown-sub">${tHtml('games.mostlikely.top_of_votes', { n: res.topVotes, count: res.total })}</span></div>`
+      : '<div class="ml-crown ml-crown--none">' + tHtml('games.mostlikely.no_votes_this_round') + '</div>';
     const bars = ids
       .filter((id) => res.tally[id] > 0 || !res.anon)
       .map(
@@ -470,11 +475,11 @@
       .join('');
     const who =
       res.votes && Object.keys(res.votes).length
-        ? `<details class="ml-who"><summary>Who voted for whom</summary>${Object.keys(res.votes)
+        ? `<details class="ml-who"><summary>${tHtml('games.mostlikely.who_voted_for_whom')}</summary>${Object.keys(res.votes)
             .map((v) => `<div class="ml-who-row">${esc(nm(v))} → ${esc(nm(res.votes[v]))}</div>`)
             .join('')}</details>`
         : res.anon
-          ? '<div class="pk-field-help">Anonymous — only the totals are shown.</div>'
+          ? '<div class="pk-field-help">' + tHtml('games.mostlikely.anonymous_only_the_totals_are_shown') + '</div>'
           : '';
     return `<div class="ml-reveal">${crowned}<div class="ml-bars">${bars}</div>${who}</div>`;
   }
@@ -490,17 +495,17 @@
         ? Object.keys(res.picks)
             .filter((id) => res.picks[id] === s)
             .map((id) => `<span class="ml-side-name">${esc(nm(id))}</span>`)
-            .join('') || '<span class="ml-side-name is-empty">Nobody</span>'
+            .join('') || '<span class="ml-side-name is-empty">' + tHtml('games.mostlikely.nobody') + '</span>'
         : '';
-    const headline = res.majority ? 'Most would rather ' + side(res.majority) : total ? 'Split room!' : 'No votes this round';
+    const headline = res.majority ? t('games.mostlikely.most_would_rather_side', { side: side(res.majority) }) : total ? t('games.mostlikely.split_room') : t('games.mostlikely.no_votes_this_round');
     const predict = res.majority
-      ? `${res.predictedRight} of ${total} guessed the majority${Object.keys(res.points || {}).length ? ' · +1 each' : ''}`
+      ? t('games.mostlikely.predictedright_of_total_guessed_the_majori', { predictedRight: res.predictedRight, total, value: Object.keys(res.points || {}).length ? t('games.mostlikely.1_each') : '' })
       : total
-        ? 'No majority — nobody scores the prediction'
+        ? t('games.mostlikely.no_majority_nobody_scores_the_prediction')
         : '';
     return `<div class="ml-reveal ml-reveal--wyr">
       <div class="ml-crown"><span class="ml-crown-icon" aria-hidden="true">${res.majority ? '🤔' : '⚖️'}</span><span class="ml-crown-name">${esc(headline)}</span><span class="ml-crown-sub">${esc(predict)}</span></div>
-      <div class="ml-split" role="img" aria-label="A ${pa} percent, B ${pb} percent">
+      <div class="ml-split" role="img" aria-label="${tHtml('games.mostlikely.split_aria', { a: pa, b: pb })}">
         <span class="ml-split-a" style="--w:${pa}%"><strong>A</strong> ${pa}%</span>
         <span class="ml-split-b" style="--w:${pb}%"><strong>B</strong> ${pb}%</span>
       </div>
@@ -508,15 +513,15 @@
         <div class="ml-side ml-side--a"><div class="ml-side-label">A · ${res.counts.a}</div><div class="ml-side-opt">${esc(side('a'))}</div>${names('a')}</div>
         <div class="ml-side ml-side--b"><div class="ml-side-label">B · ${res.counts.b}</div><div class="ml-side-opt">${esc(side('b'))}</div>${names('b')}</div>
       </div>
-      ${res.anon ? '<div class="pk-field-help">Anonymous — only the split is shown.</div>' : ''}
+      ${res.anon ? '<div class="pk-field-help">' + tHtml('games.mostlikely.anonymous_only_the_split_is_shown') + '</div>' : ''}
     </div>`;
   }
 
   function nhieHeadline(res) {
     const total = res.total || 0;
-    if (!total) return 'No answers this round';
-    if (!res.counts.have) return 'Nobody has!';
-    if (res.counts.have === total) return 'Everyone has!';
+    if (!total) return t('games.mostlikely.no_answers_this_round');
+    if (!res.counts.have) return t('games.mostlikely.nobody_has');
+    if (res.counts.have === total) return t('games.mostlikely.everyone_has');
     return res.counts.have + ' of ' + total + ' have';
   }
 
@@ -526,19 +531,19 @@
     const lost = res.lost || [];
     const names = (list) =>
       list.map((id) => `<span class="ml-side-name">${esc(nm(id))}${lost.indexOf(id) >= 0 ? ' <em class="ml-lost">−1 ✋</em>' : ''}</span>`).join('') ||
-      '<span class="ml-side-name is-empty">Nobody</span>';
+      '<span class="ml-side-name is-empty">' + tHtml('games.mostlikely.nobody') + '</span>';
     return `<div class="ml-reveal ml-reveal--nhie">
       <div class="ml-crown"><span class="ml-crown-icon" aria-hidden="true">${!total ? '🤷' : res.counts.have ? '🙋' : '😇'}</span><span class="ml-crown-name">${esc(nhieHeadline(res))}</span></div>
-      <div class="ml-split" role="img" aria-label="${res.counts.have} have, ${res.counts.never} never">
+      <div class="ml-split" role="img" aria-label="${tHtml('games.mostlikely.nhie_aria', { have: res.counts.have, never: res.counts.never })}">
         <span class="ml-split-a" style="--w:${pct}%"><strong>🙋</strong> ${res.counts.have}</span>
         <span class="ml-split-b" style="--w:${100 - pct}%"><strong>😇</strong> ${res.counts.never}</span>
       </div>
       ${
         res.anon
-          ? '<div class="pk-field-help">Anonymous — only the count is shown.</div>'
+          ? '<div class="pk-field-help">' + tHtml('games.mostlikely.anonymous_only_the_count_is_shown') + '</div>'
           : `<div class="ml-sides">
-        <div class="ml-side ml-side--a"><div class="ml-side-label">I have · ${res.counts.have}</div>${names(res.haves || [])}</div>
-        <div class="ml-side ml-side--b"><div class="ml-side-label">Never · ${res.counts.never}</div>${names(res.nevers || [])}</div>
+        <div class="ml-side ml-side--a"><div class="ml-side-label">${tHtml('games.mostlikely.i_have_have', { have: res.counts.have })}</div>${names(res.haves || [])}</div>
+        <div class="ml-side ml-side--b"><div class="ml-side-label">${tHtml('games.mostlikely.never_never', { never: res.counts.never })}</div>${names(res.nevers || [])}</div>
       </div>`
       }
     </div>`;
@@ -554,12 +559,12 @@
       .map(
         (r) => `<div class="ml-finger-row${r.fingers ? '' : ' is-out'}">
           <span class="ml-finger-name">${esc(nm(r.id))}</span>
-          <span class="ml-finger-hand" role="img" aria-label="${r.fingers} of ${F} fingers left">${Array.from({ length: F }, (_, i) => `<i class="ml-finger${i < r.fingers ? ' is-up' : ''}"></i>`).join('')}</span>
+          <span class="ml-finger-hand" role="img" aria-label="${tHtml('games.mostlikely.fingers_left_of', { n: r.fingers, total: F })}">${Array.from({ length: F }, (_, i) => `<i class="ml-finger${i < r.fingers ? ' is-up' : ''}"></i>`).join('')}</span>
           <span class="ml-finger-n">${r.fingers ? r.fingers : 'out'}</span>
         </div>`
       )
       .join('');
-    return `<div class="pk-section">Fingers left</div><div class="ml-fingers">${rows}</div>`;
+    return `<div class="pk-section">${tHtml('games.mostlikely.fingers_left')}</div><div class="ml-fingers">${rows}</div>`;
   }
 
   function revealHtml(round, nm) {
@@ -577,18 +582,18 @@
     if (round.mode === 'nhie') return { icon: !res.total ? '🤷' : res.counts.have ? '🙋' : '😇', title: nhieHeadline(res), sub: nhieLine(round.prompt) };
     if (round.mode === 'wyr') {
       const side = res.majority ? Core().optionLines(round.prompt[res.majority], lang(), false).primary : '';
-      return res.majority ? { icon: '🤔', title: 'Most would rather…', sub: side } : { icon: '⚖️', title: res.total ? 'Split room!' : 'No votes' };
+      return res.majority ? { icon: '🤔', title: t('games.mostlikely.most_would_rather'), sub: side } : { icon: '⚖️', title: res.total ? t('games.mostlikely.split_room') : t('games.mostlikely.no_votes') };
     }
     return res.top.length
-      ? { icon: '👑', title: joinNames(res.top, nm) + '!', sub: res.top.length > 1 ? 'Shared crown' : Core().badgeFor(round.prompt) }
-      : { icon: '🤷', title: 'No votes this round' };
+      ? { icon: '👑', title: joinNames(res.top, nm) + '!', sub: res.top.length > 1 ? t('games.mostlikely.shared_crown') : Core().badgeFor(round.prompt) }
+      : { icon: '🤷', title: t('games.mostlikely.no_votes_this_round') };
   }
 
   function defenceHtml(round, nm) {
     return `<div class="ml-defence">
-      <div class="ml-defence-title">Defend yourself!</div>
-      ${isHi() ? '<div class="ml-defence-hi">अपनी सफ़ाई दो!</div>' : ''}
-      <div class="pk-sub">${esc(joinNames(round.result.top, nm))} — you have 15 seconds to make your case.</div>
+      <div class="ml-defence-title">${tHtml('games.mostlikely.defend_yourself')}</div>
+      ${isHi() && hiUi('defence') ? `<div class="ml-defence-hi">${esc(hiUi('defence'))}</div>` : ''}
+      <div class="pk-sub">${tHtml('games.mostlikely.make_your_case', { names: joinNames(round.result.top, nm), count: 15 })}</div>
       <div class="pk-timer" data-timer></div>
     </div>`;
   }
@@ -600,11 +605,11 @@
       .map(
         (v) => `<div class="ml-verdict-row${v.best ? '' : ' is-clean'}">
           <span class="ml-verdict-name">${esc(nm(v.id))}${v.crowns ? ` <em>👑×${v.crowns}</em>` : ''}</span>
-          <span class="ml-verdict-text">${v.best ? esc(mltShort(v.best)) + ` <em>(${v.best.votes}/${v.best.total})</em>` : 'Clean record 😇'}</span>
+          <span class="ml-verdict-text">${v.best ? esc(mltShort(v.best)) + ` <em>(${v.best.votes}/${v.best.total})</em>` : tHtml('games.mostlikely.clean_record')}</span>
         </div>`
       )
       .join('');
-    return `<div class="ml-final-block"><div class="pk-section">Room’s verdict</div><div class="ml-verdict">${rows}</div></div>`;
+    return `<div class="ml-final-block"><div class="pk-section">${tHtml('games.mostlikely.room_s_verdict')}</div><div class="ml-verdict">${rows}</div></div>`;
   }
 
   function highlightsHtml(session, players, nm, scores, scoring) {
@@ -612,14 +617,14 @@
     const h = C.highlights(session, players.map((p) => p.id), scoring ? scores : {});
     const pair = (x) => (x && x.a && x.b ? `${esc(x.a.en)} vs ${esc(x.b.en)} (${x.counts.a}–${x.counts.b})` : '');
     const rows = [
-      h.inSync.ids.length ? ['🤝', 'Most in sync', joinNames(h.inSync.ids, nm) + ' · with the majority ' + h.inSync.n + '×'] : null,
-      h.rebel.ids.length ? ['😎', 'Rebel of the room', joinNames(h.rebel.ids, nm) + ' · in the minority ' + h.rebel.n + '×'] : null,
-      scoring && h.predictor.ids.length ? ['🔮', 'Best predictor', joinNames(h.predictor.ids, nm) + ' · ' + h.predictor.n + ' pts'] : null,
-      h.closest ? ['⚖️', 'Closest call', pair(h.closest)] : null,
-      h.unanimous ? ['📣', 'Most agreed', pair(h.unanimous)] : null,
+      h.inSync.ids.length ? /* i18n-copy */ ['🤝', t('games.mostlikely.most_in_sync'), t('games.mostlikely.joinnames_with_the_majority_n', { joinNames: joinNames(h.inSync.ids, nm), n: h.inSync.n })] : null,
+      h.rebel.ids.length ? /* i18n-copy */ ['😎', t('games.mostlikely.rebel_of_the_room'), t('games.mostlikely.joinnames_in_the_minority_n', { joinNames: joinNames(h.rebel.ids, nm), n: h.rebel.n })] : null,
+      scoring && h.predictor.ids.length ? /* i18n-copy */ ['🔮', t('games.mostlikely.best_predictor'), joinNames(h.predictor.ids, nm) + ' · ' + h.predictor.n + ' pts'] : null,
+      h.closest ? /* i18n-copy */ ['⚖️', t('games.mostlikely.closest_call'), pair(h.closest)] : null,
+      h.unanimous ? /* i18n-copy */ ['📣', t('games.mostlikely.most_agreed'), pair(h.unanimous)] : null,
     ].filter(Boolean);
     if (!rows.length) return '';
-    return `<div class="ml-final-block"><div class="pk-section">Highlights</div><div class="ml-highs">${rows
+    return `<div class="ml-final-block"><div class="pk-section">${tHtml('games.mostlikely.highlights')}</div><div class="ml-highs">${rows
       .map((r) => `<div class="ml-high"><span class="ml-high-icon" aria-hidden="true">${r[0]}</span><span class="ml-high-label">${r[1]}</span><span class="ml-high-text">${r[2]}</span></div>`)
       .join('')}</div></div>`;
   }
@@ -631,15 +636,15 @@
     const h = C.nhieHighlights(session, ids);
     const quote = (x) => (x ? '“' + nhieText(x) + '” (' + x.counts.have + '/' + x.total + ')' : '');
     const rows = [
-      st && st.winners.length ? ['🖐', st.winners.length > 1 ? 'Last hands standing' : 'Last hand standing', joinNames(st.winners, nm)] : null,
-      h.adventurous.ids.length ? ['🧭', 'Most adventurous', joinNames(h.adventurous.ids, nm) + ' · “I have” ' + h.adventurous.n + '×'] : null,
-      h.innocent.ids.length ? ['😇', 'Most innocent', joinNames(h.innocent.ids, nm) + ' · “Never” ' + h.innocent.n + '×'] : null,
-      h.common ? ['🙋', 'Most of us have', quote(h.common)] : null,
-      h.rarest ? ['🦄', 'Rarest', quote(h.rarest)] : null,
+      st && st.winners.length ? ['🖐', t('games.mostlikely.last_hands_standing', { count: st.winners.length }), joinNames(st.winners, nm)] : null,
+      h.adventurous.ids.length ? /* i18n-copy */ ['🧭', t('games.mostlikely.most_adventurous'), joinNames(h.adventurous.ids, nm) + ' · “I have” ' + h.adventurous.n + '×'] : null,
+      h.innocent.ids.length ? /* i18n-copy */ ['😇', t('games.mostlikely.most_innocent'), joinNames(h.innocent.ids, nm) + ' · “Never” ' + h.innocent.n + '×'] : null,
+      h.common ? /* i18n-copy */ ['🙋', t('games.mostlikely.most_of_us_have'), quote(h.common)] : null,
+      h.rarest ? /* i18n-copy */ ['🦄', t('games.mostlikely.rarest'), quote(h.rarest)] : null,
     ].filter(Boolean);
     return `${
       rows.length
-        ? `<div class="ml-final-block"><div class="pk-section">Highlights</div><div class="ml-highs">${rows
+        ? `<div class="ml-final-block"><div class="pk-section">${tHtml('games.mostlikely.highlights')}</div><div class="ml-highs">${rows
             .map((r) => `<div class="ml-high"><span class="ml-high-icon" aria-hidden="true">${r[0]}</span><span class="ml-high-label">${r[1]}</span><span class="ml-high-text">${esc(r[2])}</span></div>`)
             .join('')}</div></div>`
         : ''
@@ -652,11 +657,11 @@
     const hasNhie = (session.history || []).some((h) => h.mode === 'nhie');
     return `<div class="ml-final">
       <div class="pk-result-glyph" aria-hidden="true">${hasMlt ? '👑' : hasNhie && !hasWyr ? '🙊' : '🤔'}</div>
-      <div class="pk-result-title">${session.rounds} round${session.rounds === 1 ? '' : 's'} played</div>
+      <div class="pk-result-title">${tHtml('games.mostlikely.rounds_played', { count: session.rounds })}</div>
       ${hasMlt ? verdictHtml(session, players, nm) : ''}
       ${hasWyr ? highlightsHtml(session, players, nm, scores, s.scoring) : ''}
       ${hasNhie ? nhieFinalHtml(session, players, nm) : ''}
-      ${s.scoring && (hasMlt || hasWyr) ? `<div class="pk-section">Points</div>${Kit().scoreboardHtml(players, scores)}` : ''}
+      ${s.scoring && (hasMlt || hasWyr) ? `<div class="pk-section">${tHtml('games.mostlikely.points')}</div>${Kit().scoreboardHtml(players, scores)}` : ''}
     </div>`;
   }
 
@@ -666,11 +671,11 @@
     const st = C.nhieStandings(session, ids);
     const h = C.nhieHighlights(session, ids);
     const parts = [];
-    if (st && st.winners.length) parts.push('Last hand standing: ' + joinNames(st.winners, nm));
-    if (h.adventurous.ids.length) parts.push('Most adventurous: ' + joinNames(h.adventurous.ids, nm));
-    if (h.innocent.ids.length) parts.push('Most innocent: ' + joinNames(h.innocent.ids, nm));
-    if (!parts.length && h.common) parts.push(h.common.counts.have + ' of ' + h.common.total + ' of us have ' + nhieText(h.common));
-    return (parts.join(' · ') || 'We played Never Have I Ever') + ' 🙊';
+    if (st && st.winners.length) parts.push(t('games.mostlikely.last_hand_standing_joinnames', { joinNames: joinNames(st.winners, nm) }));
+    if (h.adventurous.ids.length) parts.push(t('games.mostlikely.most_adventurous_joinnames', { joinNames: joinNames(h.adventurous.ids, nm) }));
+    if (h.innocent.ids.length) parts.push(t('games.mostlikely.most_innocent_joinnames', { joinNames: joinNames(h.innocent.ids, nm) }));
+    if (!parts.length && h.common) parts.push(t('games.mostlikely.have_of_total_of_us_have', { have: h.common.counts.have, total: h.common.total, nhieText: nhieText(h.common) }));
+    return (parts.join(' · ') || t('games.mostlikely.we_played_nhie')) + ' 🙊';
   }
 
   function finalShareLine(session, players, nm, scores) {
@@ -682,27 +687,27 @@
       const v = C.verdict(session, players.map((p) => p.id))
         .filter((x) => x.best)
         .sort((a, b) => b.crowns - a.crowns || b.best.share - a.best.share)[0];
-      if (v) return 'Room’s verdict: ' + nm(v.id) + ' — ' + mltShort(v.best) + ' 👑';
+      if (v) return t('games.mostlikely.room_s_verdict_nm_mltshort', { nm: nm(v.id), mltShort: mltShort(v.best) });
     }
     const h = C.highlights(session, players.map((p) => p.id), scores);
     const parts = [];
-    if (h.inSync.ids.length) parts.push('Most in sync: ' + joinNames(h.inSync.ids, nm));
-    if (h.rebel.ids.length) parts.push('Rebel of the room: ' + joinNames(h.rebel.ids, nm));
-    if (!parts.length && h.closest) parts.push('Closest call: ' + h.closest.a.en + ' vs ' + h.closest.b.en);
-    return (parts.join(' · ') || 'We played Would You Rather') + ' 🤔';
+    if (h.inSync.ids.length) parts.push(t('games.mostlikely.most_in_sync_joinnames', { joinNames: joinNames(h.inSync.ids, nm) }));
+    if (h.rebel.ids.length) parts.push(t('games.mostlikely.rebel_of_the_room_joinnames', { joinNames: joinNames(h.rebel.ids, nm) }));
+    if (!parts.length && h.closest) parts.push(t('games.mostlikely.closest_call_en_vs_en2', { en: h.closest.a.en, en2: h.closest.b.en }));
+    return (parts.join(' · ') || t('games.mostlikely.we_played_wyr')) + ' 🤔';
   }
 
   function roundShareLine(round, nm) {
     const res = round.result;
-    if (round.mode === 'nhie') return nhieLine(round.prompt) + ' — ' + (res.total ? res.counts.have + ' of ' + res.total + ' of us have 🙋' : 'nobody answered');
+    if (round.mode === 'nhie') return nhieLine(round.prompt) + ' — ' + (res.total ? t('games.mostlikely.have_of_total_of_us_have_2', { have: res.counts.have, total: res.total }) : t('games.mostlikely.nobody_answered'));
     if (round.mode === 'wyr') {
       const total = res.total || 0;
-      if (!total) return 'Would you rather ' + round.prompt.a.en + ' or ' + round.prompt.b.en + '? 🤔';
+      if (!total) return t('games.mostlikely.would_you_rather_en_or_en2', { en: round.prompt.a.en, en2: round.prompt.b.en });
       const side = res.majority || 'a';
       const pct = Math.round((res.counts[side] / total) * 100);
-      return pct + '% of us would rather ' + round.prompt[side].en + ' 🤔';
+      return t('games.mostlikely.pct_of_us_would_rather_en', { pct, en: round.prompt[side].en });
     }
-    return res.top.length ? joinNames(res.top, nm) + ' — ' + mltShort(round.prompt) + ' 👑' : mltShort(round.prompt) + '? The room couldn’t decide';
+    return res.top.length ? joinNames(res.top, nm) + ' — ' + mltShort(round.prompt) + ' 👑' : t('games.mostlikely.mltshort_the_room_couldn_t_decide', { mltShort: mltShort(round.prompt) });
   }
 
   function share(line) {
@@ -714,14 +719,14 @@
   function open(ctx) {
     const c = ctx || {};
     if (!Core() || !Kit()) {
-      if (typeof showToast === 'function') showToast(LABEL + ' is still loading — try again');
+      if (typeof showToast === 'function') showToast(t('games.mostlikely.label_is_still_loading_try_again', { LABEL }));
       return;
     }
     if ((c.source === 'chat_group' || c.isGroup) && c.chat) {
       startRoom({ chat: c.chat });
       return;
     }
-    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
+    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: t('games.mostlikely.party'), confirmLeave: () => false });
     if (c.mode === 'pass') renderPassSetup(shell);
     else renderHome(shell);
   }
@@ -731,8 +736,8 @@
       Kit().homeHtml({
         game: GAME,
         icon: '👉',
-        title: 'Most Likely To?',
-        sub: '2–16 players · vote on your friends, pick a side, or confess',
+        title: t('games.mostlikely.most_likely_to'),
+        sub: t('games.mostlikely.2_16_players_vote_on_your'),
         howToHtml: howToCardHtml(),
       })
     );
@@ -747,11 +752,11 @@
     const card = (id, icon, title, sub, extra) =>
       `<button type="button" class="ml-mode${extra || ''}${mode === id ? ' is-on' : ''}" data-mode-pick="${id}" aria-pressed="${mode === id}">
         <span class="ml-mode-icon" aria-hidden="true">${icon}</span><span class="ml-mode-title">${title}</span><span class="ml-mode-sub">${sub}</span></button>`;
-    return `<div class="ml-modes">${card('mlt', '👉', 'Most Likely To', 'Vote for the friend who fits · 3+')}${card('wyr', '🤔', 'Would You Rather', 'Pick a side, guess the room · 2+')}${card(
+    return `<div class="ml-modes">${card('mlt', '👉', t('games.mostlikely.rules.rules.1.h'), t('games.mostlikely.vote_for_the_friend_who_fits'))}${card('wyr', '🤔', t('games.mostlikely.rules.rules.2.h'), t('games.mostlikely.pick_a_side_guess_the_room'))}${card(
       'nhie',
       '🙊',
-      'Never Have I Ever',
-      'I have or never · five fingers, last hand standing · 2+',
+      t('games.mostlikely.rules.rules.3.h'),
+      t('games.mostlikely.i_have_or_never_five_fingers'),
       ' ml-mode--wide'
     )}</div>`;
   }
@@ -763,14 +768,14 @@
     let names = loadNames();
     const body = shell.render(`<div class="pk-page">
       <div class="pk-setup-head">
-        <div class="pk-title">Pick a game</div>
-        <button type="button" class="pk-icon-btn" data-settings aria-label="Game settings">⚙︎</button>
+        <div class="pk-title">${tHtml('games.mostlikely.pick_a_game')}</div>
+        <button type="button" class="pk-icon-btn" data-settings aria-label="${tHtml('games.mostlikely.game_settings')}">⚙︎</button>
       </div>
       <div data-modes></div>
-      <div class="pk-section">Who’s playing?</div>
+      <div class="pk-section">${tHtml('games.mostlikely.who_s_playing')}</div>
       <div data-editor></div>
       <div class="pk-meta" data-meta></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${tHtml('games.mostlikely.start')}</button>
     </div>`);
     shell.setBack(() => renderHome(shell));
     let editor = null;
@@ -842,7 +847,7 @@
 
   function nameOf(session, id) {
     const p = session.players.find((x) => x.id === id);
-    return p ? p.name : 'Someone';
+    return p ? p.name : t('common.someone');
   }
 
   function startPassRound(shell, session, skip) {
@@ -870,22 +875,22 @@
     const s = session.settings;
     const quick = s.voting === 'quick';
     const body = shell.render(`<div class="pk-page">
-      <div class="pk-progress">Round ${session.roundNo}${s.rounds ? ' of ' + s.rounds : ''}</div>
+      <div class="pk-progress">${tHtml('games.mostlikely.round_roundno_value', { roundNo: session.roundNo, value: s.rounds ? t('games.mostlikely.of_rounds', { rounds: s.rounds }) : '' })}</div>
       ${promptHtml(r.prompt, r.mode)}
       <div class="pk-sub">${
         quick
           ? r.mode === 'nhie'
-            ? 'On three, hands up if you have!'
+            ? tHtml('games.mostlikely.on_three_hands_up_if_you')
             : r.mode === 'wyr'
-              ? 'On three, everyone raises a hand for A or B.'
-              : 'On three, everyone points at a player.'
+              ? tHtml('games.mostlikely.on_three_everyone_raises_a_hand')
+              : tHtml('games.mostlikely.on_three_everyone_points_at_a')
           : r.mode === 'nhie'
-            ? 'Everyone answers in secret — pass the phone around.'
-            : 'Everyone votes in secret — pass the phone around.'
+            ? tHtml('games.mostlikely.everyone_answers_in_secret_pass_the')
+            : tHtml('games.mostlikely.everyone_votes_in_secret_pass_the')
       }</div>
       ${r.mode === 'nhie' && r.fingers ? passOutNote(session, r) : ''}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${quick ? '1… 2… 3!' : 'Start secret vote'}</button>
-      <button type="button" class="pk-link" data-skip>Skip this one</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-go>${quick ? '1… 2… 3!' : tHtml('games.mostlikely.start_secret_vote')}</button>
+      <button type="button" class="pk-link" data-skip>${tHtml('games.mostlikely.skip_this_one')}</button>
     </div>`);
     wireLang(body, () => renderPassPrompt(shell, session));
     body.querySelector('[data-skip]').addEventListener('click', () => startPassRound(shell, session, true));
@@ -894,7 +899,7 @@
 
   function passOutNote(session, r) {
     const out = session.players.filter((p) => r.players.indexOf(p.id) < 0).map((p) => p.name);
-    return out.length ? `<div class="pk-field-help">Out of fingers: ${esc(out.join(', '))} — they watch this one.</div>` : '';
+    return out.length ? `<div class="pk-field-help">${tHtml('games.mostlikely.out_of_fingers_value_they_watch', { value: out.join(', ') })}</div>` : '';
   }
 
   function renderPassVote(shell, session, index) {
@@ -908,13 +913,13 @@
     const draft = {};
     const players = session.players.map((p) => ({ id: p.id, name: p.name }));
     const body = shell.render(`<div class="pk-page">
-      <div class="pk-progress">Vote ${index + 1} of ${r.players.length}</div>
+      <div class="pk-progress">${tHtml('games.mostlikely.vote_value_of_playerscount', { value: index + 1, playersCount: r.players.length })}</div>
       <div data-vote></div>
     </div>`);
     Kit().mountPassVote(body.querySelector('[data-vote]'), {
       name: nameOf(session, id),
       bodyHtml: `<div class="ml-vote-face">${promptHtml(r.prompt, r.mode)}${voteControlsHtml(r.mode)}</div>`,
-      doneLabel: index === r.players.length - 1 ? 'Lock vote & reveal' : 'Lock vote & pass',
+      doneLabel: index === r.players.length - 1 ? t('games.mostlikely.lock_vote_reveal') : t('games.mostlikely.lock_vote_pass'),
       onMount(face, setReady) {
         face.querySelectorAll('[data-lang-toggle]').forEach((b) => (b.hidden = true));
         wireVoteControls(face, r.mode, {
@@ -945,17 +950,17 @@
     r.players.forEach((id) => (counts[id] = 0));
     const body = shell.render(`<div class="pk-page">
       ${promptHtml(r.prompt, r.mode)}
-      <div class="pk-section">${r.mode === 'nhie' ? 'Tap everyone whose hand went up' : r.mode === 'wyr' ? 'Tap A or B for each player' : 'How many pointed at each player?'}</div>
+      <div class="pk-section">${r.mode === 'nhie' ? tHtml('games.mostlikely.tap_everyone_whose_hand_went_up') : r.mode === 'wyr' ? tHtml('games.mostlikely.tap_a_or_b_for_each') : tHtml('games.mostlikely.how_many_pointed_at_each_player')}</div>
       <div class="ml-quick">${r.players
         .map((id) =>
           r.mode === 'nhie'
-            ? `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><button type="button" class="ml-choice ml-choice--sm" data-hand="${esc(id)}" aria-pressed="false">🙋 I have</button></div>`
+            ? `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><button type="button" class="ml-choice ml-choice--sm" data-hand="${esc(id)}" aria-pressed="false">${tHtml('games.mostlikely.i_have_2')}</button></div>`
             : r.mode === 'wyr'
             ? `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><span class="ml-quick-ab"><button type="button" class="ml-choice ml-choice--sm" data-q="${esc(id)}" data-side="a">A</button><button type="button" class="ml-choice ml-choice--sm" data-q="${esc(id)}" data-side="b">B</button></span></div>`
-            : `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><span class="ml-stepper"><button type="button" data-dec="${esc(id)}" aria-label="One less">−</button><strong data-n="${esc(id)}">0</strong><button type="button" data-inc="${esc(id)}" aria-label="One more">+</button></span></div>`
+            : `<div class="ml-quick-row"><span class="ml-quick-name">${esc(nm(id))}</span><span class="ml-stepper"><button type="button" data-dec="${esc(id)}" aria-label="${tHtml('games.mostlikely.one_less')}">−</button><strong data-n="${esc(id)}">0</strong><button type="button" data-inc="${esc(id)}" aria-label="${tHtml('games.mostlikely.one_more')}">+</button></span></div>`
         )
         .join('')}</div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-reveal ${r.mode === 'nhie' ? '' : 'disabled'}>Reveal</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-reveal ${r.mode === 'nhie' ? '' : 'disabled'}>${tHtml('games.mostlikely.reveal')}</button>
     </div>`);
     wireLang(body, () => renderPassQuick(shell, session));
     const btn = body.querySelector('[data-reveal]');
@@ -1014,7 +1019,7 @@
         ${promptHtml(r.prompt, r.mode)}
         ${revealHtml(r, nm)}
         ${defenceHtml(r, nm)}
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-done>Case closed</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-done>${tHtml('games.mostlikely.case_closed')}</button>
       </div>`);
       animateReveal(body);
       wireLang(body, () => renderPassReveal(shell, session, true));
@@ -1045,10 +1050,10 @@
       ${promptHtml(r.prompt, r.mode)}
       ${revealHtml(r, nm)}
       ${roundBoardHtml(r, s, session.stats, session.players, session.scores, nm)}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${last ? 'See the verdict' : 'Next round'}</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${last ? tHtml('games.mostlikely.see_the_verdict') : tHtml('games.mostlikely.next_round')}</button>
       <div class="pk-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-        ${last ? '' : '<button type="button" class="pk-btn pk-btn--ghost" data-end>End game</button>'}
+        <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+        ${last ? '' : '<button type="button" class="pk-btn pk-btn--ghost" data-end>' + tHtml('games.mostlikely.end_game') + '</button>'}
       </div>
       ${Kit().badCardHtml(promptCard(r.prompt))}
     </div>`);
@@ -1063,21 +1068,21 @@
   /** Under a round result: fingers for Never Have I Ever, points for the other modes. */
   function roundBoardHtml(r, s, stats, players, scores, nm) {
     if (r.mode === 'nhie') return r.fingers ? fingersHtml(Core().nhieStandings(stats, players.map((p) => p.id)), nm) : '';
-    return s.scoring ? `<div class="pk-section">Points</div>${Kit().scoreboardHtml(players, scores, r.result.points)}` : '';
+    return s.scoring ? `<div class="pk-section">${tHtml('games.mostlikely.points')}</div>${Kit().scoreboardHtml(players, scores, r.result.points)}` : '';
   }
 
   function renderPassFinal(shell, session) {
     const nm = (id) => nameOf(session, id);
     shell.guard = false;
-    shell.setSubtitle('Final');
+    shell.setSubtitle(t('games.mostlikely.final'));
     Kit().reportPass(GAME, { players: session.players, scores: session.scores });
     const body = shell.render(`<div class="pk-page">
       ${finalHtml(session.stats, session.players, nm, session.scores, session.settings)}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${tHtml('games.mostlikely.play_again')}</button>
       ${Kit().passHubButtonHtml()}
       <div class="pk-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-        <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-setup>${tHtml('games.mostlikely.players_settings')}</button>
       </div>
     </div>`);
     try {
@@ -1153,7 +1158,7 @@
       lobbySummary: (ctrl) => modeLine(settingsOf(ctrl), 'room'),
       canStart: (ctrl, players) => {
         const min = Core().minPlayers(settingsOf(ctrl));
-        return players.length < min ? { ok: false, label: 'Need ' + (min - players.length) + ' more to start' } : { ok: true, label: 'Start' };
+        return players.length < min ? { ok: false, label: t('games.mostlikely.need_value_more_to_start', { value: min - players.length }) } : { ok: true, label: t('games.mostlikely.start') };
       },
       openSettings: (ctrl) =>
         openSettings(settingsOf(ctrl), {
@@ -1204,9 +1209,9 @@
 
   function myVoteLine(st, secret, nm) {
     if (!secret) return '';
-    if (st.mode === 'nhie') return `You answered <strong>${secret.answer === 'have' ? 'I have' : 'Never'}</strong>`;
-    if (st.mode === 'wyr') return `You picked <strong>${secret.pick === 'a' ? 'A' : 'B'}</strong> and guessed most pick <strong>${secret.guess === 'a' ? 'A' : 'B'}</strong>`;
-    return `You voted <strong>${esc(nm(secret.target))}</strong>`;
+    if (st.mode === 'nhie') return tHtml('games.mostlikely.you_answered_html', { answer: secret.answer === 'have' ? t('games.mostlikely.i_have') : t('games.mostlikely.never') });
+    if (st.mode === 'wyr') return tHtml('games.mostlikely.you_picked_guessed_html', { pick: secret.pick === 'a' ? 'A' : 'B', guess: secret.guess === 'a' ? 'A' : 'B' });
+    return tHtml('games.mostlikely.you_voted_html', { name: typeof bidi === 'function' ? bidi(nm(secret.target)) : nm(secret.target) });
   }
 
   function renderRoomPhase(ctrl, st) {
@@ -1218,7 +1223,7 @@
     const view = ctrl.view;
     const secret = view.secret && Number(view.secret.roundNo) === Number(pub.roundNo) ? view.secret : null;
     const inRound = st.players.indexOf(me) >= 0;
-    ctrl.shell.setSubtitle('Room ' + view.code + ' · Round ' + pub.roundNo + (s.rounds ? ' of ' + s.rounds : ''));
+    ctrl.shell.setSubtitle((s.rounds ? t('games.mostlikely.room_round_of', { code: view.code, roundNo: pub.roundNo, rounds: s.rounds }) : t('games.mostlikely.room_round', { code: view.code, roundNo: pub.roundNo })));
     const rerender = () => renderRoomPhase(ctrl, st);
     const timed = st.phase === 'vote' || st.phase === 'defence';
     const top = `${ctrl.hostBar(timed)}${ctrl.pausedNote()}`;
@@ -1228,12 +1233,12 @@
       const choosing = inRound && (!secret || view.mlChange === st.n);
       if (choosing) {
         const body = ctrl.render(`<div class="pk-page">${top}
-          <div class="pk-progress">${st.voted.length}/${st.players.length} voted · <span class="pk-timer pk-timer--inline" data-timer></span></div>
+          <div class="pk-progress">${tHtml('dangal.voted_of', { n: st.voted.length, total: st.players.length })} · <span class="pk-timer pk-timer--inline" data-timer></span></div>
           ${promptHtml(st.prompt, st.mode)}
           ${voteControlsHtml(st.mode)}
           <div class="pk-error" data-err></div>
-          <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-lock disabled>Lock my vote</button>
-          <div class="pk-field-help">Your vote stays secret until everyone’s in.</div>
+          <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-lock disabled>${tHtml('games.mostlikely.lock_my_vote')}</button>
+          <div class="pk-field-help">${tHtml('games.mostlikely.your_vote_stays_secret_until_everyone')}</div>
         </div>`);
         ctrl.wire(body);
         wireLang(body, rerender);
@@ -1257,17 +1262,17 @@
         <div class="ml-voted">
           ${
             inRound
-              ? `<div class="ml-voted-mine">✓ Vote locked · ${myVoteLine(st, secret, nm)} <span class="ml-private">only you can see this</span></div>`
+              ? `<div class="ml-voted-mine">${tHtml('games.mostlikely.vote_locked_myvoteline', { myVoteLine: myVoteLine(st, secret, nm) })} <span class="ml-private">${tHtml('games.mostlikely.only_you_can_see_this')}</span></div>`
               : st.mode === 'nhie' && st.fingers && st.session && st.session.fingers && me in st.session.fingers && Core().fingersLeft(st.session, me) === 0
-                ? '<div class="pk-sub">You’re out of fingers — watch the rest 👀</div>'
-                : '<div class="pk-sub">You’ll vote from the next round.</div>'
+                ? '<div class="pk-sub">' + tHtml('games.mostlikely.you_re_out_of_fingers_watch') + '</div>'
+                : '<div class="pk-sub">' + tHtml('games.mostlikely.you_ll_vote_from_the_next') + '</div>'
           }
-          <div class="pk-sub">${st.voted.length}/${st.players.length} voted</div>
+          <div class="pk-sub">${tHtml('dangal.voted_of', { n: st.voted.length, total: st.players.length })}</div>
           <div class="ml-voted-list">${st.players.map((id) => `<span class="ml-voted-chip${st.voted.indexOf(id) >= 0 ? ' is-in' : ''}">${esc(nm(id))}</span>`).join('')}</div>
           <div class="pk-timer" data-timer></div>
         </div>
-        ${inRound ? '<button type="button" class="pk-link" data-change>Change my vote</button>' : ''}
-        ${ctrl.isHost() ? `<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-reveal ${st.voted.length ? '' : 'disabled'}>Reveal now</button>` : ''}
+        ${inRound ? '<button type="button" class="pk-link" data-change>' + tHtml('games.mostlikely.change_my_vote') + '</button>' : ''}
+        ${ctrl.isHost() ? `<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-reveal ${st.voted.length ? '' : 'disabled'}>${tHtml('games.mostlikely.reveal_now')}</button>` : ''}
       </div>`);
       ctrl.wire(body);
       wireLang(body, rerender);
@@ -1285,7 +1290,7 @@
         ${promptHtml(st.prompt, st.mode)}
         ${revealHtml(st, nm)}
         ${defenceHtml(st, nm)}
-        ${canSkip ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-done>Case closed</button>' : ''}
+        ${canSkip ? '<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-done>' + tHtml('games.mostlikely.case_closed') + '</button>' : ''}
       </div>`);
       ctrl.wire(body);
       wireLang(body, rerender);
@@ -1304,11 +1309,11 @@
           over ? finalHtml(st.session, players, nm, pub.scores, s) : roundBoardHtml(st, s, st.session, players, pub.scores, nm)
         }
         ${K.roomResultActions(ctrl, {
-          nextLabel: over ? 'Play again' : 'Next round',
-          waitLabel: over ? 'Waiting for the host to start a new game…' : 'Waiting for the host to start the next round…',
+          nextLabel: over ? t('games.mostlikely.play_again') : t('games.mostlikely.next_round'),
+          waitLabel: over ? t('games.mostlikely.waiting_for_the_host_to_start') : t('games.mostlikely.waiting_for_the_host_to_start_2'),
           card: promptCard(st.prompt),
         })}
-        ${!over && ctrl.isHost() ? '<button type="button" class="pk-link" data-finish>End game &amp; see the verdict</button>' : ''}
+        ${!over && ctrl.isHost() ? '<button type="button" class="pk-link" data-finish>' + tHtml('games.mostlikely.end_game_see_the_verdict') + '</button>' : ''}
       </div>`);
       wireLang(body, rerender);
       animateReveal(body);
@@ -1336,7 +1341,7 @@
     registerGame({
       id: 'mostlikely',
       name: LABEL,
-      desc: 'Most Likely To · Would You Rather · Never Have I Ever — secret votes, big reveals',
+      desc: t('games.mostlikely.most_likely_to_would_you_rather'),
       icon: '👉',
       gameType: 'multiplayer',
       genre: 'party',
@@ -1347,8 +1352,8 @@
       selfChat: false,
       order: 23,
       meta: {
-        kit: 'party-kit.js (Pass & Play + Room)',
-        modes: 'Most Likely To · Would You Rather · Never Have I Ever (one game id)',
+        kit: t('games.mostlikely.party_kit_js_pass_play_room'),
+        modes: t('games.mostlikely.most_likely_to_would_you_rather_2'),
         voting: 'party_room → server-lib/party-deal.js; votes stay server-side until reveal; anonymous = tallies only',
       },
       launch,

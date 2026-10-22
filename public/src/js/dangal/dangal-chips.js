@@ -76,7 +76,7 @@
     } catch (e) {
       if (key !== ':' + gameType) sent.delete(key);
       console.warn('[dangal-chips] resolve failed', e?.message || e);
-      return { error: true, message: e?.message || 'resolve failed' };
+      return { error: true, message: e?.message || t('dangal.resolve_failed') };
     }
   }
 

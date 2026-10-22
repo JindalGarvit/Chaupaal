@@ -38,12 +38,12 @@
 
   /** Genre catalog — UI label + order for Manch chips. */
   const GAME_GENRES = [
-    { id: 'solo', label: 'Solo', icon: '🧠', color: '#6A1B9A' },
-    { id: 'board', label: 'Boards', icon: '♟️', color: '#5D4037' },
-    { id: 'words', label: 'Words', icon: '🔤', color: '#C62828' },
-    { id: 'cards', label: 'Cards', icon: '🂡', color: '#1B5E20' },
-    { id: 'rw_sports', label: 'Sports', icon: '🏏', color: '#2E7D32' },
-    { id: 'party', label: 'Party', icon: '🎉', color: '#E65100' },
+    { id: 'solo', label: t('dangal.solo'), icon: '🧠', color: '#6A1B9A' },
+    { id: 'board', label: t('dangal.boards'), icon: '♟️', color: '#5D4037' },
+    { id: 'words', label: t('dangal.words'), icon: '🔤', color: '#C62828' },
+    { id: 'cards', label: t('dangal.cards'), icon: '🂡', color: '#1B5E20' },
+    { id: 'rw_sports', label: t('common.sports'), icon: '🏏', color: '#2E7D32' },
+    { id: 'party', label: t('dangal.party'), icon: '🎉', color: '#E65100' },
   ];
 
   const LEGACY_GENRES = { brain: 'solo', arcade: 'solo', quiz: 'words', sports: 'rw_sports' };
@@ -68,7 +68,7 @@
   function genreLabel(genreId) {
     const id = LEGACY_GENRES[genreId] || genreId;
     const hit = GAME_GENRES.find((x) => x.id === id);
-    return hit ? hit.label : 'Games';
+    return hit ? hit.label : t('dangal.games');
   }
 
   /** Retired ids (old links, invites, stale rooms) → calm retired screen. Returns true when handled. */
@@ -95,12 +95,12 @@
     }
     const sel = Number(selected) || 0;
     return `<div class="dangal-stake-picker" data-dangal-stake-picker>
-      <div class="dangal-stake-picker__label">Stake · virtual chips only (not real money)</div>
+      <div class="dangal-stake-picker__label">${tHtml('dangal.stake_virtual_chips_only_not_real')}</div>
       <div class="dangal-stake-picker__row">
         ${DANGAL_STAKE_OPTIONS.map(
           (s) =>
             `<button type="button" class="dangal-stake-chip${s === sel ? ' is-selected' : ''}" data-stake="${s}">${
-              s === 0 ? 'Friendly' : '⚡' + s
+              s === 0 ? tHtml('dangal.friendly') : '⚡' + s
             }</button>`
         ).join('')}
       </div>
@@ -144,11 +144,11 @@
       sheet.style.cssText =
         'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:20px;z-index:110;';
       sheet.innerHTML = `
-        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;margin-bottom:4px;">Stake chips</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Friendly (0) or wager <strong>virtual chips</strong> — not real money. Teen-safe.</div>
+        <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:16px;margin-bottom:4px;">${tHtml('dangal.stake_chips')}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">${tHtml('dangal.friendly_0_or_wager')} <strong>${tHtml('dangal.classics.chips')}</strong> ${tHtml('dangal.not_real_money_teen_safe')}</div>
         ${dangalStakePickerHtml(gameId, initial)}
-        <button type="button" id="dgStakeContinue" style="width:100%;margin-top:14px;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">Continue</button>
-        <button type="button" id="dgStakeCancel" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
+        <button type="button" id="dgStakeContinue" style="width:100%;margin-top:14px;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;">${tHtml('dangal.continue')}</button>
+        <button type="button" id="dgStakeCancel" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">${tHtml('common.cancel')}</button>`;
       const device = document.querySelector('.device');
       if (!device) {
         resolve(0);
@@ -165,14 +165,14 @@
             const ok = await DangalEconomy.canAffordStake(stake);
             if (!ok) {
               if (typeof showToast === 'function') {
-                showToast('Not enough virtual chips — pick Friendly (0) or a lower stake');
+                showToast(t('dangal.not_enough_virtual_chips_pick_friendly'));
               }
               if (btn) btn.disabled = false;
               return;
             }
           } catch (e) {
             if (typeof showToast === 'function') {
-              showToast('Couldn’t check chip balance — try Friendly (0)');
+              showToast(t('dangal.couldn_t_check_chip_balance_try'));
             }
             if (btn) btn.disabled = false;
             return;
@@ -432,7 +432,7 @@
 
   /** Canonical Practice AI seat — never fake human names. */
   function practiceAiChat() {
-    return { name: 'Practice AI', id: 'ai' };
+    return { name: t('dangal.practice_ai'), id: 'ai' };
   }
 
   /**
@@ -568,16 +568,16 @@
 
   function pickerHonestyBadge(liveCapable) {
     if (liveCapable) {
-      return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(229,57,53,0.12);color:#C62828;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Live</span>';
+      return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(229,57,53,0.12);color:#C62828;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">' + tHtml('dangal.live') + '</span>';
     }
-    return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Practice</span>';
+    return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">' + tHtml('dangal.solo.practice') + '</span>';
   }
 
   function pickerPracticeBadge(kind) {
     if (kind === 'solo') {
-      return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">Solo</span>';
+      return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(0,137,123,0.12);color:#00695C;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">' + tHtml('dangal.solo') + '</span>';
     }
-    return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(201,162,39,0.18);color:#8D6E00;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">vs AI</span>';
+    return '<span style="display:inline-block;margin-inline-start:6px;padding:1px 6px;border-radius:999px;background:rgba(201,162,39,0.18);color:#8D6E00;font:700 9px Space Grotesk,sans-serif;letter-spacing:0.02em;vertical-align:middle;">' + tHtml('dangal.vs_ai') + '</span>';
   }
 
   /**
@@ -588,7 +588,7 @@
   function openGamePicker(chat, isGroup) {
     const isSelf = typeof isSelfChat === 'function' && isSelfChat(chat);
     const ctx = { chat, isGroup: !!isGroup, source: isSelf ? 'self' : 'chat' };
-    const friendName = (chat && chat.name) || 'your friend';
+    const friendName = (chat && chat.name) || t('dangal.solo.yourFriend');
 
     let pickerGames;
     let title;
@@ -600,8 +600,8 @@
       pickerGames = getGames({ selfChat: true }).map((g) => {
         const entry = getPracticeEntryClass(g.id);
         const solo = entry === 'soloPractice';
-        let rowDesc = solo ? 'Practice · Solo' : 'Practice vs AI';
-        if (g.id === 'scribble') rowDesc = 'Doodle pad · rooms with friends';
+        let rowDesc = solo ? t('dangal.practice_solo') : t('dangal.practice_vs_ai');
+        if (g.id === 'scribble') rowDesc = t('dangal.doodle_pad_rooms_with_friends');
         return {
           id: g.id,
           emoji: g.icon,
@@ -615,9 +615,9 @@
           },
         };
       });
-      title = 'Practice';
-      subtitle = 'Practice vs AI or Solo — same paths as Manch';
-      emptyHint = 'No Practice games here yet — try Manch.';
+      title = t('dangal.solo.practice');
+      subtitle = t('dangal.practice_vs_ai_or_solo_same');
+      emptyHint = t('dangal.no_practice_games_here_yet_try');
     } else if (isGroup) {
       // Hard allowlist — party Live titles only.
       const allow = new Set(GROUP_PARTY_IDS);
@@ -637,16 +637,16 @@
         pickerGames.unshift({
           id: 'partyhub',
           emoji: '🎉',
-          name: 'Party night',
-          desc: 'Several party games, one group — no re-invites',
+          name: t('dangal.party.party_night'),
+          desc: t('dangal.several_party_games_one_group_no'),
           partyKit: true,
           showChallenge: false,
           fn: () => window.PartyHub.open({ chat, source: 'chat_group' }),
         });
       }
-      title = 'Group games';
-      subtitle = 'Party games for this chat — pick players next';
-      emptyHint = 'No party games here yet — try Ludo, Oh No!, Scribble or Imposter from Manch.';
+      title = t('dangal.group_games');
+      subtitle = t('dangal.party_games_for_this_chat_pick');
+      emptyHint = t('dangal.no_party_games_here_yet_try');
     } else {
       // 1:1 — row/primary = Practice vs AI (or Solo); Challenge = Live with this friend.
       const rows = getGames({ chat1v1: true }).map((g) => {
@@ -655,13 +655,13 @@
         const solo = entry === 'soloPractice';
         let rowDesc;
         if (g.id === 'scribble') {
-          rowDesc = 'Draw & guess room with ' + friendName;
+          rowDesc = t('dangal.draw_guess_room_with_friendname', { friendName });
         } else if (liveCapable) {
-          rowDesc = 'Practice vs AI · Challenge for Live';
+          rowDesc = t('dangal.practice_vs_ai_challenge_for_live');
         } else if (solo) {
-          rowDesc = 'Practice · Solo';
+          rowDesc = t('dangal.practice_solo');
         } else {
-          rowDesc = 'Practice vs AI';
+          rowDesc = t('dangal.practice_vs_ai');
         }
         return {
           id: g.id,
@@ -681,10 +681,10 @@
       });
       rows.sort((a, b) => Number(b.liveCapable) - Number(a.liveCapable));
       pickerGames = rows;
-      title = 'Play a game';
+      title = t('dangal.play_a_game');
       subtitle =
-        'Practice vs AI anytime — or Challenge for Live with ' + friendName + '.';
-      emptyHint = 'No chat games yet — open Manch to play.';
+        t('dangal.practice_vs_ai_anytime_or_challenge_2', { friendName });
+      emptyHint = t('dangal.no_chat_games_yet_open_manch');
     }
 
     const sheet = document.createElement('div');
@@ -707,13 +707,13 @@
             lastSection = section;
             head =
               section === 'live'
-                ? '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:10px 2px 6px;">Practice vs AI · Challenge Live</div>'
-                : '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:14px 2px 6px;">Practice only</div>';
+                ? '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:10px 2px 6px;">' + tHtml('dangal.practice_vs_ai_challenge_live') + '</div>'
+                : '<div style="font:700 11px Space Grotesk,sans-serif;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin:14px 2px 6px;">' + tHtml('dangal.practice_only') + '</div>';
           }
           const challengeBtn = g.showChallenge
             ? '<button type="button" data-challenge-i="' +
               i +
-              '" class="dangal-picker-challenge" style="flex-shrink:0;padding:10px 12px;border-radius:14px;border:2px solid var(--line);background:var(--white);font:700 11px Space Grotesk,sans-serif;cursor:pointer;max-width:88px;">Challenge</button>'
+              '" class="dangal-picker-challenge" style="flex-shrink:0;padding:10px 12px;border-radius:14px;border:2px solid var(--line);background:var(--white);font:700 11px Space Grotesk,sans-serif;cursor:pointer;max-width:88px;">' + tHtml('common.dangal_challenge_start') + '</button>'
             : '';
           const badge = g.liveCapable
             ? pickerHonestyBadge(true) + pickerPracticeBadge('vsAi')
@@ -774,7 +774,7 @@
       subtitle +
       '</div>' +
       bodyHtml +
-      '<button id="closeGP" type="button" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">Cancel</button>';
+      '<button id="closeGP" type="button" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:4px;">' + tHtml('common.cancel') + '</button>';
 
     const device = document.querySelector('.device');
     if (!device) return;
@@ -821,13 +821,13 @@
         const row = pickerGames[i];
         if (!row || !row.id || !row.showChallenge) return;
         if (!gameIsLiveCapable(row.id, getGame(row.id))) {
-          if (typeof showToast === 'function') showToast('That title is Practice only — no Live challenge');
+          if (typeof showToast === 'function') showToast(t('dangal.that_title_is_practice_only_no'));
           return;
         }
         const toUid = typeof opponentUidFromChat === 'function' ? opponentUidFromChat(chat) : '';
         const chatId = chat?.firestoreId || chat?.id;
         if (!toUid || !chatId || typeof sendChallengeCard !== 'function') {
-          if (typeof showToast === 'function') showToast('Open a real chat to send a challenge');
+          if (typeof showToast === 'function') showToast(t('dangal.open_a_real_chat_to_send'));
           return;
         }
         btn.disabled = true;
@@ -871,10 +871,10 @@
             )
           );
           closePicker();
-          if (typeof showToast === 'function') showToast('Challenge sent');
+          if (typeof showToast === 'function') showToast(t('dangal.challenge_sent_2'));
         } catch (err) {
           btn.disabled = false;
-          if (typeof showToast === 'function') showToast(err?.message || 'Could not send challenge');
+          if (typeof showToast === 'function') showToast(err?.message || t('dangal.could_not_send_challenge'));
         }
       });
     });
@@ -916,12 +916,12 @@
       sheet.style.cssText =
         'position:absolute;bottom:0;left:0;right:0;background:var(--white);border-radius:24px 24px 0 0;padding:22px;z-index:100;';
       sheet.innerHTML = `
-    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🎯 Ludo</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Practice vs AI anytime — or challenge a real friend for Live 1v1.</div>
-    <button id="dgPracticeAi" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🤖 Practice vs AI</button>
+    <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;margin-bottom:4px;">🎯 ${tHtml('dangal.identity.ludo.label')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${tHtml('dangal.practice_vs_ai_anytime_or_challenge')}</div>
+    <button id="dgPracticeAi" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">${tHtml('dangal.practice_vs_ai_2')}</button>
     ${stakesOk ? dangalStakePickerHtml('ludo', 0) : ''}
-    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;${stakesOk ? 'margin-top:10px;' : ''}">👤 Challenge a friend · Live</button>
-    <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>`;
+    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;${stakesOk ? 'margin-top:10px;' : ''}">${tHtml('dangal.challenge_a_friend_live')}</button>
+    <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">${tHtml('common.cancel')}</button>`;
       document.querySelector('.device').appendChild(sheet);
       if (stakesOk) wireDangalStakePicker(sheet);
       sheet.querySelector('#dgCancelGame').addEventListener('click', () => sheet.remove());
@@ -936,29 +936,29 @@
             const ok = await DangalEconomy.canAffordStake(stake);
             if (!ok) {
               if (typeof showToast === 'function') {
-                showToast('Not enough virtual chips — pick Friendly (0) or a lower stake');
+                showToast(t('dangal.not_enough_virtual_chips_pick_friendly'));
               }
               return;
             }
           } catch (e) {
-            if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try Friendly (0)');
+            if (typeof showToast === 'function') showToast(t('dangal.couldn_t_check_chip_balance_try'));
             return;
           }
         }
         if (typeof openFriendPickerSheet !== 'function') {
-          if (typeof showToast === 'function') showToast('Sign in and add friends to challenge someone');
+          if (typeof showToast === 'function') showToast(t('dangal.sign_in_and_add_friends_to'));
           return;
         }
         sheet.remove();
         const friend = await openFriendPickerSheet({
-          title: 'Challenge · Ludo',
-          subtitle: stake > 0 ? `Live 1v1 · ⚡${stake} virtual chips` : 'Live 1v1 · 2 players',
+          title: t('dangal.challenge_ludo'),
+          subtitle: stake > 0 ? t('dangal.live_1v1_stake_virtual_chips', { stake }) : t('dangal.live_1v1_2_players'),
         });
         if (!friend) return;
         const uid = friend.uid || friend.id || '';
         const persistable = typeof isPersistableUid === 'function' && isPersistableUid(uid);
         if (!persistable) {
-          if (typeof showToast === 'function') showToast('That friend can’t play Live yet — try Practice');
+          if (typeof showToast === 'function') showToast(t('dangal.that_friend_can_t_play_live'));
           return;
         }
         const mid =
@@ -1026,13 +1026,13 @@
     ${honestyChip}
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">${
       liveOk
-        ? 'Practice vs AI anytime — or challenge a real friend for Live 1v1.'
-        : 'Practice vs AI for now. Live friend sync ships when this title graduates.'
+        ? tHtml('dangal.practice_vs_ai_anytime_or_challenge')
+        : tHtml('dangal.practice_vs_ai_for_now_live')
     }</div>
-    <button id="dgPracticeAi" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">🤖 Practice vs AI</button>
+    <button id="dgPracticeAi" style="width:100%;padding:14px;background:var(--cream);border:2px solid var(--line);border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;">${tHtml('dangal.practice_vs_ai_2')}</button>
     ${stakesOk ? dangalStakePickerHtml(gameId, 0) : ''}
-    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;${stakesOk ? 'margin-top:10px;' : ''}">👤 Challenge a friend${liveOk ? ' · Live' : ''}</button>
-    <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
+    <button id="dgFriendOpp" style="width:100%;padding:14px;background:var(--game-accent,var(--red));color:#fff;border:none;border-radius:14px;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;${stakesOk ? 'margin-top:10px;' : ''}">${tHtml('dangal.challenge_a_friend_value', { value: { html: liveOk ? tHtml('dangal.live_2') : '' } })}</button>
+    <button id="dgCancelGame" style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;">${tHtml('common.cancel')}</button>
   `;
     document.querySelector('.device').appendChild(sheet);
     if (stakesOk) wireDangalStakePicker(sheet);
@@ -1048,24 +1048,24 @@
           const ok = await DangalEconomy.canAffordStake(stake);
           if (!ok) {
             if (typeof showToast === 'function') {
-              showToast('Not enough virtual chips — pick Friendly (0) or a lower stake');
+              showToast(t('dangal.not_enough_virtual_chips_pick_friendly'));
             }
             return;
           }
         } catch (e) {
-          if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try Friendly (0)');
+          if (typeof showToast === 'function') showToast(t('dangal.couldn_t_check_chip_balance_try'));
           return;
         }
       }
       if (typeof openFriendPickerSheet === 'function') {
         sheet.remove();
         const friend = await openFriendPickerSheet({
-          title: `Challenge · ${game.name}`,
+          title: t('dangal.challenge_name', { name: game.name }),
           subtitle: liveOk
             ? stake > 0
-              ? `Live 1v1 · ⚡${stake} virtual chips`
-              : 'Live 1v1 with a real friend'
-            : 'Friend challenge (Practice until Live ships)',
+              ? t('dangal.live_1v1_stake_virtual_chips', { stake })
+              : t('dangal.live_1v1_with_a_real_friend')
+            : t('dangal.friend_challenge_practice_until_live_ships'),
         });
         if (friend) {
           const uid = friend.uid || friend.id || '';
@@ -1130,7 +1130,7 @@
         return;
       }
       if (typeof showToast === 'function') {
-        showToast('Sign in and add friends to challenge someone');
+        showToast(t('dangal.sign_in_and_add_friends_to'));
       }
     });
   }
@@ -1186,8 +1186,8 @@
   // Custom / AI question sets from the Baithak challenge creator stay on the classic engine (dangal.js).
   registerGame({
     id: 'quiz',
-    name: 'Quiz Muqabala',
-    desc: 'Daily, Duel, Party & Practice — fast, fair trivia',
+    name: t('common.quiz_muqabala'),
+    desc: t('dangal.daily_duel_party_practice_fast_fair'),
     icon: '🧠',
     gameType: 'dual',
     liveDuel: true,
@@ -1203,9 +1203,9 @@
     meta: {
       core: 'quiz-core.js (scoring, timing, selection, calibration, Daily; shared with the server)',
       live: 'party_room game quizroom → server-lib/quiz-engine.js; server-held answers, synchronized start, RTT-compensated timing',
-      solo: 'media-config action quiz → server-lib/quiz-service.js (Daily / Practice / News / report)',
-      bank: 'server-lib/quiz-bank.js (3,000+ bundled) + quizItems (AI / news, scheduler batch)',
-      customCreator: 'baithak openChallengeCreator → classic startMuqabala engine (unrated)',
+      solo: t('dangal.media_config_action_quiz_server_lib'),
+      bank: t('dangal.server_lib_quiz_bank_js_3'),
+      customCreator: t('dangal.baithak_openchallengecreator_classic_start'),
     },
     launch(ctx) {
       const c = ctx || window.__dangalLaunchCtx || {};
@@ -1219,7 +1219,7 @@
       if (liveIntent && opp) {
         if (!mid || (typeof isPersistableUid === 'function' && !isPersistableUid(opp))) {
           if (typeof showToast === 'function') {
-            showToast('Challenge link broken — open Practice instead');
+            showToast(t('dangal.challenge_link_broken_open_practice_instea'));
           }
           if (typeof openQuizCategorySheet === 'function') openQuizCategorySheet();
           else if (typeof startMuqabala === 'function') {
@@ -1229,7 +1229,7 @@
         }
         const stakeWanted = Number(c.stake) || 0;
         const name =
-          (c.chat && (c.chat.name || c.chat.peerName || c.chat.displayName)) || 'Opponent';
+          (c.chat && (c.chat.name || c.chat.peerName || c.chat.displayName)) || t('dangal.opponent');
         const goLive = () => {
           if (typeof startMuqabala === 'function') {
             startMuqabala(name, c.category || 'GK', {
@@ -1248,13 +1248,13 @@
           Promise.resolve(DangalEconomy.canAffordStake(stakeWanted)).then((ok) => {
             if (!ok) {
               if (typeof showToast === 'function') {
-                showToast('Not enough virtual chips for ⚡' + stakeWanted + ' — ask for Friendly (0)');
+                showToast(t('dangal.not_enough_virtual_chips_for_stakewanted', { stakeWanted }));
               }
               return;
             }
             goLive();
           }).catch(() => {
-            if (typeof showToast === 'function') showToast('Couldn’t check chip balance — try again');
+            if (typeof showToast === 'function') showToast(t('dangal.couldn_t_check_chip_balance_try_2'));
           });
           return;
         }

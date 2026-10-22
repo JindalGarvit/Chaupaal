@@ -11,6 +11,32 @@
  * an engine outcome: 'fault' (a CODES fault), 'let', 'winner' (nobody on the other side can reach
  * it) or 'in' with the next contact (who takes it, how long they have, the contact height).
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const api = typeof module === 'object' && module.exports ? factory(require('./badminton-engine.js')) : factory(root.BadmintonEngine);
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -34,22 +60,22 @@
    *   kmh     simulated shuttle speed range (share card: "sim km/h")
    */
   const SHOTS = {
-    serve_low: { family: 'serve', label: 'Low serve', from: ['serve'], y: 2.45, sy: 0.12, x: 0.35, time: 1020, win: 900, arrives: 'low', up: false, net: 0.012, cost: 0.003, power: 0, deceive: 0, kmh: [60, 90] },
-    serve_high: { family: 'serve', label: 'High serve', from: ['serve'], y: 6.25, sy: 0.22, x: 0.45, time: 1680, win: 1400, arrives: 'high', up: true, net: 0.004, cost: 0.004, power: 0, deceive: 0, kmh: [110, 150] },
-    serve_flick: { family: 'serve', label: 'Flick serve', from: ['serve'], y: 5.7, sy: 0.24, x: 0.4, time: 1200, win: 1000, arrives: 'high', up: true, net: 0.01, cost: 0.004, power: 0.1, deceive: 170, fault: 0.035, kmh: [120, 160] },
-    clear_att: { family: 'clear', label: 'Attacking clear', from: ['high'], y: 5.95, sy: 0.24, x: 0.6, time: 1330, win: 1050, arrives: 'high', up: true, net: 0.006, cost: 0.014, power: 0.12, deceive: 0, kmh: [150, 210] },
-    clear_def: { family: 'clear', label: 'Defensive clear', from: ['high', 'mid'], y: 6.0, sy: 0.24, x: 0.45, time: 1770, win: 1400, arrives: 'high', up: true, net: 0.004, cost: 0.012, power: 0, deceive: 0, kmh: [120, 170] },
-    drop_slow: { family: 'drop', label: 'Slow drop', from: ['high'], y: 1.5, sy: 0.35, x: 0.55, time: 1330, win: 1100, arrives: 'low', up: false, net: 0.035, cost: 0.012, power: 0.1, deceive: 170, kmh: [70, 110] },
-    drop_fast: { family: 'drop', label: 'Fast drop', from: ['high'], y: 2.3, sy: 0.38, x: 0.6, time: 1060, win: 850, arrives: 'low', up: false, net: 0.045, cost: 0.014, power: 0.25, deceive: 140, kmh: [130, 190] },
-    smash_stand: { family: 'smash', label: 'Smash', from: ['high'], y: 3.9, sy: 0.6, x: 0.7, time: 790, win: 560, arrives: 'mid', up: false, net: 0.04, cost: 0.03, power: 0.55, deceive: 0, kmh: [190, 270] },
-    smash_jump: { family: 'smash', label: 'Jump smash', from: ['high'], y: 3.6, sy: 0.6, x: 0.74, time: 720, win: 480, arrives: 'mid', up: false, net: 0.05, cost: 0.07, power: 0.75, deceive: 0, jump: true, kmh: [250, 340] },
-    drive: { family: 'drive', label: 'Drive', from: ['mid'], y: 4.3, sy: 0.55, x: 0.6, time: 880, win: 650, arrives: 'mid', up: false, net: 0.03, cost: 0.012, power: 0.3, deceive: 0, kmh: [140, 200] },
-    net_tumble: { family: 'net', label: 'Tumbling net shot', from: ['low', 'nethigh'], y: 0.75, sy: 0.3, x: 0.5, time: 1200, win: 950, arrives: 'low', up: false, net: 0.06, cost: 0.01, power: 0.1, deceive: 160, near: true, kmh: [20, 40] },
-    net_spin: { family: 'net', label: 'Spinning net shot', from: ['low', 'nethigh'], y: 0.6, sy: 0.3, x: 0.5, time: 1150, win: 950, arrives: 'low', up: false, net: 0.08, cost: 0.01, power: 0.18, deceive: 160, near: true, kmh: [20, 40] },
-    net_kill: { family: 'kill', label: 'Net kill', from: ['nethigh'], y: 2.8, sy: 0.6, x: 0.6, time: 710, win: 420, arrives: 'mid', up: false, net: 0.07, cost: 0.02, power: 0.85, deceive: 0, kmh: [150, 230] },
-    lift: { family: 'lift', label: 'Lift', from: ['low', 'mid', 'nethigh'], y: 5.85, sy: 0.28, x: 0.5, time: 1590, win: 1250, arrives: 'high', up: true, net: 0.012, cost: 0.012, power: 0, deceive: 150, kmh: [90, 140] },
-    push: { family: 'push', label: 'Push', from: ['mid', 'nethigh'], y: 3.4, sy: 0.45, x: 0.6, time: 1020, win: 750, arrives: 'mid', up: false, net: 0.035, cost: 0.01, power: 0.2, deceive: 0, kmh: [90, 140] },
-    block: { family: 'block', label: 'Block', from: ['mid'], y: 1.35, sy: 0.35, x: 0.5, time: 1200, win: 900, arrives: 'low', up: false, net: 0.035, cost: 0.008, power: 0.05, deceive: 0, kmh: [40, 80] },
+    serve_low: { family: 'serve', label: gtx('games.badminton.low_serve', 'Low serve'), from: ['serve'], y: 2.45, sy: 0.12, x: 0.35, time: 1020, win: 900, arrives: 'low', up: false, net: 0.012, cost: 0.003, power: 0, deceive: 0, kmh: [60, 90] },
+    serve_high: { family: 'serve', label: gtx('games.badminton.high_serve', 'High serve'), from: ['serve'], y: 6.25, sy: 0.22, x: 0.45, time: 1680, win: 1400, arrives: 'high', up: true, net: 0.004, cost: 0.004, power: 0, deceive: 0, kmh: [110, 150] },
+    serve_flick: { family: 'serve', label: gtx('games.badminton.flick_serve', 'Flick serve'), from: ['serve'], y: 5.7, sy: 0.24, x: 0.4, time: 1200, win: 1000, arrives: 'high', up: true, net: 0.01, cost: 0.004, power: 0.1, deceive: 170, fault: 0.035, kmh: [120, 160] },
+    clear_att: { family: 'clear', label: gtx('games.badminton.attacking_clear', 'Attacking clear'), from: ['high'], y: 5.95, sy: 0.24, x: 0.6, time: 1330, win: 1050, arrives: 'high', up: true, net: 0.006, cost: 0.014, power: 0.12, deceive: 0, kmh: [150, 210] },
+    clear_def: { family: 'clear', label: gtx('games.badminton.defensive_clear', 'Defensive clear'), from: ['high', 'mid'], y: 6.0, sy: 0.24, x: 0.45, time: 1770, win: 1400, arrives: 'high', up: true, net: 0.004, cost: 0.012, power: 0, deceive: 0, kmh: [120, 170] },
+    drop_slow: { family: 'drop', label: gtx('games.badminton.slow_drop', 'Slow drop'), from: ['high'], y: 1.5, sy: 0.35, x: 0.55, time: 1330, win: 1100, arrives: 'low', up: false, net: 0.035, cost: 0.012, power: 0.1, deceive: 170, kmh: [70, 110] },
+    drop_fast: { family: 'drop', label: gtx('games.badminton.fast_drop', 'Fast drop'), from: ['high'], y: 2.3, sy: 0.38, x: 0.6, time: 1060, win: 850, arrives: 'low', up: false, net: 0.045, cost: 0.014, power: 0.25, deceive: 140, kmh: [130, 190] },
+    smash_stand: { family: 'smash', label: gtx('games.badminton.smash', 'Smash'), from: ['high'], y: 3.9, sy: 0.6, x: 0.7, time: 790, win: 560, arrives: 'mid', up: false, net: 0.04, cost: 0.03, power: 0.55, deceive: 0, kmh: [190, 270] },
+    smash_jump: { family: 'smash', label: gtx('games.badminton.jump_smash', 'Jump smash'), from: ['high'], y: 3.6, sy: 0.6, x: 0.74, time: 720, win: 480, arrives: 'mid', up: false, net: 0.05, cost: 0.07, power: 0.75, deceive: 0, jump: true, kmh: [250, 340] },
+    drive: { family: 'drive', label: gtx('games.badminton.drive', 'Drive'), from: ['mid'], y: 4.3, sy: 0.55, x: 0.6, time: 880, win: 650, arrives: 'mid', up: false, net: 0.03, cost: 0.012, power: 0.3, deceive: 0, kmh: [140, 200] },
+    net_tumble: { family: 'net', label: gtx('games.badminton.tumbling_net_shot', 'Tumbling net shot'), from: ['low', 'nethigh'], y: 0.75, sy: 0.3, x: 0.5, time: 1200, win: 950, arrives: 'low', up: false, net: 0.06, cost: 0.01, power: 0.1, deceive: 160, near: true, kmh: [20, 40] },
+    net_spin: { family: 'net', label: gtx('games.badminton.spinning_net_shot', 'Spinning net shot'), from: ['low', 'nethigh'], y: 0.6, sy: 0.3, x: 0.5, time: 1150, win: 950, arrives: 'low', up: false, net: 0.08, cost: 0.01, power: 0.18, deceive: 160, near: true, kmh: [20, 40] },
+    net_kill: { family: 'kill', label: gtx('games.badminton.net_kill', 'Net kill'), from: ['nethigh'], y: 2.8, sy: 0.6, x: 0.6, time: 710, win: 420, arrives: 'mid', up: false, net: 0.07, cost: 0.02, power: 0.85, deceive: 0, kmh: [150, 230] },
+    lift: { family: 'lift', label: gtx('games.badminton.lift', 'Lift'), from: ['low', 'mid', 'nethigh'], y: 5.85, sy: 0.28, x: 0.5, time: 1590, win: 1250, arrives: 'high', up: true, net: 0.012, cost: 0.012, power: 0, deceive: 150, kmh: [90, 140] },
+    push: { family: 'push', label: gtx('games.badminton.push', 'Push'), from: ['mid', 'nethigh'], y: 3.4, sy: 0.45, x: 0.6, time: 1020, win: 750, arrives: 'mid', up: false, net: 0.035, cost: 0.01, power: 0.2, deceive: 0, kmh: [90, 140] },
+    block: { family: 'block', label: gtx('games.badminton.block', 'Block'), from: ['mid'], y: 1.35, sy: 0.35, x: 0.5, time: 1200, win: 900, arrives: 'low', up: false, net: 0.035, cost: 0.008, power: 0.05, deceive: 0, kmh: [40, 80] },
   };
   const SHOT_ORDER = Object.keys(SHOTS);
   const FAMILIES = ['serve', 'clear', 'drop', 'smash', 'drive', 'net', 'kill', 'lift', 'push', 'block'];
@@ -110,14 +136,14 @@
    * saves its legs · defence = composure under a smash.
    */
   const LEVELS = {
-    beginner: { id: 'beginner', label: 'Beginner', speed: 3.815, react: 264, acc: 1.16, timing: { p: 0.185, g: 0.59 }, smart: 0.43, deception: 0, stamina: 0.1, defence: 0.24, legs: 1.06 },
-    club: { id: 'club', label: 'Club', speed: 3.84, react: 260, acc: 1.14, timing: { p: 0.19, g: 0.59 }, smart: 0.48, deception: 0.04, stamina: 0.4, defence: 0.3, legs: 1.02 },
-    county: { id: 'county', label: 'County', speed: 3.87, react: 255, acc: 1.08, timing: { p: 0.2, g: 0.6 }, smart: 0.56, deception: 0.08, stamina: 0.7, defence: 0.4, legs: 0.98 },
-    pro: { id: 'pro', label: 'Pro', speed: 3.9, react: 250, acc: 1.02, timing: { p: 0.21, g: 0.6 }, smart: 0.64, deception: 0.12, stamina: 0.95, defence: 0.5, legs: 0.94 },
+    beginner: { id: 'beginner', label: gtx('games.badminton.beginner', 'Beginner'), speed: 3.815, react: 264, acc: 1.16, timing: { p: 0.185, g: 0.59 }, smart: 0.43, deception: 0, stamina: 0.1, defence: 0.24, legs: 1.06 },
+    club: { id: 'club', label: gtx('games.badminton.club', 'Club'), speed: 3.84, react: 260, acc: 1.14, timing: { p: 0.19, g: 0.59 }, smart: 0.48, deception: 0.04, stamina: 0.4, defence: 0.3, legs: 1.02 },
+    county: { id: 'county', label: gtx('games.badminton.county', 'County'), speed: 3.87, react: 255, acc: 1.08, timing: { p: 0.2, g: 0.6 }, smart: 0.56, deception: 0.08, stamina: 0.7, defence: 0.4, legs: 0.98 },
+    pro: { id: 'pro', label: gtx('games.badminton.pro', 'Pro'), speed: 3.9, react: 250, acc: 1.02, timing: { p: 0.21, g: 0.6 }, smart: 0.64, deception: 0.12, stamina: 0.95, defence: 0.5, legs: 0.94 },
   };
   const LEVEL_ORDER = ['beginner', 'club', 'county', 'pro'];
   /** A person's movement and read (their skill is the timing and the shot they pick). */
-  const HUMAN = { id: 'human', label: 'You', speed: 3.9, react: 245, acc: 1, smart: 0, deception: 0, stamina: 0.6, defence: 0.5, legs: 1 };
+  const HUMAN = { id: 'human', label: gtx('games.badminton.paused.you', 'You'), speed: 3.9, react: 245, acc: 1, smart: 0, deception: 0, stamina: 0.6, defence: 0.5, legs: 1 };
 
   /**
    * Playstyles (the botPersona hook: the same style numbers live in server-lib/dangal-ai.js).
@@ -125,10 +151,10 @@
    * the net · tilt = per-discipline balance factor fitted in scripts/sim-badminton.js (× attack, ÷ clear/lift).
    */
   const PERSONAS = {
-    allround: { id: 'allround', label: 'All-rounder', style: { aggression: 0.5, bluff: 0.4, speed: 0.55, chattiness: 0.3 }, w: { serve: 1, clear: 1, drop: 1, smash: 1, drive: 1, net: 1, kill: 1, lift: 1, push: 1, block: 1 }, line: 0.5, front: 0 },
-    attacker: { id: 'attacker', label: 'Attacker', style: { aggression: 0.9, bluff: 0.25, speed: 0.5, chattiness: 0.3 }, w: { serve: 1, clear: 0.8, drop: 1.15, smash: 2.4, drive: 1.05, net: 0.8, kill: 1.8, lift: 0.85, push: 1.1, block: 0.8 }, line: 0.65, front: 0.05, tilt: { singles: 0.8, doubles: 0.8 } },
-    retriever: { id: 'retriever', label: 'Retriever', style: { aggression: 0.2, bluff: 0.2, speed: 0.85, chattiness: 0.2 }, w: { serve: 1, clear: 1.6, drop: 0.9, smash: 0.55, drive: 0.8, net: 0.8, kill: 0.9, lift: 1.6, push: 1, block: 1.4 }, line: 0.35, front: -0.1, tilt: { singles: 1.33, doubles: 1.3 } },
-    net: { id: 'net', label: 'Net player', style: { aggression: 0.6, bluff: 0.6, speed: 0.65, chattiness: 0.3 }, w: { serve: 1, clear: 0.85, drop: 1.6, smash: 0.9, drive: 0.9, net: 2.5, kill: 2.3, lift: 0.85, push: 1.3, block: 1.3 }, line: 0.55, front: 0.08, tilt: { singles: 0.95, doubles: 1.7 } },
+    allround: { id: 'allround', label: gtx('games.badminton.all_rounder', 'All-rounder'), style: { aggression: 0.5, bluff: 0.4, speed: 0.55, chattiness: 0.3 }, w: { serve: 1, clear: 1, drop: 1, smash: 1, drive: 1, net: 1, kill: 1, lift: 1, push: 1, block: 1 }, line: 0.5, front: 0 },
+    attacker: { id: 'attacker', label: gtx('games.badminton.attacker', 'Attacker'), style: { aggression: 0.9, bluff: 0.25, speed: 0.5, chattiness: 0.3 }, w: { serve: 1, clear: 0.8, drop: 1.15, smash: 2.4, drive: 1.05, net: 0.8, kill: 1.8, lift: 0.85, push: 1.1, block: 0.8 }, line: 0.65, front: 0.05, tilt: { singles: 0.8, doubles: 0.8 } },
+    retriever: { id: 'retriever', label: gtx('games.badminton.retriever', 'Retriever'), style: { aggression: 0.2, bluff: 0.2, speed: 0.85, chattiness: 0.2 }, w: { serve: 1, clear: 1.6, drop: 0.9, smash: 0.55, drive: 0.8, net: 0.8, kill: 0.9, lift: 1.6, push: 1, block: 1.4 }, line: 0.35, front: -0.1, tilt: { singles: 1.33, doubles: 1.3 } },
+    net: { id: 'net', label: gtx('games.badminton.net_player', 'Net player'), style: { aggression: 0.6, bluff: 0.6, speed: 0.65, chattiness: 0.3 }, w: { serve: 1, clear: 0.85, drop: 1.6, smash: 0.9, drive: 0.9, net: 2.5, kill: 2.3, lift: 0.85, push: 1.3, block: 1.3 }, line: 0.55, front: 0.08, tilt: { singles: 0.95, doubles: 1.7 } },
   };
   const PERSONA_ORDER = ['allround', 'attacker', 'retriever', 'net'];
   const ATTACK_FAMS = { smash: 1, kill: 1, drive: 1, push: 1 };
@@ -641,9 +667,9 @@
   // ---------------------------------------------------------------- drills (solo, unrated)
 
   const DRILLS = {
-    serve: { id: 'serve', label: 'Serve practice', blurb: 'Low serves that skim the short line, flicks that reach the back.', shots: 10, max: 20 },
-    smash: { id: 'smash', label: 'Smash defence', blurb: 'A Pro Attacker smashes at you. Get it back — block or drive for a bonus.', shots: 10, max: 20 },
-    net: { id: 'net', label: 'Net play', blurb: 'Tight net shots score; kill anything above the tape.', shots: 10, max: 20 },
+    serve: { id: 'serve', label: gtx('games.badminton.serve_practice', 'Serve practice'), blurb: gtx('games.badminton.low_serves_that_skim_the_short', 'Low serves that skim the short line, flicks that reach the back.'), shots: 10, max: 20 },
+    smash: { id: 'smash', label: gtx('games.badminton.smash_defence', 'Smash defence'), blurb: gtx('games.badminton.a_pro_attacker_smashes_at_you', 'A Pro Attacker smashes at you. Get it back — block or drive for a bonus.'), shots: 10, max: 20 },
+    net: { id: 'net', label: gtx('games.badminton.net_play', 'Net play'), blurb: gtx('games.badminton.tight_net_shots_score_kill_anything', 'Tight net shots score; kill anything above the tape.'), shots: 10, max: 20 },
   };
   const DRILL_ORDER = ['serve', 'smash', 'net'];
 
@@ -714,13 +740,13 @@
     if (!c) return null;
     if (c.beaten) {
       nextDrill(d);
-      return { pts: 0, kind: 'beaten', shot: '', land: null, q: 0, note: 'Too quick — that one beat you' };
+      return { pts: 0, kind: 'beaten', shot: '', land: null, q: 0, note: gtx('games.badminton.too_quick_that_one_beat_you', 'Too quick — that one beat you') };
     }
     if (!play || play.miss) {
       d.log.push({ i: d.i, pts: 0, kind: 'miss', shot: '' });
       d.i += 1;
       nextDrill(d);
-      return { pts: 0, kind: 'miss', shot: '', land: null, q: 0, note: 'Missed — swipe or tap when the bar hits green' };
+      return { pts: 0, kind: 'miss', shot: '', land: null, q: 0, note: gtx('games.badminton.missed_swipe_or_tap_when_the', 'Missed — swipe or tap when the bar hits green') };
     }
     const rng = drillRng(d, 2);
     const res = resolve(d.rs, c, play, rng);
@@ -734,18 +760,18 @@
         pts = 1;
         if (clean && d.target === 'low' && res.shot === 'serve_low' && res.land.y <= 2.45) pts = 2;
         if (clean && d.target === 'deep' && res.shot !== 'serve_low' && res.land.y >= 5.6) pts = 2;
-        note = pts === 2 ? 'On target' : 'In';
-      } else note = 'Fault';
+        note = pts === 2 ? gtx('games.badminton.on_target', 'On target') : gtx('games.badminton.lc.in', 'In');
+      } else note = gtx('games.badminton.fault', 'Fault');
     } else if (d.kind === 'smash') {
       if (res.kind === 'in' || res.kind === 'winner') {
         pts = clean && fam !== 'lift' && fam !== 'clear' ? 2 : 1;
-        note = pts === 2 ? 'Counter-attack' : 'Got it back';
-      } else note = 'Fault';
+        note = pts === 2 ? gtx('games.badminton.counter_attack', 'Counter-attack') : gtx('games.badminton.got_it_back', 'Got it back');
+      } else note = gtx('games.badminton.fault', 'Fault');
     } else if (res.kind === 'in' || res.kind === 'winner') {
       if (fam === 'kill') pts = clean ? 2 : 1;
       else if (fam === 'net') pts = clean && res.land.y <= 1.0 ? 2 : 1;
-      note = pts === 2 ? (fam === 'kill' ? 'Killed' : 'Tight') : pts ? 'In' : 'Safe, but that gives them the attack';
-    } else note = 'Fault';
+      note = pts === 2 ? (fam === 'kill' ? gtx('games.badminton.killed', 'Killed') : gtx('games.badminton.tight', 'Tight')) : pts ? gtx('games.badminton.lc.in', 'In') : gtx('games.badminton.safe_but_that_gives_them_the', 'Safe, but that gives them the attack');
+    } else note = gtx('games.badminton.fault', 'Fault');
     d.score += pts;
     d.log.push({ i: d.i, pts, kind: res.kind, shot: res.shot });
     d.i += 1;

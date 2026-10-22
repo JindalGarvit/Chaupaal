@@ -1019,8 +1019,8 @@ function driveTp(room, now, cap) {
     assert(!/\{ id: 'rummy', name:/.test(pc) && !/\{ id: 'teenpatti', name:/.test(pc) && !/window\.openRummy = /.test(pc) && !/window\.openTeenPatti = /.test(pc), 'old party-classics Rummy / Teen Patti no longer registered');
     const rui = read('public/src/js/games/rummy-ui.js');
     const tui = read('public/src/js/games/teenpatti-ui.js');
-    assert(/id: 'rummy'/.test(rui) && /registerPartyGame\(GAME/.test(rui) && /window\.openRummy/.test(rui) && /t\('rummy\.' \+ key/.test(rui), 'rummy-ui registers the game + party room, copy through i18n');
-    assert(/id: 'teenpatti'/.test(tui) && /registerPartyGame\(GAME/.test(tui) && /window\.openTeenPatti/.test(tui) && /t\('teenpatti\.' \+ key/.test(tui), 'teenpatti-ui registers the game + party room, copy through i18n');
+    assert(/id: 'rummy'/.test(rui) && /registerPartyGame\(GAME/.test(rui) && /window\.openRummy/.test(rui) && /t\('games\.rummy\.' \+ key/.test(rui), 'rummy-ui registers the game + party room, copy through i18n');
+    assert(/id: 'teenpatti'/.test(tui) && /registerPartyGame\(GAME/.test(tui) && /window\.openTeenPatti/.test(tui) && /t\('games\.teenpatti\.' \+ key/.test(tui), 'teenpatti-ui registers the game + party room, copy through i18n');
     assert(/isIndiaLocale\(\) \? '13' : 'gin'/.test(rui), 'locale default: India → 13-card, elsewhere → Gin');
     assert(/tr\('bot', 'Bot'\)/.test(rui) && /'Bot ' \+/.test(read('server-lib/rummy-engine.js')) && /'Bot ' \+/.test(read('server-lib/teenpatti-engine.js')), 'bots are labelled "Bot"');
     assert(/helper/.test(rui) && /coach: true, helper: false/.test(rui), 'beginner helpers off by default (practice toggle), coach on');

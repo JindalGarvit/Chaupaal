@@ -79,6 +79,21 @@ bdi,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Game chrome (Dangal L5): mode cards, buttons, lobby rows and sheet labels wrap instead of overflowing. */
+:is(.pk-btn, .pk-mode, .pk-mode-title, .pk-mode-sub, .pk-row-btn, .pk-sub, .pk-section, .pk-field-label, .cl-sub, .cl-pref,
+  .pk-hero-title, .pk-hero-sub, .pk-wait, .pk-link, .im-pack-row, .ww-night-prompt, .sf-result-title, .qz-done-title) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Content-language honesty notes ("English words for now…"): small and calm, never a banner. */
+.pk-lang-note, .qz-lang-note {
+  display: block;
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted, #6b7280);
+}
+.pk-row-btn--sub { font-size: 13px; }
 .bottom-tabs .tab-btn { min-width: 0; }
 .bottom-tabs .tab-btn :is(.tab-label, span:not([class*="icon"]):not([class*="light"]):not([class*="dot"])) {
   max-width: 100%;

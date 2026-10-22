@@ -4,6 +4,32 @@
  * public round only ever lists who has voted. Anonymous reveal publishes tallies, never voter → choice.
  * UMD: window.MostLikelyCore / require().
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
   const PC = node ? require('./party-core.js') : root.PartyCore;
@@ -15,7 +41,7 @@
   'use strict';
 
   const MODES = ['mlt', 'wyr', 'nhie'];
-  const MODE_LABELS = { mlt: 'Most Likely To', wyr: 'Would You Rather', nhie: 'Never Have I Ever' };
+  const MODE_LABELS = { mlt: gtx('games.mostlikely.rules.rules.1.h', 'Most Likely To'), wyr: gtx('games.mostlikely.rules.rules.2.h', 'Would You Rather'), nhie: gtx('games.mostlikely.rules.rules.3.h', 'Never Have I Ever') };
   const MIN = { mlt: 3, wyr: 2, nhie: 2 };
   /** Never Have I Ever "five fingers": each “I have” costs one; last player with fingers left wins. */
   const FINGERS = 5;
@@ -39,7 +65,7 @@
     customOnly: false, // true = only tonight's custom pack (needs 4+ prompts for the mode)
   };
 
-  const BADGES = ['Certified 👑', 'Called it!', 'No contest', 'The people have spoken', 'Guilty as charged 😄', 'Crowned'];
+  const BADGES = /* i18n-copy */ [gtx('games.mostlikely.certified', 'Certified 👑'), gtx('games.mostlikely.called_it', 'Called it!'), gtx('games.mostlikely.no_contest', 'No contest'), gtx('games.mostlikely.the_people_have_spoken', 'The people have spoken'), gtx('games.mostlikely.guilty_as_charged', 'Guilty as charged 😄'), gtx('games.mostlikely.crowned', 'Crowned')];
 
   function isHi(lang) {
     return String(lang || 'en').indexOf('hi') === 0;
@@ -213,12 +239,12 @@
    * mlt: text (either “sing in the shower” or a full question); wyr: { a, b }.
    */
   function cleanCustom(input, mode) {
-    const kind = 'Keep it kind and teen-safe — try another one';
+    const kind = gtx('games.mostlikely.keep_it_kind_and_teen_safe', 'Keep it kind and teen-safe — try another one');
     if (mode === 'wyr') {
       const a = tidy(input && input.a, 80);
       const b = tidy(input && input.b, 80);
-      if (a.length < 2 || b.length < 2) return { ok: false, reason: 'Add both options' };
-      if (a.toLowerCase() === b.toLowerCase()) return { ok: false, reason: 'The two options need to be different' };
+      if (a.length < 2 || b.length < 2) return { ok: false, reason: gtx('games.mostlikely.add_both_options', 'Add both options') };
+      if (a.toLowerCase() === b.toLowerCase()) return { ok: false, reason: gtx('games.mostlikely.the_two_options_need_to_be', 'The two options need to be different') };
       if (kindnessFlags(a + ' ' + b).length) return { ok: false, reason: kind };
       return { ok: true, prompt: { custom: true, a: { en: a, hi: '' }, b: { en: b, hi: '' } } };
     }
@@ -226,13 +252,13 @@
       const t = tidy(typeof input === 'string' ? input : input && input.text, 120)
         .replace(/^never\s+have\s+i\s+ever[\s.…,:-]*/i, '')
         .replace(/[.!…\s]+$/, '');
-      if (t.length < 3) return { ok: false, reason: 'Write a little more' };
+      if (t.length < 3) return { ok: false, reason: gtx('games.mostlikely.write_a_little_more', 'Write a little more') };
       if (kindnessFlags(t).length) return { ok: false, reason: kind };
       return { ok: true, prompt: { custom: true, en: t, hi: '' } };
     }
     let text = tidy(typeof input === 'string' ? input : input && input.text, 120);
     text = text.replace(/^who('s| is)? most likely to\s+/i, '').replace(/^most likely to\s+/i, '');
-    if (text.length < 3) return { ok: false, reason: 'Write a little more' };
+    if (text.length < 3) return { ok: false, reason: gtx('games.mostlikely.write_a_little_more', 'Write a little more') };
     if (kindnessFlags(text).length) return { ok: false, reason: kind };
     return { ok: true, prompt: { custom: true, en: text, hi: '' } };
   }
@@ -242,14 +268,14 @@
   function mltQuestionEn(prompt) {
     const t = String(prompt.en || '');
     if (prompt.custom && (/\?$/.test(t) || /^(who|which|kaun)\b/i.test(t))) return t;
-    return 'Who’s most likely to ' + t.replace(/\?+$/, '') + '?';
+    return gtx('games.mostlikely.who_s_most_likely_to_replace', 'Who’s most likely to {{replace}}?', { replace: t.replace(/\?+$/, '') });
   }
 
   /** { primary, secondary } for the prompt line in the reader's language; secondary only if bilingual. */
   function promptLines(prompt, mode, lang, both) {
     if (!prompt) return { primary: '', secondary: '' };
-    if (mode === 'wyr') return { primary: 'Would you rather…', secondary: '' };
-    if (mode === 'nhie') return { primary: 'Never have I ever ' + String(prompt.en || '').replace(/[.!]+$/, ''), secondary: '' };
+    if (mode === 'wyr') return { primary: gtx('games.mostlikely.would_you_rather', 'Would you rather…'), secondary: '' };
+    if (mode === 'nhie') return { primary: gtx('games.mostlikely.never_have_i_ever_replace', 'Never have I ever {{replace}}', { replace: String(prompt.en || '').replace(/[.!]+$/, '') }), secondary: '' };
     const en = mltQuestionEn(prompt);
     const hi = prompt.hi || '';
     // Hindi is locale data: only a Hindi reader sees it (and, with `both`, the English under it).

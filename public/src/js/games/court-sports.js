@@ -17,7 +17,7 @@
   'use strict';
 
   const GAME = 'badminton';
-  const LABEL = 'Badminton';
+  const LABEL = t('dangal.identity.badminton.label');
   const KEY_SETTINGS = 'chaupaal_bd_settings_v1';
   const KEY_COACH = 'chaupaal_rally_coach_badminton';
   const KEY_DRILLS = 'chaupaal_bd_drills_v1';
@@ -37,8 +37,22 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('badminton.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.badminton.' + key, p || fallback) : fill(fallback, p);
   }
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
@@ -113,16 +127,16 @@
 
   function practiceSub(detail) {
     if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
-      return DangalLive.modeChromeLabel(false, detail || 'vs Bot');
+      return DangalLive.modeChromeLabel(false, detail || t('games.badminton.vs_bot'));
     }
-    return detail ? 'Practice · ' + detail : 'Practice vs Bot';
+    return detail ? t('games.badminton.practice_detail', { detail }) : t('games.badminton.practice_vs_bot');
   }
 
   function liveSub() {
     if (typeof DangalLive !== 'undefined' && DangalLive.modeChromeLabel) {
       return DangalLive.modeChromeLabel(true);
     }
-    return 'Live';
+    return t('games.badminton.rules.rules.11.h');
   }
 
   function resolveChat(arg) {
@@ -136,7 +150,7 @@
     if (arg && (arg.name || arg.dangalMatchId || arg.uid || arg.opponentUid || arg.peerUid)) return arg;
     const ctx = window.__dangalLaunchCtx || {};
     return Object.assign(
-      { name: 'Opponent' },
+      { name: t('games.badminton.opp') },
       ctx.chat || {},
       {
         dangalMatchId: ctx.matchId || undefined,
@@ -176,8 +190,8 @@
     const live = !!o.live || !!o.liveHandle;
     if (typeof confirmLeaveGame === 'function') {
       const leave = await confirmLeaveGame({
-        title: o.title || 'Leave game?',
-        body: live && playing ? 'Leaving now counts as a forfeit.' : o.body || 'This match will end.',
+        title: o.title || t('games.badminton.leave_game'),
+        body: live && playing ? t('games.badminton.leaving_now_counts_as_a_forfeit') : o.body || t('games.badminton.leave.practice'),
       });
       if (!leave) return false;
     }
@@ -234,7 +248,7 @@
     }
     overlay.dataset.gameId = o.id || '';
     if (typeof applyGameIdentity === 'function') applyGameIdentity(o.id, overlay);
-    const sub = o.subtitle || (o.live ? liveSub() : practiceSub(o.practiceDetail || 'vs Bot'));
+    const sub = o.subtitle || (o.live ? liveSub() : practiceSub(o.practiceDetail || t('games.badminton.vs_bot')));
     overlay.innerHTML =
       (typeof gameChromeHtml === 'function'
         ? gameChromeHtml({
@@ -289,8 +303,8 @@
         live: !!o.live || !!liveHandle,
         liveHandle,
         isPlaying: !gameOver,
-        title: 'Leave ' + (o.title || 'game') + '?',
-        body: o.leaveBody || 'This match will end.',
+        title: t('games.badminton.leave_value', { value: o.title || t('games.badminton.game_2') }),
+        body: o.leaveBody || t('games.badminton.leave.practice'),
       });
     });
     return shell;
@@ -306,7 +320,7 @@
       synth.cancel();
       const u = new SpeechSynthesisUtterance(String(text).replace(/–/g, ' '));
       u.rate = 1.02;
-      u.lang = 'en';
+      u.lang = typeof getTtsLang === 'function' ? getTtsLang(typeof currentLang !== 'undefined' ? currentLang : 'en') : 'en-US';
       synth.speak(u);
     } catch (e) {}
   }
@@ -430,7 +444,7 @@
 
   /** The plain rule-source line lives in design-system (the one place federation names appear). */
   function attribution() {
-    return (typeof federationHonestyLine === 'function' && federationHonestyLine(GAME)) || 'Rules based on the Laws of Badminton';
+    return (typeof federationHonestyLine === 'function' && federationHonestyLine(GAME)) || t('games.badminton.rules_based_on_the_laws_of');
   }
 
   function netHtml(rtt) {
@@ -456,10 +470,10 @@
           ${row(tr('stats.winners', 'Winners'), s.winners[a], s.winners[b])}
           ${row(tr('stats.errors', 'Errors'), s.errors[a], s.errors[b])}
           ${row(tr('stats.streak', 'Best streak'), s.bestStreak[a], s.bestStreak[b])}
-          ${s.fastest ? row(tr('stats.fastest', 'Fastest smash'), BM().sideOfSeat(s.fastest.seat) === a ? s.fastest.kmh + ' ' + tr('simkmh', 'sim km/h') : '', BM().sideOfSeat(s.fastest.seat) === b ? s.fastest.kmh + ' ' + tr('simkmh', 'sim km/h') : '') : ''}
+          ${s.fastest ? row(tr('stats.fastest', 'Fastest smash'), BM().sideOfSeat(s.fastest.seat) === a ? tr('kmh_sim_km_h', '{{kmh}} sim km/h', { kmh: s.fastest.kmh }) : '', BM().sideOfSeat(s.fastest.seat) === b ? tr('kmh_sim_km_h', '{{kmh}} sim km/h', { kmh: s.fastest.kmh }) : '') : ''}
         </tbody>
       </table>
-      <p class="bd-stats-line">${esc(tr('stats.rallies', 'Rallies') + ' ' + s.rallies + ' · ' + tr('stats.longest', 'longest') + ' ' + s.longest + ' ' + tr('stats.shots', 'shots') + ' · ' + tr('stats.avg', 'average') + ' ' + s.avgRally + (s.lets ? ' · ' + tr('stats.lets', 'lets') + ' ' + s.lets : ''))}</p>
+      <p class="bd-stats-line">${esc(tr('rallies_rallies_longest_longest_shots_average_avgrally', 'Rallies {{rallies}} · longest {{longest}} shots · average {{avgRally}}{{value}}', { rallies: s.rallies, longest: s.longest, avgRally: s.avgRally, value: (s.lets ? tr('lets_lets', ' · lets {{lets}}', { lets: s.lets }) : '') }))}</p>
     </div>`;
   }
 
@@ -469,7 +483,7 @@
       <p class="bd-attrib">${esc(attribution())}</p>
       ${(Eng ? Eng.LAWS : []).map((l) => `<h4>${esc(l.h)} <small>${esc(l.law)}</small></h4><p>${esc(l.body)}</p>`).join('')}
       <h4>${esc(tr('rules.formats', 'Formats'))}</h4>
-      <p>${esc(Eng ? Eng.FORMAT_ORDER.map((id) => Eng.FORMATS[id].label + ' — ' + Eng.FORMATS[id].blurb + (Eng.FORMATS[id].rated ? ' (rated in Live singles)' : ' (unrated)')).join(' · ') : '')}</p>
+      <p>${esc(Eng ? Eng.FORMAT_ORDER.map((id) => t(Eng.FORMATS[id].rated ? 'games.badminton.format_line_rated' : 'games.badminton.format_line_unrated', { label: Eng.FORMATS[id].label, blurb: Eng.FORMATS[id].blurb })).join(' · ') : '')}</p>
       <h4>${esc(tr('rules.play', 'Playing'))}</h4>
       <p>${esc(tr('rules.playBody', 'Release as the bar crosses the green band — the centre is your best contact. Swipe up to choose the shot: a longer swipe goes deeper, a quick swipe attacks (smash, drive, kill), sideways aims. Hold still for a moment before swiping to disguise it. A plain tap plays the natural shot. You run to the shuttle yourself; drag your marker to change where you recover to.'))}</p>
       <p>${esc(tr('rules.playMore', 'You can only smash from above your head, and only net-shot when you reach the net early. Long rallies tire you (slower feet, weaker shots); you recover between points and at intervals. Doubles: attack front-and-back, defend side-by-side — your partner rotates with you.'))}</p>
@@ -706,7 +720,7 @@
       board.innerHTML =
         boardRowHtml(state, side, !o.spectator, names[side]) +
         boardRowHtml(state, 1 - side, false, names[1 - side]) +
-        `<div class="bd-board-meta">${esc(formatLabel(pub.format) + (state.format.games > 1 ? ' · ' + tr('game', 'Game') + ' ' + g : '') + (pub.discipline === 'doubles' ? ' · ' + tr('doubles', 'Doubles') : ''))}</div>`;
+        `<div class="bd-board-meta">${esc(formatLabel(pub.format) + (state.format.games > 1 ? tr('game_g', ' · Game {{g}}', { g }) : '') + (pub.discipline === 'doubles' ? ' · ' + tr('doubles', 'Doubles') : ''))}</div>`;
     }
 
     function showCall(text, now) {
@@ -962,17 +976,17 @@
       if (pub.status !== 'playing') text = '';
       else if (pub.toss && now < pub.toss.until) {
         const w = pub.toss.winner;
-        text = w === mySide() && !o.spectator ? tr('toss.you', 'You won the toss — you serve first') : BM().configOf(pub).sides[w].name + ' ' + tr('toss.them', 'won the toss and serve first');
+        text = w === mySide() && !o.spectator ? tr('toss.you', 'You won the toss — you serve first') : tr('name_won_the_toss_and_serve_first', '{{name}} won the toss and serve first', { name: (typeof bidi === 'function' ? bidi(BM().configOf(pub).sides[w].name) : BM().configOf(pub).sides[w].name) });
       } else if (c) {
         const court = c.court === 'L' ? tr('court.L', 'left court') : tr('court.R', 'right court');
         const simple = pub.simple && pub.simple[o.me];
         if (seatIsMine(c.seat)) {
           if (simple) text = c.serve ? tr('hint.serveSimple', 'Your serve — tap in the green') : tr('hint.hitSimple', 'Your shot — tap in the green');
-          else if (c.serve) text = tr('hint.serve', 'Your serve from the') + ' ' + court + ' · ' + (coachShown ? tr('hint.serveShort', 'tap = low · swipe long = high') : tr('hint.serveCoach', 'tap for a low serve, swipe up long for a high one, quick for a flick'));
+          else if (c.serve) text = tr('your_serve_from_the_court_value', 'Your serve from the {{court}} · {{value}}', { court, value: (coachShown ? tr('hint.serveShort', 'tap = low · swipe long = high') : tr('hint.serveCoach', 'tap for a low serve, swipe up long for a high one, quick for a flick')) });
           else text = coachShown ? tr('hint.hit', 'Your shot — swipe or tap in the green') : tr('hint.hitCoach', 'Swipe up in the green: long = deep, quick = attack, sideways = aim · tap = natural shot');
         }
-        else if (BM().sideOfSeat(c.seat) === mySide() && !o.spectator) text = seatName(c.seat) + ' ' + tr('hint.partner', 'has this one');
-        else text = seatName(c.seat) + (c.serve ? ' ' + tr('hint.serving', 'serving from the') + ' ' + court : ' ' + tr('hint.their', 'to play'));
+        else if (BM().sideOfSeat(c.seat) === mySide() && !o.spectator) text = tr('name_has_this_one', '{{name}} has this one', { name: (typeof bidi === 'function' ? bidi(seatName(c.seat)) : seatName(c.seat)) });
+        else text = seatName(c.seat) + (c.serve ? tr('serving_from_the_court', ' serving from the {{court}}', { court }) : ' ' + tr('hint.their', 'to play'));
       }
       hint.textContent = text;
       const net = body.querySelector('[data-bd-net]');
@@ -985,7 +999,7 @@
         const show = stv != null && stv < 0.6 && pub.status === 'playing';
         stEl.hidden = !show;
         if (show) {
-          stEl.textContent = tr('stamina', 'Legs') + ' ' + Math.round(stv * 100) + '%';
+          stEl.textContent = tr('legs_value', 'Legs {{value}}%', { value: Math.round(stv * 100) });
           stEl.classList.toggle('is-low', stv < 0.3);
         }
       }
@@ -1010,7 +1024,7 @@
       const who = pz.who && pz.who === mySeat() ? tr('paused.you', 'You') : seatName(pz.who);
       layerHtml(`<div class="bd-interval">
         <div class="bd-interval-title">${esc(tr('paused.title', 'Connection lost'))} <span data-bd-countdown>${left}s</span></div>
-        <div class="bd-interval-call">${esc(who + ' ' + tr('paused.body', 'dropped out — waiting to reconnect.'))}</div>
+        <div class="bd-interval-call">${esc(tr('name_dropped_out_waiting_to_reconnect', '{{name}} dropped out — waiting to reconnect.', { name: (typeof bidi === 'function' ? bidi(who) : who) }))}</div>
         ${pz.let ? `<div class="bd-interval-ends">${esc(tr('paused.let', 'Let — that rally will be replayed'))}</div>` : ''}
         <p class="bd-note">${esc(tr('paused.note', 'If they don’t make it back in time, the match is forfeited.'))}</p>
       </div>`);
@@ -1068,7 +1082,7 @@
     function outcomeTitle(state) {
       const r = state.result;
       if (!r) return tr('result.void', 'Match ended');
-      if (o.spectator) return state.config.sides[r.winner].name + ' ' + tr('result.win3', 'win');
+      if (o.spectator) return tr('name_win', '{{name}} win', { name: (typeof bidi === 'function' ? bidi(state.config.sides[r.winner].name) : state.config.sides[r.winner].name) });
       return r.winner === mySide() ? tr('result.youWin', 'You win') : tr('result.youLose', 'You lose');
     }
 
@@ -1139,7 +1153,7 @@
         const scoreLine = state.games.map((g) => g.score[mySide()] + '–' + g.score[1 - mySide()]).join(' ');
         const mySmash = s.fastest && BM().sideOfSeat(s.fastest.seat) === mySide() ? s.fastest.kmh : 0;
         const meta =
-          tr('share.meta', 'Longest rally') + ' ' + s.longest + ' ' + tr('stats.shots', 'shots') + (mySmash ? ' · ' + tr('share.smash', 'Fastest smash') + ' ' + mySmash + ' ' + tr('simkmh', 'sim km/h') : '') + ' · ' + tr('stats.winners', 'Winners') + ' ' + s.winners[mySide()];
+          tr('longest_rally_longest_shots_value_winners_winners', 'Longest rally {{longest}} shots{{value}} · Winners {{winners}}', { longest: s.longest, value: (mySmash ? tr('fastest_smash_mysmash_sim_km_h', ' · Fastest smash {{mySmash}} sim km/h', { mySmash }) : ''), winners: s.winners[mySide()] });
         if (typeof openUnifiedShareSheet === 'function') {
           openUnifiedShareSheet({
             gameId: GAME,
@@ -1148,7 +1162,7 @@
               text: shareText(state),
               meta,
               longestRally: s.longest,
-              fastestSmash: mySmash ? mySmash + ' sim km/h' : '',
+              fastestSmash: mySmash ? t('games.badminton.mysmash_sim_km_h', { mySmash }) : '',
             },
           });
         } else toast(shareText(state) + ' · ' + meta);
@@ -1229,7 +1243,7 @@
   function startLocal(opts) {
     const o = opts || {};
     if (!E() || !BM() || !R()) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     const s = settings();
@@ -1299,7 +1313,7 @@
       const spec = RALLY;
       const shared = window.DangalRules && window.DangalRules.get(spec.id);
       GameUI.attachHowTo(shell.overlay, shared
-        ? { gameId: spec.id, title: 'How to play ' + (spec.name || 'Badminton') }
+        ? { gameId: spec.id, title: t('games.badminton.how_to_play_value', { value: spec.name || t('games.badminton.rules.ruleset.name') }) }
         : { title: spec.name, body: attribution() });
     }
   }
@@ -1345,7 +1359,7 @@
    */
   function startLive(cfg) {
     if (!E() || !BM()) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     const me = myUid();
@@ -1442,7 +1456,7 @@
       card(
         pub.discipline === 'doubles' ? tr('wait.doubles', 'Doubles — waiting for players') : tr('wait.title', 'Waiting for your opponent'),
         `<ul class="bd-seats">${seats}</ul><p class="bd-card-note">${esc(formatLabel(pub.format) + (pub.rated ? ' · ' + tr('rated', 'rated') : ' · ' + tr('unrated', 'unrated')) + (Object.keys(pub.simple || {}).length ? ' · ' + tr('simple', 'Simple controls') : ''))}</p>${
-          pub.rated && lastRtt > HIGH_RTT_MS ? `<p class="bd-card-note bd-card-warn">${esc(tr('net.warnWait', 'Your connection is slow') + ' (' + lastRtt + ' ms) — ' + tr('net.warnWait2', 'shots may land late in this rated match. Try Wi-Fi, or play unrated.'))}</p>` : ''
+          pub.rated && lastRtt > HIGH_RTT_MS ? `<p class="bd-card-note bd-card-warn">${esc(tr('your_connection_is_slow_lastrtt_ms_shots', 'Your connection is slow ({{lastRtt}} ms) — shots may land late in this rated match. Try Wi-Fi, or play unrated.', { lastRtt }))}</p>` : ''
         }`,
         [
           host && late ? { label: tr('wait.fill', 'Fill empty seats with Bots'), primary: true, fn: () => liveCall('fill', { matchId, tier: s.level, persona: s.persona }).catch((e) => toast(liveErrorText(e))) } : null,
@@ -1520,7 +1534,7 @@
       }
       const seat = BM().seatOfUid(pub, gone);
       const leftMs = Math.max(0, RECONNECT_MS - goneFor(gone));
-      el.textContent = (pub.names[seat] || tr('opp', 'Opponent')) + ' ' + tr('live.reconnecting', 'lost connection — waiting') + ' ' + Math.ceil(leftMs / 1000) + 's';
+      el.textContent = tr('value_lost_connection_waiting_value2_s', '{{value}} lost connection — waiting {{value2}}s', { value: pub.names[seat] || tr('opp', 'Opponent'), value2: Math.ceil(leftMs / 1000) });
     }
 
     function loop() {
@@ -1661,7 +1675,7 @@
       <div class="pk-modes">
         <button type="button" class="pk-mode pk-mode--primary" data-go="bot">
           <span class="pk-mode-title">${esc(tr('home.bot', 'Play vs Bot'))}</span>
-          <span class="pk-mode-sub">${esc(tr('singles', 'Singles') + ' · ' + line)}</span>
+          <span class="pk-mode-sub">${esc(tr('singles_line', 'Singles · {{line}}', { line }))}</span>
         </button>
         <button type="button" class="pk-mode" data-go="friend">
           <span class="pk-mode-title">${esc(tr('home.friend', 'Play a friend'))}</span>
@@ -1688,10 +1702,10 @@
   }
 
   const PERSONA_HELP = {
-    allround: 'mixes everything, no obvious weakness.',
-    attacker: 'smashes and kills whenever it can — make it hit from deep.',
-    retriever: 'gets everything back with clears and lifts — be patient, then finish.',
-    net: 'lives at the net with tight spinners and kills — lift it to the back.',
+    allround: t('games.badminton.mixes_everything_no_obvious_weakness'),
+    attacker: t('games.badminton.smashes_and_kills_whenever_it_can'),
+    retriever: t('games.badminton.gets_everything_back_with_clears_and'),
+    net: t('games.badminton.lives_at_the_net_with_tight'),
   };
 
   function openSettings(onDone) {
@@ -1758,7 +1772,7 @@
     const chatId = f.chatId || f.firestoreId || '';
     if (typeof sendChallengeCard === 'function' && chatId) {
       try {
-        await sendChallengeCard(uid, GAME, { chatId, matchId: mid, stake, mode: tr('singles', 'Singles') + ' · ' + formatLabel(s.format) });
+        await sendChallengeCard(uid, GAME, { chatId, matchId: mid, stake, mode: tr('singles_label', 'Singles · {{label}}', { label: formatLabel(s.format) }) });
       } catch (e) {}
     }
     const go = () => startLive({ matchId: mid, opponentUid: uid, host: true, stake, oppName: f.name, source: 'challenge_host' });
@@ -1821,7 +1835,7 @@
               const uid = f && (f.uid || f.id);
               if (!uid || !persistable(uid)) return;
               if (Object.keys(picks).some((k) => picks[k] && picks[k].uid === uid)) return toast(tr('dbl.dupe', 'They already have a seat'));
-              picks[seat] = { uid, name: String(f.name || 'Friend').split(' ')[0].slice(0, 16), chatId: f.chatId || f.firestoreId || '' };
+              picks[seat] = { uid, name: String(f.name || t('common.friend')).split(' ')[0].slice(0, 16), chatId: f.chatId || f.firestoreId || '' };
               paint();
             })
           );
@@ -1844,7 +1858,7 @@
               friends.forEach((k) => {
                 const p = picks[k];
                 if (typeof sendChallengeCard === 'function' && p.chatId) {
-                  sendChallengeCard(p.uid, GAME, { chatId: p.chatId, matchId: mid, stake: 0, mode: tr('doubles', 'Doubles') + ' · ' + formatLabel(s.format) }).catch(() => {});
+                  sendChallengeCard(p.uid, GAME, { chatId: p.chatId, matchId: mid, stake: 0, mode: tr('doubles_label', 'Doubles · {{label}}', { label: formatLabel(s.format) }) }).catch(() => {});
                 }
               });
             }, 1500);
@@ -1934,7 +1948,7 @@
             return;
           }
           const q = sheet.el ? sheet.el.querySelector('[data-q]') : document.querySelector('.pk-sheet [data-q]');
-          if (q && r && r.count) q.textContent = tr('dbl.count', 'In the queue:') + ' ' + r.count + '/4';
+          if (q && r && r.count) q.textContent = tr('in_the_queue_count_4', 'In the queue: {{count}}/4', { count: r.count });
         })
         .catch(() => {});
     };
@@ -1957,7 +1971,7 @@
       title: tr('drills.title', 'Drills'),
       bodyHtml: `<div class="pk-modes">${Rl.DRILL_ORDER.map((id) => {
         const D = Rl.DRILLS[id];
-        const pb = best[id] != null ? ' · ' + tr('drills.best', 'Best') + ' ' + best[id] + '/' + D.max : '';
+        const pb = best[id] != null ? tr('best_best_max', ' · Best {{best}}/{{max}}', { best: best[id], max: D.max }) : '';
         return `<button type="button" class="pk-mode" data-drill="${id}"><span class="pk-mode-title">${esc(tr('drill.' + id, D.label))}</span><span class="pk-mode-sub">${esc(tr('drill.' + id + '.sub', D.blurb) + pb)}</span></button>`;
       }).join('')}</div><p class="pk-field-help">${esc(tr('drills.help', 'Solo practice · unrated · 10 shots each'))}</p>`,
       onMount: (el, close) => {
@@ -1974,7 +1988,7 @@
   function startDrill(kind) {
     const Rl = R();
     if (!E() || !Rl) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     const D = Rl.DRILLS[kind] || Rl.DRILLS.serve;
@@ -2032,7 +2046,7 @@
       dur = d.contact.win || 900;
       shot = null;
       const meta = $('[data-dr-meta]');
-      if (meta) meta.textContent = tr('drills.shot', 'Shot') + ' ' + Math.min(d.i + 1, D.shots) + '/' + D.shots + (d.kind === 'serve' ? ' · ' + (d.target === 'low' ? tr('drill.targetLow', 'Target: low serve, just over the short line') : tr('drill.targetDeep', 'Target: swipe long — a high serve or flick to the back')) : '');
+      if (meta) meta.textContent = tr('shot_n_shots_value', 'Shot {{n}}/{{shots}}{{value}}', { n: Math.min(d.i + 1, D.shots), shots: D.shots, value: (d.kind === 'serve' ? ' · ' + (d.target === 'low' ? tr('drill.targetLow', 'Target: low serve, just over the short line') : tr('drill.targetDeep', 'Target: swipe long — a high serve or flick to the back')) : '') });
     }
     function play(g, at) {
       if (done || !d.contact || shot || !startAt || at < startAt - 150) return;
@@ -2069,7 +2083,7 @@
       layer.hidden = false;
       layer.innerHTML = `<div class="bd-result">
         <div class="bd-result-title">${esc(d.score + ' / ' + D.max)}</div>
-        <div class="bd-result-sub">${esc(isBest ? tr('drills.newBest', 'New personal best!') : tr('drills.best', 'Best') + ' ' + prev + '/' + D.max)}</div>
+        <div class="bd-result-sub">${esc(isBest ? tr('drills.newBest', 'New personal best!') : tr('best_prev_max', 'Best {{prev}}/{{max}}', { prev, max: D.max }))}</div>
         <div class="bd-result-actions">
           <button type="button" class="bd-btn bd-btn--primary" data-again>${esc(tr('again', 'Play again'))}</button>
           <button type="button" class="bd-btn bd-btn--ghost" data-done>${esc(tr('done', 'Done'))}</button>
@@ -2148,7 +2162,7 @@
 
   const RALLY = {
     id: 'badminton',
-    name: 'Badminton',
+    name: t('games.badminton.rules.ruleset.name'),
     icon: '🏸',
     accent: '#01579B',
     bg: '#000D1A',
@@ -2187,7 +2201,7 @@
     registerGame({
       id: 'badminton',
       name: RALLY.name,
-      desc: 'Best of 3 games to 21 · singles + doubles · Live',
+      desc: t('games.badminton.best_of_3_games_to_21_2'),
       icon: RALLY.icon,
       ratingKey: RALLY.id,
       gameType: 'dual',
@@ -2199,7 +2213,7 @@
       ownHome: true,
       order: 20,
       meta: {
-        core: 'badminton-engine.js (laws, scoring, service courts, stats) + badminton-match.js (match flow) — shared with the server',
+        core: t('games.badminton.badminton_engine_js_laws_scoring_service'),
         live: 'badminton_match → server-lib/badminton-engine.js; the server resolves every contact',
         complete: true,
       },

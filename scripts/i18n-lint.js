@@ -30,7 +30,7 @@ const BASELINE = path.join(__dirname, 'i18n-lint-baseline.json');
 
 const GLOSSARY = [
   'Chaupaal', 'Dangal', 'Baithak', 'Mehfil', 'Peepal', 'Akhbaar', 'Duniya', 'Khoj', 'Vriksha', 'Muqabala',
-  'Raja Mantri Chor Sipahi', 'Teen Patti', 'Carrom', 'Ludo', 'Tambola', 'Kakuro', 'Shabd Five',
+  'Raja Mantri Chor Sipahi', 'Teen Patti', 'Carrom', 'Tambola', 'Kakuro', 'Shabd Five', 'Oh No!', 'Tip Tap',
 ];
 const SKIP_FILES = /(^|[\\/])(data[\\/]|i18n\.js$|i18n-format\.js$|i18n-layout\.js$|.*-core\.js$|.*-engine\.js$|.*-bank\.js$|.*-lexicon\.js$|.*-answers\.js$|samples\.js$)/;
 

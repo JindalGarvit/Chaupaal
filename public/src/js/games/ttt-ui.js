@@ -13,10 +13,24 @@
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('ttt.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
   }
-  const LABEL = 'Tic-Tac-Toe';
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.ttt.' + key, p || fallback) : fill(fallback, p);
+  }
+  const LABEL = t('games.ttt.tic_tac_toe');
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
@@ -67,7 +81,7 @@
         const v = st.cells[i];
         const can = legal.indexOf(i) >= 0;
         cells += `<button type="button" class="ttt-cell ttt-cell--mini${v ? ' is-filled' : ''}${can ? ' is-legal' : ''}${i === st.last ? ' is-last' : ''}" data-cell="${i}" ${can ? '' : 'disabled'} aria-label="${esc(
-          tr('board', 'Board') + ' ' + (b + 1) + ', ' + (v || tr('empty', 'Empty')) + ' ' + (k + 1)
+          tr('board_value_value2_value3', 'Board {{value}}, {{value2}} {{value3}}', { value: (b + 1), value2: v || tr('empty', 'Empty'), value3: (k + 1) })
         )}">${markSvg(v)}</button>`;
       }
       boards.push(
@@ -81,15 +95,15 @@
     if (st.over) {
       if (st.winner === 'D') return tr('draw', 'It’s a draw');
       const n = names[st.winner] || st.winner;
-      return (mineMarks.length === 1 && mineMarks[0] === st.winner ? tr('youWin', 'You win!') : n + ' ' + tr('wins', 'wins!')) + (st.result === 'timeout' ? ' · ' + tr('onTime', 'on time') : st.result === 'left' ? ' · ' + tr('oppLeft', 'opponent left') : st.result === 'resign' ? ' · ' + tr('resigned', 'resignation') : '');
+      return (mineMarks.length === 1 && mineMarks[0] === st.winner ? tr('youWin', 'You win!') : tr('n_wins', '{{n}} wins!', { n })) + (st.result === 'timeout' ? ' · ' + tr('onTime', 'on time') : st.result === 'left' ? ' · ' + tr('oppLeft', 'opponent left') : st.result === 'resign' ? ' · ' + tr('resigned', 'resignation') : '');
     }
     const who = names[st.turn] || st.turn;
     if (mineMarks.indexOf(st.turn) >= 0) {
-      const base = mineMarks.length > 1 ? who + ' (' + st.turn + ') — ' + tr('yourMove', 'your move') : tr('yourTurn', 'Your turn');
+      const base = mineMarks.length > 1 ? tr('name_turn_your_move', '{{name}} ({{turn}}) — your move', { name: (typeof bidi === 'function' ? bidi(who) : who), turn: st.turn }) : tr('yourTurn', 'Your turn');
       if (st.mode === 'ultimate') return base + ' · ' + (st.next >= 0 && !st.small[st.next] ? tr('playIn', 'play in the highlighted board') : tr('anyBoard', 'any open board'));
       return base;
     }
-    return who + ' ' + tr('thinking', 'is thinking…');
+    return tr('name_is_thinking', '{{name}} is thinking…', { name: (typeof bidi === 'function' ? bidi(who) : who) });
   }
 
   // ---------------- local ----------------
@@ -106,7 +120,7 @@
     const vsBot = o.kind === 'bot';
     const level = o.mode === 'ultimate' ? o.ulevel : o.level;
     const me = { id: 'p0', name: (K && K.myName()) || tr('you', 'You') };
-    const other = vsBot ? { id: 'bot', name: tr('bot', 'Bot') + ' · ' + C.levelLabel(level), bot: true, level } : { id: 'p1', name: tr('player2', 'Player 2') };
+    const other = vsBot ? { id: 'bot', name: tr('bot_label', 'Bot · {{label}}', { label: C.levelLabel(level) }), bot: true, level } : { id: 'p1', name: tr('player2', 'Player 2') };
     const round = o.round || 1;
     const youFirst = vsBot ? (round % 2 === 1) === !!o.youFirst : true;
     const players = youFirst ? [me, other] : [other, me];
@@ -163,7 +177,7 @@
           <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-share>${esc(tr('share', 'Share'))}</button><button type="button" class="pk-btn pk-btn--ghost" data-home>${esc(tr('change', 'Change mode'))}</button></div></div>`;
         ctl.querySelector('[data-again]').addEventListener('click', () => K.closeThen(shell, () => startLocal(Object.assign({}, o, { round: round + 1 }))));
         ctl.querySelector('[data-home]').addEventListener('click', () => K.closeThen(shell, () => openHome({})));
-        ctl.querySelector('[data-share]').addEventListener('click', () => C.shareWin(GAME, LABEL, line + ' · ' + modeLabel(o.mode) + (vsBot ? ' vs ' + C.levelLabel(level) + ' ' + tr('bot', 'bot') : '')));
+        ctl.querySelector('[data-share]').addEventListener('click', () => C.shareWin(GAME, LABEL, line + ' · ' + modeLabel(o.mode) + (vsBot ? tr('vs_label_bot', ' vs {{label}} bot', { label: C.levelLabel(level) }) : '')));
       }
     }
     function after() {
@@ -229,7 +243,7 @@
 
   function lobbySummary(ctrl) {
     const s = (ctrl.view.pub && ctrl.view.pub.settings) || {};
-    return modeLabel(s.mode) + ' · ' + CK().stakeLabel(Number(s.stake) || 0) + ' · ' + tr('unratedShort', 'unrated');
+    return tr('label_label2_unrated', '{{label}} · {{label2}} · unrated', { label: modeLabel(s.mode), label2: CK().stakeLabel(Number(s.stake) || 0) });
   }
   function openRoomSettings(ctrl) {
     const K = Kit();
@@ -377,8 +391,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'ttt',
-      name: 'Tic-Tac-Toe',
-      desc: 'Classic + Ultimate · bots · Live 1v1 · unrated',
+      name: t('games.ttt.tic_tac_toe'),
+      desc: t('games.ttt.classic_ultimate_bots_live_1v1_unrated'),
       icon: '⭕',
       ratingKey: 'ttt',
       gameType: 'dual',
@@ -390,7 +404,7 @@
       ownHome: true,
       order: 50,
       meta: {
-        core: 'ttt-core.js (perfect minimax for Classic, MCTS for Ultimate, shared with the server)',
+        core: t('games.ttt.ttt_core_js_perfect_minimax_for'),
         live: 'party_room → server-lib/classics-rooms.js; server-checked moves, unrated, optional stake',
       },
       launch: openGame,

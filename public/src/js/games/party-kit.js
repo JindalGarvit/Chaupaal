@@ -179,7 +179,7 @@
       const ask = shell.guard || (typeof o.confirmLeave === 'function' ? o.confirmLeave() : false);
       if (ask && typeof confirmLeaveGame === 'function') {
         asking = true;
-        const go = await confirmLeaveGame({ title: 'Leave the game?', body: o.leaveBody || 'This round will end for everyone on this phone.' });
+        const go = await confirmLeaveGame({ title: t('dangal.party.leave_the_game'), body: o.leaveBody || t('dangal.party.this_round_will_end_for_everyone') });
         asking = false;
         if (!go) return;
       }
@@ -187,15 +187,15 @@
     });
     if (typeof GameUI !== 'undefined' && GameUI && typeof GameUI.attachHowTo === 'function') {
       try {
-        GameUI.attachHowTo(el.querySelector('.game-chrome-right') || el, { gameId: o.gameId, title: 'How to play ' + o.title });
+        GameUI.attachHowTo(el.querySelector('.game-chrome-right') || el, { gameId: o.gameId, title: t('dangal.party.how_to_play_title', { title: o.title }) });
       } catch (e) {}
     }
     const textBtn = document.createElement('button');
     textBtn.type = 'button';
     textBtn.className = 'pk-textsize';
     textBtn.setAttribute('aria-pressed', String(largeText()));
-    textBtn.setAttribute('aria-label', 'Larger text');
-    textBtn.textContent = 'Aa';
+    textBtn.setAttribute('aria-label', t('dangal.party.larger_text'));
+    textBtn.textContent = t('dangal.party.aa');
     textBtn.addEventListener('click', () => {
       const on = !largeText();
       setLargeText(on);
@@ -238,7 +238,7 @@
    */
   const ID_SHAPES = ['●', '▲', '■', '◆', '★', '⬟', '✚', '⬢', '▼', '◐', '✦', '⬤', '◼', '▶', '✿', '♥'];
   const ID_COLORS = ['#4F8EF7', '#F5A524', '#17C3B2', '#E4508F', '#9B6BF2', '#8BC34A', '#FF7043', '#26A69A'];
-  const ID_NAMES = ['circle', 'triangle', 'square', 'diamond', 'star', 'pentagon', 'cross', 'hexagon', 'down triangle', 'half circle', 'sparkle', 'dot', 'block', 'arrow', 'flower', 'heart'];
+  const ID_NAMES = /* i18n-copy */ ['circle', 'triangle', 'square', 'diamond', 'star', 'pentagon', 'cross', 'hexagon', t('dangal.party.down_triangle'), t('dangal.party.half_circle'), 'sparkle', 'dot', 'block', 'arrow', 'flower', 'heart'];
   function identityHtml(index, name) {
     const i = Math.max(0, Number(index) || 0);
     const shape = ID_SHAPES[i % ID_SHAPES.length];
@@ -332,13 +332,13 @@
             .map(
               (n, i) => `<div class="pk-player-row">
               <span class="pk-player-num">${i + 1}</span>
-              <input class="pk-player-input" data-pk-name="${i}" maxlength="20" value="${esc(n)}" placeholder="Player ${i + 1}" autocomplete="off" enterkeyhint="next" aria-label="Player ${i + 1} name">
-              ${names.length > min ? `<button type="button" class="pk-player-remove" data-pk-remove="${i}" aria-label="Remove player ${i + 1}">✕</button>` : ''}
+              <input class="pk-player-input" data-pk-name="${i}" maxlength="20" value="${esc(n)}" placeholder="${tHtml('dangal.party.player_n', { n: i + 1 })}" autocomplete="off" enterkeyhint="next" aria-label="${tHtml('dangal.party.player_n_name', { n: i + 1 })}">
+              ${names.length > min ? `<button type="button" class="pk-player-remove" data-pk-remove="${i}" aria-label="${tHtml('dangal.party.remove_player_n', { n: i + 1 })}">✕</button>` : ''}
             </div>`
             )
             .join('')}
         </div>
-        ${names.length < max ? '<button type="button" class="pk-add-player" data-pk-add>+ Add player</button>' : `<div class="pk-hint">Max ${max} players</div>`}`;
+        ${names.length < max ? '<button type="button" class="pk-add-player" data-pk-add>' + tHtml('dangal.party.add_player') + '</button>' : `<div class="pk-hint">${tHtml('dangal.party.max_value_players', { value: max })}</div>`}`;
       root.querySelectorAll('[data-pk-name]').forEach((inp) => {
         inp.addEventListener('input', () => {
           names[Number(inp.dataset.pkName)] = inp.value;
@@ -364,7 +364,7 @@
     const list = () => {
       const seen = {};
       return names.map((n, i) => {
-        let v = String(n || '').trim().slice(0, 20) || 'Player ' + (i + 1);
+        let v = String(n || '').trim().slice(0, 20) || t('dangal.party.player_n', { n: i + 1 });
         const k = v.toLowerCase();
         if (seen[k]) v = v + ' ' + (seen[k] + 1);
         seen[k] = (seen[k] || 0) + 1;
@@ -429,19 +429,19 @@
     let revealed = false;
     let holdTimer = 0;
     root.innerHTML = `<div class="pk-pass">
-      <div class="pk-pass-lead">${esc(o.lead || 'Pass the phone to')}</div>
+      <div class="pk-pass-lead">${esc(o.lead || t('dangal.party.pass_the_phone_to'))}</div>
       <div class="pk-pass-name">${esc(o.name)}</div>
       <div class="pk-card" data-pk-card aria-live="polite">
         <div class="pk-card-cover" data-pk-cover>
           <div class="pk-card-eye" aria-hidden="true">👁</div>
-          <div class="pk-card-cover-title">Hold to see your card</div>
-          <div class="pk-card-cover-sub">Only ${esc(o.name)} should look</div>
+          <div class="pk-card-cover-title">${tHtml('dangal.party.hold_to_see_your_card')}</div>
+          <div class="pk-card-cover-sub">${tHtml('dangal.party.only_name_should_look', { name: o.name })}</div>
         </div>
         <div class="pk-card-face" data-pk-face hidden></div>
       </div>
       <div class="pk-pass-actions">
-        <button type="button" class="pk-btn pk-btn--ghost" data-pk-tap>Tap to reveal</button>
-        <button type="button" class="pk-btn pk-btn--primary" data-pk-done disabled>${esc(o.doneLabel || 'Hide & pass')}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-pk-tap>${tHtml('dangal.party.tap_to_reveal')}</button>
+        <button type="button" class="pk-btn pk-btn--primary" data-pk-done disabled>${esc(o.doneLabel || t('dangal.party.hide_pass'))}</button>
       </div>
     </div>`;
     const card = root.querySelector('[data-pk-card]');
@@ -456,7 +456,7 @@
       face.hidden = false;
       cover.hidden = true;
       card.classList.add('is-revealed');
-      tapBtn.textContent = 'Hide';
+      tapBtn.textContent = t('common.hide');
       if (!seen) {
         seen = true;
         doneBtn.disabled = false;
@@ -471,7 +471,7 @@
       face.hidden = true;
       cover.hidden = false;
       card.classList.remove('is-revealed');
-      tapBtn.textContent = 'Tap to reveal';
+      tapBtn.textContent = t('dangal.party.tap_to_reveal');
     };
     const startHold = (e) => {
       if (e && e.cancelable) e.preventDefault();
@@ -524,19 +524,19 @@
   function mountPassVote(root, opts) {
     const o = opts || {};
     root.innerHTML = `<div class="pk-pass">
-      <div class="pk-pass-lead">${esc(o.lead || 'Pass the phone to')}</div>
+      <div class="pk-pass-lead">${esc(o.lead || t('dangal.party.pass_the_phone_to'))}</div>
       <div class="pk-pass-name">${esc(o.name)}</div>
       <div class="pk-card pk-card--vote" data-pk-card>
         <div class="pk-card-cover" data-pk-cover>
           <div class="pk-card-eye" aria-hidden="true">${esc(o.coverIcon || '🤫')}</div>
-          <div class="pk-card-cover-title">${esc(o.coverTitle || 'Secret vote')}</div>
-          <div class="pk-card-cover-sub">Only ${esc(o.name)} should look</div>
+          <div class="pk-card-cover-title">${esc(o.coverTitle || t('dangal.party.secret_vote'))}</div>
+          <div class="pk-card-cover-sub">${tHtml('dangal.party.only_name_should_look', { name: o.name })}</div>
         </div>
         <div class="pk-card-face" data-pk-face hidden></div>
       </div>
       <div class="pk-pass-actions">
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pk-open>I’m ${esc(o.name)} — show me</button>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pk-done hidden disabled>${esc(o.doneLabel || 'Lock vote & pass')}</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pk-open>${tHtml('dangal.party.im_name_show_me', { name: bidi(o.name) })}</button>
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pk-done hidden disabled>${esc(o.doneLabel || t('dangal.party.lock_vote_pass'))}</button>
       </div>
     </div>`;
     const cover = root.querySelector('[data-pk-cover]');
@@ -684,7 +684,7 @@
     const rows = players
       .map((p) => ({ p, s: Number((scores || {})[p.id]) || 0, d: Number((deltas || {})[p.id]) || 0 }))
       .sort((a, b) => b.s - a.s || a.p.name.localeCompare(b.p.name));
-    return `<div class="pk-score" role="table" aria-label="Scoreboard">${rows
+    return `<div class="pk-score" role="table" aria-label="${tHtml('dangal.party.scoreboard')}">${rows
       .map(
         (r, i) => `<div class="pk-score-row${i === 0 && r.s > 0 ? ' is-top' : ''}" role="row">
         <span class="pk-score-rank">${i + 1}</span>
@@ -719,19 +719,19 @@
   let callOffset = null;
 
   const ROOM_ERROR_COPY = {
-    ROOM_NOT_FOUND: 'That room doesn’t exist any more — check the code',
-    ROOM_FULL: 'That room is full',
-    ROOM_CLOSED: 'That room has closed',
-    BAD_CODE: 'Room codes are 6 letters and numbers',
-    HOST_ONLY: 'Only the host can do that',
-    NOT_MEMBER: 'You’re not in this room any more',
-    RATE_LIMITED: 'Slow down a little — try again in a moment',
-    BUSY: 'Busy — try again',
-    AUTH_REQUIRED: 'Sign in to play with friends',
+    ROOM_NOT_FOUND: t('dangal.party.that_room_doesn_t_exist_any'),
+    ROOM_FULL: t('dangal.party.that_room_is_full'),
+    ROOM_CLOSED: t('dangal.party.that_room_has_closed'),
+    BAD_CODE: t('dangal.party.room_codes_are_6_letters_and'),
+    HOST_ONLY: t('dangal.party.only_the_host_can_do_that'),
+    NOT_MEMBER: t('dangal.party.you_re_not_in_this_room'),
+    RATE_LIMITED: t('dangal.party.slow_down_a_little_try_again'),
+    BUSY: t('dangal.party.busy_try_again'),
+    AUTH_REQUIRED: t('dangal.party.sign_in_to_play_with_friends'),
   };
 
   /** Server messages that are already plain, specific copy ("Need at least 4 players"). */
-  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', 'PENDING', 'REMOVED', 'BLOCKED', 'WORD_BLOCKED', 'TOO_FEW', 'BAD_TARGET', 'NOT_DRAWER', 'NO_QUESTIONS', 'TOO_EARLY', 'AGE_GATE', 'AGE_CONFIRM', 'INSUFFICIENT_CHIPS', 'NOT_SEATED', 'TOO_MANY', 'AI_OFF', 'CUSTOM_MISSING', 'BAD_THEME'];
+  const PASSTHROUGH = ['NEED_PLAYERS', 'TOO_MANY_PLAYERS', 'TEAMS_UNEVEN', t('dangal.party.pending'), t('dangal.party.removed'), t('dangal.party.blocked'), 'WORD_BLOCKED', 'TOO_FEW', 'BAD_TARGET', 'NOT_DRAWER', 'NO_QUESTIONS', 'TOO_EARLY', 'AGE_GATE', 'AGE_CONFIRM', 'INSUFFICIENT_CHIPS', 'NOT_SEATED', 'TOO_MANY', 'AI_OFF', 'CUSTOM_MISSING', 'BAD_THEME'];
 
   function roomErrorText(e) {
     const code = String((e && e.code) || '').toUpperCase();
@@ -739,8 +739,8 @@
     if (PASSTHROUGH.indexOf(code) >= 0 && e.message) return e.message;
     if (/^CLUE_/.test(code)) return null;
     return typeof navigator !== 'undefined' && navigator.onLine === false
-      ? 'You’re offline — reconnect to keep playing'
-      : 'Couldn’t reach the room — try again';
+      ? t('dangal.party.you_re_offline_reconnect_to_keep')
+      : t('dangal.party.couldn_t_reach_the_room_try');
   }
 
   /**
@@ -758,7 +758,7 @@
     if (!shell || shell.closed || !shell.el) return;
     let pill = shell.el.querySelector('.pk-hubpill');
     const isHost = pub.host === myUid();
-    const label = isHost ? '← Party night' : 'Party night';
+    const label = isHost ? '← Party night' : t('dangal.party.party_night');
     if (!pill) {
       pill = document.createElement('button');
       pill.type = 'button';
@@ -771,7 +771,7 @@
     pill.dataset.hub = String(pub.hub);
     pill.dataset.host = isHost ? '1' : '0';
     pill.textContent = label;
-    pill.setAttribute('aria-label', isHost ? 'Back to the party — pick the next game' : 'Party night scoreboard');
+    pill.setAttribute('aria-label', isHost ? t('dangal.party.back_to_the_party_pick_the') : t('dangal.party.party_night_scoreboard'));
   }
 
   /**
@@ -948,23 +948,23 @@
 
   function shareRoom(game, code, label) {
     const url = roomLink(game, code);
-    const text = `Join my ${label} room on Chaupaal — code ${code}`;
+    const text = t('dangal.party.join_my_label_room_on_chaupaal', { label, code });
     if (typeof openUnifiedShareSheet === 'function') {
       openUnifiedShareSheet({
         gameId: game,
-        title: 'Invite to ' + label,
-        subtitle: 'Room code ' + code,
+        title: t('dangal.party.invite_to_label', { label }),
+        subtitle: t('dangal.party.room_code_code', { code }),
         story: false,
         stats: typeof buildShareStats === 'function'
-          ? buildShareStats({ scoreLine: 'Room ' + code, meta: label, text, url })
-          : { scoreLine: 'Room ' + code, meta: label, text, url },
+          ? buildShareStats({ scoreLine: t('dangal.party.room_code_3', { code }), meta: label, text, url })
+          : { scoreLine: t('dangal.party.room_code_3', { code }), meta: label, text, url },
       });
       return;
     }
     if (navigator.share) {
       navigator.share({ title: label, text, url }).catch(() => {});
     } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(text + '\n' + url).then(() => toast('Link copied'));
+      navigator.clipboard.writeText(text + '\n' + url).then(() => toast(t('common.link_copied')));
     }
   }
 
@@ -974,9 +974,9 @@
     const chatId = chat ? chat.firestoreId || chat.id : chatOrId;
     if (!chatId || typeof sendRealtimeMessage !== 'function') return false;
     const isGroup = !!(chat && (chat.type === 'group' || chat.isGroup));
-    const who = myName() || 'A friend';
+    const who = myName() || t('dangal.party.a_friend');
     try {
-      await sendRealtimeMessage(chatId, `${who} started ${label} — tap to join`, isGroup, null, {
+      await sendRealtimeMessage(chatId, t('dangal.party.who_started_label_tap_to_join', { who, label }), isGroup, null, {
         type: 'party_invite',
         game,
         code,
@@ -993,11 +993,11 @@
       shareRoom(game, code, label);
       return;
     }
-    const friend = await openFriendPickerSheet({ title: 'Invite to ' + label, subtitle: 'They’ll get a join card in your chat' });
+    const friend = await openFriendPickerSheet({ title: t('dangal.party.invite_to_label', { label }), subtitle: t('dangal.party.they_ll_get_a_join_card') });
     if (!friend) return;
     const chatId = friend.chatId || friend.firestoreId || '';
     if (chatId && (await postInviteToChat({ id: chatId, type: 'dm' }, game, code, label))) {
-      toast('Invite sent to ' + (friend.name || 'your friend'));
+      toast(t('dangal.party.invite_sent_to_value', { value: friend.name || t('dangal.party.your_friend') }));
       return;
     }
     const peer = friend.uid || friend.id;
@@ -1006,7 +1006,7 @@
         await openPeerDm({ uid: peer, origin: 'party_invite', seedHello: false });
         const open = window.currentOpenChat;
         if (open && (await postInviteToChat(open, game, code, label))) {
-          toast('Invite sent');
+          toast(t('dangal.party.invite_sent'));
           return;
         }
       } catch (e) {}
@@ -1018,12 +1018,12 @@
   function inviteCardHtml(att, m) {
     const game = String(att.game || 'imposter');
     const code = String(att.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-    const label = att.label || (typeof gameDisplayName === 'function' ? gameDisplayName(game) : 'Party game');
+    const label = att.label || (typeof gameDisplayName === 'function' ? gameDisplayName(game) : t('dangal.party.party_game'));
     const mark = typeof gameMarkHtml === 'function' ? gameMarkHtml(game, { size: 30 }) : '🎉';
     return `<div class="party-invite-card">
-      <div class="party-invite-head">${mark}<div><strong>${esc(label)}</strong><span>Party · room ${esc(code)}</span></div></div>
-      <div class="party-invite-text">${esc((m && m.text) || 'Join the game')}</div>
-      <button type="button" class="party-invite-join" data-party-invite-join="${esc(code)}" data-party-game="${esc(game)}">Join game</button>
+      <div class="party-invite-head">${mark}<div><strong>${esc(label)}</strong><span>${tHtml('dangal.party.party_room_code', { code })}</span></div></div>
+      <div class="party-invite-text">${esc((m && m.text) || t('dangal.party.join_the_game'))}</div>
+      <button type="button" class="party-invite-join" data-party-invite-join="${esc(code)}" data-party-game="${esc(game)}">${tHtml('dangal.party.join_game')}</button>
     </div>`;
   }
 
@@ -1034,11 +1034,11 @@
     if (!g || typeof g.openRoom !== 'function') {
       if (typeof openRetiredGameScreen === 'function' && typeof isRetiredGameId === 'function' && isRetiredGameId(game)) {
         openRetiredGameScreen(game);
-      } else toast('That game isn’t available');
+      } else toast(t('dangal.party.that_game_isn_t_available'));
       return;
     }
     if (!isSignedIn()) {
-      toast('Sign in to join your friends’ room');
+      toast(t('dangal.party.sign_in_to_join_your_friends'));
       if (typeof openAuthSheet === 'function') openAuthSheet('login');
       return;
     }
@@ -1104,12 +1104,37 @@
     return lazyLoading[rel];
   }
 
+  const CL = () => window.DangalContentLocales || null;
+  /** Content language of the room screen that is open ('' outside rooms → my UI language). */
+  let activeRoomLang = '';
+  const roomContentLang = () => activeRoomLang || uiContentLang();
+  function uiContentLang() {
+    return CL() ? CL().contentBase(typeof currentLang !== 'undefined' ? currentLang : 'en') : 'en';
+  }
+
+  /** Locale overlays (data/locales/<lang>/…) for a game's content, after its packs. */
+  function overlayFiles(game, langs) {
+    return CL() ? CL().overlaysFor(game, langs) : [];
+  }
+
   function gameDataReady(game) {
-    return (LAZY_DATA[game] || []).every((rel) => lazyLoaded[rel]);
+    return (LAZY_DATA[game] || []).concat(overlayFiles(game, [uiContentLang()])).every((rel) => lazyLoaded[rel]);
+  }
+
+  /** Load one content language for a game (room content language ≠ my UI language). */
+  function ensureContentLocale(game, lang) {
+    const files = overlayFiles(game, [lang]).filter((rel) => !lazyLoaded[rel]);
+    if (!files.length) return Promise.resolve();
+    return files
+      .reduce((p, rel) => p.then(() => loadLazyScript(rel)), Promise.resolve())
+      .then(() => CL() && CL().drain())
+      .catch(() => {});
   }
 
   function ensureGameData(game) {
-    return (LAZY_DATA[game] || []).reduce((p, rel) => p.then(() => loadLazyScript(rel)), Promise.resolve());
+    return (LAZY_DATA[game] || [])
+      .reduce((p, rel) => p.then(() => loadLazyScript(rel)), Promise.resolve())
+      .then(() => ensureContentLocale(game, uiContentLang()));
   }
 
   /** Wrap a game entry point so its packs/core load first (sync when already loaded). */
@@ -1119,7 +1144,7 @@
       if (gameDataReady(game)) return fn.apply(this, args);
       return ensureGameData(game).then(
         () => fn.apply(this, args),
-        () => toast('Couldn’t load the game — check your connection and try again')
+        () => toast(t('dangal.party.couldn_t_load_the_game_check'))
       );
     };
   }
@@ -1280,21 +1305,21 @@
     const paint = () => {
       root.innerHTML = `<div class="pk-teams">${teams
         .map(
-          (t, ti) => `<div class="pk-team pk-team--${ti}">
-            <div class="pk-team-name">${esc((o.teamNames || [])[ti] || (ti ? 'Team B' : 'Team A'))}</div>
-            ${t
+          (_t, ti) => `<div class="pk-team pk-team--${ti}">
+            <div class="pk-team-name">${esc((o.teamNames || [])[ti] || (ti ? t('dangal.party.team_b') : t('dangal.party.team_a')))}</div>
+            ${_t
               .map(
                 (n, i) => `<div class="pk-player-row">
-                <input class="pk-player-input" data-pk-t="${ti}" data-pk-i="${i}" maxlength="20" value="${esc(n)}" placeholder="Player" autocomplete="off" aria-label="${ti ? 'Team B' : 'Team A'} player ${i + 1}">
-                ${t.length > minPer ? `<button type="button" class="pk-player-remove" data-pk-rm="${ti}:${i}" aria-label="Remove">✕</button>` : ''}
+                <input class="pk-player-input" data-pk-t="${ti}" data-pk-i="${i}" maxlength="20" value="${esc(n)}" placeholder="${tHtml('dangal.party.player')}" autocomplete="off" aria-label="${ti ? tHtml('dangal.party.team_b') : tHtml('dangal.party.team_a')} player ${i + 1}">
+                ${_t.length > minPer ? `<button type="button" class="pk-player-remove" data-pk-rm="${ti}:${i}" aria-label="${tHtml('common.remove')}">✕</button>` : ''}
               </div>`
               )
               .join('')}
-            ${total() < max ? `<button type="button" class="pk-add-player" data-pk-addt="${ti}">+ Add</button>` : ''}
+            ${total() < max ? `<button type="button" class="pk-add-player" data-pk-addt="${ti}">${tHtml('dangal.party.add')}</button>` : ''}
           </div>`
         )
         .join('')}</div>
-        <button type="button" class="pk-chip pk-teams-shuffle" data-pk-shuffle>🔀 Shuffle teams</button>`;
+        <button type="button" class="pk-chip pk-teams-shuffle" data-pk-shuffle>${tHtml('dangal.party.shuffle_teams')}</button>`;
       root.querySelectorAll('[data-pk-t]').forEach((inp) =>
         inp.addEventListener('input', () => {
           teams[Number(inp.dataset.pkT)][Number(inp.dataset.pkI)] = inp.value;
@@ -1335,10 +1360,10 @@
     const list = () => {
       const seen = {};
       let n = 0;
-      return teams.map((t) =>
-        t.map((name) => {
+      return teams.map((_t) =>
+        _t.map((name) => {
           n += 1;
-          let v = String(name || '').trim().slice(0, 20) || 'Player ' + n;
+          let v = String(name || '').trim().slice(0, 20) || t('dangal.party.player_n', { n });
           const k = v.toLowerCase();
           if (seen[k]) v = v + ' ' + (seen[k] + 1);
           seen[k] = (seen[k] || 0) + 1;
@@ -1354,7 +1379,7 @@
 
   function requireSignIn() {
     if (isSignedIn()) return true;
-    toast('Sign in to play on separate phones — Pass & Play works signed out');
+    toast(t('dangal.party.sign_in_to_play_on_separate'));
     if (typeof openAuthSheet === 'function') openAuthSheet('login');
     return false;
   }
@@ -1363,37 +1388,37 @@
   async function createRoom(o) {
     if (!requireSignIn()) return;
     if (navigator.onLine === false) {
-      toast('You’re offline — Pass & Play works without internet');
+      toast(t('dangal.party.you_re_offline_pass_play_works'));
       return;
     }
     try {
       const chatId = o.chat ? o.chat.firestoreId || o.chat.id : '';
       const res = await roomCall(o.game, 'create', {
-        name: myName() || 'Host',
-        settings: o.settings || {},
+        name: myName() || t('dangal.party.host'),
+        settings: Object.assign({ contentLang: uiContentLang() }, o.settings || {}),
         chatId: chatId && chatId !== 'ai' ? chatId : '',
       });
       if (o.chat && chatId && chatId !== 'ai') {
-        if (await postInviteToChat(o.chat, o.game, res.code, o.label)) toast('Invite posted in the chat');
+        if (await postInviteToChat(o.chat, o.game, res.code, o.label)) toast(t('dangal.party.invite_posted_in_the_chat'));
       }
       o.open(res.code, { host: true });
     } catch (e) {
-      toast(roomErrorText(e) || 'Couldn’t create a room');
+      toast(roomErrorText(e) || t('dangal.party.couldn_t_create_a_room'));
     }
   }
 
   function openJoinSheet(onCode) {
     if (!requireSignIn()) return;
     openSheet({
-      title: 'Join a room',
-      bodyHtml: `<input class="pk-input pk-input--code" data-code maxlength="6" placeholder="ROOM CODE" autocapitalize="characters" autocomplete="off" enterkeyhint="go" aria-label="Room code">
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-join>Join</button>`,
+      title: t('dangal.party.join_a_room'),
+      bodyHtml: `<input class="pk-input pk-input--code" data-code maxlength="6" placeholder="${tHtml('dangal.party.room_code')}" autocapitalize="characters" autocomplete="off" enterkeyhint="go" aria-label="${tHtml('dangal.party.room_code_2')}">
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-join>${tHtml('dangal.party.join')}</button>`,
       onMount(sheet, close) {
         const input = sheet.querySelector('[data-code]');
         setTimeout(() => input.focus(), 50);
         const go = () => {
           const code = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (code.length !== 6) return toast('Room codes are 6 letters and numbers');
+          if (code.length !== 6) return toast(t('dangal.party.room_codes_are_6_letters_and'));
           close();
           onCode(code);
         };
@@ -1422,10 +1447,10 @@
     const code = spec.code;
     if (spec.join) {
       try {
-        const res = await roomCall(spec.game, 'join', { code, name: myName() || 'Player' });
-        if (res.pending) toast('Round in progress — you’ll be dealt in next round');
+        const res = await roomCall(spec.game, 'join', { code, name: myName() || t('dangal.party.player') });
+        if (res.pending) toast(t('dangal.party.round_in_progress_you_ll_be'));
       } catch (e) {
-        toast(roomErrorText(e) || 'Couldn’t join that room');
+        toast(roomErrorText(e) || t('dangal.party.couldn_t_join_that_room'));
         return null;
       }
     }
@@ -1434,7 +1459,7 @@
     ctrl.uid = myUid();
     ctrl.name = (id) => {
       const p = view.pub && view.pub.players && view.pub.players[id];
-      return p ? p.name : 'Player';
+      return p ? p.name : t('dangal.party.player');
     };
     ctrl.players = () => {
       const players = (view.pub && view.pub.players) || {};
@@ -1468,7 +1493,7 @@
       if (!ctrl.isHost() || !timed) return '';
       return hostBarHtml(view.pub);
     };
-    ctrl.pausedNote = () => (view.pub && view.pub.paused ? '<div class="pk-paused">Paused by the host</div>' : '');
+    ctrl.pausedNote = () => (view.pub && view.pub.paused ? '<div class="pk-paused">' + tHtml('dangal.party.paused_by_the_host') + '</div>' : '');
     ctrl.wire = (body) => {
       body.querySelectorAll('[data-host]').forEach((btn) => btn.addEventListener('click', () => ctrl.act(btn.dataset.host)));
       const el = body.querySelector('[data-timer]');
@@ -1487,14 +1512,20 @@
     ctrl.shell = openShell({
       gameId: spec.game,
       title: spec.label,
-      subtitle: 'Room ' + code,
+      subtitle: t('dangal.party.room_code_3', { code }),
       confirmLeave: () => !!(view.pub && view.pub.status === 'playing'),
-      leaveBody: 'You can rejoin from the invite link while the room is open.',
-      onClose: () => ctrl.conn && ctrl.conn.stop(),
+      leaveBody: t('dangal.party.you_can_rejoin_from_the_invite'),
+      onClose: () => {
+        activeRoomLang = '';
+        if (ctrl.conn) ctrl.conn.stop();
+      },
     });
     ctrl.conn = connectRoom(spec.game, code, {
       onPub: (pub) => {
         view.pub = pub;
+        const cl = pub && pub.settings && pub.settings.contentLang;
+        activeRoomLang = cl || '';
+        if (cl && cl !== uiContentLang()) ensureContentLocale(spec.game, cl).then(() => view.pub === pub && paint());
         paint();
       },
       onSecret: (secret) => {
@@ -1507,10 +1538,10 @@
       },
     }, { presence: spec.presence !== false });
     if (!ctrl.conn) {
-      ctrl.shell.render('<div class="pk-empty">Can’t reach the game server right now. Try again in a moment.</div>');
+      ctrl.shell.render('<div class="pk-empty">' + tHtml('dangal.party.can_t_reach_the_game_server') + '</div>');
       return ctrl;
     }
-    ctrl.shell.render('<div class="pk-empty">Joining room…</div>');
+    ctrl.shell.render('<div class="pk-empty">' + tHtml('dangal.party.joining_room') + '</div>');
 
     function paintPresence() {
       ctrl.shell.el.querySelectorAll('[data-presence]').forEach((dot) => {
@@ -1528,10 +1559,10 @@
     function paint() {
       if (ctrl.shell.closed) return;
       const pub = view.pub;
-      if (!pub) return message('This room isn’t available any more.', 'Back to games');
-      if (pub.status === 'closed' && pub.hub) return message('Back to the party…', 'Done');
-      if (pub.status === 'closed') return message('The host closed this room.', 'Done');
-      if (!pub.players || !pub.players[ctrl.uid] || pub.players[ctrl.uid].left) return message('You’re no longer in this room.', 'Done');
+      if (!pub) return message(t('dangal.party.this_room_isn_t_available_any'), t('dangal.party.back_to_games'));
+      if (pub.status === 'closed' && pub.hub) return message(t('dangal.party.back_to_the_party_2'), t('common.done'));
+      if (pub.status === 'closed') return message(t('dangal.party.the_host_closed_this_room'), t('common.done'));
+      if (!pub.players || !pub.players[ctrl.uid] || pub.players[ctrl.uid].left) return message(t('dangal.party.you_re_no_longer_in_this_2'), t('common.done'));
       const st = pub.status === 'playing' && pub.state ? spec.hydrate(pub.state) : null;
       const key = JSON.stringify([
         pub.status, pub.roundNo, pub.host, !!pub.paused, pub.over, pub.players, pub.scores, pub.seen,
@@ -1553,7 +1584,7 @@
       if (pub.status === 'lobby' || !st) renderLobby();
       else if (pub.players[ctrl.uid].pending) renderPending(st);
       else {
-        ctrl.shell.setSubtitle('Room ' + code);
+        ctrl.shell.setSubtitle(t('dangal.party.room_code_3', { code }));
         spec.renderPhase(ctrl, st);
       }
       if (kept) {
@@ -1573,40 +1604,42 @@
       const start = spec.canStart
         ? spec.canStart(ctrl, players)
         : players.length < spec.min
-          ? { ok: false, label: 'Need ' + (spec.min - players.length) + ' more to start' }
-          : { ok: true, label: 'Start' };
+          ? { ok: false, label: t('dangal.party.need_value_more_to_start', { value: spec.min - players.length }) }
+          : { ok: true, label: t('dangal.party.start') };
       const list =
         (spec.lobbyListHtml && spec.lobbyListHtml(ctrl, players)) ||
         `<div class="pk-lobby-list">${players
           .map(
             (p, i) => `<div class="pk-lobby-row"><span class="pk-dot" data-presence="${esc(p.id)}"></span>${identityHtml(i, p.name)}<span>${esc(p.name)}</span>${
-              p.id === pub.host ? '<span class="pk-badge">Host</span>' : ''
-            }${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">You</span>' : ''}</div>`
+              p.id === pub.host ? '<span class="pk-badge">' + tHtml('dangal.party.host') + '</span>' : ''
+            }${p.id === ctrl.uid ? '<span class="pk-badge pk-badge--me">' + tHtml('common.you') + '</span>' : ''}</div>`
           )
           .join('')}</div>`;
       const body = ctrl.shell.render(`<div class="pk-page pk-lobby">
-        <div class="pk-code-label">Room code</div>
-        <div class="pk-code" aria-label="Room code ${esc(code)}">${esc(code)}</div>
+        <div class="pk-code-label">${tHtml('dangal.party.room_code_2')}</div>
+        <div class="pk-code" aria-label="${tHtml('dangal.room_code_value', { code })}">${esc(code)}</div>
         <div class="pk-row">
-          <button type="button" class="pk-btn pk-btn--ghost" data-share>Share link</button>
-          <button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite friends</button>
+          <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('dangal.party.share_link')}</button>
+          <button type="button" class="pk-btn pk-btn--ghost" data-invite>${tHtml('dangal.party.invite_friends')}</button>
         </div>
-        <div class="pk-section">In the room · ${players.length}/${spec.max}</div>
+        <div class="pk-section">${tHtml('dangal.party.in_the_room_playerscount_value', { playersCount: players.length, value: spec.max })}</div>
         ${list}
         <button type="button" class="pk-row-btn" data-settings ${isHost && spec.openSettings ? '' : 'disabled'}>
           ${esc(spec.lobbySummary(ctrl))}${isHost && spec.openSettings ? '<span class="pk-chev" aria-hidden="true">›</span>' : ''}
         </button>
+        ${contentLangRowHtml(spec.game, pub.settings, isHost)}
         ${
           isHost
             ? `<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start ${start.ok ? '' : 'disabled'}>${esc(start.label)}</button>`
-            : '<div class="pk-wait">Waiting for the host to start…</div>'
+            : '<div class="pk-wait">' + tHtml('dangal.party.waiting_for_the_host_to_start') + '</div>'
         }
-        <button type="button" class="pk-link" data-leave>Leave room</button>
+        <button type="button" class="pk-link" data-leave>${tHtml('dangal.party.leave_room')}</button>
       </div>`);
       body.querySelector('[data-share]').addEventListener('click', () => shareRoom(spec.game, code, spec.label));
       body.querySelector('[data-invite]').addEventListener('click', () => inviteFriends(spec.game, code, spec.label));
       body.querySelector('[data-leave]').addEventListener('click', ctrl.leave);
       if (isHost && spec.openSettings) body.querySelector('[data-settings]').addEventListener('click', () => spec.openSettings(ctrl));
+      body.querySelector('[data-content-lang]')?.addEventListener('click', () => isHost && pickContentLang(spec.game, pub.settings, (next) => ctrl.act('settings', { settings: { contentLang: next } })));
       body.querySelector('[data-start]')?.addEventListener('click', () => startWith('start', spec.startArgs));
       if (spec.onLobbyMount) spec.onLobbyMount(ctrl, body);
     }
@@ -1623,14 +1656,60 @@
     function renderPending(st) {
       if (spec.renderPending) return spec.renderPending(ctrl, st);
       const body = ctrl.shell.render(`<div class="pk-page pk-empty">
-        <div class="pk-title">Round in progress</div>
-        <div class="pk-sub">You’ll be dealt in when the next round starts.</div>
-        <button type="button" class="pk-link" data-leave>Leave room</button>
+        <div class="pk-title">${tHtml('dangal.party.round_in_progress')}</div>
+        <div class="pk-sub">${tHtml('dangal.party.you_ll_be_dealt_in_when')}</div>
+        <button type="button" class="pk-link" data-leave>${tHtml('dangal.party.leave_room')}</button>
       </div>`);
       body.querySelector('[data-leave]').addEventListener('click', ctrl.leave);
     }
 
     return ctrl;
+  }
+
+  function langName(code) {
+    const e = typeof getLangEntry === 'function' ? getLangEntry(code) : null;
+    return (e && e.native) || code;
+  }
+
+  /**
+   * Small, honest availability note for a game's content in `lang` ('' when it is all there).
+   * e.g. "Words in English" when a room / reader language has no translated pack yet.
+   */
+  function contentNoteHtml(game, lang) {
+    if (!CL()) return '';
+    const st = CL().status(game, lang);
+    if (st.full) return '';
+    return '<span class="pk-lang-note" data-content-note>' + tHtml('dangal.content.in_english', { lang: langName(st.lang) }) + '</span>';
+  }
+
+  /** Lobby row: the room content language (host picks; everyone else sees it). Only for word / title games. */
+  function contentLangRowHtml(game, settings, isHost) {
+    if (!CL() || !CL().hasRoomContent(game)) return '';
+    const lang = CL().roomLang(settings);
+    const label = tHtml('dangal.content.room_language', { lang: langName(lang) });
+    return `<button type="button" class="pk-row-btn pk-row-btn--sub" data-content-lang ${isHost ? '' : 'disabled'} lang="${esc(lang)}">${label}${isHost ? '<span class="pk-chev" aria-hidden="true">›</span>' : ''}</button>${contentNoteHtml(game, lang)}`;
+  }
+
+  /** Host picks the room content language; `onPick(code)` saves it (room settings op). */
+  function pickContentLang(game, settings, onPick) {
+    const cur = CL().roomLang(settings);
+    const choices = CL().roomChoices(game);
+    openSheet({
+      title: t('dangal.content.room_language_title'),
+      bodyHtml: `<p class="pk-sub">${tHtml('dangal.content.room_language_sub')}</p><div class="pk-list">${choices
+        .map((c) => `<button type="button" class="pk-row-btn${c === cur ? ' is-on' : ''}" data-pick-lang="${esc(c)}" aria-pressed="${c === cur}" lang="${esc(c)}">${esc(langName(c))}${contentNoteHtml(game, c)}</button>`)
+        .join('')}</div>`,
+      onMount(el, close) {
+        el.querySelectorAll('[data-pick-lang]').forEach((b) =>
+          b.addEventListener('click', async () => {
+            close();
+            const next = b.dataset.pickLang;
+            await ensureContentLocale(game, next);
+            onPick(next);
+          })
+        );
+      },
+    });
   }
 
   /** Shared result actions row for room games (host deals / ends, others invite / leave). */
@@ -1639,15 +1718,15 @@
     return `<div class="pk-result-actions">
       ${
         isHost
-          ? `<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${esc(o.nextLabel || 'Next round')}</button>`
-          : `<div class="pk-wait">${esc(o.waitLabel || 'Waiting for the host…')}</div>`
+          ? `<button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${esc(o.nextLabel || t('dangal.party.next_round'))}</button>`
+          : `<div class="pk-wait">${esc(o.waitLabel || t('dangal.party.waiting_for_the_host'))}</div>`
       }
       <div class="pk-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-share-result>Share</button>
-        ${isHost && ctrl.spec.openSettings ? '<button type="button" class="pk-btn pk-btn--ghost" data-room-settings>Settings</button>' : '<button type="button" class="pk-btn pk-btn--ghost" data-invite>Invite</button>'}
+        <button type="button" class="pk-btn pk-btn--ghost" data-share-result>${tHtml('common.share')}</button>
+        ${isHost && ctrl.spec.openSettings ? '<button type="button" class="pk-btn pk-btn--ghost" data-room-settings>' + tHtml('common.settings') + '</button>' : '<button type="button" class="pk-btn pk-btn--ghost" data-invite>' + tHtml('common.invite') + '</button>'}
       </div>
       ${o.card ? badCardHtml(o.card) : ''}
-      <button type="button" class="pk-link" data-end>${isHost ? (hubOf(ctrl) ? 'Back to the party' : 'End room') : 'Leave room'}</button>
+      <button type="button" class="pk-link" data-end>${isHost ? (hubOf(ctrl) ? tHtml('dangal.party.back_to_the_party') : tHtml('dangal.party.end_room')) : tHtml('dangal.party.leave_room')}</button>
     </div>`;
   }
 
@@ -1679,29 +1758,29 @@
   function hostBarHtml(pub) {
     if (!pub) return '';
     const used = pub.extended && pub.extended.key === String(pub.phaseKey || '') ? Number(pub.extended.n) || 0 : 0;
-    return `<div class="pk-hostbar"><span>Host</span>${
+    return `<div class="pk-hostbar"><span>${tHtml('dangal.party.host')}</span>${
       pub.paused
-        ? '<button type="button" class="pk-chip" data-host="resume">Resume</button>'
-        : '<button type="button" class="pk-chip" data-host="pause">Pause</button>'
-    }${used < 3 ? '<button type="button" class="pk-chip" data-host="addTime" aria-label="Add 30 seconds">+30s</button>' : ''}</div>`;
+        ? '<button type="button" class="pk-chip" data-host="resume">' + tHtml('common.shortcut_dangal_resume') + '</button>'
+        : '<button type="button" class="pk-chip" data-host="pause">' + tHtml('dangal.party.pause') + '</button>'
+    }${used < 3 ? '<button type="button" class="pk-chip" data-host="addTime" aria-label="' + tHtml('dangal.party.add_30_seconds') + '">+30s</button>' : ''}</div>`;
   }
 
   // ---------------- content quality: "Bad card" ----------------
 
   const FLAG_REASONS = [
-    ['unclear', 'Unclear'],
-    ['too_hard', 'Too hard'],
-    ['offensive', 'Not okay'],
-    ['repeat', 'Seen it too often'],
-    ['other', 'Something else'],
+    /* i18n-copy */ ['unclear', t('dangal.party.unclear')],
+    /* i18n-copy */ ['too_hard', t('dangal.party.too_hard')],
+    /* i18n-copy */ ['offensive', t('dangal.party.not_okay')],
+    /* i18n-copy */ ['repeat', t('dangal.party.seen_it_too_often')],
+    /* i18n-copy */ ['other', t('dangal.party.something_else')],
   ];
   const flaggedLocal = {};
 
   /** card = { game, key, label? } — built-in cards only; custom / AI cards have no key. */
   function badCardHtml(card) {
     if (!card || !card.key || !card.game || !isSignedIn()) return '';
-    if (flaggedLocal[card.game + '|' + card.key]) return '<div class="pk-badcard is-done">Thanks — noted</div>';
-    return `<button type="button" class="pk-badcard" data-bad-card aria-label="Report a bad card${card.label ? ': ' + esc(card.label) : ''}">👎 Bad card</button>`;
+    if (flaggedLocal[card.game + '|' + card.key]) return '<div class="pk-badcard is-done">' + tHtml('dangal.party.thanks_noted') + '</div>';
+    return `<button type="button" class="pk-badcard" data-bad-card aria-label="${card.label ? tHtml('dangal.party.report_bad_card_label', { label: card.label }) : tHtml('dangal.party.report_bad_card')}">${tHtml('dangal.party.bad_card')}</button>`;
   }
 
   function wireBadCard(body, card) {
@@ -1709,14 +1788,14 @@
     if (!btn || !card || !card.key) return;
     btn.addEventListener('click', () => {
       openSheet({
-        title: 'What was wrong with it?',
+        title: t('dangal.party.what_was_wrong_with_it'),
         bodyHtml: `<div class="pk-flag-reasons">${FLAG_REASONS.map(([v, l]) => `<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-reason="${v}">${esc(l)}</button>`).join('')}</div>`,
         onMount: (el, close) => {
           el.querySelectorAll('[data-reason]').forEach((b) =>
             b.addEventListener('click', () => {
               close();
               flagCard(card, b.dataset.reason);
-              btn.outerHTML = '<div class="pk-badcard is-done">Thanks — noted</div>';
+              btn.outerHTML = '<div class="pk-badcard is-done">' + tHtml('dangal.party.thanks_noted') + '</div>';
             })
           );
         },
@@ -1827,39 +1906,39 @@
     const lineKind = o.kind === 'prompts' && o.mode === 'wyr' ? 'wyr' : o.kind;
     const min = o.min || 4;
     const hint =
-      lineKind === 'pairs' ? 'One per line: word — similar word' : lineKind === 'wyr' ? 'One per line: option A | option B' : o.kind === 'titles' ? 'One title per line' : 'One prompt per line';
+      lineKind === 'pairs' ? t('dangal.party.one_per_line_word_similar_word') : lineKind === 'wyr' ? t('dangal.party.one_per_line_option_a_option') : o.kind === 'titles' ? t('dangal.party.one_title_per_line') : t('dangal.party.one_prompt_per_line');
     let draft = null;
     const listHtml = () => {
       const saved = savedPacks(o.game).filter((p) => !o.mode || !p.mode || p.mode === o.mode);
       return saved.length
-        ? `<div class="pk-section">On this phone</div>${saved
+        ? `<div class="pk-section">${tHtml('dangal.party.on_this_phone')}</div>${saved
             .map(
-              (p) => `<div class="pk-pack-row"><button type="button" class="pk-row-btn" data-use-saved="${esc(p.name)}">${esc(p.name)} · ${p.items.length}</button><button type="button" class="pk-link" data-del-saved="${esc(p.name)}" aria-label="Delete ${esc(p.name)}">Delete</button></div>`
+              (p) => `<div class="pk-pack-row"><button type="button" class="pk-row-btn" data-use-saved="${esc(p.name)}">${esc(p.name)} · ${p.items.length}</button><button type="button" class="pk-link" data-del-saved="${esc(p.name)}" aria-label="${tHtml('dangal.party.delete_name', { name: p.name })}">${tHtml('dangal.party.delete')}</button></div>`
             )
             .join('')}`
         : '';
     };
     const ai = aiOn();
     openSheet({
-      title: ai ? 'Make a pack' : 'Your packs',
+      title: ai ? t('dangal.party.make_a_pack') : t('dangal.party.your_packs'),
       bodyHtml: `<div class="pk-packsheet">
         ${
           ai
-            ? `<form data-pack-form class="pk-row"><input class="pk-input" data-pack-theme maxlength="60" placeholder="Make a pack about… (e.g. space, the 90s)" aria-label="Pack theme"><button type="submit" class="pk-btn pk-btn--primary">Make</button></form>`
+            ? `<form data-pack-form class="pk-row"><input class="pk-input" data-pack-theme maxlength="60" placeholder="${tHtml('dangal.party.make_a_pack_about_e_g')}" aria-label="${tHtml('dangal.party.pack_theme')}"><button type="submit" class="pk-btn pk-btn--primary">${tHtml('dangal.party.make')}</button></form>`
             : ''
         }
         <div data-pack-preview hidden>
-          <input class="pk-input" data-pack-name maxlength="30" aria-label="Pack name">
+          <input class="pk-input" data-pack-name maxlength="30" aria-label="${tHtml('dangal.party.pack_name')}">
           <textarea class="pk-input pk-pack-lines" data-pack-lines rows="8" aria-label="${esc(hint)}"></textarea>
-          <div class="pk-sub">${esc(hint)} · at least ${min}</div>
+          <div class="pk-sub">${tHtml('dangal.party.hint_at_least_value', { hint, value: min })}</div>
           <div class="pk-err" data-pack-err role="alert"></div>
           <div class="pk-row">
-            <button type="button" class="pk-btn pk-btn--primary" data-pack-use>Use tonight</button>
-            <button type="button" class="pk-btn pk-btn--ghost" data-pack-save>Save on this phone</button>
+            <button type="button" class="pk-btn pk-btn--primary" data-pack-use>${tHtml('dangal.party.use_tonight')}</button>
+            <button type="button" class="pk-btn pk-btn--ghost" data-pack-save>${tHtml('dangal.party.save_on_this_phone')}</button>
           </div>
         </div>
         <div data-pack-saved>${listHtml()}</div>
-        ${!ai && !savedPacks(o.game).length ? '<div class="pk-sub">No saved packs yet.</div>' : ''}
+        ${!ai && !savedPacks(o.game).length ? '<div class="pk-sub">' + tHtml('dangal.party.no_saved_packs_yet') + '</div>' : ''}
       </div>`,
       onMount: (el, closeSheet) => {
         const preview = el.querySelector('[data-pack-preview]');
@@ -1873,9 +1952,9 @@
         };
         const current = () => {
           const items = linesToPack(lineKind, el.querySelector('[data-pack-lines]').value);
-          const name = el.querySelector('[data-pack-name]').value.trim().slice(0, 30) || (draft && draft.name) || 'My pack';
+          const name = el.querySelector('[data-pack-name]').value.trim().slice(0, 30) || (draft && draft.name) || t('dangal.party.my_pack');
           if (items.length < min) {
-            err.textContent = 'Add at least ' + min + ' (' + items.length + ' so far)';
+            err.textContent = t('dangal.party.add_at_least_value_itemscount_so', { value: min, itemsCount: items.length });
             return null;
           }
           return { name, mode: o.mode || '', items };
@@ -1903,17 +1982,17 @@
           if (theme.length < 2) return input.focus();
           const btn = e.target.querySelector('button');
           btn.disabled = true;
-          btn.textContent = 'Making…';
+          btn.textContent = t('dangal.party.making');
           try {
             const d = await roomCall(o.game, 'ai_pack', { theme, mode: o.mode || '', locale: contentPrefs().lang });
             const items = (d.pack && (d.pack.words || d.pack.titles || d.pack.prompts)) || [];
             showDraft((d.pack && d.pack.name) || theme.slice(0, 30), items);
-            if (d.source === 'fallback') err.textContent = 'Couldn’t make a fresh pack — here’s a close match you can edit';
+            if (d.source === 'fallback') err.textContent = t('dangal.party.couldn_t_make_a_fresh_pack');
           } catch (ex) {
-            toast(roomErrorText(ex) || 'Couldn’t make a pack right now');
+            toast(roomErrorText(ex) || t('dangal.party.couldn_t_make_a_pack_right'));
           } finally {
             btn.disabled = false;
-            btn.textContent = 'Make';
+            btn.textContent = t('dangal.party.make');
           }
         });
         el.querySelector('[data-pack-use]').addEventListener('click', () => {
@@ -1928,7 +2007,7 @@
           savePack(o.game, p);
           el.querySelector('[data-pack-saved]').innerHTML = listHtml();
           wireSaved();
-          toast('Saved on this phone');
+          toast(t('dangal.party.saved_on_this_phone'));
         });
       },
     });
@@ -1948,16 +2027,16 @@
       <div class="pk-chat-log" aria-live="polite">${
         msgs.length
           ? msgs
-              .map((m) => `<div class="pk-chat-msg${m.from === o.me ? ' is-me' : ''}"><b>${esc(m.from === o.me ? 'You' : o.name(m.from))}</b> ${esc(m.text)}</div>`)
+              .map((m) => `<div class="pk-chat-msg${m.from === o.me ? ' is-me' : ''}"><b>${esc(m.from === o.me ? t('common.you') : o.name(m.from))}</b> ${esc(m.text)}</div>`)
               .join('')
-          : '<div class="pk-chat-empty">No messages yet</div>'
+          : '<div class="pk-chat-empty">' + tHtml('dangal.party.no_messages_yet') + '</div>'
       }</div>
       ${
         o.disabled
           ? `<div class="pk-chat-off">${esc(o.disabled)}</div>`
           : `<form class="pk-chat-form" data-chat-form>
-        <input class="pk-input pk-chat-input" data-keep="chat-${esc(o.channel)}" maxlength="160" placeholder="${esc(o.placeholder || 'Say something…')}" autocomplete="off" enterkeyhint="send" aria-label="${esc(o.placeholder || 'Message')}">
-        <button type="submit" class="pk-btn pk-btn--primary pk-chat-send" aria-label="Send">➤</button>
+        <input class="pk-input pk-chat-input" data-keep="chat-${esc(o.channel)}" maxlength="160" placeholder="${esc(o.placeholder || t('dangal.party.say_something'))}" autocomplete="off" enterkeyhint="send" aria-label="${esc(o.placeholder || t('common.message'))}">
+        <button type="submit" class="pk-btn pk-btn--primary pk-chat-send" aria-label="${tHtml('common.send')}">➤</button>
       </form>`
       }
     </div>`;
@@ -1990,9 +2069,9 @@
     const url = location.origin + '/';
     const stats =
       typeof buildShareStats === 'function'
-        ? buildShareStats({ scoreLine: line, meta: label + ' · party game', text, url, caption: line })
+        ? buildShareStats({ scoreLine: line, meta: t('dangal.party.label_party_game', { label }), text, url, caption: line })
         : { scoreLine: line, meta: label, text, url };
-    if (typeof openUnifiedShareSheet === 'function') openUnifiedShareSheet({ gameId, title: 'Share', subtitle: line, stats });
+    if (typeof openUnifiedShareSheet === 'function') openUnifiedShareSheet({ gameId, title: t('common.share'), subtitle: line, stats });
     else if (typeof shareGameResult === 'function') shareGameResult(gameId, stats);
     else if (navigator.share) navigator.share({ title: label, text, url }).catch(() => {});
   }
@@ -2008,12 +2087,12 @@
       ${o.howToHtml || ''}
       <div class="pk-modes">
         <button type="button" class="pk-mode pk-mode--primary" data-mode="pass">
-          <span class="pk-mode-title">Pass &amp; Play</span><span class="pk-mode-sub">${esc(o.passSub || 'One phone, pass it around')}</span>
+          <span class="pk-mode-title">${tHtml('dangal.party.pass_play')}</span><span class="pk-mode-sub">${esc(o.passSub || t('dangal.party.one_phone_pass_it_around'))}</span>
         </button>
         <button type="button" class="pk-mode" data-mode="room">
-          <span class="pk-mode-title">Play with friends</span><span class="pk-mode-sub">${esc(o.roomSub || 'Everyone on their own phone')}</span>
+          <span class="pk-mode-title">${tHtml('dangal.party.play_with_friends')}</span><span class="pk-mode-sub">${esc(o.roomSub || t('dangal.party.everyone_on_their_own_phone'))}</span>
         </button>
-        <button type="button" class="pk-link" data-mode="join">Have a room code? Join</button>
+        <button type="button" class="pk-link" data-mode="join">${tHtml('dangal.party.have_a_room_code_join')}</button>
         ${partyNightLinkHtml(o.game)}
       </div>
     </div>`;
@@ -2076,7 +2155,7 @@
 
   /** Result-screen button back to the Pass & Play party night (only while one is on). */
   function passHubButtonHtml() {
-    return passNight() ? '<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-pass-hub>Back to party night</button>' : '';
+    return passNight() ? '<button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-pass-hub>' + tHtml('dangal.party.back_to_party_night') + '</button>' : '';
   }
   function wirePassHub(body, shell) {
     body.querySelector('[data-pass-hub]')?.addEventListener('click', () => {
@@ -2089,7 +2168,7 @@
   function partyNightLinkHtml(game) {
     return window.PartyHubCore === undefined && !window.PartyHub
       ? ''
-      : `<button type="button" class="pk-link pk-link--party" data-party-night="${esc(game || '')}">🎉 Party night · several games, one group</button>`;
+      : `<button type="button" class="pk-link pk-link--party" data-party-night="${esc(game || '')}">${tHtml('dangal.party.party_night_several_games_one_group')}</button>`;
   }
 
   window.PartyKit = {
@@ -2121,6 +2200,12 @@
     joinFromLink,
     registerPartyGame,
     ensureGameData,
+    ensureContentLocale,
+    roomContentLang,
+    contentNoteHtml,
+    contentLangRowHtml,
+    pickContentLang,
+    uiContentLang,
     withGameData,
     segHtml,
     wireSegs,

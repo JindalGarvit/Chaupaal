@@ -283,7 +283,9 @@ function loadLexicon() {
     const choices = s.choices || [];
     // String *values* only: a pack word like "game" must not match the JSON key "game",
     // and enum fields (phase "draw", reason, chat kind) are not user text.
-    const ENUM_KEYS = new Set(['phase', 'reason', 'k', 'status', 'game', 'type']);
+    // lastWord is the previous turn's word, already revealed to everyone — once a small custom list runs out
+    // it can be dealt again, which is not a leak.
+    const ENUM_KEYS = new Set(['phase', 'reason', 'k', 'status', 'game', 'type', 'lastWord']);
     const values = new Set();
     (function walk(v, key) {
       if (typeof v === 'string') {

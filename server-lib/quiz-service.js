@@ -9,6 +9,7 @@
  *   solo_next     { mode, category, difficulty, region } → Practice (unlimited) or News question
  *   solo_answer   { qid, i }                  → reveal + running score
  *   report        { qid, reason, note }       → quizReports + quizStats.reports
+ *   Any op may carry `lang` ("Questions in"): prompts/options come from quiz-locales.js when translated, else English.
  *
  * Firestore (Admin only):
  *   quizItems/{id}                AI / news questions { …item, status, norm, createdAt, expiresAt }
@@ -27,6 +28,7 @@
 const crypto = require('crypto');
 const Core = require('../public/src/js/games/quiz-core.js');
 const Bank = require('./quiz-bank.js');
+const Locales = require('./quiz-locales.js');
 
 const FRIEND_CAP = 200;
 const EXTRAS_TTL_MS = 5 * 60 * 1000;
@@ -35,6 +37,12 @@ const NEXT_PAUSE_MS = 2500;
 const SOLO_ALLOWANCE_MS = 150;
 const NEWS_ROUND = 5;
 const REPORT_REASONS = ['wrong', 'unclear', 'offensive'];
+
+/** Question language for this request (validated; English unless that language pass is available). */
+function qLang(body) {
+  const l = String((body && body.lang) || 'en').toLowerCase().split('-')[0];
+  return /^[a-z]{2,3}$/.test(l) && Locales.available(l) ? l : 'en';
+}
 
 function err(code, message) {
   const e = new Error(message || code);
@@ -231,7 +239,7 @@ async function dailyIds(db, day, now) {
       return Object.assign(ids.slice(), { salt });
     }
     const calib = await loadCalibration(db, now);
-    const pool = buildPool({ calib }).filter((q) => q.source === 'bundled' && q.locale === 'global');
+    const pool = Locales.dailyPool(buildPool({ calib }).filter((q) => q.source === 'bundled' && q.locale === 'global'));
     const set = Core.dailySet(pool, day).map((q) => q.id);
     tx.set(ref, { ids: set, salt, createdAt: now });
     return Object.assign(set, { salt });
@@ -241,8 +249,8 @@ async function dailyIds(db, day, now) {
 /** Same order for everyone that day, but seeded by a server-only salt so the browser can't rebuild it. */
 const dailySeed = (day, ids) => 'daily:' + day + ':' + ((ids && ids.salt) || '');
 
-function dailyPublic(day, ids, qn) {
-  const q = Bank.byId(ids[qn]);
+function dailyPublic(day, ids, qn, lang) {
+  const q = Locales.localise(Bank.byId(ids[qn]), lang);
   if (!q) return null;
   return Object.assign(Core.publicQuestion(q, Core.optionOrder(dailySeed(day, ids), q.id, 4)), { n: qn + 1 });
 }
@@ -298,7 +306,7 @@ async function dailyStart(db, uid, body, now) {
     if (!att.final) await ref.set({ final }, { merge: true });
     return { day, done: true, final, total: ids.length };
   }
-  return { day, done: false, qn: att.qn, total: ids.length, score: att.score, q: dailyPublic(day, ids, att.qn), servedAt: att.servedAt, limitMs: Core.DAILY_MS, serverNow: now };
+  return { day, done: false, qn: att.qn, total: ids.length, score: att.score, q: dailyPublic(day, ids, att.qn, qLang(body)), servedAt: att.servedAt, limitMs: Core.DAILY_MS, serverNow: now };
 }
 
 async function dailyAnswer(db, uid, body, now) {
@@ -328,7 +336,7 @@ async function dailyAnswer(db, uid, body, now) {
     a.qn++;
     a.servedAt = now + NEXT_PAUSE_MS;
     if (a.qn >= ids.length) a.done = true;
-    reveal = { qn: a.qn - 1, qid: q.id, correct, picked, isCorrect: ok, gained: pts, explanation: q.explanation || '', ms: Math.min(ms, Core.DAILY_MS) };
+    reveal = { qn: a.qn - 1, qid: q.id, correct, picked, isCorrect: ok, gained: pts, explanation: Locales.localise(q, qLang(body)).explanation || '', ms: Math.min(ms, Core.DAILY_MS) };
     tx.set(ref, a);
     return a;
   });
@@ -338,7 +346,7 @@ async function dailyAnswer(db, uid, body, now) {
     if (!att.final) await ref.set({ final }, { merge: true });
     return { day, reveal, done: true, final, score: att.score };
   }
-  return { day, reveal, done: false, qn: att.qn, total: ids.length, score: att.score, q: dailyPublic(day, ids, att.qn), servedAt: att.servedAt, limitMs: Core.DAILY_MS, serverNow: now };
+  return { day, reveal, done: false, qn: att.qn, total: ids.length, score: att.score, q: dailyPublic(day, ids, att.qn, qLang(body)), servedAt: att.servedAt, limitMs: Core.DAILY_MS, serverNow: now };
 }
 
 async function dailyBoard(db, uid, body, now) {
@@ -409,7 +417,7 @@ async function soloNext(db, uid, body, now) {
   await sessRef.set(sess);
   return {
     mode,
-    q: Object.assign(Core.publicQuestion(q, order), { n: sess.n + 1 }),
+    q: Object.assign(Core.publicQuestion(Locales.localise(q, qLang(body)), order), { n: sess.n + 1 }),
     total: mode === 'news' ? NEWS_ROUND : null,
     servedAt,
     limitMs: Core.PRACTICE_MS,
@@ -453,7 +461,7 @@ async function soloAnswer(db, uid, body, now) {
     picked,
     isCorrect: ok,
     gained: pts,
-    explanation: q.explanation || '',
+    explanation: Locales.localise(q, qLang(body)).explanation || '',
     score: sess.score,
     streak: sess.streak,
     n: sess.n,
@@ -501,7 +509,7 @@ async function home(db, uid, body, now) {
     if (day) daily = { day, done: !!(att && att.exists && att.data().done), started: !!(att && att.exists), final: (att && att.exists && att.data().final) || null };
   } catch (e) {}
   const counts = Bank.counts();
-  return { categories: Core.CATEGORIES, regions: Core.REGIONS, newsAvailable, daily, streak, bank: counts.global };
+  return { categories: Core.CATEGORIES, regions: Core.REGIONS, newsAvailable, daily, streak, bank: counts.global, questionLangs: ['en'].concat(Locales.languages()) };
 }
 
 // ---------------------------------------------------------------- duel quick match

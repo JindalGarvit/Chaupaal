@@ -21,7 +21,8 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const { readWithCopy } = require('./lib/i18n-source');
+const read = (p) => readWithCopy(p);
 
 const WW = require(path.join(root, 'public/src/js/games/werewolf-core.js'));
 const Party = require(path.join(root, 'server-lib/party-deal.js'));
@@ -672,7 +673,7 @@ assert((client.match(/registerGame\(\{\s*id: '/g) || []).length === 1 && /regist
 const passPath = client.slice(client.indexOf('PASS & PLAY'), client.indexOf('======================= ROOM'));
 assert(passPath.length > 1000 && !/apiFetch|rtdb|createRoom|roomCall|act\(/.test(passPath), 'Pass & Play path makes no network calls (offline, signed out)');
 assert(/speechSynthesis/.test(client) && /chaupaal_werewolf_voice/.test(client) && /Sound\.play/.test(client) && /quietMode|muted/.test(client), 'narrator voice (Web Speech) + mute + phase sounds');
-assert(/t\('werewolf\./.test(client), 'narration + labels go through i18n t()');
+assert(/t\('games\.werewolf\./.test(client), 'narration + labels go through i18n t()');
 assert(/Best with 7\+/.test(client) && /balance/.test(client) && /Advanced/.test(client), 'setup: “Best with 7+”, balance meter, Advanced section');
 assert(/Role guide/.test(client) && /How to play · 20 seconds/.test(client) && /glossaryHtml/.test(client), 'how-to: short version + 20-second card + role glossary');
 assert(/shareLine/.test(client) && /recap/.test(client) && /suspicion|Most suspected/.test(client), 'end screen: roles, recap timeline, suspicion, share');

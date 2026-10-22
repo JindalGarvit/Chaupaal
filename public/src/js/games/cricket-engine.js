@@ -19,13 +19,39 @@
  *   { t:'pen', runs }                                — penalty runs to the batting side
  *   { t:'end', reason:'forfeit'|'abandoned', winner } — forfeit (winner = side index) / no result
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.CricketEngine = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const RULESET = 'Based on the MCC Laws of Cricket, adapted for street play';
+  const RULESET = gtx('games.streetcricket.rules.ruleset.source', 'Based on the MCC Laws of Cricket, adapted for street play');
   const BALLS_PER_OVER = 6;
   /** Super Overs repeat on a tie; after this many the boundary count decides. */
   const MAX_SUPER_OVERS = 2;
@@ -33,10 +59,10 @@
   // ---------------------------------------------------------------- formats + presets
 
   const FORMATS = {
-    superquick: { id: 'superquick', label: 'Super Quick', overs: 1, wickets: 1 },
-    quick: { id: 'quick', label: 'Quick', overs: 2, wickets: 2 },
-    standard: { id: 'standard', label: 'Standard', overs: 5, wickets: 3 },
-    long: { id: 'long', label: 'Long', overs: 10, wickets: 5 },
+    superquick: { id: 'superquick', label: gtx('games.streetcricket.super_quick', 'Super Quick'), overs: 1, wickets: 1 },
+    quick: { id: 'quick', label: gtx('games.streetcricket.quick', 'Quick'), overs: 2, wickets: 2 },
+    standard: { id: 'standard', label: gtx('games.streetcricket.preset.standard', 'Standard'), overs: 5, wickets: 3 },
+    long: { id: 'long', label: gtx('games.streetcricket.long', 'Long'), overs: 10, wickets: 5 },
   };
   const FORMAT_ORDER = ['superquick', 'quick', 'standard', 'long'];
 
@@ -44,9 +70,9 @@
   const CHASE_BANDS = { superquick: [16, 22], quick: [24, 32], standard: [45, 60], long: [80, 100] };
 
   const TIE_MODES = {
-    superover: { id: 'superover', label: 'Super Over' },
-    shared: { id: 'shared', label: 'Shared (tie stands)' },
-    boundaries: { id: 'boundaries', label: 'Boundary count' },
+    superover: { id: 'superover', label: gtx('games.streetcricket.rules.variant.tie.labels.superover', 'Super Over') },
+    shared: { id: 'shared', label: gtx('games.streetcricket.shared_tie_stands', 'Shared (tie stands)') },
+    boundaries: { id: 'boundaries', label: gtx('games.streetcricket.rules.variant.tie.labels.boundaries', 'Boundary count') },
   };
 
   const BASE_RULES = {
@@ -63,49 +89,49 @@
   const PRESETS = {
     standard: {
       id: 'standard',
-      label: 'Standard',
+      label: gtx('games.streetcricket.preset.standard', 'Standard'),
       rated: true,
       rules: { drs: true },
       toggles: [],
-      tweaks: [
-        'MCC-adapted laws: LBW, free hit after a no-ball, one bowler per side in 1v1.',
-        'Review: one per side per innings on LBW or caught behind — kept on umpire’s call.',
+      tweaks: /* i18n-copy */ [
+        gtx('games.streetcricket.mcc_adapted_laws_lbw_free_hit', 'MCC-adapted laws: LBW, free hit after a no-ball, one bowler per side in 1v1.'),
+        gtx('games.streetcricket.review_one_per_side_per_innings', 'Review: one per side per innings on LBW or caught behind — kept on umpire’s call.'),
       ],
     },
     gully: {
       id: 'gully',
-      label: 'Gully rules',
+      label: gtx('games.streetcricket.rules.rules.9.h', 'Gully rules'),
       rated: false,
       rules: { lbw: false, bounceCatch: 'onehand', sixOut: true, lastManStands: true },
       toggles: ['sixOut', 'lastManStands'],
-      tweaks: [
-        'No LBW.',
-        'One tip one hand: a one-handed catch after one bounce is out.',
-        'Six and out: clearing the wall is out (toggle).',
-        'Last man stands: the last batter bats on alone (toggle).',
+      tweaks: /* i18n-copy */ [
+        gtx('games.streetcricket.no_lbw', 'No LBW.'),
+        gtx('games.streetcricket.one_tip_one_hand_a_one', 'One tip one hand: a one-handed catch after one bounce is out.'),
+        gtx('games.streetcricket.six_and_out_clearing_the_wall', 'Six and out: clearing the wall is out (toggle).'),
+        gtx('games.streetcricket.last_man_stands_the_last_batter', 'Last man stands: the last batter bats on alone (toggle).'),
       ],
     },
     backyard: {
       id: 'backyard',
-      label: 'Backyard rules',
+      label: gtx('games.streetcricket.rules.rules.10.h', 'Backyard rules'),
       rated: false,
       rules: { lbw: false, firstBallSafe: true, tipAndRun: true, bounceCatch: 'bounce' },
       toggles: ['tipAndRun', 'bounceCatch'],
-      tweaks: [
-        'No LBW.',
-        'Can’t be out first ball.',
-        'Tip and run: touch it and you must run (toggle).',
-        'One-bounce catch counts (toggle).',
+      tweaks: /* i18n-copy */ [
+        gtx('games.streetcricket.no_lbw', 'No LBW.'),
+        gtx('games.streetcricket.can_t_be_out_first_ball', 'Can’t be out first ball.'),
+        gtx('games.streetcricket.tip_and_run_touch_it_and', 'Tip and run: touch it and you must run (toggle).'),
+        gtx('games.streetcricket.one_bounce_catch_counts_toggle', 'One-bounce catch counts (toggle).'),
       ],
     },
   };
   const PRESET_ORDER = ['standard', 'gully', 'backyard'];
 
   const TOGGLE_LABELS = {
-    sixOut: 'Six and out',
-    lastManStands: 'Last man stands',
-    tipAndRun: 'Tip and run',
-    bounceCatch: 'One-bounce catch',
+    sixOut: gtx('games.streetcricket.six_and_out', 'Six and out'),
+    lastManStands: gtx('games.streetcricket.last_man_stands', 'Last man stands'),
+    tipAndRun: gtx('games.streetcricket.tip_and_run', 'Tip and run'),
+    bounceCatch: gtx('games.streetcricket.one_bounce_catch', 'One-bounce catch'),
   };
 
   function normFormat(id) {
@@ -134,14 +160,14 @@
   /** Laws table for the Rules sheet + summary: Standard vs each preset. */
   function lawsTable() {
     const rows = [
-      ['Overs / wickets', 'Super Quick 1/1 · Quick 2/2 · Standard 5/3 · Long 10/5'],
-      ['Legal ball', '6 legal balls an over; wides and no-balls are re-bowled'],
-      ['Wide', '1 extra + any runs; not a ball faced; can be stumped, run out or hit wicket'],
-      ['No-ball', '1 extra + runs off the bat; only run out; next ball is a free hit'],
-      ['Free hit', 'Only a run out; carries over through a wide or another no-ball'],
-      ['Byes / leg-byes', 'Count to extras, not the bowler'],
-      ['Tie', 'Super Over (the chasing side bats first), shared, or boundary count'],
-      ['Review', 'Standard only: one per side per innings on LBW / caught behind; umpire’s call keeps it'],
+      /* i18n-copy */ [gtx('games.streetcricket.overs_wickets', 'Overs / wickets'), gtx('games.streetcricket.super_quick_1_1_quick_2', 'Super Quick 1/1 · Quick 2/2 · Standard 5/3 · Long 10/5')],
+      /* i18n-copy */ [gtx('games.streetcricket.legal_ball', 'Legal ball'), gtx('games.streetcricket.6_legal_balls_an_over_wides', '6 legal balls an over; wides and no-balls are re-bowled')],
+      /* i18n-copy */ [gtx('games.streetcricket.flash.wide', 'Wide'), gtx('games.streetcricket.1_extra_any_runs_not_a', '1 extra + any runs; not a ball faced; can be stumped, run out or hit wicket')],
+      [gtx('games.streetcricket.no_ball', 'No-ball'), gtx('games.streetcricket.1_extra_runs_off_the_bat', '1 extra + runs off the bat; only run out; next ball is a free hit')],
+      /* i18n-copy */ [gtx('games.streetcricket.freeHit', 'Free hit'), gtx('games.streetcricket.only_a_run_out_carries_over', 'Only a run out; carries over through a wide or another no-ball')],
+      /* i18n-copy */ [gtx('games.streetcricket.byes_leg_byes', 'Byes / leg-byes'), gtx('games.streetcricket.count_to_extras_not_the_bowler', 'Count to extras, not the bowler')],
+      /* i18n-copy */ [gtx('games.streetcricket.tie', 'Tie'), gtx('games.streetcricket.super_over_the_chasing_side_bats', 'Super Over (the chasing side bats first), shared, or boundary count')],
+      /* i18n-copy */ [gtx('games.streetcricket.drs.short', 'Review'), gtx('games.streetcricket.standard_only_one_per_side_per', 'Standard only: one per side per innings on LBW / caught behind; umpire’s call keeps it')],
     ];
     const cols = PRESET_ORDER.map((id) => {
       const r = makeRules(id);
@@ -165,21 +191,21 @@
   // ---------------------------------------------------------------- dismissals + law checks
 
   const DISMISSALS = {
-    bowled: { label: 'Bowled', bowler: true },
-    caught: { label: 'Caught', bowler: true },
+    bowled: { label: gtx('games.streetcricket.bowled', 'Bowled'), bowler: true },
+    caught: { label: gtx('games.streetcricket.caught', 'Caught'), bowler: true },
     lbw: { label: 'LBW', bowler: true },
-    runout: { label: 'Run out', bowler: false },
-    stumped: { label: 'Stumped', bowler: true },
-    hitwicket: { label: 'Hit wicket', bowler: true },
-    sixout: { label: 'Six and out', bowler: true },
-    bouncecatch: { label: 'Caught on the bounce', bowler: true },
+    runout: { label: gtx('games.streetcricket.run_out', 'Run out'), bowler: false },
+    stumped: { label: gtx('games.streetcricket.stumped', 'Stumped'), bowler: true },
+    hitwicket: { label: gtx('games.streetcricket.hit_wicket', 'Hit wicket'), bowler: true },
+    sixout: { label: gtx('games.streetcricket.six_and_out', 'Six and out'), bowler: true },
+    bouncecatch: { label: gtx('games.streetcricket.caught_on_the_bounce', 'Caught on the bounce'), bowler: true },
   };
   /** Dismissals where runs completed still count (everything else scores 0 off the bat). */
   const RUNS_STAND = { runout: true };
 
   function dismissalLabel(kind, rules) {
-    if (kind === 'bouncecatch' && rules && rules.bounceCatch === 'onehand') return 'Caught one tip one hand';
-    return (DISMISSALS[kind] && DISMISSALS[kind].label) || 'Out';
+    if (kind === 'bouncecatch' && rules && rules.bounceCatch === 'onehand') return gtx('games.streetcricket.caught_one_tip_one_hand', 'Caught one tip one hand');
+    return (DISMISSALS[kind] && DISMISSALS[kind].label) || gtx('games.streetcricket.chart.out', 'Out');
   }
 
   /**
@@ -203,13 +229,13 @@
   }
 
   const SAVED_TEXT = {
-    no_lbw: 'no LBW in these rules',
-    rule_off: 'not out under these rules',
-    no_ball: 'saved by the no-ball',
-    free_hit: 'free hit',
-    wide: 'not out off a wide',
-    bye: 'not out',
-    first_ball: 'can’t be out first ball',
+    no_lbw: gtx('games.streetcricket.no_lbw_in_these_rules', 'no LBW in these rules'),
+    rule_off: gtx('games.streetcricket.not_out_under_these_rules', 'not out under these rules'),
+    no_ball: gtx('games.streetcricket.saved_by_the_no_ball', 'saved by the no-ball'),
+    free_hit: gtx('games.streetcricket.free_hit', 'free hit'),
+    wide: gtx('games.streetcricket.not_out_off_a_wide', 'not out off a wide'),
+    bye: gtx('games.streetcricket.not_out', 'not out'),
+    first_ball: gtx('games.streetcricket.can_t_be_out_first_ball_2', 'can’t be out first ball'),
   };
 
   // ---------------------------------------------------------------- match config
@@ -227,7 +253,7 @@
    * batter ("Ava", "Ava (2)", …) so the scorecard stays honest.
    */
   function soloSide(pid, name, wickets) {
-    const n = cleanName(name, 'Player');
+    const n = cleanName(name, gtx('games.streetcricket.player', 'Player'));
     const count = Math.max(2, (Number(wickets) || 1) + 2);
     const batters = [];
     for (let i = 0; i < count; i++) batters.push({ id: pid + (i ? '#' + (i + 1) : ''), pid, name: i ? n + ' (' + (i + 1) + ')' : n });
@@ -250,18 +276,18 @@
       const side = s || {};
       if (side.batters && side.batters.length) {
         return {
-          name: cleanName(side.name, 'Side ' + (i + 1)),
-          batters: side.batters.map((b, k) => ({ id: String(b.id || 's' + i + 'b' + k), pid: String(b.pid || b.id || 's' + i + 'b' + k), name: cleanName(b.name, 'Batter ' + (k + 1)) })),
+          name: cleanName(side.name, gtx('games.streetcricket.side_n', 'Side {{n}}', { n: i + 1 })),
+          batters: side.batters.map((b, k) => ({ id: String(b.id || 's' + i + 'b' + k), pid: String(b.pid || b.id || 's' + i + 'b' + k), name: cleanName(b.name, gtx('games.streetcricket.batter_n', 'Batter {{n}}', { n: k + 1 })) })),
           bowlers: (side.bowlers && side.bowlers.length ? side.bowlers : side.batters).map((b, k) => ({
             id: String(b.id || 's' + i + 'w' + k),
             pid: String(b.pid || b.id || 's' + i + 'w' + k),
-            name: cleanName(b.name, 'Bowler ' + (k + 1)),
+            name: cleanName(b.name, gtx('games.streetcricket.bowler_n', 'Bowler {{n}}', { n: k + 1 })),
           })),
         };
       }
       return soloSide(String(side.pid || 'p' + i), side.name, wickets);
     });
-    while (sides.length < 2) sides.push(soloSide('p' + sides.length, 'Player ' + (sides.length + 1), wickets));
+    while (sides.length < 2) sides.push(soloSide('p' + sides.length, gtx('dangal.party.player_n', 'Player {{n}}', { n: sides.length + 1 }), wickets));
     const target = Math.max(0, Math.floor(Number(opts.target) || 0));
     return {
       format: f.id,
@@ -290,8 +316,8 @@
       tie: p.tie,
       pitch: p.pitch,
       sides: [
-        { pid: p.playerA, name: names[p.playerA] || 'Player A' },
-        { pid: p.playerB, name: names[p.playerB] || 'Player B' },
+        { pid: p.playerA, name: names[p.playerA] || gtx('games.streetcricket.player_a', 'Player A') },
+        { pid: p.playerB, name: names[p.playerB] || gtx('games.streetcricket.player_b', 'Player B') },
       ],
       battingFirst: p.toss && p.toss.bats === p.playerB ? 1 : 0,
     });
@@ -433,7 +459,7 @@
     return { k: runs === 4 ? 'four' : runs === 6 ? 'six' : 'run', v: String(runs) };
   }
 
-  const DEL_LABEL = { medium: 'Medium', quick: 'Quick', flight: 'Flight', spin: 'Spin' };
+  const DEL_LABEL = { medium: gtx('games.streetcricket.risk.med', 'Medium'), quick: gtx('games.streetcricket.quick', 'Quick'), flight: gtx('games.streetcricket.flight', 'Flight'), spin: gtx('games.streetcricket.spin', 'Spin') };
   const SHOT_VERB = {
     defend: 'defended',
     push: 'pushed',
@@ -443,16 +469,16 @@
     pull: 'pulled',
     sweep: 'swept',
     flick: 'flicked',
-    leave: 'left alone',
+    leave: gtx('games.streetcricket.left_alone', 'left alone'),
   };
-  const LENGTH_TEXT = { yorker: 'yorker', full: 'full', good: 'good length', short: 'short', bouncer: 'bouncer', fulltoss: 'full toss' };
-  const VARIATION_TEXT = { slower: 'slower ball', cutter: 'cutter', turnIn: 'turning in', turnAway: 'turning away', armBall: 'arm ball' };
-  const REVIEW_TEXT = { overturned: 'overturned', umpires_call: 'umpire’s call — decision stays', stands: 'decision stands' };
+  const LENGTH_TEXT = { yorker: 'yorker', full: 'full', good: gtx('games.streetcricket.good_length', 'good length'), short: 'short', bouncer: 'bouncer', fulltoss: gtx('games.streetcricket.delivery.fulltoss', 'full toss') };
+  const VARIATION_TEXT = { slower: gtx('games.streetcricket.slower_ball', 'slower ball'), cutter: 'cutter', turnIn: gtx('games.streetcricket.turning_in', 'turning in'), turnAway: gtx('games.streetcricket.turning_away', 'turning away'), armBall: gtx('games.streetcricket.arm_ball', 'arm ball') };
+  const REVIEW_TEXT = { overturned: 'overturned', umpires_call: gtx('games.streetcricket.umpire_s_call_decision_stays', 'umpire’s call — decision stays'), stands: gtx('games.streetcricket.decision_stands', 'decision stands') };
 
   /** "Pace, good length" · "Spin, arm ball, full" · legacy "Quick". */
   function deliveryLabel(ev) {
     if (ev.type === 'pace' || ev.type === 'spin') {
-      const parts = [ev.type === 'pace' ? 'Pace' : 'Spin'];
+      const parts = [ev.type === 'pace' ? gtx('games.streetcricket.pace', 'Pace') : gtx('games.streetcricket.spin', 'Spin')];
       if (VARIATION_TEXT[ev.variation]) parts.push(VARIATION_TEXT[ev.variation]);
       if (LENGTH_TEXT[ev.length]) parts.push(LENGTH_TEXT[ev.length]);
       return parts.join(', ');
@@ -475,9 +501,9 @@
     const runs = info.runs;
     let s = '';
     if (info.extra === 'wd') {
-      s = runs === 4 ? 'Wide, runs away for four more — 5 extras' : runs ? 'Wide, ' + plural(1 + runs, 'extra') : 'Wide outside off, 1 extra';
+      s = runs === 4 ? gtx('games.streetcricket.wide_runs_away_for_four_more', 'Wide, runs away for four more — 5 extras') : runs ? gtx('games.streetcricket.wide_plural', 'Wide, {{plural}}', { plural: plural(1 + runs, 'extra') }) : gtx('games.streetcricket.wide_outside_off_1_extra', 'Wide outside off, 1 extra');
     } else if (info.extra === 'nb') {
-      s = 'No-ball, 1 extra' + (runs ? ' + ' + (runs === 4 ? 'FOUR' : runs === 6 ? 'SIX' : plural(runs, 'run')) + ' off the bat' : '');
+      s = gtx('games.streetcricket.no_ball_1_extra_value', 'No-ball, 1 extra{{value}}', { value: runs ? gtx('games.streetcricket.value_off_the_bat', ' + {{value}} off the bat', { value: runs === 4 ? 'FOUR' : runs === 6 ? 'SIX' : plural(runs, 'run') }) : '' });
     } else if (info.extra === 'b' || info.extra === 'lb') {
       s = (del ? del + ', ' : '') + 'beaten — ' + plural(runs, info.extra === 'b' ? 'bye' : 'leg-bye');
     } else {
@@ -485,19 +511,22 @@
       if (info.out) s = head;
       else if (runs >= 4) s = (head ? head + ' — ' : '') + (runs === 6 ? 'SIX!' : 'FOUR!');
       else if (runs > 0) s = (head ? head + ' for ' : '') + plural(runs, 'run');
-      else s = head ? head + ', no run' : 'no run';
+      else s = head ? gtx('games.streetcricket.head_no_run', '{{head}}, no run', { head }) : gtx('games.streetcricket.no_run', 'no run');
     }
-    if (info.tipRun) s += ' — tip and run';
-    if (ev.appeal && !info.drs && !info.out && !info.saved) s += ev.appeal.kind === 'lbw' ? ' — LBW appeal, not out' : ' — caught-behind appeal, not out';
-    if (info.drs) s += ' — review (' + (info.drs.by === 'bat' ? 'batter' : 'bowler') + '): ' + (REVIEW_TEXT[info.drs.result] || 'decision stands');
+    if (info.tipRun) s += ' ' + gtx('games.streetcricket.tip_and_run_2', '— tip and run');
+    if (ev.appeal && !info.drs && !info.out && !info.saved) s += ev.appeal.kind === 'lbw' ? ' ' + gtx('games.streetcricket.lbw_appeal_not_out', '— LBW appeal, not out') : ' ' + gtx('games.streetcricket.caught_behind_appeal_not_out', '— caught-behind appeal, not out');
+    if (info.drs) {
+      const result = REVIEW_TEXT[info.drs.result] || gtx('games.streetcricket.decision_stands', 'decision stands');
+      s += ' — ' + gtx(info.drs.by === 'bat' ? 'games.streetcricket.review_by_batter' : 'games.streetcricket.review_by_bowler', 'review (' + (info.drs.by === 'bat' ? 'batter' : 'bowler') + '): ' + result, { result });
+    }
     if (info.out) {
       const lbl = dismissalLabel(info.out, info.rules);
       const extraRuns = RUNS_STAND[info.out] && runs ? ' (' + plural(runs, 'run') + ' completed)' : '';
-      s = (s ? s + ' — ' : '') + 'OUT! ' + lbl + extraRuns;
+      s = gtx('games.streetcricket.value_out_lbl_extraruns', '{{value}}OUT! {{lbl}}{{extraRuns}}', { value: (s ? s + ' — ' : ''), lbl, extraRuns });
     } else if (info.saved) {
-      s += ' — ' + (SAVED_TEXT[info.saved] || 'not out');
+      s += ' — ' + (SAVED_TEXT[info.saved] || gtx('games.streetcricket.not_out', 'not out'));
     }
-    if (info.freeHitNext) s += ' · free hit next';
+    if (info.freeHitNext) s += ' ' + gtx('games.streetcricket.free_hit_next', '· free hit next');
     return info.no + ': ' + s;
   }
 
@@ -727,7 +756,7 @@
   }
 
   function sideName(state, i) {
-    return state.config.sides[i] ? state.config.sides[i].name : 'Side ' + (i + 1);
+    return state.config.sides[i] ? state.config.sides[i].name : gtx('games.streetcricket.side_n', 'Side {{n}}', { n: i + 1 });
   }
 
   function winByChase(state, inn) {
@@ -739,11 +768,11 @@
       by: 'wickets',
       wickets: w,
       balls: b,
-      text: sideName(state, inn.bat) + ' won by ' + plural(w, 'wicket') + (b > 0 ? ' (' + plural(b, 'ball') + ' left)' : ' (off the last ball)'),
+      text: gtx('games.streetcricket.sidename_won_by_plural_value', '{{sideName}} won by {{plural}}{{value}}', { sideName: sideName(state, inn.bat), plural: plural(w, 'wicket'), value: b > 0 ? gtx('games.streetcricket.plural_left', ' ({{plural}} left)', { plural: plural(b, 'ball') }) : gtx('games.streetcricket.off_the_last_ball', ' (off the last ball)') }),
     };
   }
   function winByRuns(state, side, margin) {
-    return { kind: 'win', winner: side, by: 'runs', runs: margin, text: sideName(state, side) + ' won by ' + plural(margin, 'run') };
+    return { kind: 'win', winner: side, by: 'runs', runs: margin, text: gtx('games.streetcricket.sidename_won_by_plural', '{{sideName}} won by {{plural}}', { sideName: sideName(state, side), plural: plural(margin, 'run') }) };
   }
 
   function advance(state) {
@@ -754,7 +783,7 @@
       if (c.innings === 1) {
         if (inn.runs >= inn.target) return finishWith(state, winByChase(state, inn));
         const margin = inn.target - 1 - inn.runs;
-        if (margin === 0) return finishWith(state, { kind: 'tie', winner: -1, by: '', text: 'Scores level — match tied' });
+        if (margin === 0) return finishWith(state, { kind: 'tie', winner: -1, by: '', text: gtx('games.streetcricket.scores_level_match_tied', 'Scores level — match tied') });
         return finishWith(state, winByRuns(state, inn.bowl, margin));
       }
       if (main.length === 1) {
@@ -774,26 +803,26 @@
     }
     const first = supers[supers.length - 2];
     const second = supers[supers.length - 1];
-    const tag = supers.length > 2 ? ' (after ' + supers.length / 2 + ' Super Overs)' : '';
-    if (second.runs >= second.target) return finishWith(state, { kind: 'win', winner: second.bat, by: 'superover', text: 'Match tied · ' + sideName(state, second.bat) + ' won the Super Over' + tag });
-    if (second.runs < first.runs) return finishWith(state, { kind: 'win', winner: first.bat, by: 'superover', text: 'Match tied · ' + sideName(state, first.bat) + ' won the Super Over' + tag });
+    const tag = supers.length > 2 ? gtx('games.streetcricket.after_value_super_overs', ' (after {{value}} Super Overs)', { value: supers.length / 2 }) : '';
+    if (second.runs >= second.target) return finishWith(state, { kind: 'win', winner: second.bat, by: 'superover', text: gtx('games.streetcricket.match_tied_sidename_won_the_super', 'Match tied · {{sideName}} won the Super Over{{tag}}', { sideName: sideName(state, second.bat), tag }) });
+    if (second.runs < first.runs) return finishWith(state, { kind: 'win', winner: first.bat, by: 'superover', text: gtx('games.streetcricket.match_tied_sidename_won_the_super', 'Match tied · {{sideName}} won the Super Over{{tag}}', { sideName: sideName(state, first.bat), tag }) });
     if (supers.length / 2 < MAX_SUPER_OVERS) {
       startInnings(state, second.bat, { super: true });
       return;
     }
-    return boundaryDecider(state, 'Super Overs tied · ');
+    return boundaryDecider(state, gtx('games.streetcricket.super_overs_tied', 'Super Overs tied · '));
   }
 
   function boundaryDecider(state, prefix) {
     const b0 = boundaryCount(state, 0);
     const b1 = boundaryCount(state, 1);
-    if (b0 === b1) return finishWith(state, { kind: 'tie', winner: -1, by: 'boundaries', text: prefix + 'Match tied (boundaries level ' + b0 + '–' + b1 + ')' });
+    if (b0 === b1) return finishWith(state, { kind: 'tie', winner: -1, by: 'boundaries', text: gtx('games.streetcricket.prefix_match_tied_boundaries_level_b0', '{{prefix}}Match tied (boundaries level {{b0}}–{{b1}})', { prefix, b0, b1 }) });
     const w = b0 > b1 ? 0 : 1;
     return finishWith(state, {
       kind: 'win',
       winner: w,
       by: 'boundaries',
-      text: prefix + sideName(state, w) + ' won on boundary count (' + Math.max(b0, b1) + '–' + Math.min(b0, b1) + ')',
+      text: prefix + gtx('games.streetcricket.won_boundary_count', sideName(state, w) + ' won on boundary count (' + Math.max(b0, b1) + '–' + Math.min(b0, b1) + ')', { name: sideName(state, w), a: Math.max(b0, b1), b: Math.min(b0, b1) }),
     });
   }
 
@@ -803,8 +832,8 @@
       startInnings(state, chasingSide, { super: true });
       return;
     }
-    if (mode === 'boundaries') return boundaryDecider(state, 'Scores level · ');
-    return finishWith(state, { kind: 'tie', winner: -1, by: '', text: 'Match tied' });
+    if (mode === 'boundaries') return boundaryDecider(state, gtx('games.streetcricket.scores_level', 'Scores level · '));
+    return finishWith(state, { kind: 'tie', winner: -1, by: '', text: gtx('games.streetcricket.res.tie', 'Match tied') });
   }
 
   function finishWith(state, result) {
@@ -821,7 +850,7 @@
       inn.runs += r;
       inn.extras.pen += r;
       inn.partnerships[inn.partnerships.length - 1].runs += r;
-      inn.balls.push({ no: ballNumber(inn.legal), over: Math.floor(inn.legal / BALLS_PER_OVER), text: ballNumber(inn.legal) + ': ' + plural(r, 'penalty run') + ' to the batting side', token: { k: 'pen', v: 'P' + r }, team: r, extra: 'pen', runs: r, out: '' });
+      inn.balls.push({ no: ballNumber(inn.legal), over: Math.floor(inn.legal / BALLS_PER_OVER), text: gtx('games.streetcricket.ballnumber_value_to_the_batting_side', '{{ballNumber}}: {{value}} to the batting side', { ballNumber: ballNumber(inn.legal), value: plural(r, gtx('games.streetcricket.penalty_run', 'penalty run')) }), token: { k: 'pen', v: 'P' + r }, team: r, extra: 'pen', runs: r, out: '' });
       inn.worm.push({ legal: inn.legal, runs: inn.runs, w: 0 });
       checkEnd(state);
       return true;
@@ -832,7 +861,7 @@
       if (ev.reason === 'forfeit' && (ev.winner === 0 || ev.winner === 1)) {
         finishWith(state, { kind: 'win', winner: ev.winner, by: 'forfeit', text: sideName(state, ev.winner) + ' won · ' + sideName(state, 1 - ev.winner) + ' forfeited' });
       } else {
-        finishWith(state, { kind: 'noresult', winner: -1, by: '', text: 'Match abandoned · no result' });
+        finishWith(state, { kind: 'noresult', winner: -1, by: '', text: gtx('games.streetcricket.match_abandoned_no_result', 'Match abandoned · no result') });
       }
       return true;
     }
@@ -947,7 +976,7 @@
     const batting = inn.batters.map((b) => ({
       name: b.name,
       pid: b.pid,
-      how: b.out ? howOut(b.out) : 'not out',
+      how: b.out ? howOut(b.out) : gtx('games.streetcricket.not_out', 'not out'),
       out: !!b.out,
       r: b.r,
       b: b.b,
@@ -974,7 +1003,7 @@
     return {
       n: inn.n,
       super: inn.super,
-      title: (inn.super ? 'Super Over · ' : '') + sideName(state, inn.bat),
+      title: inn.super ? gtx('games.streetcricket.super_over_side', 'Super Over · ' + sideName(state, inn.bat), { side: sideName(state, inn.bat) }) : sideName(state, inn.bat),
       batting,
       yetToBat: inn.complete ? [] : yetToBat.slice(0, 3),
       bowling,
@@ -994,12 +1023,12 @@
   }
 
   function howOut(o) {
-    if (o.kind === 'runout') return 'run out';
+    if (o.kind === 'runout') return gtx('games.streetcricket.run_out_2', 'run out');
     if (o.kind === 'caught' || o.kind === 'bouncecatch') return (o.kind === 'bouncecatch' ? o.label.toLowerCase() : 'c') + ' b ' + o.bowler;
     if (o.kind === 'lbw') return 'lbw b ' + o.bowler;
     if (o.kind === 'stumped') return 'st b ' + o.bowler;
-    if (o.kind === 'hitwicket') return 'hit wicket b ' + o.bowler;
-    if (o.kind === 'sixout') return 'six and out b ' + o.bowler;
+    if (o.kind === 'hitwicket') return gtx('games.streetcricket.hit_wicket_b_bowler', 'hit wicket b {{bowler}}', { bowler: o.bowler });
+    if (o.kind === 'sixout') return gtx('games.streetcricket.six_and_out_b_bowler', 'six and out b {{bowler}}', { bowler: o.bowler });
     return 'b ' + o.bowler;
   }
 
@@ -1017,7 +1046,7 @@
   function timeline(state) {
     const out = [];
     state.innings.forEach((inn) => {
-      out.push({ head: true, text: (inn.super ? 'Super Over · ' : inn.n === 0 ? '1st innings · ' : '2nd innings · ') + sideName(state, inn.bat) });
+      out.push({ head: true, text: gtx(inn.super ? 'games.streetcricket.super_over_side' : inn.n === 0 ? 'games.streetcricket.first_innings_side' : 'games.streetcricket.second_innings_side', (inn.super ? 'Super Over · ' : inn.n === 0 ? '1st innings · ' : '2nd innings · ') + sideName(state, inn.bat), { side: sideName(state, inn.bat) }) });
       inn.balls.forEach((b) => out.push({ inn: inn.n, no: b.no, text: b.text, token: b.token }));
     });
     return out;
@@ -1068,7 +1097,7 @@
       lines,
       result: state.result ? state.result.text : '',
       top: top ? top.line : '',
-      text: ['Street Cricket'].concat(lines, state.result ? [state.result.text] : [], top ? ['Top performer: ' + top.line] : []).join('\n'),
+      text: [gtx('dangal.identity.streetcricket.label', 'Street Cricket')].concat(lines, state.result ? [state.result.text] : [], top ? [gtx('games.streetcricket.top_performer', 'Top performer: ' + top.line, { line: top.line })] : []).join('\n'),
     };
   }
 
@@ -1085,17 +1114,17 @@
   }
 
   const SHOTS = {
-    defend: { id: 'defend', label: 'Defend' },
-    push: { id: 'push', label: 'Push' },
-    loft: { id: 'loft', label: 'Loft' },
+    defend: { id: 'defend', label: gtx('games.streetcricket.defend', 'Defend') },
+    push: { id: 'push', label: gtx('games.streetcricket.push', 'Push') },
+    loft: { id: 'loft', label: gtx('games.streetcricket.loft', 'Loft') },
   };
 
   /** Delivery feel is unchanged from the timing game; wideP / noBallP are the new extras hooks. */
   const DELIVERIES = {
-    medium: { id: 'medium', label: 'Medium', family: 'pace', runupMs: 420, flightMs: 1000, zoneStart: 0.4, zoneEnd: 0.68, lateEnd: 0.94, path: 'straight', accent: '#81C784', mistimeHint: 'Mistimed the ball', wideP: 0.035, noBallP: 0.02 },
-    quick: { id: 'quick', label: 'Quick', family: 'pace', runupMs: 260, flightMs: 700, zoneStart: 0.5, zoneEnd: 0.64, lateEnd: 0.9, path: 'skiddy', accent: '#EF5350', mistimeHint: 'Beaten for pace', wideP: 0.05, noBallP: 0.04 },
-    flight: { id: 'flight', label: 'Flight', family: 'length', runupMs: 560, flightMs: 1280, zoneStart: 0.5, zoneEnd: 0.78, lateEnd: 0.96, path: 'loopy', accent: '#42A5F5', mistimeHint: 'Through the flight', wideP: 0.03, noBallP: 0.015 },
-    spin: { id: 'spin', label: 'Spin', family: 'spin', runupMs: 500, flightMs: 1120, zoneStart: 0.46, zoneEnd: 0.72, lateEnd: 0.95, path: 'curve', accent: '#AB47BC', mistimeHint: 'Turned past the bat', wideP: 0.045, noBallP: 0.015 },
+    medium: { id: 'medium', label: gtx('games.streetcricket.risk.med', 'Medium'), family: 'pace', runupMs: 420, flightMs: 1000, zoneStart: 0.4, zoneEnd: 0.68, lateEnd: 0.94, path: 'straight', accent: '#81C784', mistimeHint: gtx('games.streetcricket.mistimed_the_ball', 'Mistimed the ball'), wideP: 0.035, noBallP: 0.02 },
+    quick: { id: 'quick', label: gtx('games.streetcricket.quick', 'Quick'), family: 'pace', runupMs: 260, flightMs: 700, zoneStart: 0.5, zoneEnd: 0.64, lateEnd: 0.9, path: 'skiddy', accent: '#EF5350', mistimeHint: gtx('games.streetcricket.beaten_for_pace', 'Beaten for pace'), wideP: 0.05, noBallP: 0.04 },
+    flight: { id: 'flight', label: gtx('games.streetcricket.flight', 'Flight'), family: 'length', runupMs: 560, flightMs: 1280, zoneStart: 0.5, zoneEnd: 0.78, lateEnd: 0.96, path: 'loopy', accent: '#42A5F5', mistimeHint: gtx('games.streetcricket.through_the_flight', 'Through the flight'), wideP: 0.03, noBallP: 0.015 },
+    spin: { id: 'spin', label: gtx('games.streetcricket.spin', 'Spin'), family: 'spin', runupMs: 500, flightMs: 1120, zoneStart: 0.46, zoneEnd: 0.72, lateEnd: 0.95, path: 'curve', accent: '#AB47BC', mistimeHint: gtx('games.streetcricket.turned_past_the_bat', 'Turned past the bat'), wideP: 0.045, noBallP: 0.015 },
   };
   const DELIVERY_ORDER = ['medium', 'quick', 'flight', 'spin'];
 

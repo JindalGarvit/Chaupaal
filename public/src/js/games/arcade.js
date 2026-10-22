@@ -9,26 +9,26 @@ function openTipTap(ctx) {
   const TT = window.TipTapEngine;
   const Hub = window.SoloHub;
   const Core = window.SoloCore;
-  if (!TT || !Hub || !Core) return toast('Tip Tap is still loading — try again');
+  if (!TT || !Hub || !Core) return toast(t('games.tiptap.tip_tap_is_still_loading_try'));
   if (!window.TipTapLevels) {
     if (window.PartyKit && PartyKit.ensureGameData) {
       return PartyKit.ensureGameData('tiptap').then(
-        () => (window.TipTapLevels ? openTipTap(ctx) : toast('Couldn’t load Tip Tap — try again')),
-        () => toast('Couldn’t load Tip Tap — check your connection and try again')
+        () => (window.TipTapLevels ? openTipTap(ctx) : toast(t('games.tiptap.couldn_t_load_tip_tap_try'))),
+        () => toast(t('games.tiptap.couldn_t_load_tip_tap_check'))
       );
     }
-    return toast('Tip Tap is still loading — try again');
+    return toast(t('games.tiptap.tip_tap_is_still_loading_try'));
   }
   const LV = window.TipTapLevels;
   const GAME = 'tiptap';
   const N_LEVELS = LV.count;
   const PALETTE = [
-    { name: 'Red', fill: '#E63946', glow: '#FF6B6B', shape: '●' },
-    { name: 'Amber', fill: '#F4A261', glow: '#FFD166', shape: '▲' },
-    { name: 'Teal', fill: '#2A9D8F', glow: '#5EEAD4', shape: '■' },
-    { name: 'Blue', fill: '#4C75D9', glow: '#93C5FD', shape: '◆' },
-    { name: 'Violet', fill: '#9B5DE5', glow: '#D8B4FE', shape: '★' },
-    { name: 'Coral', fill: '#E76F51', glow: '#FDBA74', shape: '✚' },
+    { name: t('games.tiptap.red'), fill: '#E63946', glow: '#FF6B6B', shape: '●' },
+    { name: t('games.tiptap.amber'), fill: '#F4A261', glow: '#FFD166', shape: '▲' },
+    { name: t('games.tiptap.teal'), fill: '#2A9D8F', glow: '#5EEAD4', shape: '■' },
+    { name: t('games.tiptap.blue'), fill: '#4C75D9', glow: '#93C5FD', shape: '◆' },
+    { name: t('games.tiptap.violet'), fill: '#9B5DE5', glow: '#D8B4FE', shape: '★' },
+    { name: t('games.tiptap.coral'), fill: '#E76F51', glow: '#FDBA74', shape: '✚' },
   ];
   const SP = TT.SP;
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
@@ -60,7 +60,7 @@ function openTipTap(ctx) {
   const gs = begin
     ? begin({
         type: 'tiptap',
-        title: 'Tip Tap',
+        title: t('games.tiptap.tip_tap'),
         mode: 'solo',
         overlay,
         cleanup() {
@@ -76,7 +76,7 @@ function openTipTap(ctx) {
   if (begin && (!gs || !gs.alive())) return;
   if (!begin) {
     const device = document.querySelector('.device');
-    if (!device) return toast('Game container not found');
+    if (!device) return toast(t('games.tiptap.game_container_not_found'));
     device.appendChild(overlay);
   }
   if (typeof prepareGameOverlay === 'function') prepareGameOverlay(overlay, { theme: 'dark', gameId: 'tiptap' });
@@ -156,10 +156,13 @@ function openTipTap(ctx) {
     const sp = view.sp[i];
     if (k === -1) return 'empty';
     let base;
-    if (sp === SP.ITEM) base = 'fruit';
-    else if (sp === SP.RAINBOW) base = 'prism';
-    else base = (PALETTE[k] ? PALETTE[k].name : 'gem') + (sp === SP.H ? ' row line' : sp === SP.V ? ' column line' : sp === SP.BOMB ? ' bomb' : '');
-    if (view.lock[i]) base += ', chained';
+    if (sp === SP.ITEM) base = t('games.tiptap.tile_fruit');
+    else if (sp === SP.RAINBOW) base = t('games.tiptap.tile_prism');
+    else {
+      const gem = PALETTE[k] ? PALETTE[k].name : t('games.tiptap.tile_gem');
+      base = sp === SP.H ? t('games.tiptap.tile_row_line', { gem }) : sp === SP.V ? t('games.tiptap.tile_column_line', { gem }) : sp === SP.BOMB ? t('games.tiptap.tile_bomb', { gem }) : gem;
+    }
+    if (view.lock[i]) base = t('games.tiptap.tile_chained', { tile: base });
     if (view.tile[i]) base += ', jelly';
     return base;
   }
@@ -213,22 +216,22 @@ function openTipTap(ctx) {
 
   function goalChip(g) {
     const done = g.done ? ' is-done' : '';
-    if (g.t === 'score') return `<span class="tt-goal-chip${done}">Score ${fmt(g.have)}/${fmt(g.need)}</span>`;
+    if (g.t === 'score') return `<span class="tt-goal-chip${done}">${tHtml('games.tiptap.score_fmt_fmt2', { fmt: fmt(g.have), fmt2: fmt(g.need) })}</span>`;
     if (g.t === 'color') {
       const p = PALETTE[g.c] || PALETTE[0];
       return `<span class="tt-goal-chip${done}"><span class="tt-goal-swatch" style="--tt-fill:${p.fill};--tt-glow:${p.glow}"></span>${settings.colorblind ? p.shape + ' ' : ''}${g.have}/${g.need}</span>`;
     }
-    if (g.t === 'tiles') return `<span class="tt-goal-chip${done}"><span class="tt-goal-jelly"></span>Jelly ${g.have}/${g.need}</span>`;
-    if (g.t === 'locks') return `<span class="tt-goal-chip${done}">⛓ Chains ${g.have}/${g.need}</span>`;
+    if (g.t === 'tiles') return `<span class="tt-goal-chip${done}"><span class="tt-goal-jelly"></span>${tHtml('games.tiptap.jelly_have_need', { have: g.have, need: g.need })}</span>`;
+    if (g.t === 'locks') return `<span class="tt-goal-chip${done}">${tHtml('games.tiptap.chains_have_need', { have: g.have, need: g.need })}</span>`;
     if (g.t === 'items') return `<span class="tt-goal-chip${done}">🍒 ${g.have}/${g.need}</span>`;
     return '';
   }
   function goalText(g) {
-    if (g.t === 'score') return 'Score ' + fmt(g.n);
-    if (g.t === 'color') return 'Clear ' + g.n + ' ' + (PALETTE[g.c] ? PALETTE[g.c].name : '') + (settings.colorblind && PALETTE[g.c] ? ' ' + PALETTE[g.c].shape : '');
-    if (g.t === 'tiles') return 'Clear all ' + g.n + ' jelly tiles';
-    if (g.t === 'locks') return 'Break all ' + g.n + ' chains';
-    if (g.t === 'items') return 'Bring ' + g.n + ' fruit to the bottom';
+    if (g.t === 'score') return t('games.tiptap.score_fmt', { fmt: fmt(g.n) });
+    if (g.t === 'color') return t('games.tiptap.clear_n_value_value2', { n: g.n, value: (PALETTE[g.c] ? PALETTE[g.c].name : ''), value2: (settings.colorblind && PALETTE[g.c] ? ' ' + PALETTE[g.c].shape : '') });
+    if (g.t === 'tiles') return t('games.tiptap.clear_all_n_jelly_tiles', { n: g.n });
+    if (g.t === 'locks') return t('games.tiptap.break_all_n_chains', { n: g.n });
+    if (g.t === 'items') return t('games.tiptap.bring_n_fruit_to_the_bottom', { n: g.n });
     return '';
   }
 
@@ -245,11 +248,11 @@ function openTipTap(ctx) {
         movesEl.innerHTML = `⏱ <strong class="${left < 10000 ? 'tt-low' : ''}">${Hub.fmtMs(left + 999)}</strong>`;
       } else {
         const left = Math.max(0, s.movesLimit - s.movesUsed);
-        movesEl.innerHTML = `Moves <strong class="${left <= 3 ? 'tt-low' : ''}">${left}</strong>`;
+        movesEl.innerHTML = tHtml('games.tiptap.moves_left_html', { left: { html: `<strong class="${left <= 3 ? 'tt-low' : ''}">${left}</strong>`, text: String(left) } });
       }
     }
     const goalsEl = $('cbGoals');
-    if (goalsEl) goalsEl.innerHTML = run.kind === 'daily' ? '<span class="tt-goal-chip">Daily · highest score wins</span>' : TT.goalStatus(s).map(goalChip).join('');
+    if (goalsEl) goalsEl.innerHTML = run.kind === 'daily' ? '<span class="tt-goal-chip">' + tHtml('games.tiptap.daily_highest_score_wins') + '</span>' : TT.goalStatus(s).map(goalChip).join('');
     const fill = $('cbProgress');
     if (fill) {
       const st = run.level.stars || [];
@@ -363,12 +366,12 @@ function openTipTap(ctx) {
         Hub.feedback(GAME, 'coin');
         await wait(T.pop);
       } else if (ev.t === 'bonus') {
-        notice(`${ev.moves} moves left → +${fmt(ev.gained)}`);
+        notice(t('games.tiptap.moves_moves_left_gained', { moves: ev.moves, gained: fmt(ev.gained) }));
         shownScore += ev.gained;
         hud();
         await wait(T.notice);
       } else if (ev.t === 'shuffle') {
-        notice('No moves left — shuffled the board');
+        notice(t('games.tiptap.no_moves_left_shuffled_the_board'));
         await wait(T.notice);
       }
     }
@@ -415,7 +418,7 @@ function openTipTap(ctx) {
       scorePop(mid, '+' + fmt(ev.gained));
     }
     if (ev.combo) notice(ev.combo);
-    else if (ev.step >= 2) notice(['', '', 'Nice!', 'Great!', 'Superb!', 'Incredible!'][Math.min(5, ev.step)] || 'Incredible!');
+    else if (ev.step >= 2) notice(/* i18n-copy */ ['', '', t('games.tiptap.nice'), t('games.tiptap.great'), t('games.tiptap.superb'), t('games.tiptap.incredible')][Math.min(5, ev.step)] || t('games.tiptap.incredible'));
     Hub.feedback(GAME, ev.fired && ev.fired.length ? 'capture' : ev.step ? 'coin' : 'valid');
   }
   function notice(text) {
@@ -478,25 +481,25 @@ function openTipTap(ctx) {
     animating = false;
     hideOverlay();
     screen('ttHub');
-    setSub('Solo · ' + N_LEVELS + ' levels · Daily');
+    setSub(t('games.tiptap.solo_n_levels_levels_daily', { N_LEVELS }));
     const p = Hub.load(GAME);
     const cont = Math.min(N_LEVELS, p.level);
     const contBtn = $('ttContinue');
-    if (contBtn) contBtn.textContent = p.best >= N_LEVELS ? 'Replay level ' + N_LEVELS : 'Play level ' + cont;
+    if (contBtn) contBtn.textContent = p.best >= N_LEVELS ? t('games.tiptap.replay_level_n_levels', { N_LEVELS }) : t('games.tiptap.play_level_cont', { cont });
     const meta = $('ttHubMeta');
-    if (meta) meta.textContent = `★ ${starTotal(p)} / ${N_LEVELS * 3}` + (p.best ? ` · ${p.best} cleared` : '');
+    if (meta) meta.textContent = `★ ${starTotal(p)} / ${N_LEVELS * 3}` + (p.best ? ' · ' + t('games.tiptap.n_cleared', { count: p.best }) : '');
     const d = $('ttDaily');
     if (d) {
       const ds = Hub.dailyState(GAME);
       const st = Hub.streak(GAME);
-      d.innerHTML = `Daily Challenge <small>${ds.done ? 'Played ✓' : ds.started ? 'Practice' : 'New today'}${st ? ' · 🔥 ' + st : ''}</small>`;
+      d.innerHTML = `${tHtml('games.tiptap.daily_challenge')} <small>${ds.done ? tHtml('games.tiptap.played') : ds.started ? tHtml('games.tiptap.practice') : tHtml('games.tiptap.new_today')}${st ? ' · 🔥 ' + st : ''}</small>`;
     }
   }
 
   function openPicker() {
     hideOverlay();
     screen('ttPicker');
-    setSub('Choose a level');
+    setSub(t('games.tiptap.choose_a_level'));
     const p = Hub.load(GAME);
     const grid = $('ttPickerGrid');
     if (!grid) return;
@@ -505,8 +508,8 @@ function openTipTap(ctx) {
       const locked = n > p.level;
       const stars = p.stars[n] || 0;
       const lv = LV.get(n);
-      const cls = 'tt-pick-cell game-tap-target' + (locked ? ' is-locked' : '') + (stars ? ' is-cleared' : '') + (n === p.level && !stars ? ' is-current' : '');
-      html += `<button type="button" class="${cls}" data-n="${n}" ${locked ? 'disabled' : ''} aria-label="Level ${n}${locked ? ' locked' : stars ? ', ' + stars + ' stars' : ''}"><b>${locked ? '·' : n}</b><small>${locked ? '' : stars ? '★'.repeat(stars) : lv && lv.time ? '⏱' : ''}</small></button>`;
+      const cls = 'tt-pick-cell game-tap-target' /* i18n-ignore */ + (locked ? ' is-locked' : '') + (stars ? ' is-cleared' : '') + (n === p.level && !stars ? ' is-current' : '');
+      html += `<button type="button" class="${cls}" data-n="${n}" ${locked ? 'disabled' : ''} aria-label="${locked ? tHtml('dangal.level_n_locked', { n }) : stars ? tHtml('dangal.level_n_stars', { n, count: stars }) : tHtml('dangal.level_n', { n })}"><b>${locked ? '·' : n}</b><small>${locked ? '' : stars ? '★'.repeat(stars) : lv && lv.time ? '⏱' : ''}</small></button>`;
     }
     grid.innerHTML = html;
     const cur = grid.querySelector('.is-current') || grid.querySelector(`[data-n="${Math.min(N_LEVELS, p.level)}"]`);
@@ -523,18 +526,18 @@ function openTipTap(ctx) {
     const goals = lv.goals.map((g) => `<li>${esc(goalText(g))}</li>`).join('');
     const target = challenge ? Hub.targetHtml(challenge) : '';
     const el = showOverlay(`<div class="solo-res">
-      <div class="solo-res-title">Level ${n}</div>
+      <div class="solo-res-title">${tHtml('games.tiptap.level_n', { n })}</div>
       ${target}
       <ul class="tt-goals-check">${goals}</ul>
-      <div class="solo-res-line">${esc(limit)} · 3★ at ${fmt(lv.stars[2])}</div>
-      ${best ? `<div class="solo-res-line">Your best: ${'★'.repeat(stars)} ${fmt(best)}</div>` : ''}
-      <div class="solo-actions"><button type="button" class="solo-btn solo-btn--primary" data-go="play">Play</button></div>
-      <div class="solo-actions solo-actions--quiet"><button type="button" class="solo-link" data-go="board">Friends’ scores</button><button type="button" class="solo-link" data-go="back">Back</button></div></div>`);
+      <div class="solo-res-line">${tHtml('games.tiptap.limit_3_at_fmt', { limit, fmt: fmt(lv.stars[2]) })}</div>
+      ${best ? `<div class="solo-res-line">${tHtml('games.tiptap.your_best_repeat_fmt', { repeat: '★'.repeat(stars), fmt: fmt(best) })}</div>` : ''}
+      <div class="solo-actions"><button type="button" class="solo-btn solo-btn--primary" data-go="play">${tHtml('common.saathi_cta_play')}</button></div>
+      <div class="solo-actions solo-actions--quiet"><button type="button" class="solo-link" data-go="board">${tHtml('games.tiptap.friends_scores')}</button><button type="button" class="solo-link" data-go="back">${tHtml('common.back')}</button></div></div>`);
     el.querySelector('[data-go="play"]').addEventListener('click', () => {
       hideOverlay();
       startRun('level', { n, challenge });
     });
-    el.querySelector('[data-go="board"]').addEventListener('click', () => Hub.openBoard(GAME, Core.boardId(GAME, 'level', n), { title: 'Level ' + n }));
+    el.querySelector('[data-go="board"]').addEventListener('click', () => Hub.openBoard(GAME, Core.boardId(GAME, 'level', n), { title: t('games.tiptap.level_n', { n }) }));
     el.querySelector('[data-go="back"]').addEventListener('click', () => {
       hideOverlay();
       if (!run || run.over) showHub();
@@ -543,13 +546,13 @@ function openTipTap(ctx) {
 
   function openDailyFlow() {
     Hub.openDaily(GAME, {
-      title: 'Tip Tap Daily',
-      detail: '20 moves · highest score wins',
+      title: t('games.tiptap.tip_tap_daily'),
+      detail: t('games.tiptap.20_moves_highest_score_wins'),
       onPlay: async (fresh) => {
         if (!fresh) return startRun('daily', { practice: true });
         const r = await Hub.startDaily(GAME);
         if (!alive()) return;
-        if (!r.scored) toast('You’ve already played today’s Daily on another device — this one is practice');
+        if (!r.scored) toast(t('games.tiptap.you_ve_already_played_today_s'));
         startRun('daily', { practice: !r.scored });
       },
     });
@@ -578,7 +581,7 @@ function openTipTap(ctx) {
     clearHint();
     hideOverlay();
     screen('ttPlay');
-    setSub(kind === 'daily' ? (run.practice ? 'Daily · practice' : 'Daily Challenge') : 'Level ' + opts.n + (level.time ? ' · timed' : ''));
+    setSub(kind === 'daily' ? (run.practice ? t('games.tiptap.daily_practice') : t('games.tiptap.daily_challenge')) : (level.time ? t('games.tiptap.level_n_timed', { n: opts.n }) : t('games.tiptap.level_n', { n: opts.n })));
     const tg = $('ttTarget');
     if (tg) tg.innerHTML = run.challenge ? Hub.targetHtml(run.challenge) : '';
     render({ enter: true });
@@ -622,18 +625,18 @@ function openTipTap(ctx) {
     } catch (e) {}
     Hub.feedback(GAME, won ? 'win' : 'lose');
     if (won && typeof launchConfetti === 'function' && !Hub.reducedMotion(GAME) && stars === 3) launchConfetti();
-    const beat = run.challenge && Number.isFinite(run.challenge.beatScore) ? (s.score > run.challenge.beatScore ? 'You beat the challenge! 🎯' : 'Challenge not beaten this time') : '';
-    const status = won ? [beat, s.score > prevBest && prevBest ? 'New best for this level' : ''].filter(Boolean).join(' · ') : '';
+    const beat = run.challenge && Number.isFinite(run.challenge.beatScore) ? (s.score > run.challenge.beatScore ? t('games.tiptap.you_beat_the_challenge') : t('games.tiptap.challenge_not_beaten_this_time')) : '';
+    const status = won ? [beat, s.score > prevBest && prevBest ? t('dangal.new_best_level') : ''].filter(Boolean).join(' · ') : '';
     const goalsList = TT.goalStatus(s)
       .map((g) => `<li class="${g.done ? 'is-done' : 'is-miss'}">${g.done ? '✓' : '✗'} ${esc(goalText(Object.assign({ n: g.need }, g)))}</li>`)
       .join('');
     const html = Hub.resultHtml({
-      title: won ? `Level ${n} cleared` : run.level.time ? 'Time’s up' : 'Out of moves',
+      title: won ? t('games.tiptap.level_n_cleared', { n }) : run.level.time ? t('games.tiptap.time_s_up') : t('games.tiptap.out_of_moves'),
       stars: won ? stars : null,
-      lines: [`<b>${fmt(s.score)}</b> points`, won ? '' : `<ul class="tt-goals-check">${goalsList}</ul>`],
+      lines: [tHtml('games.tiptap.points_html', { points: fmt(s.score) }), won ? '' : `<ul class="tt-goals-check">${goalsList}</ul>`],
       status,
-      primary: won ? (n < N_LEVELS ? 'Next level' : 'Replay') : 'Try again',
-      secondary: won ? 'Replay' : 'Levels',
+      primary: won ? (n < N_LEVELS ? t('games.tiptap.next_level') : t('games.tiptap.replay')) : t('games.tiptap.try_again'),
+      secondary: won ? t('games.tiptap.replay') : t('games.tiptap.levels'),
       share: won,
       board: true,
     });
@@ -641,13 +644,13 @@ function openTipTap(ctx) {
     Hub.wireResult(el, {
       primary: () => (won && n < N_LEVELS ? showIntro(n + 1) : startRun('level', { n, challenge: run.challenge })),
       secondary: () => (won ? startRun('level', { n, challenge: run.challenge }) : openPicker()),
-      share: () => Hub.share(GAME, { title: 'Level ' + n, line: `${'★'.repeat(stars)} ${fmt(s.score)} pts`, score: s.score, params: { lv: n } }),
-      board: () => Hub.openBoard(GAME, run.boardId, { title: 'Level ' + n }),
+      share: () => Hub.share(GAME, { title: t('games.tiptap.level_n', { n }), line: `${'★'.repeat(stars)} ${fmt(s.score)} pts`, score: s.score, params: { lv: n } }),
+      board: () => Hub.openBoard(GAME, run.boardId, { title: t('games.tiptap.level_n', { n }) }),
       close: () => showHub(),
     });
     if (won && s.score > prevBest) {
       const note = el.querySelector('[data-note]');
-      if (Hub.signedIn() && note) note.textContent = 'Checking your score…';
+      if (Hub.signedIn() && note) note.textContent = t('games.tiptap.checking_your_score');
       const res = Hub.signedIn() ? await Hub.submit(GAME, run.boardId, payload) : null;
       if (note && note.isConnected) note.textContent = Hub.submitNote(res);
     }
@@ -658,58 +661,58 @@ function openTipTap(ctx) {
     Hub.feedback(GAME, 'complete');
     const el = showOverlay(
       Hub.resultHtml({
-        title: run.practice ? 'Daily · practice' : 'Daily Challenge',
-        lines: [`<b>${fmt(s.score)}</b> points`, `🔥 ${Hub.streak(GAME)} day streak`],
-        primary: 'Practice again',
+        title: run.practice ? t('games.tiptap.daily_practice') : t('games.tiptap.daily_challenge'),
+        lines: [tHtml('dangal.points_bold', { count: s.score, shown: fmt(s.score) }), tHtml('dangal.day_streak_fire', { count: Hub.streak(GAME) })],
+        primary: t('games.tiptap.practice_again'),
         share: true,
         board: true,
       }) + '<p class="solo-note" data-note></p>'
     );
     const dayNo = run.day;
-    const shareInfo = { title: 'Daily ' + Core.dayKeyOf(dayNo), line: fmt(s.score) + ' pts', score: s.score, params: { mode: 'daily' } };
+    const shareInfo = { title: t('games.tiptap.daily_daykeyof', { dayKeyOf: Core.dayKeyOf(dayNo) }), line: fmt(s.score) + ' pts', score: s.score, params: { mode: 'daily' } };
     Hub.wireResult(el, {
       primary: () => startRun('daily', { practice: true }),
       share: () => Hub.share(GAME, shareInfo),
-      board: () => Hub.openBoard(GAME, run.boardId, { title: 'Tip Tap Daily' }),
+      board: () => Hub.openBoard(GAME, run.boardId, { title: t('games.tiptap.tip_tap_daily') }),
       close: () => showHub(),
     });
     const note = el.querySelector('[data-note]');
     if (run.practice) {
-      if (note) note.textContent = 'Practice run — only your first try today counts.';
+      if (note) note.textContent = t('games.tiptap.practice_run_only_your_first_try');
       return;
     }
-    if (note && Hub.signedIn()) note.textContent = 'Checking your score…';
+    if (note && Hub.signedIn()) note.textContent = t('games.tiptap.checking_your_score');
     const res = await Hub.finishDaily(GAME, payload, { score: s.score, line: fmt(s.score) + ' pts' });
     if (note && note.isConnected) note.textContent = Hub.submitNote(res.scored ? res : { ranked: false, reason: 'practice' }) || '';
     const streakLine = el.querySelectorAll('.solo-res-line')[1];
-    if (streakLine) streakLine.textContent = `🔥 ${Hub.streak(GAME)} day streak`;
+    if (streakLine) streakLine.textContent = t('games.tiptap.streak_day_streak', { streak: Hub.streak(GAME) });
   }
 
   // ---------------- chrome ----------------
 
   overlay.innerHTML = `
     ${gameChromeHtml({
-      title: 'Tip Tap',
-      subtitle: 'Solo · Match-3',
+      title: t('games.tiptap.tip_tap'),
+      subtitle: t('games.tiptap.solo_match_3'),
       backId: 'cbBack',
       pauseId: 'cbPause',
       rightHtml:
-        '<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="Show a hint" style="visibility:hidden">Hint</button>' +
+        '<button type="button" id="cbHint" class="game-chrome-action game-tap-target" aria-label="' + tHtml('games.tiptap.show_a_hint') + '" style="visibility:hidden">' + tHtml('games.tiptap.hint') + '</button>' +
         '<span class="game-chrome-metric" id="cbScore" style="visibility:hidden">0</span>',
     })}
     <div id="ttHub" class="tt-hub">
-      <div class="tt-hub-title">Tip Tap</div>
-      <div class="tt-hub-sub">Match 3 or more · clear the goals</div>
+      <div class="tt-hub-title">${tHtml('games.tiptap.tip_tap')}</div>
+      <div class="tt-hub-sub">${tHtml('games.tiptap.match_3_or_more_clear_the')}</div>
       <div id="ttHubMeta" class="tt-hub-meta"></div>
-      <button type="button" id="ttContinue" class="tt-hub-cta game-tap-target">Play</button>
-      <button type="button" id="ttDaily" class="tt-hub-secondary game-tap-target">Daily Challenge</button>
-      <button type="button" id="ttOpenLevels" class="tt-hub-secondary game-tap-target">All levels</button>
-      <div class="solo-hub-row"><button type="button" class="solo-link" id="ttRules">How to play</button><button type="button" class="solo-link" id="ttSettings">Settings</button></div>
+      <button type="button" id="ttContinue" class="tt-hub-cta game-tap-target">${tHtml('common.saathi_cta_play')}</button>
+      <button type="button" id="ttDaily" class="tt-hub-secondary game-tap-target">${tHtml('games.tiptap.daily_challenge')}</button>
+      <button type="button" id="ttOpenLevels" class="tt-hub-secondary game-tap-target">${tHtml('games.tiptap.all_levels')}</button>
+      <div class="solo-hub-row"><button type="button" class="solo-link" id="ttRules">${tHtml('games.tiptap.how_to_play')}</button><button type="button" class="solo-link" id="ttSettings">${tHtml('common.settings')}</button></div>
     </div>
     <div id="ttPicker" class="tt-picker" hidden>
-      <div class="tt-picker-head">Levels</div>
+      <div class="tt-picker-head">${tHtml('games.tiptap.levels')}</div>
       <div id="ttPickerGrid" class="tt-picker-grid"></div>
-      <button type="button" id="ttPickerBack" class="tt-hub-secondary game-tap-target">Back</button>
+      <button type="button" id="ttPickerBack" class="tt-hub-secondary game-tap-target">${tHtml('common.back')}</button>
     </div>
     <div id="ttPlay" class="tt-play" hidden>
       <div class="tt-meter">
@@ -735,8 +738,8 @@ function openTipTap(ctx) {
     clockStop();
     const ask =
       typeof confirmLeaveGame === 'function'
-        ? confirmLeaveGame({ title: 'Leave this level?', body: run.kind === 'daily' && !run.practice ? 'Your Daily try ends here and won’t count.' : 'This run won’t be saved.' })
-        : Promise.resolve(window.confirm('Leave this level?'));
+        ? confirmLeaveGame({ title: t('games.tiptap.leave_this_level'), body: run.kind === 'daily' && !run.practice ? t('games.tiptap.your_daily_try_ends_here_and') : t('games.tiptap.this_run_won_t_be_saved') })
+        : Promise.resolve(window.confirm(t('games.tiptap.leave_this_level')));
     Promise.resolve(ask).then((ok) => {
       if (ok) showHub();
       else clockStart();
@@ -870,8 +873,8 @@ function openTipTap(ctx) {
 if (typeof registerGame === 'function') {
   registerGame({
     id: 'tiptap',
-    name: 'Tip Tap',
-    desc: 'Match-3 · 150 levels + a Daily · Solo',
+    name: t('games.tiptap.tip_tap'),
+    desc: t('games.tiptap.match_3_150_levels_a_daily'),
     icon: '✨',
     ratingKey: 'tiptap',
     gameType: 'solo',

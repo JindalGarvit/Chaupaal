@@ -63,7 +63,7 @@
       '<rect x="6" y="9" width="14" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2" transform="rotate(-10 13 19)"/><rect x="18" y="8" width="14" height="20" rx="2" fill="currentColor" opacity=".2" stroke="currentColor" stroke-width="2" transform="rotate(8 25 18)"/><path fill="currentColor" d="M25.6 13.5c-1.8 2-4.1 3.3-4.1 5.4 0 1.3 1 2.2 2.2 2.2.7 0 1.3-.3 1.6-.8l-.6 2.4h1.8l-.6-2.4c.3.5.9.8 1.6.8 1.2 0 2.2-.9 2.2-2.2 0-2.1-2.3-3.4-4.1-5.4z" transform="rotate(8 25 18)"/><circle cx="12" cy="32" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="32" r="1.6" fill="currentColor"/>',
   };
 
-  const GAME_IDENTITY = {
+  const GAME_IDENTITY = /* i18n-catalog: dangal.identity */ {
     chess: { primary: '#8B5E3C', secondary: '#F0D9B5', surface: '#3D2B1A', label: 'Chess', icon: '♟', mark: M.chess, orientation: 'portrait' },
     snakes: { primary: '#2E7D32', secondary: '#F9E784', surface: '#1A3A2A', label: 'Snakes & Ladders', icon: '🐍', mark: M.snakes, orientation: 'portrait' },
     ludo: { primary: '#E040FB', secondary: '#FFD740', surface: '#1A1A2E', label: 'Ludo', icon: '🎯', mark: M.ludo, orientation: 'portrait' },
@@ -96,7 +96,7 @@
    * Plain rule attribution per title — never "official", never a federation logo or endorsement.
    * Simplified adaptations say so.
    */
-  const RULE_SOURCES = {
+  const RULE_SOURCES = /* i18n-catalog: dangal.rule_source */ {
     tiptap: 'Our own match-3 puzzle rules',
     brickbreaker: 'Classic brick-breaker arcade rules',
     ankjod: 'Classic Kakuro rules',
@@ -124,9 +124,16 @@
     poker: 'Standard No-Limit Texas Hold’em rules · virtual chips only',
   };
 
+  /** Catalog lookup with the declared English as the fallback (game names, laws, rule sources). */
+  function locText(key, en) {
+    if (!en || typeof t !== 'function') return en;
+    const v = t(key);
+    return v && v !== key ? v : en;
+  }
+
   function gameRuleSource(id) {
     const key = typeof canonicalGameId === 'function' ? canonicalGameId(id) : String(id || '');
-    return RULE_SOURCES[key] || '';
+    return RULE_SOURCES[key] ? locText('dangal.rule_source.' + key, RULE_SOURCES[key]) : '';
   }
 
   const RATED_GAMES =
@@ -147,9 +154,24 @@
       .replace(/>/g, '&gt;');
   }
 
+  /**
+   * Identity in the reader's language: label = the game-name glossary (dangal.identity.<id>.label —
+   * brand / origin titles are glossary tokens and never translate), law / lawHint localised.
+   */
+  const identityMemo = {};
   function getGameIdentity(id) {
     const key = typeof canonicalGameId === 'function' ? canonicalGameId(id) : String(id || '');
-    return GAME_IDENTITY[key] || null;
+    const g = GAME_IDENTITY[key];
+    if (!g) return null;
+    const memo = key + '|' + (typeof currentLang !== 'undefined' ? currentLang : 'en');
+    if (identityMemo[memo]) return identityMemo[memo];
+    const out = Object.assign({}, g, {
+      label: locText('dangal.identity.' + key + '.label', g.label),
+      law: g.law ? locText('dangal.identity.' + key + '.law', g.law) : g.law,
+      lawHint: g.lawHint ? locText('dangal.identity.' + key + '.lawHint', g.lawHint) : g.lawHint,
+    });
+    identityMemo[memo] = out;
+    return out;
   }
 
   /**
@@ -184,7 +206,7 @@
     const size = Math.max(16, Number(o.size) || 40);
     const ident = getGameIdentity(gameId);
     const emoji = (ident && ident.icon) || o.fallback || '🎮';
-    const label = (ident && ident.label) || String(gameId || 'Game');
+    const label = (ident && ident.label) || String(gameId || t('dangal.game'));
     const color = o.color || (ident && ident.primary) || 'currentColor';
     const extra = o.className ? ' ' + String(o.className) : '';
     if (ident && ident.mark) {
@@ -257,7 +279,7 @@
         window.GAME_LABELS.muqabala = GAME_IDENTITY.quiz.label;
         window.GAME_LABELS.tictactoe = GAME_IDENTITY.ttt.label;
         window.GAME_LABELS.kakuro = GAME_IDENTITY.ankjod.label;
-        window.GAME_LABELS.uno = 'Oh No!';
+        window.GAME_LABELS.uno = t('dangal.oh_no');
       }
     } catch (e) {}
   }

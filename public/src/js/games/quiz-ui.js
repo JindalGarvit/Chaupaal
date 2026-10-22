@@ -12,7 +12,7 @@
 
   const GAME = 'quiz';
   const ROOM = 'quizroom';
-  const LABEL = 'Quiz Muqabala';
+  const LABEL = t('dangal.identity.quiz.label');
   const PREFS_KEY = 'chaupaal_quiz_prefs';
   const PARTY_KEY = 'chaupaal_quiz_party';
   const SOUND_KEY = 'chaupaal_quiz_sound';
@@ -21,7 +21,23 @@
   const CK = () => window.ClassicsKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  const tr = (key, fallback) => (typeof t === 'function' ? t('quiz.' + key, fallback) : fallback);
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  const tr = (key, fallback, params) => {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.quiz.' + key, p || fallback) : fill(fallback, p);
+  };
   const toast = (m) => m && typeof showToast === 'function' && showToast(m);
   const fmt = (n) => (typeof formatNumber === 'function' ? formatNumber(n || 0) : Number(n || 0).toLocaleString());
   function readJson(k, d) {
@@ -55,9 +71,33 @@
 
   let offset = 0;
   const serverNow = () => Date.now() + offset;
+  /** "Questions in": my UI language when its translated core exists on the server, else English. */
+  function uiBase() {
+    const C = window.DangalContentLocales;
+    return C ? C.contentBase(typeof currentLang !== 'undefined' ? currentLang : 'en') : 'en';
+  }
+  function questionLangs() {
+    return Array.isArray(window.__quizQuestionLangs) ? window.__quizQuestionLangs : ['en'];
+  }
+  function questionLang() {
+    const ui = uiBase();
+    if (ui === 'en' || prefs().qlang === 'en') return 'en';
+    return questionLangs().indexOf(ui) >= 0 ? ui : 'en';
+  }
+  function langName(code) {
+    const e = typeof getLangEntry === 'function' ? getLangEntry(code) : null;
+    return (e && e.native) || code;
+  }
+  /** Compact honest note when my language has no translated questions yet ('' otherwise). */
+  function questionLangNote() {
+    const ui = uiBase();
+    if (ui === 'en' || questionLangs().indexOf(ui) >= 0) return '';
+    return `<p class="pk-sub qz-lang-note" data-qlang-note>${esc(t('games.quiz.questions_english_note', { lang: langName(ui) }))}</p>`;
+  }
+
   async function quizCall(op, args) {
     if (typeof apiFetch !== 'function') throw Object.assign(new Error('Offline'), { code: 'OFFLINE' });
-    const res = await apiFetch('/api/media-config', { method: 'POST', needAuth: true, body: Object.assign({ action: 'quiz', op }, args || {}) });
+    const res = await apiFetch('/api/media-config', { method: 'POST', needAuth: true, body: Object.assign({ action: 'quiz', op, lang: questionLang() }, args || {}) });
     if (!res || !res.ok) {
       const e = new Error((res && res.error && res.error.message) || 'Something went wrong');
       e.code = (res && res.error && res.error.code) || 'ERROR';
@@ -236,7 +276,7 @@
     }
     let score = s.score || 0;
     while (!s.done && !shell.closed) {
-      const header = tr('question', 'Question') + ' ' + (s.qn + 1) + '/' + s.total;
+      const header = tr('question_value_total', 'Question {{value}}/{{total}}', { value: (s.qn + 1), total: s.total });
       const view = mountSoloQuestion(shell.body, { q: s.q, servedAt: s.servedAt, limitMs: s.limitMs, header, scoreLine: fmt(score) });
       const i = await view.result;
       if (shell.closed) return;
@@ -297,7 +337,7 @@
   }
 
   function prefs() {
-    return Object.assign({ category: null, difficulty: 0, region: null }, readJson(PREFS_KEY, {}) || {});
+    return Object.assign({ category: null, difficulty: 0, region: null, qlang: 'ui' }, readJson(PREFS_KEY, {}) || {});
   }
 
   function openPracticeSettings(onDone) {
@@ -311,6 +351,7 @@
         <div class="qz-cats">${[['', '🎲', tr('mixed', 'Mixed')]].concat(C.CATEGORIES.map((c) => [c.id, c.icon, tr('cat.' + c.id, c.label)])).map(([id, icon, l]) => `<button type="button" class="qz-cat-chip${(cur.category || '') === id ? ' is-on' : ''}" data-cat="${id}">${icon} ${esc(l)}</button>`).join('')}</div>
         <div class="cl-sub">${esc(tr('difficulty', 'Difficulty'))}</div>
         ${K.segHtml('difficulty', Number(cur.difficulty) || 0, [[0, tr('any', 'Any')], [1, tr('easy', 'Easy')], [2, tr('medium', 'Medium')], [3, tr('hard', 'Hard')]])}
+        ${uiBase() !== 'en' && questionLangs().indexOf(uiBase()) >= 0 ? `<div class="cl-sub">${esc(t('games.quiz.questions_in'))}</div>${K.segHtml('qlang', cur.qlang === 'en' ? 'en' : 'ui', [['ui', langName(uiBase())], ['en', langName('en')]])}` : questionLangNote()}
         <details class="cl-advanced"><summary>${esc(tr('advanced', 'Advanced'))}</summary>
           <div class="cl-sub">${esc(tr('regional', 'Regional questions (optional)'))}</div>
           ${K.segHtml('region', cur.region || '', [['', tr('none', 'None')]].concat(C.REGIONS.map((r) => [r.id, tr('region.' + r.id, r.label)])))}
@@ -327,7 +368,7 @@
           })
         );
         el.querySelector('[data-save]').addEventListener('click', () => {
-          writeJson(PREFS_KEY, { category: cur.category || null, difficulty: Number(cur.difficulty) || 0, region: cur.region || null });
+          writeJson(PREFS_KEY, { category: cur.category || null, difficulty: Number(cur.difficulty) || 0, region: cur.region || null, qlang: cur.qlang === 'en' ? 'en' : 'ui' });
           writeJson(SOUND_KEY, el.querySelector('[data-sound]').checked);
           close();
           if (onDone) onDone();
@@ -358,7 +399,7 @@
         }
         restart = false;
         if (s.done || s.empty) return renderSoloDone(shell, news, total, s.empty);
-        const header = news ? tr('question', 'Question') + ' ' + s.q.n + '/' + (s.total || 5) : '#' + s.q.n;
+        const header = news ? tr('question_n_value', 'Question {{n}}/{{value}}', { n: s.q.n, value: s.total || 5 }) : '#' + s.q.n;
         const view = mountSoloQuestion(shell.body, { q: s.q, servedAt: s.servedAt, limitMs: s.limitMs, header, scoreLine: fmt(s.score), nextLabel: tr('next', 'Next') });
         if (!news) {
           const bar = document.createElement('div');
@@ -420,7 +461,7 @@
     const s = settingsOf(ctrl);
     if (s.mode === 'duel') return tr('duelSummary', 'Duel · 10 questions · 15s · rated');
     const cats = Array.isArray(s.categories) ? s.categories : Object.values(s.categories || {});
-    const bits = [(s.length || 10) + ' ' + tr('questions', 'questions'), Math.round((s.questionMs || 20000) / 1000) + 's', cats.length ? cats.map((c) => catOf(c).icon).join('') : tr('allCats', 'All categories')];
+    const bits = [tr('value_questions', '{{value}} questions', { value: s.length || 10 }), Math.round((s.questionMs || 20000) / 1000) + 's', cats.length ? cats.map((c) => catOf(c).icon).join('') : tr('allCats', 'All categories')];
     if (Number(s.difficulty)) bits.push(Core().difficultyLabel(Number(s.difficulty)));
     if (s.hostPlays === false) bits.push(tr('bigScreen', 'Big screen'));
     return bits.join(' · ');
@@ -475,13 +516,13 @@
       return { ok: true, label: tr('startDuel', 'Start Duel') };
     }
     const need = settingsOf(ctrl).hostPlays === false ? 3 : 2;
-    if (players.length < need) return { ok: false, label: tr('needMore', 'Invite at least') + ' ' + (need - players.length) + ' ' + tr('more', 'more') };
-    return { ok: true, label: tr('start', 'Start') + ' · ' + players.length + ' ' + tr('players', 'players') };
+    if (players.length < need) return { ok: false, label: tr('invite_at_least_value_more', 'Invite at least {{value}} more', { value: (need - players.length) }) };
+    return { ok: true, label: tr('start_players', 'Start · {length, plural, one {# player} other {# players}}', { length: players.length }) };
   }
 
   const ERR = {
-    TOO_EARLY: 'Wait for the question',
-    NO_QUESTIONS: 'Not enough questions for those settings — pick more categories',
+    TOO_EARLY: t('games.quiz.wait_for_the_question'),
+    NO_QUESTIONS: t('games.quiz.not_enough_questions_for_those_settings'),
     NEED_PLAYERS: '',
     PHASE: '',
     OVER: '',
@@ -606,7 +647,7 @@
       m.st = st;
       const q = st.question;
       const mine = st.players.find((p) => p.id === me());
-      body.querySelector('[data-qn]').textContent = q ? tr('question', 'Question') + ' ' + q.n + '/' + st.total : '';
+      body.querySelector('[data-qn]').textContent = q ? tr('question_n_total', 'Question {{n}}/{{total}}', { n: q.n, total: st.total }) : '';
       const c = q ? catOf(q.category) : null;
       body.querySelector('[data-cat]').textContent = c ? c.icon + ' ' + tr('cat.' + q.category, c.label) : '';
       body.querySelector('[data-me]').textContent = mine ? fmt(mine.score) : '';
@@ -677,8 +718,8 @@
       const other = ranked.find((p) => p.id !== me);
       if (st.forfeit) title = st.forfeit === me ? tr('youForfeit', 'You left — Duel forfeited') : tr('oppForfeit', 'Your opponent left — you win');
       else if (mine && other && mine.score === other.score && mine.time === other.time) title = tr('draw', 'It’s a draw');
-      else title = myIdx === 0 ? tr('youWin', 'You win!') : (other ? other.name : '') + ' ' + tr('wins', 'wins');
-    } else title = myIdx === 0 ? tr('youWin', 'You win!') : ranked[0] ? ranked[0].name + ' ' + tr('wins', 'wins') : '';
+      else title = myIdx === 0 ? tr('youWin', 'You win!') : tr('value_wins', '{{value}} wins', { value: (other ? other.name : '') });
+    } else title = myIdx === 0 ? tr('youWin', 'You win!') : ranked[0] ? tr('name_wins', '{{name}} wins', { name: (typeof bidi === 'function' ? bidi(ranked[0].name) : ranked[0].name) }) : '';
     if (ctrl.quizOver !== ctrl.view.pub.roundNo) {
       ctrl.quizOver = ctrl.view.pub.roundNo;
       if (mine) {
@@ -714,7 +755,7 @@
       ${podium}
       ${list}
       ${review}
-      ${K.roomResultActions(ctrl, { nextLabel: duel ? tr('rematch', 'Rematch') : tr('again', 'Play again'), waitLabel: tr('waitAgain', 'Waiting for the host…') })}
+      ${K.roomResultActions(ctrl, { nextLabel: duel ? tr('rematch', 'Rematch') : tr('again_play_again', 'Play again'), waitLabel: tr('waitAgain', 'Waiting for the host…') })}
     </div></div>`);
     body.querySelectorAll('[data-report]').forEach((b) => b.addEventListener('click', () => openReport(b.dataset.report)));
     K.wireRoomResultActions(ctrl, body, {
@@ -759,7 +800,7 @@
         const players = ctrl.players();
         if (s.mode === 'duel') {
           const sec = body.querySelector('.pk-section');
-          if (sec) sec.textContent = tr('inDuel', 'In the Duel') + ' · ' + players.length + '/2';
+          if (sec) sec.textContent = tr('in_the_duel_length_2', 'In the Duel · {{length}}/2', { length: players.length });
         }
         if (!ctrl.measured) {
           ctrl.measured = true;
@@ -806,7 +847,7 @@
         return;
       }
       try {
-        const r = await quizCall('duel_find', { name: Kit().myName() || 'Player' });
+        const r = await quizCall('duel_find', { name: Kit().myName() || t('dangal.party.player') });
         if (r.matched && r.code && r.code !== ctrl.view.code) {
           clearInterval(ctrl.queueTimer);
           ctrl.queueTimer = null;
@@ -821,7 +862,7 @@
     const K = Kit();
     if (!K.requireSignIn()) return;
     try {
-      const r = await quizCall('duel_find', { name: K.myName() || 'Player' });
+      const r = await quizCall('duel_find', { name: K.myName() || t('dangal.party.player') });
       if (r.matched) return openRoom(r.code, { join: true });
       return openRoom(r.code, {});
     } catch (e) {
@@ -830,7 +871,7 @@
   }
 
   function createDuel(chat) {
-    Kit().createRoom({ game: ROOM, label: LABEL + ' · ' + tr('duel', 'Duel'), chat: chat || null, settings: { mode: 'duel' }, open: (code) => openRoom(code, {}) });
+    Kit().createRoom({ game: ROOM, label: tr('label_duel', '{{LABEL}} · Duel', { LABEL }), chat: chat || null, settings: { mode: 'duel' }, open: (code) => openRoom(code, {}) });
   }
   function createParty(chat) {
     Kit().createRoom({ game: ROOM, label: LABEL, chat: chat || null, settings: partyDefaults(), open: (code) => openRoom(code, {}) });
@@ -876,9 +917,10 @@
         <div class="pk-modes">
           <button type="button" class="pk-mode pk-mode--primary" data-go="daily"><span class="pk-mode-title">${esc(tr('daily', 'Daily Quiz'))}${streak ? ` <span class="qz-flame">🔥${streak}</span>` : ''}</span><span class="pk-mode-sub">${esc(dailySub)}</span></button>
           <button type="button" class="pk-mode" data-go="duel"><span class="pk-mode-title">${esc(tr('duel', 'Duel'))}</span><span class="pk-mode-sub">${esc(tr('duelSub', 'Live 1v1 · rated'))}</span></button>
-          <button type="button" class="pk-mode" data-go="party"><span class="pk-mode-title">${esc(tr('party', 'Party Quiz'))}</span><span class="pk-mode-sub">${esc(tr('partySub', '2–50 players · big-screen friendly'))}</span></button>
+          <button type="button" class="pk-mode" data-go="party"><span class="pk-mode-title">${esc(tr('party_party_quiz', 'Party Quiz'))}</span><span class="pk-mode-sub">${esc(tr('partySub', '2–50 players · big-screen friendly'))}</span></button>
           <button type="button" class="pk-mode" data-go="practice"><span class="pk-mode-title">${esc(tr('practice', 'Practice'))}</span><span class="pk-mode-sub">${esc(tr('practiceSub', 'Unrated · unlimited'))}</span></button>
           ${h && h.newsAvailable ? `<button type="button" class="pk-mode" data-go="news"><span class="pk-mode-title">${esc(tr('news', 'News Quiz'))}</span><span class="pk-mode-sub">${esc(tr('newsSub', 'From this week’s Akhbaar'))}</span></button>` : ''}
+          ${questionLangNote()}
           <div class="cl-home-links">
             <button type="button" class="pk-link" data-go="join">${esc(tr('join', 'Have a room code? Join'))}</button>
             <button type="button" class="pk-link" data-go="settings">${esc(tr('settings', 'Settings'))}</button>
@@ -904,6 +946,7 @@
     if (!K.isSignedIn()) return;
     try {
       const h = await quizCall('home', { day });
+      if (h && Array.isArray(h.questionLangs)) window.__quizQuestionLangs = h.questionLangs;
       if (!shell.closed) render(h);
     } catch (e) {}
   }

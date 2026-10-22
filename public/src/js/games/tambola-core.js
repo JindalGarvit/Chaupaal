@@ -13,6 +13,32 @@
  * An invalid claim is a bogey: that ticket is blocked for that prize (or, with the warn setting, the
  * first bogey is only a warning).
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.TambolaCore = factory();
@@ -30,26 +56,26 @@
   const LOG_MAX = 10;
 
   const PRIZES_90 = {
-    early5: { label: 'Early Five', desc: 'The first five numbers on one ticket' },
-    top: { label: 'Top Line', desc: 'All five numbers on the top row' },
-    middle: { label: 'Middle Line', desc: 'All five numbers on the middle row' },
-    bottom: { label: 'Bottom Line', desc: 'All five numbers on the bottom row' },
-    corners: { label: 'Four Corners', desc: 'First and last numbers of the top and bottom rows' },
-    full: { label: 'Full House', desc: 'All fifteen numbers' },
-    full2: { label: '2nd Full House', desc: 'The next Full House after the first' },
-    full3: { label: '3rd Full House', desc: 'The next Full House after the second' },
-    early7: { label: 'Early Seven', desc: 'The first seven numbers on one ticket' },
-    star: { label: 'Star', desc: 'Four corners plus the centre number of the middle row' },
-    breakfast: { label: 'Breakfast', desc: 'Every number in columns 1–3' },
-    lunch: { label: 'Lunch', desc: 'Every number in columns 4–6' },
-    dinner: { label: 'Dinner', desc: 'Every number in columns 7–9' },
+    early5: { label: gtx('games.tambola.early_five', 'Early Five'), desc: gtx('games.tambola.the_first_five_numbers_on_one', 'The first five numbers on one ticket') },
+    top: { label: gtx('games.tambola.top_line', 'Top Line'), desc: gtx('games.tambola.all_five_numbers_on_the_top', 'All five numbers on the top row') },
+    middle: { label: gtx('games.tambola.middle_line', 'Middle Line'), desc: gtx('games.tambola.all_five_numbers_on_the_middle', 'All five numbers on the middle row') },
+    bottom: { label: gtx('games.tambola.bottom_line', 'Bottom Line'), desc: gtx('games.tambola.all_five_numbers_on_the_bottom', 'All five numbers on the bottom row') },
+    corners: { label: gtx('games.tambola.four_corners', 'Four Corners'), desc: gtx('games.tambola.first_and_last_numbers_of_the', 'First and last numbers of the top and bottom rows') },
+    full: { label: gtx('games.tambola.full_house', 'Full House'), desc: gtx('games.tambola.all_fifteen_numbers', 'All fifteen numbers') },
+    full2: { label: gtx('games.tambola.2nd_full_house', '2nd Full House'), desc: gtx('games.tambola.the_next_full_house_after_the', 'The next Full House after the first') },
+    full3: { label: gtx('games.tambola.3rd_full_house', '3rd Full House'), desc: gtx('games.tambola.the_next_full_house_after_the_2', 'The next Full House after the second') },
+    early7: { label: gtx('games.tambola.early_seven', 'Early Seven'), desc: gtx('games.tambola.the_first_seven_numbers_on_one', 'The first seven numbers on one ticket') },
+    star: { label: gtx('games.tambola.star', 'Star'), desc: gtx('games.tambola.four_corners_plus_the_centre_number', 'Four corners plus the centre number of the middle row') },
+    breakfast: { label: gtx('games.tambola.breakfast', 'Breakfast'), desc: gtx('games.tambola.every_number_in_columns_1_3', 'Every number in columns 1–3') },
+    lunch: { label: gtx('games.tambola.lunch', 'Lunch'), desc: gtx('games.tambola.every_number_in_columns_4_6', 'Every number in columns 4–6') },
+    dinner: { label: gtx('games.tambola.dinner', 'Dinner'), desc: gtx('games.tambola.every_number_in_columns_7_9', 'Every number in columns 7–9') },
   };
   const PRIZES_75 = {
-    line: { label: 'Any Line', desc: 'A full row, column or diagonal (the free centre counts)' },
-    corners: { label: 'Four Corners', desc: 'The four corner squares' },
-    x: { label: 'X', desc: 'Both diagonals' },
-    blackout: { label: 'Blackout', desc: 'Every square on the card' },
-    custom: { label: 'Custom pattern', desc: 'The host’s own pattern' },
+    line: { label: gtx('games.tambola.any_line', 'Any Line'), desc: gtx('games.tambola.a_full_row_column_or_diagonal', 'A full row, column or diagonal (the free centre counts)') },
+    corners: { label: gtx('games.tambola.four_corners', 'Four Corners'), desc: gtx('games.tambola.the_four_corner_squares', 'The four corner squares') },
+    x: { label: 'X', desc: gtx('games.tambola.both_diagonals', 'Both diagonals') },
+    blackout: { label: gtx('games.tambola.blackout', 'Blackout'), desc: gtx('games.tambola.every_square_on_the_card', 'Every square on the card') },
+    custom: { label: gtx('games.tambola.custom_pattern', 'Custom pattern'), desc: gtx('games.tambola.the_host_s_own_pattern', 'The host’s own pattern') },
   };
   const DEFAULT_PRIZES = { 90: ['early5', 'top', 'middle', 'bottom', 'corners', 'full'], 75: ['line', 'corners', 'x', 'blackout'] };
   const DEFAULT_SHARES = { early5: 10, top: 10, middle: 10, bottom: 10, corners: 10, full: 40, full2: 20, full3: 10, early7: 10, star: 10, breakfast: 10, lunch: 10, dinner: 10, line: 15, x: 20, blackout: 45, custom: 20 };
@@ -399,7 +425,7 @@
       const want = p.sheet ? 6 : Math.max(0, Math.min(set.maxTickets, Math.floor(Number(p.tickets) || 1)));
       if (!want) return;
       const list = set.variant === '75' ? Array.from({ length: want }, () => card75(R)) : strip90(R).slice(0, want);
-      seats.push({ id: String(p.id), name: String(p.name || 'Player'), bot: !!p.bot, n: want, left: false, paid: !p.bot && set.mode !== 'fun' ? want * set.price : 0 });
+      seats.push({ id: String(p.id), name: String(p.name || gtx('dangal.party.player', 'Player')), bot: !!p.bot, n: want, left: false, paid: !p.bot && set.mode !== 'fun' ? want * set.price : 0 });
       tickets.push(list.map(pack));
     });
     const total = set.variant === '75' ? 75 : 90;
@@ -743,8 +769,11 @@
 
   // ---------------------------------------------------------------- calls + Caller mode
 
-  /** Traditional 90-ball calls (English). Numbers without a well-known call read as digits. */
-  const CALLS = {
+  /**
+   * Traditional 90-ball calls — English-only flavour: the UI offers them (and the toggle) only when
+   * the caller's language is English; every other language reads plain numbers.
+   */
+  const CALLS = /* i18n-en-only */ {
     1: 'Kelly’s eye', 2: 'One little duck', 3: 'Cup of tea', 4: 'Knock at the door', 5: 'Man alive', 6: 'Half a dozen', 7: 'Lucky seven', 8: 'Garden gate', 9: 'Doctor’s orders',
     10: 'Cock and hen', 11: 'Legs eleven', 12: 'One dozen', 13: 'Unlucky for some', 14: 'Valentine’s Day', 15: 'Young and keen', 16: 'Sweet sixteen', 17: 'Dancing queen', 18: 'Coming of age', 19: 'Goodbye teens',
     20: 'One score', 21: 'Key of the door', 22: 'Two little ducks', 23: 'Thee and me', 24: 'Two dozen', 25: 'Duck and dive', 26: 'Pick and mix', 27: 'Gateway to heaven', 28: 'Duck and its mate', 29: 'Rise and shine',
@@ -761,9 +790,9 @@
     if (variant === '75') return letter75(n) + ' ' + n;
     if (!traditional) return String(n);
     if (CALLS[n]) return CALLS[n] + ', ' + n;
-    if (n < 10) return 'On its own, number ' + n;
+    if (n < 10) return 'On its own, number ' + n; // i18n-ignore (en-only traditional call)
     const d = String(n);
-    return d[0] + ' and ' + d[1] + ', ' + n;
+    return d[0] + ' and ' + d[1] + ', ' + n; // i18n-ignore (en-only traditional call)
   }
 
   /** Printed-ticket code: seed (base 36) + sheet + ticket, e.g. "K3F9Q-4.2". */
@@ -808,7 +837,7 @@
 
   // ---------------------------------------------------------------- bots (practice + filler seats)
 
-  const BOT_NAMES = ['Ava', 'Leo', 'Mia', 'Kai', 'Zoe', 'Sam', 'Ivy', 'Max', 'Noa', 'Eli', 'Ria', 'Ben', 'Lia', 'Tom', 'Uma', 'Jay', 'Ana', 'Raf', 'Isa', 'Dev'];
+  const BOT_NAMES = ['Ava', 'Leo', 'Mia', 'Kai', 'Zoe', 'Sam', 'Ivy', 'Max', 'Noa', 'Eli', 'Ria', 'Ben', 'Lia', 'Tom', 'Uma', 'Jay', 'Ana', 'Raf', 'Isa', 'Dev']; // i18n-ignore (codes / names)
   const botName = (i) => BOT_NAMES[i % BOT_NAMES.length] + ' · Bot';
 
   return {

@@ -5,12 +5,12 @@
   'use strict';
 
   const NOTIFICATION_TEMPLATES = {
-    your_turn: (d) => "It's your turn in " + (d.gameName || 'a game'),
-    chess_challenge: (d) => (d.fromName || 'Someone') + ' challenges you to Chess',
-    game_challenge: (d) => (d.fromName || 'Someone') + ' challenges you to ' + (d.gameName || 'a game'),
-    challenge_accepted: (d) => (d.fromName || 'Someone') + ' accepted your ' + (d.gameName || 'game') + ' challenge',
-    challenge_declined: (d) => (d.fromName || 'Someone') + ' declined your ' + (d.gameName || 'game') + ' challenge',
-    game_over: (d) => (d.gameName || 'Game') + ' over',
+    your_turn: (d) => t('dangal.it_s_your_turn_in_value', { value: d.gameName || t('dangal.a_game') }),
+    chess_challenge: (d) => t('dangal.value_challenges_you_to_chess', { value: d.fromName || t('common.someone') }),
+    game_challenge: (d) => t('dangal.value_challenges_you_to_value2', { value: d.fromName || t('common.someone'), value2: d.gameName || t('dangal.a_game') }),
+    challenge_accepted: (d) => t('dangal.value_accepted_your_value2_challenge', { value: d.fromName || t('common.someone'), value2: d.gameName || t('dangal.classics.game') }),
+    challenge_declined: (d) => t('dangal.value_declined_your_value2_challenge', { value: d.fromName || t('common.someone'), value2: d.gameName || t('dangal.classics.game') }),
+    game_over: (d) => (d.gameName || t('dangal.game')) + ' over',
   };
 
   async function notifyPlayer(recipientUid, eventKey, data) {

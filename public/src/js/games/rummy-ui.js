@@ -9,7 +9,7 @@
   'use strict';
 
   const GAME = 'rummy';
-  const LABEL = 'Rummy';
+  const LABEL = t('dangal.identity.rummy.label');
   const SETUP_KEY = 'chaupaal_rummy_setup';
   const PREFS_KEY = 'chaupaal_rummy_prefs';
   const Core = () => window.RummyCore;
@@ -17,8 +17,22 @@
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('rummy.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.rummy.' + key, p || fallback) : fill(fallback, p);
   }
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function toast(msg) {
@@ -40,7 +54,7 @@
   }
 
   const RANK_SHORT = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-  const RANK_PLURAL = ['', 'Aces', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes', 'Sevens', 'Eights', 'Nines', 'Tens', 'Jacks', 'Queens', 'Kings'];
+  const RANK_PLURAL = /* i18n-copy */ ['', t('games.rummy.aces'), t('games.rummy.twos'), t('games.rummy.threes'), t('games.rummy.fours'), t('games.rummy.fives'), t('games.rummy.sixes'), t('games.rummy.sevens'), t('games.rummy.eights'), t('games.rummy.nines'), t('games.rummy.tens'), t('games.rummy.jacks'), t('games.rummy.queens'), t('games.rummy.kings')];
   const LEVELS = ['easy', 'normal', 'expert'];
   function levelLabel(l) {
     return { easy: tr('lvl.easy', 'Easy'), normal: tr('lvl.normal', 'Normal'), expert: tr('lvl.expert', 'Expert') }[l] || l;
@@ -49,9 +63,9 @@
     return m === 'gin' ? tr('gin', 'Gin Rummy') : tr('thirteen', '13-card Rummy');
   }
   function formatLabel(s) {
-    if (s.mode === 'gin') return tr('ginTo', 'Gin Rummy · to') + ' ' + s.target;
-    if (s.format === 'pool') return tr('pool', 'Pool') + ' ' + s.pool;
-    if (s.format === 'deals') return tr('deals', 'Deals') + ' · ' + s.deals;
+    if (s.mode === 'gin') return tr('gin_rummy_to_target', 'Gin Rummy · to {{target}}', { target: s.target });
+    if (s.format === 'pool') return tr('pool_pool', 'Pool {{pool}}', { pool: s.pool });
+    if (s.format === 'deals') return tr('deals_deals', 'Deals · {{deals}}', { deals: s.deals });
     return tr('points', 'Points Rummy');
   }
   /** India → 13-card by default; everywhere else → Gin. Both are always available. */
@@ -156,17 +170,17 @@
     return tr('badGroup', 'One of your groups isn’t a valid sequence or set.');
   }
   const ERRORS = {
-    not_your_turn: 'Not your turn',
-    phase: 'Not now — wait for your turn',
-    joker_pick: 'Jokers can’t be picked from the open pile',
-    same_card: 'You can’t throw back the card you just picked',
-    no_card: 'That card isn’t in your hand',
-    bad_groups: 'Those groups don’t match your cards',
-    no_drop: 'There’s no drop in Deals',
-    cant_knock: 'Too much deadwood to knock',
-    stock_only: 'Draw from the stock this turn',
-    empty: 'That pile is empty',
-    no_rejoin: 'Rejoin isn’t open',
+    not_your_turn: t('games.rummy.not_your_turn'),
+    phase: t('games.rummy.not_now_wait_for_your_turn'),
+    joker_pick: t('games.rummy.jokers_can_t_be_picked_from'),
+    same_card: t('games.rummy.you_can_t_throw_back_the'),
+    no_card: t('games.rummy.that_card_isn_t_in_your'),
+    bad_groups: t('games.rummy.those_groups_don_t_match_your'),
+    no_drop: t('games.rummy.there_s_no_drop_in_deals'),
+    cant_knock: t('games.rummy.tooMuch'),
+    stock_only: t('games.rummy.draw_from_the_stock_this_turn'),
+    empty: t('games.rummy.that_pile_is_empty'),
+    no_rejoin: t('games.rummy.rejoin_isn_t_open'),
   };
 
   function confirmSheet(title, body, yes, no) {
@@ -276,11 +290,11 @@
       if (s.out) return tr('out', 'Out');
       if (!vm.gin && dd.results && dd.results[i]) {
         const r = dd.results[i];
-        if (r.kind === 'first_drop' || r.kind === 'middle_drop') return tr('dropped', 'Dropped') + ' ' + r.points;
-        if (r.kind === 'wrong') return tr('wrongShow', 'Wrong show') + ' ' + r.points;
+        if (r.kind === 'first_drop' || r.kind === 'middle_drop') return tr('dropped_points', 'Dropped {{points}}', { points: r.points });
+        if (r.kind === 'wrong') return tr('wrong_show_points', 'Wrong show {{points}}', { points: r.points });
         if (r.kind === 'timeout') return tr('timedOut', 'Timed out');
         if (r.kind === 'win') return dd.phase === 'done' ? tr('winner', 'Winner') : tr('declared', 'Declared');
-        if (dd.phase === 'meld' || dd.phase === 'done') return r.points + ' ' + tr('pts', 'pts');
+        if (dd.phase === 'meld' || dd.phase === 'done') return tr('points_pts', '{{points}} pts', { points: r.points });
       }
       if (!vm.gin && dd.phase === 'meld' && (dd.pending || []).indexOf(i) >= 0) return tr('grouping', 'Grouping…');
       return '';
@@ -288,7 +302,7 @@
     function scoreText(s) {
       if (vm.gin) return s.score + ' / ' + vm.set.target;
       if (vm.format === 'pool') return s.score + ' / ' + vm.set.pool;
-      if (vm.format === 'deals') return tr('chipsShort', 'score') + ' ' + s.score;
+      if (vm.format === 'deals') return tr('score_score', 'score {{score}}', { score: s.score });
       return '';
     }
 
@@ -298,7 +312,7 @@
       if (dd.phase === 'done') return dealLine();
       if (dd.phase === 'meld') {
         const who = nameOf(dd.declarer);
-        return vm.mustMeld ? who + ' ' + tr('declaredGroup', 'declared — group your cards and submit') : who + ' ' + tr('declaredWait', 'declared — waiting for everyone’s groups');
+        return vm.mustMeld ? tr('name_declared_group_your_cards_and_submit', '{{name}} declared — group your cards and submit', { name: (typeof bidi === 'function' ? bidi(who) : who) }) : tr('name_declared_waiting_for_everyones_groups', '{{name}} declared — waiting for everyone’s groups', { name: (typeof bidi === 'function' ? bidi(who) : who) });
       }
       if (myTurn()) {
         if (dd.phase === 'upcard') return tr('upcardTurn', 'Take the upcard, or pass');
@@ -306,7 +320,7 @@
         return vm.gin ? tr('throwGin', 'Throw a card — or knock') : tr('throwTurn', 'Throw a card — or put it on Finish to declare');
       }
       const s = vm.seats[dd.turn];
-      return s ? nameOf(dd.turn) + ' ' + tr('isPlaying', 'is playing…') : '';
+      return s ? tr('name_is_playing', '{{name}} is playing…', { name: (typeof bidi === 'function' ? bidi(nameOf(dd.turn)) : nameOf(dd.turn)) }) : '';
     }
 
     function dealLine() {
@@ -386,7 +400,7 @@
         ${
           vm.gin
             ? ''
-            : `<div class="rm-wild" aria-label="${esc(tr('wildIs', 'Wild joker') + ': ' + wildLabel(dd))}">${dd.wildCard ? cardHtml(dd.wildCard, { size: 'sm' }) : ''}<span class="rm-pile-label">${esc(tr('wild', 'Wild'))}: ${esc(wildLabel(dd))}</span></div>`
+            : `<div class="rm-wild" aria-label="${esc(tr('wild_joker_label', 'Wild joker: {{label}}', { label: wildLabel(dd) }))}">${dd.wildCard ? cardHtml(dd.wildCard, { size: 'sm' }) : ''}<span class="rm-pile-label">${esc(tr('wild', 'Wild'))}: ${esc(wildLabel(dd))}</span></div>`
         }
         ${
           !vm.gin && throwing
@@ -658,7 +672,7 @@
       const gs = groups.map((g) => g.filter((x) => x !== card)).filter((g) => g.length);
       const check = C().checkDeclaration(gs, rest, wild());
       if (!check.valid) {
-        const go = await confirmSheet(tr('wrongQ', 'Declare anyway?'), reasonText(check.reason) + ' ' + tr('wrongCost', 'A wrong show costs 80 points.'), tr('declareAnyway', 'Declare anyway'), tr('keepPlaying', 'Keep playing'));
+        const go = await confirmSheet(tr('wrongQ', 'Declare anyway?'), tr('reasontext_a_wrong_show_costs_80_points', '{{reasonText}} A wrong show costs 80 points.', { reasonText: reasonText(check.reason) }), tr('declareAnyway', 'Declare anyway'), tr('keepPlaying', 'Keep playing'));
         if (!go) return;
       }
       send('declare', { card, groups: gs });
@@ -668,11 +682,11 @@
       if (d().drawnFrom === 'open' && card === vm.myDrawn) return toast(ERRORS.same_card);
       const rest = vm.hand.filter((c) => c !== card);
       const pts = solveCached(rest, { gin: true }).points;
-      if (pts > vm.set.knock) return toast(tr('tooMuch', 'Too much deadwood to knock') + ' (' + pts + ')');
+      if (pts > vm.set.knock) return toast(tr('too_much_deadwood_to_knock_pts', 'Too much deadwood to knock ({{pts}})', { pts }));
       send('knock', { card });
     }
     async function doDrop() {
-      const go = await confirmSheet(tr('dropQ', 'Drop this deal?'), tr('dropBody', 'You’ll score') + ' ' + vm.dropCost + ' ' + tr('dropBody2', 'points and sit out until the next deal.'), tr('drop', 'Drop') + ' (' + vm.dropCost + ')', tr('keepPlaying', 'Keep playing'));
+      const go = await confirmSheet(tr('dropQ', 'Drop this deal?'), tr('youll_score_dropcost_points_and_sit_out', 'You’ll score {{dropCost}} points and sit out until the next deal.', { dropCost: vm.dropCost }), tr('drop_dropcost', 'Drop ({{dropCost}})', { dropCost: vm.dropCost }), tr('keepPlaying', 'Keep playing'));
       if (go) send('drop');
     }
 
@@ -687,24 +701,24 @@
         if (vm.mustMeld) {
           const pts = C().evaluate(groups, wild()).points;
           primary.push(btn('data-a="automeld"', tr('autoGroup', 'Auto-group'), 'ghost'));
-          primary.push(btn('data-a="meld"', tr('submit', 'Submit') + ' · ' + pts + ' ' + tr('pts', 'pts'), 'primary'));
+          primary.push(btn('data-a="meld"', tr('submit_pts_pts', 'Submit · {{pts}} pts', { pts }), 'primary'));
         } else if (canDraw()) {
           if (dd.phase === 'upcard') {
             primary.push(btn('data-a="pass"', tr('pass', 'Pass'), 'ghost'));
             primary.push(btn('data-a="take"', tr('takeUp', 'Take upcard'), 'primary'));
-          } else if (vm.canDrop) primary.push(btn('data-a="drop"', tr('drop', 'Drop') + ' (' + vm.dropCost + ')', 'fold'));
+          } else if (vm.canDrop) primary.push(btn('data-a="drop"', tr('drop_dropcost', 'Drop ({{dropCost}})', { dropCost: vm.dropCost }), 'fold'));
         } else if (canThrow()) {
-          if (sel.size > 1) primary.push(btn('data-a="group"', tr('groupN', 'Group') + ' (' + sel.size + ')', 'ghost'));
+          if (sel.size > 1) primary.push(btn('data-a="group"', tr('group_size', 'Group ({{size}})', { size: sel.size }), 'ghost'));
           else if (one) {
             primary.push(btn('data-a="discard"', tr('throw', 'Throw'), vm.gin ? 'ghost' : 'primary'));
             if (vm.gin) {
               const pts = solveCached(vm.hand.filter((c) => c !== one), { gin: true }).points;
-              primary.push(btn('data-a="knock"', pts === 0 ? tr('goGin', 'Gin!') : tr('knock', 'Knock') + ' (' + pts + ')', 'primary', pts > vm.set.knock));
+              primary.push(btn('data-a="knock"', pts === 0 ? tr('goGin', 'Gin!') : tr('knock_pts', 'Knock ({{pts}})', { pts }), 'primary', pts > vm.set.knock));
             } else primary.push(btn('data-a="declare"', tr('declare', 'Declare'), 'ghost'));
           }
           if (vm.gin && vm.set.bigGin && vm.hand.length === 11 && solveCached(vm.hand, { gin: true }).points === 0) primary.push(btn('data-a="biggin"', tr('bigGin', 'Big Gin!'), 'primary'));
         }
-        if (!vm.mustMeld && sel.size > 1 && !canThrow()) primary.push(btn('data-a="group"', tr('groupN', 'Group') + ' (' + sel.size + ')', 'ghost'));
+        if (!vm.mustMeld && sel.size > 1 && !canThrow()) primary.push(btn('data-a="group"', tr('group_size', 'Group ({{size}})', { size: sel.size }), 'ghost'));
         links.push(`<button type="button" class="pk-link" data-a="sort">${esc(vm.gin ? tr('arrange', 'Arrange') : tr('sort', 'Sort by suit'))}</button>`);
         if (!vm.gin && o.helper && o.helper() && !vm.mustMeld) links.push(`<button type="button" class="pk-link" data-a="suggest">${esc(tr('suggest', 'Suggest groups'))}</button>`);
         if (o.onSkip && !vm.gin && dd.active && !dd.active[vm.me]) links.push(`<button type="button" class="pk-link" data-a="skip">${esc(tr('skip', 'Skip to the result'))}</button>`);
@@ -772,7 +786,7 @@
         if (r.kind !== 'draw') {
           const k = r.knocker || {};
           const df = r.defender || {};
-          body = `<div class="rm-res-row${r.by === r.winner ? ' is-win' : ''}"><div class="rm-res-head"><b>${esc(nameOf(r.by))}</b><span>${esc(r.kind === 'gin' || r.kind === 'biggin' ? tr('gin0', 'Gin') : tr('deadwood', 'Deadwood') + ' ' + (k.points || 0))}</span></div>${groupsHtml(k.groups, 0)}${
+          body = `<div class="rm-res-row${r.by === r.winner ? ' is-win' : ''}"><div class="rm-res-head"><b>${esc(nameOf(r.by))}</b><span>${esc(r.kind === 'gin' || r.kind === 'biggin' ? tr('gin0', 'Gin') : tr('deadwood_value', 'Deadwood {{value}}', { value: k.points || 0 }))}</span></div>${groupsHtml(k.groups, 0)}${
             (k.dead || []).length ? `<div class="rm-res-dead">${miniCards(k.dead, 0)}</div>` : ''
           }</div>
           <div class="rm-res-row${r.by !== r.winner ? ' is-win' : ''}"><div class="rm-res-head"><b>${esc(nameOf(1 - r.by))}</b><span>${esc(tr('deadwood', 'Deadwood'))} ${df.points || 0}</span></div>${groupsHtml(df.groups, 0)}${
@@ -884,9 +898,9 @@
 
   function chipLine(vm) {
     if (!vm.chip) return '';
-    if (vm.mode === 'gin') return '⚡' + vm.chip + ' ' + tr('stakeWord', 'stake');
-    if (vm.format === 'points') return '⚡' + vm.chip + ' ' + tr('perPoint', 'per point');
-    return tr('potWord', 'Pot') + ' ⚡' + (vm.pot || 0);
+    if (vm.mode === 'gin') return tr('chip_stake', '⚡{{chip}} stake', { chip: vm.chip });
+    if (vm.format === 'points') return tr('chip_per_point', '⚡{{chip}} per point', { chip: vm.chip });
+    return tr('pot_value', 'Pot ⚡{{value}}', { value: vm.pot || 0 });
   }
 
   function buildVm(pubSt, priv, extra) {
@@ -938,7 +952,7 @@
     const nBots = gin ? 1 : Math.max(1, Math.min(5, Number(s.bots) || 1));
     const me = (K && K.myName()) || tr('you', 'You');
     const players = [{ id: 'me', name: me }];
-    for (let i = 0; i < nBots; i++) players.push({ id: 'bot' + (i + 1), name: tr('bot', 'Bot') + (nBots > 1 ? ' ' + (i + 1) : '') + ' · ' + levelLabel(s.level), bot: true, level: s.level });
+    for (let i = 0; i < nBots; i++) players.push({ id: 'bot' + (i + 1), name: tr('bot_value_label', 'Bot{{value}} · {{label}}', { value: (nBots > 1 ? ' ' + (i + 1) : ''), label: levelLabel(s.level) }), bot: true, level: s.level });
     const settings = { mode: s.mode, format: s.format, pool: s.pool, deals: s.deals, knock: s.knock, target: s.target, scoring: s.scoring, bigGin: !!s.bigGin };
     const rng = CK().seededRng(CK().newSeed());
     const st = C.newMatch(players, settings, rng);
@@ -947,7 +961,7 @@
     let reviewDeal = -1;
     let botTimer = null;
     let recorded = false;
-    const sub = formatLabel(Object.assign({}, C.mergeSettings(settings), { target: settings.target })) + ' · ' + tr('vs', 'vs') + ' ' + levelLabel(s.level);
+    const sub = tr('label_vs_label2', '{{label}} · vs {{label2}}', { label: formatLabel(Object.assign({}, C.mergeSettings(settings), { target: settings.target })), label2: levelLabel(s.level) });
     const shell = K.openShell({
       gameId: GAME,
       title: LABEL,
@@ -1056,7 +1070,7 @@
         if (out.valid) fx('win');
         else {
           fx('invalid');
-          toast(tr('wrongToast', 'Wrong show — 80 points.') + ' ' + reasonText(out.reason));
+          toast(tr('wrong_show_80_points_reasontext', 'Wrong show — 80 points. {{reasonText}}', { reasonText: reasonText(out.reason) }));
         }
       } else if (type === 'discard' || type === 'knock') fx('place');
       refresh();
@@ -1105,7 +1119,7 @@
           <button type="button" class="pk-btn pk-btn--ghost" data-home>${esc(tr('change', 'Change game'))}</button></div></div>`;
         el.querySelector('[data-again]').addEventListener('click', () => K.closeThen(shell, () => startLocal(s)));
         el.querySelector('[data-home]').addEventListener('click', () => K.closeThen(shell, () => openHome({})));
-        el.querySelector('[data-share]').addEventListener('click', () => CK().shareWin(GAME, LABEL, line + ' · ' + formatLabel(s) + ' vs ' + levelLabel(s.level) + ' ' + tr('botLower', 'bots')));
+        el.querySelector('[data-share]').addEventListener('click', () => CK().shareWin(GAME, LABEL, tr('line_label_vs_label2_bots', '{{line}} · {{label}} vs {{label2}} bots', { line, label: formatLabel(s), label2: levelLabel(s.level) })));
       },
       menu: () => [
         { label: tr('rules', 'Rules'), run: () => openRules(s.mode, s.format) },
@@ -1117,15 +1131,15 @@
 
   function finalLine(vm, meSeat) {
     const w = vm.winner;
-    const who = w === meSeat ? tr('youWin', 'You win') : w >= 0 && vm.seats[w] ? vm.seats[w].name + ' ' + tr('wins', 'wins') : tr('gameOver', 'Game over');
+    const who = w === meSeat ? tr('youWin', 'You win') : w >= 0 && vm.seats[w] ? tr('name_wins', '{{name}} wins', { name: (typeof bidi === 'function' ? bidi(vm.seats[w].name) : vm.seats[w].name) }) : tr('gameOver', 'Game over');
     if (vm.mode === 'gin' && vm.final && vm.final.totals) {
       const t = vm.final.totals;
       return who + ' ' + t[w] + '–' + t[1 - w] + (vm.final.shutout ? ' · ' + tr('shutout', 'shutout') : '');
     }
-    if (vm.mode === 'gin' && vm.final && vm.final.forfeit) return who + ' · ' + tr('byForfeit', 'by forfeit');
-    if (vm.format === 'pool') return who + ' ' + tr('thePool', 'the pool');
-    if (vm.format === 'deals' && w >= 0 && vm.seats[w]) return who + ' · ' + vm.seats[w].score + ' ' + tr('scoreWord', 'score');
-    if (vm.format === 'points' && meSeat >= 0 && vm.seats[meSeat] && w !== meSeat) return who + ' · ' + tr('youScored', 'you finished on') + ' ' + vm.seats[meSeat].score + ' ' + tr('pts', 'pts');
+    if (vm.mode === 'gin' && vm.final && vm.final.forfeit) return tr('name_by_forfeit', '{{name}} · by forfeit', { name: (typeof bidi === 'function' ? bidi(who) : who) });
+    if (vm.format === 'pool') return tr('name_the_pool', '{{name}} the pool', { name: (typeof bidi === 'function' ? bidi(who) : who) });
+    if (vm.format === 'deals' && w >= 0 && vm.seats[w]) return tr('name_score_score', '{{name}} · {{score}} score', { name: (typeof bidi === 'function' ? bidi(who) : who), score: vm.seats[w].score });
+    if (vm.format === 'points' && meSeat >= 0 && vm.seats[meSeat] && w !== meSeat) return tr('name_you_finished_on_score_pts', '{{name}} · you finished on {{score}} pts', { name: (typeof bidi === 'function' ? bidi(who) : who), score: vm.seats[meSeat].score });
     return who;
   }
 
@@ -1223,14 +1237,14 @@
   function chipLabel(s) {
     const c = chipOf(s);
     if (!c || Number(s.bots) > 0) return tr('friendly', 'Friendly (no chips)');
-    if (s.mode === 'gin') return '⚡' + c + ' ' + tr('stakeWord', 'stake') + ' · 18+';
-    if (s.format === 'points') return '⚡' + c + ' ' + tr('perPoint', 'per point') + ' · 18+';
-    return '⚡' + c + ' ' + tr('entry', 'entry') + ' · 18+';
+    if (s.mode === 'gin') return tr('c_stake_18', '⚡{{c}} stake · 18+', { c });
+    if (s.format === 'points') return tr('c_per_point_18', '⚡{{c}} per point · 18+', { c });
+    return tr('c_entry_18', '⚡{{c}} entry · 18+', { c });
   }
   function lobbySummary(ctrl) {
     const s = roomSettings(ctrl);
     const bits = [formatLabel(s), chipLabel(s)];
-    if (Number(s.bots) > 0) bits.push(s.bots + ' ' + (Number(s.bots) === 1 ? tr('botOne', 'bot') : tr('botMany', 'bots')) + ' · ' + levelLabel(s.botLevel));
+    if (Number(s.bots) > 0) bits.push(tr('bots_label', '{bots, plural, one {# bot} other {# bots}} · {{label}}', { bots: s.bots, label: levelLabel(s.botLevel) }));
     return bits.join(' · ');
   }
   function canStart(ctrl, players) {
@@ -1353,7 +1367,7 @@
         live: true,
         act: async (type, args) => {
           const out = await ctrl.act(type, args);
-          if (out && type === 'declare' && out.valid === false) toast(tr('wrongToast', 'Wrong show — 80 points.') + ' ' + reasonText(out.reason));
+          if (out && type === 'declare' && out.valid === false) toast(tr('wrong_show_80_points_reasontext', 'Wrong show — 80 points. {{reasonText}}', { reasonText: reasonText(out.reason) }));
           return out || { error: 'failed' };
         },
         onHud: (el) => {
@@ -1418,7 +1432,7 @@
     const K = Kit();
     for (let tries = 0; tries < 2; tries++) {
       try {
-        const res = await K.roomCall(GAME, 'join', { code, name: K.myName() || 'Player' });
+        const res = await K.roomCall(GAME, 'join', { code, name: K.myName() || t('dangal.party.player') });
         if (res.pending) toast(tr('pendingJoin', 'Game in progress — you’ll be dealt in next game'));
         return true;
       } catch (e) {
@@ -1461,7 +1475,7 @@
         }
         const s = roomSettings(ctrl);
         const sec = body.querySelector('.pk-section');
-        if (sec) sec.textContent = tr('atTable', 'At the table') + ' · ' + ctrl.players().length + '/' + (s.mode === 'gin' ? 2 : 6);
+        if (sec) sec.textContent = tr('at_the_table_length_value', 'At the table · {{length}}/{{value}}', { length: ctrl.players().length, value: (s.mode === 'gin' ? 2 : 6) });
         if (typeof ageGateStatus === 'function' && ageGateStatus() !== 'ok' && ageGateStatus() !== 'under_18') {
           const note = document.createElement('button');
           note.type = 'button';
@@ -1469,7 +1483,7 @@
           note.textContent = tr('confirmAdult', 'Confirm you’re 18+ (needed for chip tables)');
           note.addEventListener('click', async () => {
             if (await openAgeGateSheet(GAME)) {
-              await K.roomCall(GAME, 'join', { code, name: K.myName() || 'Player' }).catch(() => {});
+              await K.roomCall(GAME, 'join', { code, name: K.myName() || t('dangal.party.player') }).catch(() => {});
               note.remove();
             }
           });
@@ -1545,8 +1559,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'rummy',
-      name: 'Rummy',
-      desc: '13-card · Gin · bots · Live tables',
+      name: t('games.rummy.rules.ruleset.name'),
+      desc: t('games.rummy.13_card_gin_bots_live_tables'),
       icon: '🃏',
       ratingKey: 'rummy',
       gameType: 'dual',
@@ -1558,7 +1572,7 @@
       ownHome: true,
       order: 33,
       meta: {
-        core: 'rummy-core.js (13-card + Gin rules, solver, bots, coach — shared with the server)',
+        core: t('games.rummy.rummy_core_js_13_card_gin'),
         live: 'party_room → server-lib/rummy-engine.js; server deal, private hands, 2 players rated, 3+ chip ledger',
       },
       launch: openGame,

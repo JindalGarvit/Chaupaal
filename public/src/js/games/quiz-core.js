@@ -11,6 +11,32 @@
  * - Difficulty: every item carries an Elo-style rating; players answering it move it up or down.
  * - AI questions start "pending" and follow PROMOTE / RETIRE thresholds below.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.QuizCore = factory();
@@ -18,24 +44,24 @@
   'use strict';
 
   const CATEGORIES = [
-    { id: 'gk', label: 'General Knowledge', icon: '💡' },
-    { id: 'science', label: 'Science', icon: '🔬' },
-    { id: 'geography', label: 'Geography', icon: '🌍' },
-    { id: 'history', label: 'History', icon: '🏛️' },
-    { id: 'movies', label: 'Movies & TV', icon: '🎬' },
-    { id: 'music', label: 'Music', icon: '🎵' },
-    { id: 'sports', label: 'Sports', icon: '⚽' },
-    { id: 'tech', label: 'Tech', icon: '💻' },
-    { id: 'food', label: 'Food', icon: '🍜' },
-    { id: 'language', label: 'Language & Words', icon: '🔤' },
-    { id: 'art', label: 'Art & Culture', icon: '🎨' },
-    { id: 'nature', label: 'Nature', icon: '🌿' },
+    { id: 'gk', label: gtx('games.quiz.general_knowledge', 'General Knowledge'), icon: '💡' },
+    { id: 'science', label: gtx('games.quiz.science', 'Science'), icon: '🔬' },
+    { id: 'geography', label: gtx('games.quiz.geography', 'Geography'), icon: '🌍' },
+    { id: 'history', label: gtx('games.quiz.history', 'History'), icon: '🏛️' },
+    { id: 'movies', label: gtx('games.quiz.movies_tv', 'Movies & TV'), icon: '🎬' },
+    { id: 'music', label: gtx('common.music', 'Music'), icon: '🎵' },
+    { id: 'sports', label: gtx('common.sports', 'Sports'), icon: '⚽' },
+    { id: 'tech', label: gtx('common.tech', 'Tech'), icon: '💻' },
+    { id: 'food', label: gtx('common.food', 'Food'), icon: '🍜' },
+    { id: 'language', label: gtx('games.quiz.language_words', 'Language & Words'), icon: '🔤' },
+    { id: 'art', label: gtx('games.quiz.art_culture', 'Art & Culture'), icon: '🎨' },
+    { id: 'nature', label: gtx('games.quiz.nature', 'Nature'), icon: '🌿' },
   ];
   const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
   const REGIONS = [
-    { id: 'in', label: 'India' },
-    { id: 'us', label: 'United States' },
-    { id: 'uk', label: 'United Kingdom' },
+    { id: 'in', label: gtx('common.india', 'India') },
+    { id: 'us', label: gtx('games.quiz.united_states', 'United States') },
+    { id: 'uk', label: gtx('games.quiz.united_kingdom', 'United Kingdom') },
   ];
 
   const SCORE_BASE = 600;
@@ -160,7 +186,7 @@
     return Math.round(Math.min(2100, Math.max(900, r)));
   }
   const tierOf = (rating) => (rating < 1400 ? 1 : rating < 1600 ? 2 : 3);
-  const difficultyLabel = (tier) => (tier <= 1 ? 'Easy' : tier === 2 ? 'Medium' : 'Hard');
+  const difficultyLabel = (tier) => (tier <= 1 ? gtx('games.quiz.easy', 'Easy') : tier === 2 ? gtx('games.quiz.medium', 'Medium') : gtx('games.quiz.hard', 'Hard'));
   /** Duel target: items a bit easier than the players' average so ~65% land. */
   const targetRating = (ratings) => {
     const xs = (ratings || []).filter(Number.isFinite);

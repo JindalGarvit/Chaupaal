@@ -7,6 +7,32 @@
  * 0.01 mm positions, pocketed ids per colour, dues, Queen), a phase ('shot' | 'place' | 'boardOver' |
  * 'over'), the game score per team and the board history.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./carrom-physics.js'));
   else root.CarromCore = factory(root.CarromPhysics);
@@ -33,7 +59,7 @@
   const SR = Phys.STRIKER_R;
   const C = Phys.CENTRE;
   const OTHER = { w: 'b', b: 'w' };
-  const COLOR_NAME = { w: 'White', b: 'Black', q: 'Queen' };
+  const COLOR_NAME = { w: gtx('games.carrom.white', 'White'), b: gtx('games.carrom.black', 'Black'), q: gtx('games.carrom.queen', 'Queen') };
 
   const clone = (x) => JSON.parse(JSON.stringify(x));
 
@@ -199,7 +225,7 @@
       mode: doubles ? 'doubles' : 'singles',
       seats: list.map((p, i) => ({
         id: String(p.id),
-        name: String(p.name || 'Player ' + (i + 1)).slice(0, 32),
+        name: String(p.name || gtx('dangal.party.player_n', 'Player {{n}}', { n: i + 1 })).slice(0, 32),
         side: doubles ? i : i * 2,
         team: i % 2,
         bot: !!p.bot,
@@ -251,7 +277,7 @@
     st.phase = 'shot';
     st.place = [];
     st.nextTurn = breaker;
-    st.note = seat.name + ' breaks with white';
+    st.note = gtx('games.carrom.name_breaks_with_white', '{{name}} breaks with white', { name: seat.name });
     st.seq += 1;
   }
 
@@ -282,7 +308,7 @@
   }
 
   function plural(n, c) {
-    return n + ' ' + (c === 'q' ? 'Queen' : COLOR_NAME[c].toLowerCase());
+    return n + ' ' + (c === 'q' ? gtx('games.carrom.queen', 'Queen') : COLOR_NAME[c].toLowerCase());
   }
 
   function returnQueen(st, shooterSide) {
@@ -350,17 +376,17 @@
       if (!touched) {
         // Law 45: the break needs the striker to touch a man — up to three tries, then the turn passes.
         if (pS) {
-          msgs.push('Striker pocketed without touching a man — the break passes (no due on the break).');
+          msgs.push(gtx('games.carrom.striker_pocketed_without_touching_a_man', 'Striker pocketed without touching a man — the break passes (no due on the break).'));
           b.tries = 0;
           return endTurn(st, seat, false, msgs, entry);
         }
         b.tries += 1;
         if (b.tries >= BREAK_TRIES) {
           b.tries = 0;
-          msgs.push('Three tries without touching a man — the break passes.');
+          msgs.push(gtx('games.carrom.three_tries_without_touching_a_man', 'Three tries without touching a man — the break passes.'));
           return endTurn(st, seat, false, msgs, entry);
         }
-        msgs.push('Missed the men — try ' + (b.tries + 1) + ' of 3 to break.');
+        msgs.push(gtx('games.carrom.missed_men_try_n', 'Missed the men — try {{n}} of 3 to break.', { n: b.tries + 1 }));
         return endTurn(st, seat, true, msgs, entry);
       }
       b.broken = true;
@@ -392,38 +418,38 @@
       // 103 / 106 / 111: pocketing the opponent's last man loses the board — by your men left plus the
       // Queen, unless you had already covered it.
       const q = qBefore === 'covered' && qBy === T ? 0 : queenValue(st, O);
-      msgs.push('Pocketed ' + (teamName(st, O) === 'You' ? 'your' : teamName(st, O) + '’s') + ' last man — that loses the board.');
+      msgs.push(gtx('games.carrom.pocketed_value_last_man_that_loses', 'Pocketed {{value}} last man — that loses the board.', { value: teamName(st, O) === 'You' ? gtx('games.carrom.your', 'your') : teamName(st, O) + '’s' }));
       return endBoard(st, O, menLeft(st, myC) + q + extra, 'opp_last', msgs, entry);
     }
     if (lastOwn && lastOpp) {
       if (pS) {
         const pts = (qBefore === 'covered' && qBy === T ? 1 : threeOrOne(st, O)) + 1; // 109 / 110 / 112
-        msgs.push('Both last men went in with the striker — the board goes to ' + teamName(st, O) + '.');
+        msgs.push(gtx('games.carrom.both_last_men_went_in_with', 'Both last men went in with the striker — the board goes to {{teamName}}.', { teamName: teamName(st, O) }));
         return endBoard(st, O, pts, 'both_last_striker', msgs, entry);
       }
       if (queenOnBoard) {
-        msgs.push('Both last men went in with the Queen still on the board — the board goes to ' + teamName(st, O) + '.'); // 105
+        msgs.push(gtx('games.carrom.both_last_men_went_in_with_2', 'Both last men went in with the Queen still on the board — the board goes to {{teamName}}.', { teamName: teamName(st, O) })); // 105
         return endBoard(st, O, threeOrOne(st, O), 'both_last_queen', msgs, entry);
       }
       if (qBefore === 'covered' && qBy === O) {
-        msgs.push('Last men down together — ' + teamSays(st, T, 'finish') + ' first.');
+        msgs.push(gtx('games.carrom.last_men_down_together_teamsays_first', 'Last men down together — {{teamSays}} first.', { teamSays: teamSays(st, T, 'finish') }));
         return endBoard(st, T, 1, 'both_last', msgs, entry);
       }
-      msgs.push('Queen and both last men — ' + teamSays(st, T, 'take') + ' the board.'); // 102 / 104
+      msgs.push(gtx('games.carrom.queen_and_both_last_men_teamsays', 'Queen and both last men — {{teamSays}} the board.', { teamSays: teamSays(st, T, 'take') })); // 102 / 104
       if (pQ || qBefore === 'pending') b.queen = { s: 'covered', by: T };
       return endBoard(st, T, threeOrOne(st, T), 'both_last_cover', msgs, entry);
     }
     if (lastOwn) {
       if (queenOnBoard) {
         // 107 / 108: finishing your men with the Queen still on the board loses by 3.
-        msgs.push('Last man pocketed with the Queen still on the board — that loses the board.');
+        msgs.push(gtx('games.carrom.last_man_pocketed_with_the_queen', 'Last man pocketed with the Queen still on the board — that loses the board.'));
         return endBoard(st, O, threeOrOne(st, O) + extra, 'queen_left', msgs, entry);
       }
       if (!pS) {
         const covering = pQ || qBefore === 'pending';
         if (covering) b.queen = { s: 'covered', by: T };
         const q = b.queen.s === 'covered' && b.queen.by === T ? queenValue(st, T) : 0;
-        msgs.push(teamSays(st, T, 'pocket') + ' their last man' + (covering ? ' and cover the Queen' : '') + '.');
+        msgs.push(gtx('games.carrom.teamsays_their_last_man_value', '{{teamSays}} their last man{{value}}.', { teamSays: teamSays(st, T, 'pocket'), value: covering ? gtx('games.carrom.and_cover_the_queen', ' and cover the Queen') : '' }));
         return endBoard(st, T, menLeft(st, opC) + q, 'cleared', msgs, entry);
       }
       // With the striker the men come back (73 / 98 / 101) — the board goes on.
@@ -444,26 +470,26 @@
         dues = 1;
         cont = true;
         if (pQ) queenBack = true; // 98a
-        msgs.push('Striker pocketed with ' + plural(pOwn, myC) + ' — they come back with a due. Shoot again.');
+        msgs.push(gtx('games.carrom.striker_pocketed_with_plural_they_come', 'Striker pocketed with {{plural}} — they come back with a due. Shoot again.', { plural: plural(pOwn, myC) }));
       } else if (pQ) {
         queenBack = true;
         dues = 1;
         // 99a: continue — unless all nine are still on the board (95d) or the Queen wasn't yours to take (95a/b).
         cont = !nineOnBoard && b.ever[myC] && b.due[myC] === 0;
-        msgs.push('Queen and striker pocketed — the Queen goes back and you owe a due.' + (cont ? ' Shoot again.' : ''));
+        msgs.push(gtx('games.carrom.queen_and_striker_pocketed_the_queen', 'Queen and striker pocketed — the Queen goes back and you owe a due.{{value}}', { value: cont ? gtx('games.carrom.shoot_again', ' Shoot again.') : '' }));
       } else {
         dues = 1; // 72a / 74
         if (pendingBefore) queenBack = true; // 100a
-        msgs.push('Striker pocketed — due: one ' + COLOR_NAME[myC].toLowerCase() + ' man goes back.');
+        msgs.push(gtx('games.carrom.striker_pocketed_due_one_value_man', 'Striker pocketed — due: one {{value}} man goes back.', { value: COLOR_NAME[myC].toLowerCase() }));
       }
     } else {
       if (pQ) {
         if (b.due[myC] > 0) {
           queenBack = true; // 95b
-          msgs.push('Queen pocketed while you owe a due — it goes back and the turn passes.');
+          msgs.push(gtx('games.carrom.queen_pocketed_while_you_owe_a', 'Queen pocketed while you owe a due — it goes back and the turn passes.'));
         } else if (!b.ever[myC] && pOwn === 0) {
           queenBack = true; // 95a
-          msgs.push('Queen pocketed before any of your men — it goes back and the turn passes.');
+          msgs.push(gtx('games.carrom.queen_pocketed_before_any_of_your', 'Queen pocketed before any of your men — it goes back and the turn passes.'));
         } else if (pOwn > 0) {
           if (nineOnBoard && pOwn === 1) queenPend = true; // 97b
           else queenCover = true; // 97a
@@ -473,16 +499,16 @@
         if (pOwn > 0) queenCover = true;
         else {
           queenBack = true; // 96
-          msgs.push('Queen not covered — back to the centre.');
+          msgs.push(gtx('games.carrom.queen_not_covered_back_to_the', 'Queen not covered — back to the centre.'));
         }
       }
       cont = !queenBack && (pOwn > 0 || queenPend || queenCover);
       if (pQ && b.due[myC] > 0) cont = false;
     }
-    if (pOpp > 0) msgs.push('Pocketed ' + plural(pOpp, opC) + ' — ' + (pOpp > 1 ? 'they count' : 'it counts') + ' for ' + teamName(st, O) + '.'); // 74 / 125
-    if (!pS && pOwn > 0) msgs.unshift('Pocketed ' + plural(pOwn, myC) + '.');
-    if (queenCover) msgs.push('Queen covered!');
-    if (queenPend) msgs.push('Queen pocketed — cover it with one of your men next shot.');
+    if (pOpp > 0) msgs.push(gtx('games.carrom.pocketed_opp_count', 'Pocketed ' + plural(pOpp, opC) + ' — ' + (pOpp > 1 ? 'they count' : 'it counts') + ' for ' + teamName(st, O) + '.', { count: pOpp, men: plural(pOpp, opC), team: teamName(st, O) })); // 74 / 125
+    if (!pS && pOwn > 0) msgs.unshift(gtx('games.carrom.pocketed_plural', 'Pocketed {{plural}}.', { plural: plural(pOwn, myC) }));
+    if (queenCover) msgs.push(gtx('games.carrom.queen_covered', 'Queen covered!'));
+    if (queenPend) msgs.push(gtx('games.carrom.queen_pocketed_cover_it_with_one', 'Queen pocketed — cover it with one of your men next shot.'));
 
     // Queen bookkeeping
     if (queenCover) b.queen = { s: 'covered', by: T };
@@ -501,7 +527,7 @@
     b.due[opC] = owedO - takeO;
     if (take > 0) queuePlace(st, myC, take, placerFor(st, seat));
     if (takeO > 0) queuePlace(st, opC, takeO, seat); // 78b-ii: the shooter places the opponent's outstanding due
-    if (b.due[myC] > 0 && dues > 0) msgs.push('Due owed: ' + plural(b.due[myC], myC) + ' comes back as soon as you pocket one.');
+    if (b.due[myC] > 0 && dues > 0) msgs.push(gtx('games.carrom.due_owed_plural_comes_back_as', 'Due owed: {{plural}} comes back as soon as you pocket one.', { plural: plural(b.due[myC], myC) }));
     return endTurn(st, seat, cont, msgs, entry);
   }
 
@@ -529,25 +555,25 @@
       if (back === 'q') back = b.fp[T].pop() || null;
       if (back) owedPlace.push(back);
       const n = owedPlace.length;
-      msgs.push('Striker pocketed — ' + (n ? n + (n > 1 ? ' men go' : ' man goes') + ' back to the centre' : 'turn passes') + '.');
+      msgs.push(gtx('games.carrom.striker_pocketed_value', 'Striker pocketed — {{value}}.', { value: n ? gtx('games.carrom.men_back_centre', n + (n > 1 ? ' men go' : ' man goes') + ' back to the centre', { count: n }) : gtx('games.carrom.turn_passes', 'turn passes') }));
     } else {
       men.forEach((p) => b.fp[T].push(p.id));
-      if (men.length) msgs.push('Pocketed ' + men.map((p) => COLOR_NAME[p.c].toLowerCase()).join(' + ') + '.');
+      if (men.length) msgs.push(gtx('games.carrom.pocketed_value', 'Pocketed {{value}}.', { value: men.map((p) => COLOR_NAME[p.c].toLowerCase()).join(' + ') }));
       if (pQ && men.length) {
         b.queen = { s: 'covered', by: T };
         b.fp[T].push('q');
-        msgs.push('Queen covered — 50 points!');
+        msgs.push(gtx('games.carrom.queen_covered_50_points', 'Queen covered — 50 points!'));
       } else if (pQ) {
         b.queen = { s: 'pending', by: T };
-        msgs.push('Queen pocketed — cover it with any man next shot.');
+        msgs.push(gtx('games.carrom.queen_pocketed_cover_it_with_any', 'Queen pocketed — cover it with any man next shot.'));
       } else if (pending) {
         if (men.length) {
           b.queen = { s: 'covered', by: T };
           b.fp[T].push('q');
-          msgs.push('Queen covered — 50 points!');
+          msgs.push(gtx('games.carrom.queen_covered_50_points', 'Queen covered — 50 points!'));
         } else {
           returnQueen(st, st.seats[seat].side);
-          msgs.push('Queen not covered — back to the centre.');
+          msgs.push(gtx('games.carrom.queen_not_covered_back_to_the', 'Queen not covered — back to the centre.'));
         }
       }
       cont = men.length > 0 || b.queen.s === 'pending';
@@ -587,9 +613,9 @@
   function endTurn(st, seat, cont, msgs, entry) {
     const next = cont ? seat : nextSeat(st, seat);
     st.nextTurn = next;
-    if (!msgs.length) msgs.push('No pocket.');
+    if (!msgs.length) msgs.push(gtx('games.carrom.no_pocket', 'No pocket.'));
     if (entry) entry.msg = msgs.join(' ');
-    st.note = [msgs.join(' '), cont ? (/again/.test(msgs.join(' ')) ? '' : 'Shoot again.') : st.seats[next].name === 'You' ? 'Your turn.' : st.seats[next].name + '’s turn.'].filter(Boolean).join(' ');
+    st.note = [msgs.join(' '), cont ? (/again/.test(msgs.join(' ')) ? '' : gtx('games.carrom.shoot_again_dot', 'Shoot again.')) : st.seats[next].name === 'You' ? gtx('games.carrom.your_turn_dot', 'Your turn.') : gtx('games.carrom.name_turn', st.seats[next].name + '’s turn.', { name: st.seats[next].name })].filter(Boolean).join(' ');
     if (st.place.length) st.phase = 'place';
     else startTurn(st, next);
     return { ok: true };
@@ -602,7 +628,7 @@
     // Law 142: no room on the baseline for the striker → the board is replayed.
     if (!legalSpots(st.board.pieces, st.seats[seat].side, 40).length && !legalSpots(st.board.pieces, st.seats[seat].side, 5).length) {
       const br = st.board.breaker;
-      st.note = 'No room for the striker on the baseline — the board is replayed.';
+      st.note = gtx('games.carrom.no_room_for_the_striker_on', 'No room for the striker on the baseline — the board is replayed.');
       const keepScores = st.scores.slice();
       newBoard(st, br);
       st.scores = keepScores;
@@ -618,7 +644,7 @@
     st.boards.push({ no: b.no, winner, pts, why, queen: b.queen.s === 'covered' ? b.queen.by : null });
     if (entry) entry.msg = msgs.join(' ');
     st.place = [];
-    st.note = msgs.join(' ') + ' ' + teamSays(st, winner, 'win') + ' the board +' + pts + '.';
+    st.note = gtx('games.carrom.msgs_teamsays_the_board_pts', '{{msgs}} {{teamSays}} the board +{{pts}}.', { msgs: msgs.join(' '), teamSays: teamSays(st, winner, 'win'), pts });
     if (st.variant === 'quick') return finish(st, winner, 'board');
     if (st.scores[winner] >= GAME_POINTS) return finish(st, winner, 'points');
     if (st.boards.length >= GAME_BOARDS) {
@@ -647,7 +673,7 @@
     const scores = st.scores.slice();
     newBoard(st, br);
     st.scores = scores;
-    if (st.extra) st.note = 'Level after eight boards — extra board. ' + st.seats[br].name + ' won the toss and breaks.';
+    if (st.extra) st.note = gtx('games.carrom.level_after_eight_boards_extra_board', 'Level after eight boards — extra board. {{name}} won the toss and breaks.', { name: st.seats[br].name });
     return { ok: true };
   }
 
@@ -688,7 +714,7 @@
   function forgo(st, seat) {
     if (st.phase !== 'place' || !st.place.length) return { error: 'phase' };
     if (seat != null && seat !== st.place[0].seat) return { error: 'not_your_turn' };
-    st.note = st.seats[st.place[0].seat].name + ' let the due go.';
+    st.note = gtx('games.carrom.value_let_the_due_go', '{{value}} let the due go.', { value: st.seats[st.place[0].seat].name });
     return donePlacing(st, true);
   }
 
@@ -705,10 +731,10 @@
   function timeoutFoul(st, seat) {
     if (st.over || st.phase !== 'shot' || seat !== st.turn) return { error: 'phase' };
     const b = st.board;
-    const msgs = [st.seats[seat].name + ' ran out of time'];
+    const msgs = [gtx('games.carrom.name_ran_out_of_time', st.seats[seat].name + ' ran out of time', { name: st.seats[seat].name })];
     if (!b.broken) {
       b.tries = 0;
-      msgs[0] += ' — the break passes (no penalty on the break).';
+      msgs[0] += ' ' + gtx('games.carrom.the_break_passes_no_penalty_on', '— the break passes (no penalty on the break).');
       return endTurn(st, seat, false, msgs, null);
     }
     const T = teamOf(st, seat);
@@ -720,14 +746,14 @@
       if (back === 'q') back = b.fp[T].pop() || null;
       if (back) queuePlace(st, back.charAt(0), 1, placerFor(st, seat), [back]);
       freeScores(st);
-      msgs[0] += ' — foul, turn passes.';
+      msgs[0] += ' ' + gtx('games.carrom.foul_turn_passes', '— foul, turn passes.');
       return endTurn(st, seat, false, msgs, null);
     }
     const owed = 1 + b.due[myC];
     const take = Math.min(owed, b.pocketed[myC].length);
     b.due[myC] = owed - take;
     if (take) queuePlace(st, myC, take, placerFor(st, seat));
-    msgs[0] += ' — foul: one ' + COLOR_NAME[myC].toLowerCase() + ' man ' + (take ? 'comes back' : 'is owed') + ' and the turn passes.';
+    msgs[0] += gtx('games.carrom.foul_one_value_man_value2_and', ' — foul: one {{value}} man {{value2}} and the turn passes.', { value: COLOR_NAME[myC].toLowerCase(), value2: take ? gtx('games.carrom.comes_back', 'comes back') : gtx('games.carrom.is_owed', 'is owed') });
     return endTurn(st, seat, false, msgs, null);
   }
 
@@ -736,7 +762,7 @@
     if (st.over) return { error: 'over' };
     const T = teamOf(st, seat);
     st.forfeit = { seat, team: T, reason: reason || 'resign' };
-    st.note = st.seats[seat].name + (reason === 'left' ? ' left' : reason === 'afk' ? ' timed out three times' : ' resigned') + ' — ' + teamSays(st, 1 - T, 'win') + '.';
+    st.note = gtx(reason === 'left' ? 'games.carrom.name_left_outcome' : reason === 'afk' ? 'games.carrom.name_afk_outcome' : 'games.carrom.name_resigned_outcome', st.seats[seat].name + (reason === 'left' ? ' left' : reason === 'afk' ? ' timed out three times' : ' resigned') + ' — ' + teamSays(st, 1 - T, 'win') + '.', { name: st.seats[seat].name, outcome: teamSays(st, 1 - T, 'win') });
     return finish(st, 1 - T, reason || 'resign');
   }
 

@@ -4,6 +4,32 @@
  * null-move pruning, late-move reductions, tapered PST evaluation.
  * Runs inside chess-worker.js (lazy-loaded); a shallow main-thread call is the low-end fallback.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./chess-core.js'));
   else root.ChessSearch = factory(root.ChessCore);
@@ -416,10 +442,10 @@
 
   /** Style parameters only — personas never change rules or honesty labels. */
   const PERSONAS = {
-    aggressive: { label: 'Aggressive', checkBonus: 25, captureBonus: 20, quietPenalty: 0, tempMul: 1, style: { kingAttack: 7, shelter: 4 } },
-    solid: { label: 'Solid', checkBonus: 0, captureBonus: 5, quietPenalty: 0, tempMul: 0.7, style: { kingAttack: 2, shelter: 10 } },
-    tricky: { label: 'Tricky', checkBonus: 30, captureBonus: 10, quietPenalty: 0, tempMul: 1.2, style: { kingAttack: 5, shelter: 6 } },
-    friendly: { label: 'Friendly', checkBonus: 0, captureBonus: 0, quietPenalty: 0, tempMul: 1.5, style: { kingAttack: 2, shelter: 6 } },
+    aggressive: { label: gtx('games.chess.aggressive', 'Aggressive'), checkBonus: 25, captureBonus: 20, quietPenalty: 0, tempMul: 1, style: { kingAttack: 7, shelter: 4 } },
+    solid: { label: gtx('games.chess.solid', 'Solid'), checkBonus: 0, captureBonus: 5, quietPenalty: 0, tempMul: 0.7, style: { kingAttack: 2, shelter: 10 } },
+    tricky: { label: gtx('games.chess.tricky', 'Tricky'), checkBonus: 30, captureBonus: 10, quietPenalty: 0, tempMul: 1.2, style: { kingAttack: 5, shelter: 6 } },
+    friendly: { label: gtx('games.chess.friendly', 'Friendly'), checkBonus: 0, captureBonus: 0, quietPenalty: 0, tempMul: 1.5, style: { kingAttack: 2, shelter: 6 } },
   };
 
   function levelInfo(level) {

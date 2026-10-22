@@ -43,7 +43,7 @@ assert(/og=1&kind=profile/.test(vercel), 'bot rewrite profile');
 assert(/\/challenge\/\(\.\*\)/.test(vercel), 'challenge SPA rewrite');
 assert(/user-agent/.test(vercel), 'UA has condition');
 
-const beat = fs.readFileSync(path.join(__dirname, '../public/src/js/games/game-ui.js'), 'utf8');
+const beat = require('./lib/i18n-source').readWithCopy('public/src/js/games/game-ui.js');
 assert(/\/challenge\//.test(beat), 'buildBeatScoreLink uses /challenge/');
 assert(/openLeaderboardRankShare/.test(beat), 'rank share helper');
 assert(/Share my rank/.test(beat), 'share my rank CTA');

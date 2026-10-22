@@ -445,7 +445,7 @@ function rtdbTrip(v) {
     const ds = read('public/src/js/dangal/design-system.js');
     assert(/penalty: \{ primary: '#00A86B'[^}]*mark: M\.penalty[^}]*orientation: 'portrait'/.test(ds) && require(path.join(root, 'public/src/js/dangal/dangal-rating-math.js')).isRated('penalty'), 'identity (portrait, mark) + rated');
     const ui = read('public/src/js/games/game-ui.js');
-    assert(/penalty: '#00A86B'/.test(ui) && /penalty: 'Penalty Shootout'/.test(ui) && /penalty: \[/.test(ui), 'accent, label, coach tips');
+    assert(/penalty: '#00A86B'/.test(ui) && /penalty: (t\('dangal\.penalty_shootout'\)|'Penalty Shootout')/.test(ui) && /penalty: \[/.test(ui), 'accent, label, coach tips');
     const ach = read('public/src/js/dangal/dangal-achievements.js');
     assert(/penalty_clean_sheet/.test(ach) && /penalty_panenka/.test(ach), 'achievements listed on the client');
     const econSrc = read('server-lib/dangal-economy.js');

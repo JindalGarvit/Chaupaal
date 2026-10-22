@@ -23,7 +23,8 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const { readWithCopy } = require('./lib/i18n-source');
+const read = (p) => readWithCopy(p);
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 const Rules = require(path.join(root, 'public/src/js/dangal/dangal-rules.js'));
@@ -380,7 +381,7 @@ function graduation() {
     ['chess', 'uno', 'badminton', 'poker', 'ludo', ''].forEach((g) => assert(/Bot$/.test(AI.FALLBACKS.botPersona({ gameId: g, level: 'regular', persona: g === 'chess' ? 'solid' : g === 'uno' ? 'honest' : g === 'badminton' ? 'allround' : '' }).name), 'bot persona for “' + (g || 'any') + '” is labelled Bot'));
     const persona = AI.createDangalAI({ env: { AI_FEATURES_ENABLED: 'true' }, callAI: async () => ({ text: JSON.stringify({ name: 'Priya', style: { aggression: 0.5, bluff: 0.2, speed: 0.5, chattiness: 0.3 } }) }) });
     assert(/ Bot$/.test((await persona.run('botPersona', { gameId: 'ludo' }, { uid: 'b' })).data.name), 'an AI-made persona name is always labelled Bot');
-    assert(/' Bot', seat: i/.test(read('public/src/js/games/poker.js')) && /' · Bot'/.test(read('public/src/js/games/tambola-core.js')), 'practice / table bots carry “Bot” in their names');
+    assert((/' Bot', seat: i/.test(read('public/src/js/games/poker.js')) || (/games\.poker\.value_levellabel_bot', \{[^}]*\}\), seat: i/.test(read('public/src/js/games/poker.js')) && / Bot$/.test(t('games.poker.value_levellabel_bot', { value: 'Ava', levelLabel: 'Regular' })))) && /' · Bot'/.test(read('public/src/js/games/tambola-core.js')), 'practice / table bots carry “Bot” in their names');
     const chipCash = scan(/(buy chips|purchase chips|cash out (table|chips)|withdraw chips|chips? for (real )?money|redeem chips)/i, jsFiles);
     assert(chipCash.length === 0, 'chips: no purchase or cash-out path in any game (' + chipCash.slice(0, 3).join(', ') + ')');
     const moneyServer = fs.readdirSync(path.join(root, 'server-lib')).filter((f) => /money/i.test(f)).map((f) => read('server-lib/' + f)).join('\n');
@@ -408,7 +409,7 @@ function graduation() {
     assert(/dangal_sound_off/.test(read('public/src/js/dangal/dangal-sound.js')) && /dangal_haptics_off/.test(read('public/src/js/core/polish.js')) && /dangal_reduce_motion/.test(read('public/src/js/games/game-ui.js')) && /dangal_reduce_motion/.test(read('public/src/js/games/party-kit.js')), 'sound, vibration and reduce-motion switches are honoured by the shared layers');
     const uiSrc = read('public/src/js/dangal/dangal-assist-ui.js');
     assert(["'sound', 'Sound'", "'haptics', 'Vibration'", "'tips', 'Post-game tips'", "'motion', 'Reduce motion'"].every((s) => uiSrc.indexOf(s) >= 0) && /extrasHtml\(canon\(id\)/.test(read('public/src/js/dangal/dangal-rules.js')), 'every game’s Rules sheet carries Sound / Vibration / Tips / Reduce motion toggles');
-    assert(/aria-live="polite"/.test(uiSrc) && /aria-label="Dismiss tip"/.test(uiSrc) && /aria-label="Fewer players"/.test(uiSrc), 'new controls have screen-reader labels / live regions');
+    assert(/aria-live="polite"/.test(uiSrc) && /aria-label="\$\{tHtml\('dangal\.dismiss_tip'\)\}"/.test(uiSrc) && /aria-label="\$\{tHtml\('dangal\.fewer_players'\)\}"/.test(uiSrc) && /Dismiss tip/.test(uiSrc) && /Fewer players/.test(uiSrc), 'new controls have screen-reader labels / live regions');
     assert(/\.dangal-reduce-motion \*/.test(read('public/src/styles/dangal.css')), 'reduce-motion switch also stops CSS animation');
     const CB = {
       tiptap: ['games/arcade.js', /colorblind/], brickbreaker: ['games/solo-hub.js', /colorblind/], ankjod: ['games/ank-jod.js', /digit|aria/], wordguess: ['games/shabd-ui.js', /High contrast colours/],

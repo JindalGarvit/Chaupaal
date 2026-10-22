@@ -55,7 +55,7 @@ const FINAL = [
   const ui = read('public/src/js/games/game-ui.js');
   const missingIdentity = ids.filter((id) => !new RegExp('\\b' + id + ':\\s*\\{[^}]*label:').test(ds));
   assert(missingIdentity.length === 0, 'every roster title has an identity (' + (missingIdentity.join(',') || 'all') + ')');
-  const missingLabel = ids.filter((id) => !new RegExp('\\b' + id + ':\\s*[\'"][A-Z]').test(ui));
+  const missingLabel = ids.filter((id) => !new RegExp('\\b' + id + ':\\s*([\'"][A-Z]|t\\(\'[\\w.]+\'\\))').test(ui));
   assert(missingLabel.length === 0, 'every roster title has a display label (' + (missingLabel.join(',') || 'all') + ')');
 
   // Retired / old names appear only in retired + alias lists and tests.

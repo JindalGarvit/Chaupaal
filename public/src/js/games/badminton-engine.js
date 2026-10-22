@@ -30,6 +30,32 @@
  * The second half of the file is the gameplay layer (PLAY): how a timed tap becomes a landing
  * spot and which faults it risks. Laws never depend on it; the server uses it with its own seed.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -44,9 +70,9 @@
    * score that triggers the mid-game interval (and the end change in the deciding game).
    */
   const FORMATS = {
-    standard: { id: 'standard', label: 'Standard', blurb: 'Best of 3 games to 21', games: 3, points: 21, cap: 30, interval: 11, rated: true },
-    single: { id: 'single', label: 'Single game', blurb: 'One game to 21', games: 1, points: 21, cap: 30, interval: 11, rated: false },
-    quick11: { id: 'quick11', label: 'Quick 11', blurb: 'Best of 3 to 11 (a Chaupaal quick format)', games: 3, points: 11, cap: 15, interval: 6, rated: false, chaupaal: true },
+    standard: { id: 'standard', label: gtx('games.badminton.standard', 'Standard'), blurb: gtx('games.badminton.best_of_3_games_to_21', 'Best of 3 games to 21'), games: 3, points: 21, cap: 30, interval: 11, rated: true },
+    single: { id: 'single', label: gtx('games.badminton.single_game', 'Single game'), blurb: gtx('games.badminton.one_game_to_21', 'One game to 21'), games: 1, points: 21, cap: 30, interval: 11, rated: false },
+    quick11: { id: 'quick11', label: gtx('games.badminton.quick_11', 'Quick 11'), blurb: gtx('games.badminton.best_of_3_to_11_a', 'Best of 3 to 11 (a Chaupaal quick format)'), games: 3, points: 11, cap: 15, interval: 6, rated: false, chaupaal: true },
   };
   const FORMAT_ORDER = ['standard', 'single', 'quick11'];
   const DISCIPLINES = ['singles', 'doubles'];
@@ -107,38 +133,38 @@
 
   /** Rally-ending codes. kind: 'winner' (the hitter's side wins) or 'fault' (the hitter's side loses). */
   const CODES = {
-    winner: { kind: 'winner', label: 'Winner', law: 'Law 13.3 — lands in court', say: 'lands in' },
-    out: { kind: 'fault', label: 'Out', law: 'Law 13.3 — lands outside the boundary lines', say: 'out' },
-    net: { kind: 'fault', label: 'Into the net', law: 'Law 13.3 — fails to pass over the net', say: 'into the net' },
-    net_touch: { kind: 'fault', label: 'Touched the net', law: 'Law 13.4 — racket or body touches the net or posts', say: 'touched the net' },
-    double_hit: { kind: 'fault', label: 'Double hit', law: 'Law 13.3 — hit twice, or by partners in succession', say: 'double hit' },
-    obstruction: { kind: 'fault', label: 'Obstruction', law: 'Law 13.4 — obstructs an opponent', say: 'obstruction' },
-    serve_height: { kind: 'fault', label: 'Service fault — above 1.15 m', law: 'Law 9.1 — whole shuttle below 1.15 m at impact', say: 'service fault' },
-    serve_feet: { kind: 'fault', label: 'Service fault — feet moved', law: 'Law 9.1 — feet stationary until the serve is delivered', say: 'service fault' },
-    serve_net: { kind: 'fault', label: 'Serve into the net', law: 'Law 13.2 — the serve fails to pass the net or is caught in it', say: 'serve into the net' },
-    serve_short: { kind: 'fault', label: 'Serve short', law: 'Law 9.1 — must pass the short service line', say: 'short' },
-    serve_long: { kind: 'fault', label: 'Serve long', law: 'Law 10 / 11 — beyond the long service line', say: 'long' },
-    serve_wide: { kind: 'fault', label: 'Serve wide', law: 'Law 9.1 — into the diagonal service court', say: 'wide' },
+    winner: { kind: 'winner', label: gtx('games.badminton.winner', 'Winner'), law: gtx('games.badminton.law_13_3_lands_in_court', 'Law 13.3 — lands in court'), say: gtx('games.badminton.lands_in', 'lands in') },
+    out: { kind: 'fault', label: gtx('games.badminton.out', 'Out'), law: gtx('games.badminton.law_13_3_lands_outside_the', 'Law 13.3 — lands outside the boundary lines'), say: 'out' },
+    net: { kind: 'fault', label: gtx('games.badminton.into_the_net', 'Into the net'), law: gtx('games.badminton.law_13_3_fails_to_pass', 'Law 13.3 — fails to pass over the net'), say: gtx('games.badminton.into_the_net_2', 'into the net') },
+    net_touch: { kind: 'fault', label: gtx('games.badminton.touched_the_net', 'Touched the net'), law: gtx('games.badminton.law_13_4_racket_or_body', 'Law 13.4 — racket or body touches the net or posts'), say: gtx('games.badminton.touched_the_net_2', 'touched the net') },
+    double_hit: { kind: 'fault', label: gtx('games.badminton.double_hit', 'Double hit'), law: gtx('games.badminton.law_13_3_hit_twice_or', 'Law 13.3 — hit twice, or by partners in succession'), say: gtx('games.badminton.double_hit_2', 'double hit') },
+    obstruction: { kind: 'fault', label: gtx('games.badminton.obstruction', 'Obstruction'), law: gtx('games.badminton.law_13_4_obstructs_an_opponent', 'Law 13.4 — obstructs an opponent'), say: 'obstruction' },
+    serve_height: { kind: 'fault', label: gtx('games.badminton.service_fault_above_1_15_m', 'Service fault — above 1.15 m'), law: gtx('games.badminton.law_9_1_whole_shuttle_below', 'Law 9.1 — whole shuttle below 1.15 m at impact'), say: gtx('games.badminton.service_fault', 'service fault') },
+    serve_feet: { kind: 'fault', label: gtx('games.badminton.service_fault_feet_moved', 'Service fault — feet moved'), law: gtx('games.badminton.law_9_1_feet_stationary_until', 'Law 9.1 — feet stationary until the serve is delivered'), say: gtx('games.badminton.service_fault', 'service fault') },
+    serve_net: { kind: 'fault', label: gtx('games.badminton.serve_into_the_net', 'Serve into the net'), law: gtx('games.badminton.law_13_2_the_serve_fails', 'Law 13.2 — the serve fails to pass the net or is caught in it'), say: gtx('games.badminton.serve_into_the_net_2', 'serve into the net') },
+    serve_short: { kind: 'fault', label: gtx('games.badminton.serve_short', 'Serve short'), law: gtx('games.badminton.law_9_1_must_pass_the', 'Law 9.1 — must pass the short service line'), say: 'short' },
+    serve_long: { kind: 'fault', label: gtx('games.badminton.serve_long', 'Serve long'), law: gtx('games.badminton.law_10_11_beyond_the_long', 'Law 10 / 11 — beyond the long service line'), say: 'long' },
+    serve_wide: { kind: 'fault', label: gtx('games.badminton.serve_wide', 'Serve wide'), law: gtx('games.badminton.law_9_1_into_the_diagonal', 'Law 9.1 — into the diagonal service court'), say: 'wide' },
   };
   const LETS = {
-    not_ready: { label: 'Let — receiver not ready', law: 'Law 14.2 — server served before the receiver was ready' },
-    caught_net: { label: 'Let — caught in the net', law: 'Law 14.2 — caught in the net after passing over (not on the serve)' },
-    both_fault: { label: 'Let — both faulted', law: 'Law 14.2 — server and receiver faulted at the same time' },
-    disintegrated: { label: 'Let — shuttle broke', law: 'Law 14.2 — the shuttle came apart' },
-    disturbed: { label: 'Let', law: 'Law 14.2 — an unforeseen or accidental occurrence' },
+    not_ready: { label: gtx('games.badminton.let_receiver_not_ready', 'Let — receiver not ready'), law: gtx('games.badminton.law_14_2_server_served_before', 'Law 14.2 — server served before the receiver was ready') },
+    caught_net: { label: gtx('games.badminton.let_caught_in_the_net', 'Let — caught in the net'), law: gtx('games.badminton.law_14_2_caught_in_the', 'Law 14.2 — caught in the net after passing over (not on the serve)') },
+    both_fault: { label: gtx('games.badminton.let_both_faulted', 'Let — both faulted'), law: gtx('games.badminton.law_14_2_server_and_receiver', 'Law 14.2 — server and receiver faulted at the same time') },
+    disintegrated: { label: gtx('games.badminton.let_shuttle_broke', 'Let — shuttle broke'), law: gtx('games.badminton.law_14_2_the_shuttle_came', 'Law 14.2 — the shuttle came apart') },
+    disturbed: { label: gtx('games.badminton.let', 'Let'), law: gtx('games.badminton.law_14_2_an_unforeseen_or', 'Law 14.2 — an unforeseen or accidental occurrence') },
   };
   const isFault = (code) => !!(CODES[code] && CODES[code].kind === 'fault');
 
   /** The table the Rules sheet shows (and the tests read). */
   const LAWS = [
-    { law: 'Law 7', h: 'Scoring', body: 'Rally point scoring. A game is won at 21 with a 2-point lead; from 20-all the first side 2 points clear wins; at 29-all the 30th point wins. Best of 3 games; the game winner serves first in the next game.' },
-    { law: 'Law 8', h: 'Ends', body: 'Change ends after each game, and in the deciding game when the leading score reaches 11.' },
-    { law: 'Law 16', h: 'Intervals', body: 'A short interval when the leading score reaches 11 in a game; a longer one between games.' },
-    { law: 'Law 10', h: 'Singles serve', body: 'Serve from the right service court on an even score, the left on an odd score, diagonally. The rally winner scores and serves next. The singles court is long and narrow; the serve may reach the back line.' },
-    { law: 'Law 11', h: 'Doubles serve', body: 'One service per side. Serving side wins → the same server serves again from the other court. Receiving side wins → they score and serve, from the court matching their score. Players change service courts only when they win a point on their own serve. The doubles court is wide; the serve must land short of the long service line.' },
-    { law: 'Law 12', h: 'Service court errors', body: 'A wrong server, court or receiver is corrected and the score stands.' },
-    { law: 'Law 13', h: 'Faults', body: 'Out, into the net, touching the net, hitting twice (or partners in succession), obstruction, and service faults (above 1.15 m, feet moving, short, long, wide).' },
-    { law: 'Law 14', h: 'Lets', body: 'Receiver not ready, caught in the net after passing over, both faulted at once, a broken shuttle or an unforeseen event — the rally is replayed by the same server.' },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 7 }), h: gtx('games.badminton.law_h.scoring', 'Scoring'), body: gtx('games.badminton.rally_point_scoring_a_game_is', 'Rally point scoring. A game is won at 21 with a 2-point lead; from 20-all the first side 2 points clear wins; at 29-all the 30th point wins. Best of 3 games; the game winner serves first in the next game.') },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 8 }), h: gtx('games.badminton.law_h.ends', 'Ends'), body: gtx('games.badminton.change_ends_after_each_game_and', 'Change ends after each game, and in the deciding game when the leading score reaches 11.') },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 16 }), h: gtx('games.badminton.law_h.intervals', 'Intervals'), body: gtx('games.badminton.a_short_interval_when_the_leading', 'A short interval when the leading score reaches 11 in a game; a longer one between games.') },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 10 }), h: gtx('games.badminton.singles_serve', 'Singles serve'), body: gtx('games.badminton.serve_from_the_right_service_court', 'Serve from the right service court on an even score, the left on an odd score, diagonally. The rally winner scores and serves next. The singles court is long and narrow; the serve may reach the back line.') },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 11 }), h: gtx('games.badminton.doubles_serve', 'Doubles serve'), body: gtx('games.badminton.one_service_per_side_serving_side', 'One service per side. Serving side wins → the same server serves again from the other court. Receiving side wins → they score and serve, from the court matching their score. Players change service courts only when they win a point on their own serve. The doubles court is wide; the serve must land short of the long service line.') },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 12 }), h: gtx('games.badminton.service_court_errors', 'Service court errors'), body: gtx('games.badminton.a_wrong_server_court_or_receiver', 'A wrong server, court or receiver is corrected and the score stands.') },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 13 }), h: gtx('games.badminton.law_h.faults', 'Faults'), body: gtx('games.badminton.out_into_the_net_touching_the', 'Out, into the net, touching the net, hitting twice (or partners in succession), obstruction, and service faults (above 1.15 m, feet moving, short, long, wide).') },
+    { law: gtx('games.badminton.law_n', 'Law {{n}}', { n: 14 }), h: gtx('games.badminton.law_h.lets', 'Lets'), body: gtx('games.badminton.receiver_not_ready_caught_in_the', 'Receiver not ready, caught in the net after passing over, both faulted at once, a broken shuttle or an unforeseen event — the rally is replayed by the same server.') },
   ];
 
   // ---------------------------------------------------------------- config
@@ -275,7 +301,7 @@
 
   // ---------------------------------------------------------------- umpire calls
 
-  const ORDINAL = ['First', 'Second', 'Final'];
+  const ORDINAL = /* i18n-copy */ [gtx('games.badminton.first', 'First'), gtx('games.badminton.second', 'Second'), gtx('games.badminton.final', 'Final')];
   function n2w(n) {
     return n === 0 ? 'love' : String(n);
   }
@@ -288,7 +314,7 @@
     const srv = state.server.side;
     if (!gamePointFor(state, srv)) return '';
     const wonGames = gamesWon(state)[srv];
-    return wonGames + 1 >= needGames(state) ? 'match point' : 'game point';
+    return wonGames + 1 >= needGames(state) ? gtx('games.badminton.match_point', 'match point') : gtx('games.badminton.game_point', 'game point');
   }
   function scoreWithPoint(state) {
     const pc = pointCall(state);
@@ -298,9 +324,9 @@
     return n2w(a) + ' ' + pc + ' ' + n2w(b);
   }
   function gameStartCall(state) {
-    if (state.format.games === 1 || state.g === 0) return 'Love all, play';
+    if (state.format.games === 1 || state.g === 0) return gtx('games.badminton.love_all_play', 'Love all, play');
     const label = isDecider(state) ? ORDINAL[2] : ORDINAL[Math.min(1, state.g)];
-    return label + ' game, love all, play';
+    return gtx('games.badminton.label_game_love_all_play', '{{label}} game, love all, play', { label });
   }
   function gameLine(g) {
     return g.score[0] + '–' + g.score[1];
@@ -353,15 +379,15 @@
       const w = ev.winner === 1 ? 1 : 0;
       state.over = true;
       state.result = { winner: w, games: state.games.map((g) => g.score.slice()), by: ev.reason === 'retired' ? 'retired' : 'forfeit', text: '' };
-      state.result.text = state.config.sides[w].name + ' win' + (state.config.perSide === 2 ? '' : 's') + ' — ' + (ev.reason === 'retired' ? 'opponent retired' : 'opponent left');
-      state.calls = [{ k: 'match', text: 'Match won by ' + state.config.sides[w].name + (ev.reason === 'retired' ? ', retired' : ', walkover') }];
+      state.result.text = gtx(ev.reason === 'retired' ? 'games.badminton.result_opp_retired' : 'games.badminton.result_opp_left', state.config.sides[w].name + ' win' + (state.config.perSide === 2 ? '' : 's') + ' — ' + (ev.reason === 'retired' ? 'opponent retired' : 'opponent left'), { name: state.config.sides[w].name, count: state.config.perSide === 2 ? 2 : 1 });
+      state.calls = [{ k: 'match', text: gtx('games.badminton.match_won_by_name_value', 'Match won by {{name}}{{value}}', { name: state.config.sides[w].name, value: ev.reason === 'retired' ? gtx('games.badminton.retired', ', retired') : gtx('games.badminton.walkover', ', walkover') }) }];
       return state;
     }
 
     if (ev.t === 'let') {
       state.stats.lets += 1;
       bump(state.stats.codes, 'let_' + (LETS[ev.code] ? ev.code : 'disturbed'));
-      state.calls = [{ k: 'let', text: 'Let' }, { k: 'score', text: scoreWithPoint(state) }];
+      state.calls = [{ k: 'let', text: gtx('games.badminton.let', 'Let') }, { k: 'score', text: scoreWithPoint(state) }];
       return state;
     }
 
@@ -411,7 +437,7 @@
         state.over = true;
         const lines = state.games.map(gameLine).join(', ');
         state.result = { winner: gw, games: state.games.map((g) => g.score.slice()), by: 'games', text: state.config.sides[gw].name + ' win' + (state.config.perSide === 2 ? '' : 's') + ' ' + lines };
-        state.calls = [{ k: 'game', text: (state.format.games === 1 ? 'Game' : 'Match') + ' won by ' + state.config.sides[gw].name + ', ' + lines }];
+        state.calls = [{ k: 'game', text: gtx('games.badminton.value_won_by_name_lines', '{{value}} won by {{name}}, {{lines}}', { value: state.format.games === 1 ? gtx('games.badminton.game', 'Game') : gtx('games.badminton.match', 'Match'), name: state.config.sides[gw].name, lines }) }];
         return state;
       }
       // Next game: the winner serves first (Law 7.6); ends change (Law 8.1); interval (Law 16).
@@ -419,7 +445,7 @@
       state.swapped = !state.swapped;
       state.changeEnds = true;
       state.pause = { kind: 'game', game: state.g };
-      state.calls = [{ k: 'game', text: ord + ' game won by ' + state.config.sides[gw].name + ', ' + line }, { k: 'ends', text: 'Change ends' }];
+      state.calls = [{ k: 'game', text: gtx('games.badminton.ord_game_won_by_name_line', '{{ord}} game won by {{name}}, {{line}}', { ord, name: state.config.sides[gw].name, line }) }, { k: 'ends', text: gtx('games.badminton.interval.ends', 'Change ends') }];
       const rp = 0;
       newGame(state, { side: gw, player: 0 }, rp);
       return state;
@@ -434,14 +460,14 @@
       state.pause = { kind: 'interval', game: state.g };
     }
     const calls = [];
-    calls.push({ k: serviceOver ? 'service_over' : 'score', text: (serviceOver ? 'Service over, ' : '') + scoreWithPoint(state) });
+    calls.push({ k: serviceOver ? 'service_over' : 'score', text: serviceOver ? gtx('games.badminton.service_over_score', 'Service over, ' + scoreWithPoint(state), { score: scoreWithPoint(state) }) : scoreWithPoint(state) });
     if (interval) {
       calls[0].text += ', interval';
       if (isDecider(state) && !state.endsChangedInGame) {
         state.endsChangedInGame = true;
         state.swapped = !state.swapped;
         state.changeEnds = true;
-        calls.push({ k: 'ends', text: 'Change ends' });
+        calls.push({ k: 'ends', text: gtx('games.badminton.interval.ends', 'Change ends') });
       }
     }
     state.calls = calls;
@@ -612,9 +638,9 @@
 
   /** Bot tiers (P12 keeps the shipped Practice levels; P13 deepens the AI). */
   const TIERS = {
-    easy: { label: 'Easy', hit: 0.66, perfect: 0.12, pressure: 0.012 },
-    normal: { label: 'Normal', hit: 0.76, perfect: 0.26, pressure: 0.01 },
-    sharp: { label: 'Sharp', hit: 0.84, perfect: 0.42, pressure: 0.008 },
+    easy: { label: gtx('games.badminton.easy', 'Easy'), hit: 0.66, perfect: 0.12, pressure: 0.012 },
+    normal: { label: gtx('games.badminton.normal', 'Normal'), hit: 0.76, perfect: 0.26, pressure: 0.01 },
+    sharp: { label: gtx('games.badminton.sharp', 'Sharp'), hit: 0.84, perfect: 0.42, pressure: 0.008 },
   };
   const TIER_ORDER = ['easy', 'normal', 'sharp'];
   function tierOf(t) {

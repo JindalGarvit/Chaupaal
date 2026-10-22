@@ -12,7 +12,7 @@
   'use strict';
 
   const GAME = 'streetcricket';
-  const LABEL = 'Street Cricket';
+  const LABEL = t('dangal.identity.streetcricket.label');
   const KEY_SETTINGS = 'chaupaal_sc_settings_v5';
   const KEY_HISTORY = 'chaupaal_sc_history_v1';
   const KEY_COACH = 'chaupaal_sc_coach_v4';
@@ -33,8 +33,22 @@
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
   }
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('cricket.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.streetcricket.' + key, p || fallback) : fill(fallback, p);
   }
   function toast(msg) {
     if (typeof showToast === 'function') showToast(msg);
@@ -88,7 +102,7 @@
   function tierLabel(id) {
     const M = CM();
     const tid = M ? M.tierOf(id) : 'normal';
-    return tr('tier.' + tid, M ? M.TIERS[tid].label : 'Normal') + ' ' + tr('bot', 'Bot');
+    return tr('label_bot', '{{label}} Bot', { label: (tr('tier.' + tid, M ? M.TIERS[tid].label : 'Normal')) });
   }
 
   function settings() {
@@ -238,11 +252,11 @@
     const meta = [];
     meta.push('RR ' + strip.rr.toFixed(2));
     if (strip.target) {
-      meta.push(tr('strip.target', 'Target') + ' ' + strip.target);
-      meta.push(tr('strip.need', 'Need') + ' ' + strip.need + ' ' + tr('strip.off', 'off') + ' ' + strip.ballsLeft);
+      meta.push(tr('target_target', 'Target {{target}}', { target: strip.target }));
+      meta.push(tr('need_need_off_ballsleft', 'Need {{need}} off {{ballsLeft}}', { need: strip.need, ballsLeft: strip.ballsLeft }));
       if (isFinite(strip.rrr)) meta.push('RRR ' + strip.rrr.toFixed(2));
     } else {
-      meta.push(strip.ballsLeft + ' ' + (strip.ballsLeft === 1 ? tr('strip.ballLeft', 'ball left') : tr('strip.ballsLeft', 'balls left')));
+      meta.push(tr('balls_left', '{ballsLeft, plural, one {# ball left} other {# balls left}}', { ballsLeft: strip.ballsLeft }));
     }
     return `<div class="sc-strip${strip.super ? ' is-super' : ''}">
       <div class="sc-strip-main">
@@ -260,7 +274,7 @@
     const M = CM();
     const c = Math.max(0, Math.min(100, Math.round(strip.striker.conf == null ? 20 : strip.striker.conf)));
     const pct = M ? M.confPercent(c) : 0;
-    const title = tr('conf.title', 'Confidence') + ' ' + c + ' · ' + tr('conf.contact', 'contact') + ' ' + (pct > 0 ? '+' : '') + pct + '%';
+    const title = tr('confidence_c_contact_value_pct', 'Confidence {{c}} · contact {{value}}{{pct}}%', { c, value: (pct > 0 ? '+' : ''), pct });
     const rev = reviewsLeft == null ? '' : `<span class="sc-rev" title="${esc(tr('drs.left', 'Reviews left'))}">${esc(tr('drs.short', 'Review'))} ${reviewsLeft}</span>`;
     return `<span class="sc-conf" title="${esc(title)}" aria-label="${esc(title)}"><span class="sc-conf-l">${esc(tr('conf.set', 'Set'))}</span><span class="sc-conf-bar"><i style="width:${c}%"></i></span><span class="sc-conf-v">${pct > 0 ? '+' : ''}${pct}%</span></span>${rev}`;
   }
@@ -281,7 +295,7 @@
           <td>${esc(b.o)}</td><td>${b.m}</td><td>${b.r}</td><td>${b.w}</td><td>${b.econ.toFixed(2)}</td></tr>`
       )
       .join('');
-    return `<table class="sc-table"><thead><tr><th>${esc(tr('card.bowler', 'Bowler'))}</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return `<table class="sc-table"><thead><tr><th>${esc(tr('card.bowler', 'Bowler'))}</th><th>O</th><th>M</th><th>R</th><th>W</th><th>${tHtml('games.streetcricket.econ')}</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   function inningsHtml(inn) {
     const ex = inn.extras;
@@ -291,10 +305,10 @@
       ? inn.partnerships.map((p) => `<li>${esc(p.a)}${p.b ? ' & ' + esc(p.b) : ''} — ${p.runs} (${p.balls})</li>`).join('')
       : '';
     return `<section class="sc-inn">
-      <h3 class="sc-inn-head"><span>${esc(inn.title)}</span><span>${inn.total.runs}/${inn.total.wkts} <small>(${esc(inn.total.overs)} ov)</small></span></h3>
+      <h3 class="sc-inn-head"><span>${esc(inn.title)}</span><span>${inn.total.runs}/${inn.total.wkts} <small>${tHtml('games.streetcricket.overs_short', { overs: inn.total.overs })}</small></span></h3>
       ${batTable(inn)}
       <div class="sc-line"><span>${esc(tr('card.extras', 'Extras'))}</span><span>${ex.total}${exParts.length ? ' (' + esc(exParts.join(', ')) + ')' : ''}</span></div>
-      <div class="sc-line sc-line--total"><span>${esc(tr('card.total', 'Total'))}</span><span>${inn.total.runs}/${inn.total.wkts} · ${esc(inn.total.overs)} ov · RR ${inn.rr.toFixed(2)}</span></div>
+      <div class="sc-line sc-line--total"><span>${esc(tr('card.total', 'Total'))}</span><span>${tHtml('games.streetcricket.runs_wkts_overs_ov_rr_rr', { runs: inn.total.runs, wkts: inn.total.wkts, overs: inn.total.overs, rr: inn.rr.toFixed(2) })}</span></div>
       ${bowlTable(inn)}
       <div class="sc-sub"><strong>${esc(tr('card.fow', 'Fall of wickets'))}</strong> ${esc(fow)}</div>
       ${parts ? `<div class="sc-sub"><strong>${esc(tr('card.partnerships', 'Partnerships'))}</strong><ul class="sc-parts">${parts}</ul></div>` : ''}
@@ -411,7 +425,7 @@
     return {
       title: LABEL,
       scoreLine: sum.lines.join(' · '),
-      meta: recap || [sum.result, sum.top ? tr('share.top', 'Top performer') + ': ' + sum.top : ''].filter(Boolean).join(' · '),
+      meta: recap || [sum.result, sum.top ? tr('top_performer_top', 'Top performer: {{top}}', { top: sum.top }) : ''].filter(Boolean).join(' · '),
       text: sum.text + (recap ? '\n' + recap : '') + '\n' + tr('share.on', 'Played on Chaupaal'),
     };
   }
@@ -457,7 +471,7 @@
     Kit().openSheet({
       title: tr('comm.title', 'Commentary'),
       bodyHtml: `<div class="sc-sheet">${commListHtml(list)}<div class="pk-field-help">${esc(
-        (persona === 'fan' ? tr('comm.fan', 'Excited fan') : tr('comm.calm', 'Calm analyst')) + ' · ' + tr('comm.help', 'key moments only · change the voice in Match settings')
+        tr('value_key_moments_only_change_the_voice', '{{value}} · key moments only · change the voice in Match settings', { value: (persona === 'fan' ? tr('comm.fan', 'Excited fan') : tr('comm.calm', 'Calm analyst')) })
       )}</div></div>`,
     });
   }
@@ -553,7 +567,7 @@
     if (ball.runs === 6) return tr('flash.six', 'SIX!');
     if (ball.runs === 4) return tr('flash.four', 'FOUR!');
     if (ball.runs === 0) return tr('flash.dot', 'Dot ball');
-    return ball.runs + ' ' + (ball.runs === 1 ? tr('flash.run', 'run') : tr('flash.runs', 'runs'));
+    return tr('runs', '{runs, plural, one {# run} other {# runs}}', { runs: ball.runs });
   }
   function lastBallOf(state) {
     for (let i = state.innings.length - 1; i >= 0; i--) {
@@ -564,13 +578,13 @@
   }
   function appealText(appeal) {
     const what = appeal.kind === 'lbw' ? tr('appeal.lbw', 'LBW') : tr('appeal.caught', 'caught behind');
-    return tr('appeal.for', 'Appeal for') + ' ' + what + ' — ' + (appeal.onField === 'out' ? tr('appeal.out', 'given OUT') : tr('appeal.notOut', 'NOT OUT'));
+    return tr('appeal_for_what_value', 'Appeal for {{what}} — {{value}}', { what, value: (appeal.onField === 'out' ? tr('appeal.out', 'given OUT') : tr('appeal.notOut', 'NOT OUT')) });
   }
   function drsVerdict(drs) {
     const d = drs.decision === 'out' ? tr('drs.out', 'OUT') : tr('drs.notOut', 'NOT OUT');
-    if (drs.result === 'overturned') return tr('drs.overturned', 'Overturned') + ' — ' + d;
-    if (drs.result === 'umpires_call') return tr('drs.umpiresCall', 'Umpire’s call') + ' — ' + d + ' · ' + tr('drs.kept', 'review kept');
-    return tr('drs.stands', 'Decision stands') + ' — ' + d;
+    if (drs.result === 'overturned') return tr('overturned_d', 'Overturned — {{d}}', { d });
+    if (drs.result === 'umpires_call') return tr('umpires_call_d_review_kept', 'Umpire’s call — {{d}} · review kept', { d });
+    return tr('decision_stands_d', 'Decision stands — {{d}}', { d });
   }
   function isHighlight(ev) {
     return !!(ev && (ev.out || (ev.runs === 6 && !ev.extra)));
@@ -578,13 +592,13 @@
 
   // ---------------- controls ----------------
 
-  const VAR_SHORT = { stock: 'Stock', slower: 'Slower', cutter: 'Cutter', bouncer: 'Bouncer', yorker: 'Yorker', turnIn: 'Turn in', turnAway: 'Turn away', armBall: 'Arm ball' };
+  const VAR_SHORT = { stock: 'Stock', slower: 'Slower', cutter: 'Cutter', bouncer: 'Bouncer', yorker: 'Yorker', turnIn: t('games.streetcricket.turn_in'), turnAway: t('games.streetcricket.turn_away'), armBall: t('games.streetcricket.arm_ball_2') };
   const FIELD_HELP = {
-    attacking: 'Catchers in · edges carry · singles are risky',
-    balanced: 'Even field all round',
-    defensive: 'Riders on the rope · fewer fours · easy singles',
-    protectOff: 'Off-side boundary sealed · leg side open',
-    protectLeg: 'Leg-side boundary sealed · off side open',
+    attacking: t('games.streetcricket.catchers_in_edges_carry_singles_are'),
+    balanced: t('games.streetcricket.even_field_all_round'),
+    defensive: t('games.streetcricket.riders_on_the_rope_fewer_fours'),
+    protectOff: t('games.streetcricket.off_side_boundary_sealed_leg_side'),
+    protectLeg: t('games.streetcricket.leg_side_boundary_sealed_off_side'),
   };
   const RUN_SHORT = { hold: 'Hold', one: 'Take 1', two: 'Push 2' };
 
@@ -656,7 +670,7 @@
     const miss = M.missChance(p, 0.75);
     const lvl = miss < 0.04 ? tr('risk.low', 'Low') : miss < 0.1 ? tr('risk.med', 'Medium') : tr('risk.high', 'High');
     const what = p.length === 'yorker' ? tr('risk.yorker', 'a full toss or no-ball') : p.line === 'wide' ? tr('risk.wide', 'a wide') : p.length === 'bouncer' ? tr('risk.bouncer', 'a wide or no-ball') : tr('risk.loose', 'a loose ball');
-    return tr('risk', 'Risk') + ' ' + lvl + ' · ' + tr('risk.miss', 'a miss can be') + ' ' + what + ' · ' + tr('risk.green', 'stop the needle in the green');
+    return tr('risk_lvl_a_miss_can_be_what', 'Risk {{lvl}} · a miss can be {{what}} · stop the needle in the green', { lvl, what });
   }
   function meterPos(ms) {
     const MS = CM().METER_MS;
@@ -888,7 +902,7 @@
     const C = CE();
     const M = CM();
     if (!C || !M || !SC()) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     const s = settings();
@@ -899,7 +913,7 @@
     const pitch = M.rollPitch(s.preset, seed0);
     const botName = tierLabel(tier);
     const matchKey = 'local_' + seed0.toString(36);
-    const title = chase ? tr('mode.chase', 'Chase') : tr('mode.vsBot', 'vs') + ' ' + botName;
+    const title = chase ? tr('mode.chase', 'Chase') : tr('vs_name', 'vs {{name}}', { name: (typeof bidi === 'function' ? bidi(botName) : botName) });
     let seedN = seed0;
     const nextSeed = () => (seedN = (Math.imul(seedN ^ (seedN >>> 15), 2246822519) + 0x9e3779b9) >>> 0);
 
@@ -1008,7 +1022,7 @@
       else
         t = {
           coin: d.coin,
-          title: botName + ' ' + tr('toss.won', 'won the toss'),
+          title: tr('name_won_the_toss', '{{name}} won the toss', { name: (typeof bidi === 'function' ? bidi(botName) : botName) }),
           sub: bf === 1 ? tr('toss.botBats', 'They bat first — you bowl') : tr('toss.botBowls', 'They bowl first — you bat'),
           buttons: [{ id: 'start', label: tr('toss.start', 'Start'), primary: true }],
         };
@@ -1055,7 +1069,7 @@
       mount();
       toIdle();
       const first = chase
-        ? tr('start.chase', 'Chase') + ' ' + state.innings[0].target + ' ' + tr('start.in', 'in') + ' ' + config.overs + ' ' + (config.overs === 1 ? tr('over1', 'over') : tr('overs', 'overs'))
+        ? tr('chase_target_in_overs', 'Chase {{target}} in {overs, plural, one {# over} other {# overs}}', { target: state.innings[0].target, overs: config.overs })
         : battingFirst === 0
           ? tr('start.youBat', 'You bat first')
           : tr('start.youBowl', 'You bowl first');
@@ -1158,7 +1172,7 @@
         if (phase === 'idle') {
           const ov = overNow();
           hint.textContent = coachShown
-            ? botName + ' · ' + lbl('type', ov.type) + ' · ' + lbl('field', ov.field) + ' ' + tr('field.lower', 'field')
+            ? tr('name_lbl_lbl2_field', '{{name}} · {{lbl}} · {{lbl2}} field', { name: (typeof bidi === 'function' ? bidi(botName) : botName), lbl: lbl('type', ov.type), lbl2: lbl('field', ov.field) })
             : tr('hint.coach', 'Watch the landing marker, then tap a shot as the ball reaches the glowing band');
         } else if (phase === 'ball') hint.textContent = spin ? tr('hint.spin', 'Spin — step out to go big (stumping risk)') : tr('hint.time', 'Tap a shot as the ball reaches the glowing band');
       } else {
@@ -1172,7 +1186,7 @@
         if (phase === 'idle') {
           hint.textContent = ov.fresh ? tr('hint.overSetup', 'New over — set type and field, then bowl') : tr('hint.bowl', 'Pick line, length and ball — tap Bowl with the needle in the green');
           runMeter();
-        } else if (phase === 'ball') hint.textContent = botName + ' ' + tr('hint.botBat', 'is batting…');
+        } else if (phase === 'ball') hint.textContent = tr('name_is_batting', '{{name}} is batting…', { name: (typeof bidi === 'function' ? bidi(botName) : botName) });
       }
     }
 
@@ -1220,7 +1234,7 @@
       scene.setField(ov.field);
       scene.bowl(d, ballAt, () => Date.now(), log.length);
       paint();
-      if (acc != null) body.querySelector('[data-sc-hint]').textContent = tr('hint.accuracy', 'Accuracy') + ' ' + Math.round(acc * 100) + '%' + (d.missed ? ' · ' + tr('hint.missed', 'missed the target') : '');
+      if (acc != null) body.querySelector('[data-sc-hint]').textContent = tr('accuracy_value_value2', 'Accuracy {{value}}%{{value2}}', { value: Math.round(acc * 100), value2: (d.missed ? ' · ' + tr('hint.missed', 'missed the target') : '') });
       feedback('place');
       if (meBatting()) {
         later(() => {
@@ -1276,13 +1290,13 @@
       const ctl = ensurePanel('review');
       const left = inn().reviews[side];
       let until = Date.now() + LOCAL_REVIEW_MS;
-      const q = ev.appeal.onField === 'out' ? tr('review.given', 'Given OUT') + ' (' + (ev.appeal.kind === 'lbw' ? 'LBW' : tr('appeal.caught', 'caught behind')) + ')' : tr('review.notGiven', 'Not out') + ' (' + (ev.appeal.kind === 'lbw' ? 'LBW' : tr('appeal.caught', 'caught behind')) + ')';
+      const q = ev.appeal.onField === 'out' ? tr('given_out_value', 'Given OUT ({{value}})', { value: (ev.appeal.kind === 'lbw' ? 'LBW' : tr('appeal.caught', 'caught behind')) }) : tr('not_out_value', 'Not out ({{value}})', { value: (ev.appeal.kind === 'lbw' ? 'LBW' : tr('appeal.caught', 'caught behind')) });
       flash(body, appealText(ev.appeal), 'extra');
       feedback('select');
       const paintQ = () => {
         const secs = Math.max(0, Math.ceil((until - Date.now()) / 1000));
         const sub = ctl.querySelector('[data-sc-rv-sub]');
-        if (sub) sub.textContent = left + ' ' + (left === 1 ? tr('review.left1', 'review left') : tr('review.leftN', 'reviews left')) + ' · ' + secs + 's';
+        if (sub) sub.textContent = tr('reviews_left_secs_s', '{left, plural, one {# review left} other {# reviews left}} · {{secs}}s', { left, secs });
         if (secs <= 0 && !paused()) decide(false);
       };
       ctl.innerHTML = `<div class="sc-review" role="alertdialog" aria-label="${esc(tr('review.title', 'Review?'))}">
@@ -1309,7 +1323,7 @@
       phase = 'drs';
       ensurePanel('none');
       const r = M.applyReview(ev, side);
-      body.querySelector('[data-sc-hint]').textContent = who + ' ' + tr('drs.reviews', 'reviews') + ' · ' + tr('drs.simulated', 'simulated ball-tracking');
+      body.querySelector('[data-sc-hint]').textContent = tr('name_reviews_simulated_ball_tracking', '{{name}} reviews · simulated ball-tracking', { name: (typeof bidi === 'function' ? bidi(who) : who) });
       scene.drs(ev.appeal, M.UMPIRE);
       feedback('select');
       later(() => {
@@ -1354,7 +1368,7 @@
           const cur = inn();
           const msg = cur.super
             ? tr('break.super', 'Scores level — Super Over!')
-            : tr('break.innings', 'Innings break') + ' — ' + state.config.sides[cur.bat].name + ' ' + tr('break.need', 'need') + ' ' + cur.target;
+            : tr('innings_break_name_need_target', 'Innings break — {{name}} need {{target}}', { name: (typeof bidi === 'function' ? bidi(state.config.sides[cur.bat].name) : state.config.sides[cur.bat].name), target: cur.target });
           flash(body, msg, 'extra');
           body.querySelector('[data-sc-hint]').textContent = msg;
         }
@@ -1527,7 +1541,7 @@
     const C = CE();
     const M = CM();
     if (!C || !M || !SC()) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     const me = myUid();
@@ -1584,7 +1598,7 @@
             body:
               pub.status === 'waiting'
                 ? tr('leave.cancelBody', 'No chips move.')
-                : tr('leave.liveBody', 'Leaving now gives your opponent the win') + (pub.stake ? ' ' + tr('leave.andChips', 'and your staked chips.') : '.'),
+                : tr('leaving_now_gives_your_opponent_the_win', 'Leaving now gives your opponent the win{{value}}', { value: (pub.stake ? ' ' + tr('leave.andChips', 'and your staked chips.') : '.') }),
           });
           if (!go) return;
         }
@@ -1672,7 +1686,7 @@
     function renderWaiting() {
       if (spectator) return simpleCard(tr('watch.waiting', 'Waiting for both players…'), '', []);
       const mins = Math.max(0, Math.ceil((pub.deadline - serverNow()) / 60000));
-      simpleCard(tr('live.waiting', 'Waiting for') + ' ' + oppName(), tr('live.waitingSub', 'They have') + ' ' + mins + ' ' + tr('live.min', 'min to accept. No chips move if they don’t.'), [
+      simpleCard(tr('waiting_for_name_2', 'Waiting for {{name}}', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }), tr('they_have_mins_min_to_accept_no', 'They have {{mins}} min to accept. No chips move if they don’t.', { mins }), [
         {
           id: 'cancel',
           label: tr('live.cancel', 'Cancel challenge'),
@@ -1685,7 +1699,7 @@
       ]);
     }
     function renderVoid() {
-      const reason = pub.reason === 'no_show' ? (spectator ? tr('live.noShowWatch', 'A player didn’t join in time') : oppName() + ' ' + tr('live.noShow', 'didn’t join in time')) : tr('live.cancelled', 'Challenge cancelled');
+      const reason = pub.reason === 'no_show' ? (spectator ? tr('live.noShowWatch', 'A player didn’t join in time') : tr('name_didnt_join_in_time', '{{name}} didn’t join in time', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) })) : tr('live.cancelled', 'Challenge cancelled');
       simpleCard(reason, tr('live.noChips', 'No chips moved.'), [
         {
           id: 'home',
@@ -1703,17 +1717,17 @@
     function renderToss() {
       const tt = pub.toss || {};
       const coinPhase = pub.phase === 'choose' && !tt.rematch && serverNow() < pub.deadline - 10000;
-      const warn = !spectator && pub.rated && lastRtt > HIGH_RTT_MS ? tr('net.warn', 'High latency') + ' (' + lastRtt + ' ms) — ' + tr('net.warnSub', 'your taps may land late in this rated match.') : '';
+      const warn = !spectator && pub.rated && lastRtt > HIGH_RTT_MS ? tr('high_latency_lastrtt_ms_your_taps_may', 'High latency ({{lastRtt}} ms) — your taps may land late in this rated match.', { lastRtt }) : '';
       let t;
       if (pub.phase === 'toss') {
         if (tt.caller === me) t = { title: tr('toss.call', 'Call the toss'), buttons: [{ id: 'heads', label: tr('toss.heads', 'Heads'), primary: true }, { id: 'tails', label: tr('toss.tails', 'Tails') }] };
-        else t = { title: nameOf(tt.caller) + ' ' + tr('toss.calling', 'is calling the toss…') };
+        else t = { title: tr('name_is_calling_the_toss', '{{name}} is calling the toss…', { name: (typeof bidi === 'function' ? bidi(nameOf(tt.caller)) : nameOf(tt.caller)) }) };
       } else if (coinPhase) t = { title: tr('toss.flipping', 'Coin in the air…'), spinning: true };
       else {
         const who = tt.winner === me ? tr('toss.you', 'You') : nameOf(tt.winner);
-        const head = tt.rematch ? who + ' ' + tr('toss.rematchChoose', 'choose — rematch') : (tt.coin === 'tails' ? tr('toss.tails', 'Tails') : tr('toss.heads', 'Heads')) + ' — ' + who + ' ' + tr('toss.wonShort', 'won the toss');
+        const head = tt.rematch ? tr('name_choose_rematch', '{{name}} choose — rematch', { name: (typeof bidi === 'function' ? bidi(who) : who) }) : tr('value_name_won_the_toss', '{{value}} — {{name}} won the toss', { value: (tt.coin === 'tails' ? tr('toss.tails', 'Tails') : tr('toss.heads', 'Heads')), name: (typeof bidi === 'function' ? bidi(who) : who) });
         if (tt.winner === me) t = { coin: tt.coin, title: head, buttons: [{ id: 'bat', label: tr('toss.bat', 'Bat'), primary: true }, { id: 'bowl', label: tr('toss.bowl', 'Bowl') }] };
-        else t = { coin: tt.coin, title: head, sub: nameOf(tt.winner) + ' ' + tr('toss.choosing', 'is choosing…') };
+        else t = { coin: tt.coin, title: head, sub: tr('name_is_choosing', '{{name}} is choosing…', { name: (typeof bidi === 'function' ? bidi(nameOf(tt.winner)) : nameOf(tt.winner)) }) };
       }
       const sig = [pub.phase, tt.call, tt.coin, tt.winner, !!t.spinning, !!warn, (t.buttons || []).length].join('|');
       const secs = Math.max(0, Math.ceil((pub.deadline - serverNow()) / 1000));
@@ -1844,7 +1858,7 @@
       ctl.dataset.role = 'review';
       ctl.dataset.n = String(rv.n);
       const kind = rv.kind === 'lbw' ? 'LBW' : tr('appeal.caught', 'caught behind');
-      const q = (rv.onField === 'out' ? tr('review.given', 'Given OUT') : tr('review.notGiven', 'Not out')) + ' (' + kind + ') — ' + tr('review.ask', 'review it?');
+      const q = tr('value_kind_review_it', '{{value}} ({{kind}}) — review it?', { value: (rv.onField === 'out' ? tr('review.given', 'Given OUT') : tr('review.notGiven', 'Not out')), kind });
       ctl.innerHTML = `<div class="sc-review" role="alertdialog" aria-label="${esc(tr('review.title', 'Review?'))}">
         <div class="sc-review-q">${esc(q)}</div>
         <div class="sc-review-sub" data-sc-rv-sub></div>
@@ -1891,7 +1905,7 @@
       if (pub.phase === 'break') {
         hint.textContent = inn.super
           ? tr('break.super', 'Scores level — Super Over!')
-          : tr('break.innings', 'Innings break') + ' — ' + C.liveStrip(st).batting + ' ' + tr('break.need', 'need') + ' ' + inn.target;
+          : tr('innings_break_batting_need_target', 'Innings break — {{batting}} need {{target}}', { batting: C.liveStrip(st).batting, target: inn.target });
         ensurePanel('none');
         return;
       }
@@ -1903,17 +1917,17 @@
         if (!spectator && pub.review.byUid === me && reviewSent !== pub.review.n) {
           renderReviewPrompt(ctl);
           const sub = ctl.querySelector('[data-sc-rv-sub]');
-          if (sub) sub.textContent = pub.review.left + ' ' + (pub.review.left === 1 ? tr('review.left1', 'review left') : tr('review.leftN', 'reviews left')) + ' · ' + secs + 's';
+          if (sub) sub.textContent = tr('reviews_left_secs_s', '{left, plural, one {# review left} other {# reviews left}} · {{secs}}s', { left: pub.review.left, secs });
           hint.textContent = '';
         } else {
           ensurePanel('none');
-          hint.textContent = (pub.review.byUid === me ? tr('review.sent', 'Sent — the third umpire is looking') : nameOf(pub.review.byUid) + ' ' + tr('review.deciding', 'is deciding whether to review…')) + ' (' + secs + 's)';
+          hint.textContent = (pub.review.byUid === me ? tr('review.sent', 'Sent — the third umpire is looking') : tr('name_is_deciding_whether_to_review', '{{name}} is deciding whether to review…', { name: (typeof bidi === 'function' ? bidi(nameOf(pub.review.byUid)) : nameOf(pub.review.byUid)) })) + ' (' + secs + 's)';
         }
         return;
       }
       if (spectator) {
         ensurePanel('none');
-        hint.textContent = pub.phase === 'bowl' ? nameOf(uidOfSide(inn.bowl)) + ' ' + tr('watch.bowling', 'is at the top of the mark') : pub.phase === 'ball' ? nameOf(batter) + ' ' + tr('watch.facing', 'is facing') : '';
+        hint.textContent = pub.phase === 'bowl' ? tr('name_is_at_the_top_of_the', '{{name}} is at the top of the mark', { name: (typeof bidi === 'function' ? bidi(nameOf(uidOfSide(inn.bowl))) : nameOf(uidOfSide(inn.bowl))) }) : pub.phase === 'ball' ? tr('name_is_facing_2', '{{name}} is facing', { name: (typeof bidi === 'function' ? bidi(nameOf(batter)) : nameOf(batter)) }) : '';
         return;
       }
       if (iBat) {
@@ -1922,7 +1936,7 @@
         ctl.querySelectorAll('[data-sc-shot]').forEach((x) => (x.disabled = !canHit));
         const spin = (b ? b.type : ov.type) === 'spin';
         setMini(ctl, 'foot', spin ? foot : 'stay', !spin);
-        if (pub.phase === 'bowl') hint.textContent = oppName() + ' · ' + lbl('type', ov.type) + ' · ' + lbl('field', ov.field) + ' ' + tr('field.lower', 'field');
+        if (pub.phase === 'bowl') hint.textContent = tr('name_lbl_lbl2_field', '{{name}} · {{lbl}} · {{lbl2}} field', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()), lbl: lbl('type', ov.type), lbl2: lbl('field', ov.field) });
         else if (pub.phase === 'ball') hint.textContent = hitSent === (b && b.n) ? tr('live.sent', 'Shot played — umpire deciding…') : spin ? tr('hint.spin', 'Spin — step out to go big (stumping risk)') : tr('hint.time', 'Tap a shot as the ball reaches the glowing band');
       } else if (iBowl) {
         const key = ov.key + '|' + ov.fresh + '|' + ov.type;
@@ -1932,7 +1946,7 @@
         const main = ctl.querySelector('[data-sc-main]');
         if (main) main.disabled = !canBowl;
         if (pub.phase === 'bowl') hint.textContent = canBowl ? (ov.fresh ? tr('hint.overSetup', 'New over — set type and field, then bowl') : tr('live.yourBall', 'Your ball — tap Bowl with the needle in the green')) + ' (' + secs + 's)' : serverNow() < (pub.meterAt || 0) ? tr('live.next', 'Next ball…') : tr('live.bowled', 'Bowled…');
-        else if (pub.phase === 'ball') hint.textContent = oppName() + ' ' + tr('live.isBatting', 'is facing…');
+        else if (pub.phase === 'ball') hint.textContent = tr('name_is_facing', '{{name}} is facing…', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) });
       }
     }
 
@@ -1947,7 +1961,7 @@
       liveCall('bowl', { matchId, ballNo: n, line: plan.line, length: plan.length, variation: plan.variation, m: Math.round(m), rtt: lastRtt })
         .then((r) => {
           const hint = body.querySelector('[data-sc-hint]');
-          if (hint && r && r.accuracy != null) hint.textContent = tr('hint.accuracy', 'Accuracy') + ' ' + Math.round(r.accuracy * 100) + '%';
+          if (hint && r && r.accuracy != null) hint.textContent = tr('accuracy_value', 'Accuracy {{value}}%', { value: Math.round(r.accuracy * 100) });
         })
         .catch((e) => {
           bowlSent = -1;
@@ -2035,7 +2049,7 @@
         view.overlay.appendChild(el);
       }
       const leftMs = Math.max(0, RECONNECT_MS - oppGoneFor());
-      el.textContent = oppName() + ' ' + tr('live.reconnecting', 'lost connection — auto-play covers their balls; waiting') + ' ' + Math.ceil(leftMs / 1000) + 's';
+      el.textContent = tr('name_lost_connection_auto_play_covers_their', '{{name}} lost connection — auto-play covers their balls; waiting {{value}}s', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()), value: Math.ceil(leftMs / 1000) });
     }
 
     function recapOf(st) {
@@ -2047,7 +2061,7 @@
       const recap = recapOf(st);
       if (!historySaved && !spectator) {
         historySaved = true;
-        saveHistory(historyEntry(matchId, 'live', tr('hist.vs', 'vs') + ' ' + oppName(), st, side, recap, persona()));
+        saveHistory(historyEntry(matchId, 'live', tr('vs_name', 'vs {{name}}', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }), st, side, recap, persona()));
         const r = st.result || {};
         view.setOutcome(r.kind === 'win' ? (r.winner === side ? 'win' : 'loss') : 'draw');
         feedback(r.kind === 'win' ? (r.winner === side ? 'win' : 'lose') : 'complete');
@@ -2062,7 +2076,7 @@
         const n = body.querySelector('[data-sc-note]');
         if (n) n.textContent = note;
         paintRecap(body, recap);
-        if (!spectator && pub.ai && pub.ai.recap && pub.ai.recap.text && historySaved) saveHistory(historyEntry(matchId, 'live', tr('hist.vs', 'vs') + ' ' + oppName(), st, side, recap, persona()));
+        if (!spectator && pub.ai && pub.ai.recap && pub.ai.recap.text && historySaved) saveHistory(historyEntry(matchId, 'live', tr('vs_name', 'vs {{name}}', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) }), st, side, recap, persona()));
         paintRematch();
         return;
       }
@@ -2095,10 +2109,10 @@
       if (!btn || !pub) return;
       const r = pub.rematch || {};
       if (rematchAsked || r[me]) {
-        btn.textContent = tr('rematch.waiting', 'Waiting for') + ' ' + oppName() + '…';
+        btn.textContent = tr('waiting_for_name', 'Waiting for {{name}}…', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) });
         btn.disabled = true;
       } else if (r[opp]) {
-        btn.textContent = oppName() + ' ' + tr('rematch.wants', 'wants a rematch — accept');
+        btn.textContent = tr('name_wants_a_rematch_accept', '{{name}} wants a rematch — accept', { name: (typeof bidi === 'function' ? bidi(oppName()) : oppName()) });
       }
       if (pub.nextMatchId && (rematchAsked || r[me])) switchToRematch(pub.nextMatchId);
     }
@@ -2308,7 +2322,7 @@
         </button>
         <button type="button" class="pk-mode" data-go="chase">
           <span class="pk-mode-title">${esc(tr('home.chase', 'Chase'))}</span>
-          <span class="pk-mode-sub">${esc(tr('home.chaseSub', 'Knock off a target —') + ' ' + C.FORMATS[s.format].label)}</span>
+          <span class="pk-mode-sub">${esc(tr('knock_off_a_target_label', 'Knock off a target — {{label}}', { label: C.FORMATS[s.format].label }))}</span>
         </button>
         <button type="button" class="pk-mode" data-go="friend">
           <span class="pk-mode-title">${esc(tr('home.friend', 'Play a friend'))}</span>
@@ -2344,7 +2358,7 @@
       body.innerHTML = `
         <div class="pk-field"><div class="pk-field-label">${esc(tr('set.format', 'Format'))}</div>
           ${K.segHtml('format', st.format, C.FORMAT_ORDER.map((id) => [id, C.FORMATS[id].label]))}
-          <div class="pk-field-help">${esc(C.FORMATS[st.format].overs + ' ' + (C.FORMATS[st.format].overs === 1 ? tr('over1', 'over') : tr('overs', 'overs')) + ' · ' + C.FORMATS[st.format].wickets + ' ' + (C.FORMATS[st.format].wickets === 1 ? tr('wicket1', 'wicket') : tr('wickets', 'wickets')) + ' ' + tr('set.perSide', 'per side'))}</div></div>
+          <div class="pk-field-help">${esc(tr('overs_wickets_per_side', '{overs, plural, one {# over} other {# overs}} · {wickets, plural, one {# wicket} other {# wickets}} per side', { overs: C.FORMATS[st.format].overs, wickets: C.FORMATS[st.format].wickets }))}</div></div>
         <div class="pk-field"><div class="pk-field-label">${esc(tr('set.rules', 'Rules'))}</div>
           ${K.segHtml('preset', st.preset, C.PRESET_ORDER.map((id) => [id, id === 'standard' ? tr('preset.standard', 'Standard') : id === 'gully' ? tr('preset.gully', 'Gully') : tr('preset.backyard', 'Backyard')]))}
           <div class="pk-field-help">${esc(p.rated ? tr('set.rated', 'MCC-adapted laws · one review per innings · rated in Live') : tr('set.unrated', 'Street tweaks · unrated'))}</div>
@@ -2440,7 +2454,7 @@
     const K = Kit();
     if (!signedInOrPrompt()) return;
     if (typeof openFriendPickerSheet !== 'function') return toast(tr('err.friends', 'Friends aren’t available right now'));
-    const f = await openFriendPickerSheet({ title: tr('challenge.title', 'Challenge · ' + LABEL), subtitle: tr('challenge.sub', 'Live 1v1 · virtual chips only') });
+    const f = await openFriendPickerSheet({ title: tr('challenge.title', 'Challenge · {{game}}', { game: LABEL }), subtitle: tr('challenge.sub', 'Live 1v1 · virtual chips only') });
     if (!f) return;
     const uid = f.uid || f.id || '';
     if (!persistable(uid)) return toast(tr('err.opp', 'Pick a real opponent'));
@@ -2518,7 +2532,7 @@
   function launch(opts) {
     const o = opts || {};
     if (!CE() || !CM()) {
-      toast(LABEL + ' ' + tr('loading', 'is still loading — try again'));
+      toast(tr('label_is_still_loading_try_again', '{{LABEL}} is still loading — try again', { LABEL }));
       return;
     }
     const ctx = window.__dangalLaunchCtx || {};
@@ -2555,7 +2569,7 @@
     registerGame({
       id: 'streetcricket',
       name: LABEL,
-      desc: 'Street formats on MCC-based laws — bowl, bat, chase',
+      desc: t('games.streetcricket.street_formats_on_mcc_based_laws'),
       icon: '🏏',
       ratingKey: 'streetcricket',
       gameType: 'dual',

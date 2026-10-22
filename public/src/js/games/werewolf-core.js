@@ -7,6 +7,32 @@
  * Theme (Werewolf | Mafia) only reskins names / icons / narration; the engine is identical.
  * UMD: window.WerewolfCore / require().
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const PC = typeof module === 'object' && module.exports ? require('./party-core.js') : root.PartyCore;
   const api = factory(PC);
@@ -31,66 +57,68 @@
   const THEMES = {
     werewolf: {
       id: 'werewolf',
-      label: 'Werewolf',
+      label: gtx('games.werewolf.rules.ruleset.name', 'Werewolf'),
       place: 'village',
-      teams: { wolves: 'Werewolves', village: 'Village', tanner: 'Tanner' },
+      teams: { wolves: gtx('games.werewolf.werewolf.team.wolves', 'Werewolves'), village: gtx('games.werewolf.werewolf.team.village', 'Village'), tanner: gtx('games.werewolf.werewolf.team.tanner', 'Tanner') },
       roles: {
-        wolf: { name: 'Werewolf', plural: 'Werewolves', icon: '🐺' },
-        seer: { name: 'Seer', plural: 'Seers', icon: '🔮' },
-        doctor: { name: 'Doctor', plural: 'Doctors', icon: '🩺' },
-        villager: { name: 'Villager', plural: 'Villagers', icon: '🧑‍🌾' },
-        hunter: { name: 'Hunter', plural: 'Hunters', icon: '🏹' },
-        witch: { name: 'Witch', plural: 'Witches', icon: '🧪' },
-        tanner: { name: 'Tanner', plural: 'Tanners', icon: '🧵' },
-        bodyguard: { name: 'Bodyguard', plural: 'Bodyguards', icon: '🛡️' },
+        wolf: { name: gtx('games.werewolf.rules.ruleset.name', 'Werewolf'), plural: gtx('games.werewolf.werewolves', 'Werewolves'), icon: '🐺' },
+        seer: { name: gtx('games.werewolf.seer', 'Seer'), plural: gtx('games.werewolf.seers', 'Seers'), icon: '🔮' },
+        doctor: { name: gtx('games.werewolf.doctor', 'Doctor'), plural: gtx('games.werewolf.doctors', 'Doctors'), icon: '🩺' },
+        villager: { name: gtx('games.werewolf.villager', 'Villager'), plural: gtx('games.werewolf.villagers', 'Villagers'), icon: '🧑‍🌾' },
+        hunter: { name: gtx('games.werewolf.hunter', 'Hunter'), plural: gtx('games.werewolf.hunters', 'Hunters'), icon: '🏹' },
+        witch: { name: gtx('games.werewolf.witch', 'Witch'), plural: gtx('games.werewolf.witches', 'Witches'), icon: '🧪' },
+        tanner: { name: gtx('games.werewolf.tanner', 'Tanner'), plural: gtx('games.werewolf.tanners', 'Tanners'), icon: '🧵' },
+        bodyguard: { name: gtx('games.werewolf.bodyguard', 'Bodyguard'), plural: gtx('games.werewolf.bodyguards', 'Bodyguards'), icon: '🛡️' },
       },
       lines: {
-        night: 'Night falls on the village. Everyone, close your eyes.',
-        wake: 'The sun rises over the village.',
-        taken: '{names} {was} taken in the night.',
-        quiet: 'A quiet night — nobody was taken.',
-        saved: 'Nobody was taken — the Doctor saved someone.',
-        protected: 'Nobody was taken — someone was protected in the night.',
-        potion: 'Nobody was taken — someone was saved in the night.',
-        day: 'Talk it over. Who among you is a Werewolf?',
+        night: gtx('games.werewolf.night_falls_on_the_village_everyone', 'Night falls on the village. Everyone, close your eyes.'),
+        wake: gtx('games.werewolf.the_sun_rises_over_the_village', 'The sun rises over the village.'),
+        taken: '{names} was taken in the night.',
+        takenMany: '{names} were taken in the night.',
+        quiet: gtx('games.werewolf.a_quiet_night_nobody_was_taken', 'A quiet night — nobody was taken.'),
+        saved: gtx('games.werewolf.nobody_was_taken_the_doctor_saved', 'Nobody was taken — the Doctor saved someone.'),
+        protected: gtx('games.werewolf.nobody_was_taken_someone_was_protected', 'Nobody was taken — someone was protected in the night.'),
+        potion: gtx('games.werewolf.nobody_was_taken_someone_was_saved', 'Nobody was taken — someone was saved in the night.'),
+        day: gtx('games.werewolf.talk_it_over_who_among_you', 'Talk it over. Who among you is a Werewolf?'),
         out: '{name} is out of the game.',
-        noOut: 'The village couldn’t agree — nobody is out today.',
+        noOut: gtx('games.werewolf.the_village_couldn_t_agree_nobody', 'The village couldn’t agree — nobody is out today.'),
         tie: 'It’s a tie! One more vote between {names}.',
         shot: '{by} the Hunter takes {name} with them.',
         noShot: '{by} the Hunter lowers their bow.',
-        win: { village: 'The village wins — every Werewolf is out!', wolves: 'The Werewolves take the village!', tanner: '{name} the Tanner wanted to be voted out — and wins!' },
+        win: { village: gtx('games.werewolf.the_village_wins_every_werewolf_is', 'The village wins — every Werewolf is out!'), wolves: gtx('games.werewolf.the_werewolves_take_the_village', 'The Werewolves take the village!'), tanner: '{name} the Tanner wanted to be voted out — and wins!' },
       },
     },
     mafia: {
       id: 'mafia',
-      label: 'Mafia',
+      label: gtx('games.werewolf.mafia', 'Mafia'),
       place: 'city',
-      teams: { wolves: 'Mafia', village: 'Town', tanner: 'Jester' },
+      teams: { wolves: gtx('games.werewolf.mafia.team.wolves', 'Mafia'), village: gtx('games.werewolf.mafia.team.village', 'Town'), tanner: gtx('games.werewolf.mafia.team.tanner', 'Jester') },
       roles: {
-        wolf: { name: 'Mafia', plural: 'Mafia', icon: '🕴️' },
-        seer: { name: 'Detective', plural: 'Detectives', icon: '🕵️' },
-        doctor: { name: 'Doctor', plural: 'Doctors', icon: '🩺' },
-        villager: { name: 'Civilian', plural: 'Civilians', icon: '🧑' },
-        hunter: { name: 'Vigilante', plural: 'Vigilantes', icon: '⚖️' },
-        witch: { name: 'Chemist', plural: 'Chemists', icon: '⚗️' },
-        tanner: { name: 'Jester', plural: 'Jesters', icon: '🃏' },
-        bodyguard: { name: 'Bodyguard', plural: 'Bodyguards', icon: '🛡️' },
+        wolf: { name: gtx('games.werewolf.mafia', 'Mafia'), plural: gtx('games.werewolf.mafia', 'Mafia'), icon: '🕴️' },
+        seer: { name: gtx('games.werewolf.detective', 'Detective'), plural: gtx('games.werewolf.detectives', 'Detectives'), icon: '🕵️' },
+        doctor: { name: gtx('games.werewolf.doctor', 'Doctor'), plural: gtx('games.werewolf.doctors', 'Doctors'), icon: '🩺' },
+        villager: { name: gtx('games.werewolf.civilian', 'Civilian'), plural: gtx('games.werewolf.civilians', 'Civilians'), icon: '🧑' },
+        hunter: { name: gtx('games.werewolf.vigilante', 'Vigilante'), plural: gtx('games.werewolf.vigilantes', 'Vigilantes'), icon: '⚖️' },
+        witch: { name: gtx('games.werewolf.chemist', 'Chemist'), plural: gtx('games.werewolf.chemists', 'Chemists'), icon: '⚗️' },
+        tanner: { name: gtx('games.werewolf.jester', 'Jester'), plural: gtx('games.werewolf.jesters', 'Jesters'), icon: '🃏' },
+        bodyguard: { name: gtx('games.werewolf.bodyguard', 'Bodyguard'), plural: gtx('games.werewolf.bodyguards', 'Bodyguards'), icon: '🛡️' },
       },
       lines: {
-        night: 'Night falls on the city. Everyone, close your eyes.',
-        wake: 'Morning comes to the city.',
-        taken: '{names} got an offer {they} couldn’t refuse — out of the game.',
-        quiet: 'A quiet night — nobody was taken.',
-        saved: 'Nobody was taken — the Doctor saved someone.',
-        protected: 'Nobody was taken — someone was protected in the night.',
-        potion: 'Nobody was taken — someone was saved in the night.',
-        day: 'Talk it over. Who’s in the Mafia?',
+        night: gtx('games.werewolf.night_falls_on_the_city_everyone', 'Night falls on the city. Everyone, close your eyes.'),
+        wake: gtx('games.werewolf.morning_comes_to_the_city', 'Morning comes to the city.'),
+        taken: '{names} got an offer they couldn’t refuse — out of the game.',
+        takenMany: '{names} got an offer they couldn’t refuse — out of the game.',
+        quiet: gtx('games.werewolf.a_quiet_night_nobody_was_taken', 'A quiet night — nobody was taken.'),
+        saved: gtx('games.werewolf.nobody_was_taken_the_doctor_saved', 'Nobody was taken — the Doctor saved someone.'),
+        protected: gtx('games.werewolf.nobody_was_taken_someone_was_protected', 'Nobody was taken — someone was protected in the night.'),
+        potion: gtx('games.werewolf.nobody_was_taken_someone_was_saved', 'Nobody was taken — someone was saved in the night.'),
+        day: gtx('games.werewolf.talk_it_over_who_s_in', 'Talk it over. Who’s in the Mafia?'),
         out: '{name} is out of the game.',
-        noOut: 'The town couldn’t agree — nobody is out today.',
+        noOut: gtx('games.werewolf.the_town_couldn_t_agree_nobody', 'The town couldn’t agree — nobody is out today.'),
         tie: 'It’s a tie! One more vote between {names}.',
         shot: '{by} the Vigilante takes {name} down with them.',
         noShot: '{by} the Vigilante holds back.',
-        win: { village: 'The town wins — the Mafia is finished!', wolves: 'The Mafia runs the city now!', tanner: '{name} the Jester wanted to be voted out — and wins!' },
+        win: { village: gtx('games.werewolf.the_town_wins_the_mafia_is', 'The town wins — the Mafia is finished!'), wolves: gtx('games.werewolf.the_mafia_runs_the_city_now', 'The Mafia runs the city now!'), tanner: '{name} the Jester wanted to be voted out — and wins!' },
       },
     },
   };
@@ -153,14 +181,25 @@
     return theme(th).teams[team] || '';
   }
 
+  /** Theme line placeholders: {{name}} (catalog) or {name} (English source). */
   function fill(text, vars) {
-    return String(text || '').replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null ? String(vars[k]) : ''));
+    return String(text || '').replace(/\{\{(\w+)\}\}|\{(\w+)\}/g, (m, a, b) => {
+      const v = vars && vars[a || b];
+      return v == null ? '' : typeof v === 'object' && v.text != null ? v.text : String(v);
+    });
   }
 
+  /** "A, B and C" in the reader's language (Intl.ListFormat; English on the server). */
   function joinNames(names) {
-    const list = names.filter(Boolean);
+    const list = names.filter(Boolean).map((n) => (typeof n === 'object' && n.text != null ? n.text : String(n)));
     if (list.length <= 1) return list[0] || '';
-    return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+    const g = typeof globalThis !== 'undefined' ? globalThis : {};
+    const lang = typeof g.currentLang === 'string' ? g.currentLang : 'en';
+    try {
+      return new Intl.ListFormat(lang, { style: 'long', type: 'conjunction' }).format(list);
+    } catch (e) {
+      return list.slice(0, -1).join(', ') + ' & ' + list[list.length - 1];
+    }
   }
 
   // ---------------- roles + balance ----------------
@@ -211,20 +250,20 @@
     const score = Math.round(((autoWolves(n) - wolves) * 3 + power - (POWER.seer + POWER.doctor)) * 10) / 10;
     const dropped = SPECIAL_ORDER.filter((r) => set[r] && roles.indexOf(r) < 0);
     let tone = 'ok';
-    let label = 'Balanced';
-    if (score > 2.5) label = 'Leans village';
-    else if (score < -1.5) label = 'Leans wolves';
+    let label = gtx('games.werewolf.balanced', 'Balanced');
+    if (score > 2.5) label = gtx('games.werewolf.leans_village', 'Leans village');
+    else if (score < -1.5) label = gtx('games.werewolf.leans_wolves', 'Leans wolves');
     if (score > 4.5 || score < -3) {
       tone = 'bad';
-      label = score > 0 ? 'Too easy for the village' : 'Too easy for the wolves';
+      label = score > 0 ? gtx('games.werewolf.too_easy_for_the_village', 'Too easy for the village') : gtx('games.werewolf.too_easy_for_the_wolves', 'Too easy for the wolves');
     } else if (score > 2.5 || score < -1.5) tone = 'warn';
     const nonWolves = n - wolves;
     let note = '';
     if (nonWolves - wolves <= 1) {
       tone = 'bad';
-      note = 'The wolves are one night away from winning.';
-    } else if (dropped.length) note = 'Not enough players for every role — ' + dropped.join(', ') + ' left out.';
-    else if (n < BEST_WITH) note = 'Best with 7+ players.';
+      note = gtx('games.werewolf.the_wolves_are_one_night_away', 'The wolves are one night away from winning.');
+    } else if (dropped.length) note = gtx('games.werewolf.not_enough_players_for_every_role', 'Not enough players for every role — {{dropped}} left out.', { dropped: dropped.join(', ') });
+    else if (n < BEST_WITH) note = gtx('games.werewolf.best_with_7_players', 'Best with 7+ players.');
     return { score, tone, label, note, wolves, roles, dropped };
   }
 
@@ -351,16 +390,16 @@
     const others = pub.alive.filter((x) => x !== id);
     const base = { kind: 'pick', role };
     if (role === 'wolf') {
-      return Object.assign(base, { verb: 'target', prompt: 'Choose who to take tonight', candidates: pub.alive.filter((x) => hidden.roles[x] !== 'wolf'), pack: wolfVotes(pub, hidden) });
+      return Object.assign(base, { verb: 'target', prompt: gtx('games.werewolf.choose_who_to_take_tonight', 'Choose who to take tonight'), candidates: pub.alive.filter((x) => hidden.roles[x] !== 'wolf'), pack: wolfVotes(pub, hidden) });
     }
-    if (role === 'seer') return Object.assign(base, { verb: 'check', prompt: 'Choose someone to check', candidates: others });
+    if (role === 'seer') return Object.assign(base, { verb: 'check', prompt: gtx('games.werewolf.choose_someone_to_check', 'Choose someone to check'), candidates: others });
     if (role === 'doctor') {
       const last = hidden.last.doctor;
-      return Object.assign(base, { verb: 'protect', prompt: 'Choose someone to protect', candidates: pub.alive.filter((x) => s.doctorRepeat || x !== last || pub.night <= 1) });
+      return Object.assign(base, { verb: 'protect', prompt: gtx('games.werewolf.choose_someone_to_protect', 'Choose someone to protect'), candidates: pub.alive.filter((x) => s.doctorRepeat || x !== last || pub.night <= 1) });
     }
     if (role === 'bodyguard') {
       const last = hidden.last.bodyguard;
-      return Object.assign(base, { verb: 'guard', prompt: 'Choose someone to guard', candidates: others.filter((x) => x !== last) });
+      return Object.assign(base, { verb: 'guard', prompt: gtx('games.werewolf.choose_someone_to_guard', 'Choose someone to guard'), candidates: others.filter((x) => x !== last) });
     }
     if (role === 'witch') {
       return Object.assign(base, {
@@ -371,7 +410,7 @@
         witch: { save: !!hidden.witch.save, kill: !!hidden.witch.kill, victim: hidden.witch.save ? wolfPick(pub, hidden) : null },
       });
     }
-    return Object.assign(base, { verb: 'suspect', prompt: 'Who do you suspect?', candidates: others });
+    return Object.assign(base, { verb: 'suspect', prompt: gtx('games.werewolf.who_do_you_suspect', 'Who do you suspect?'), candidates: others });
   }
 
   function validNight(pub, hidden, settings, a) {
@@ -784,7 +823,7 @@
       case 'dawn': {
         if (entry.taken && entry.taken.length) {
           const many = entry.taken.length > 1;
-          return L.wake + ' ' + fill(L.taken, { names: joinNames(entry.taken.map(name)), was: many ? 'were' : 'was', they: many ? 'they' : 'they' });
+          return L.wake + ' ' + fill(many ? L.takenMany || L.taken : L.taken, { names: joinNames(entry.taken.map(name)) });
         }
         if (entry.saved) return L.wake + ' ' + (entry.saved === 'doctor' ? L.saved : L[entry.saved] || L.potion);
         return L.wake + ' ' + L.quiet;
@@ -798,7 +837,7 @@
       case 'shot':
         return entry.target ? fill(L.shot, { by: name(entry.by), name: name(entry.target) }) : fill(L.noShot, { by: name(entry.by) });
       case 'left':
-        return name(entry.id) + ' left the game.';
+        return gtx('games.werewolf.name_left_the_game', '{{name}} left the game.', { name: name(entry.id) });
       case 'win':
         return fill(L.win[entry.winner] || '', { name: entry.tanner ? name(entry.tanner) : '' });
       default:

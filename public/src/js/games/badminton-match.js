@@ -18,6 +18,32 @@
  * service and ends come out of the laws engine. Bot seats play at once with future timestamps, so
  * phones animate them on the shared clock without extra round trips.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const api =
     typeof module === 'object' && module.exports
@@ -163,11 +189,11 @@
       if (isBot(v)) pub.names[s] = botLabel(v);
       else {
         pub.players[v] = true;
-        pub.names[s] = cleanName(names[s] || names[v]) || 'Player';
+        pub.names[s] = cleanName(names[s] || names[v]) || gtx('dangal.party.player', 'Player');
       }
     });
     const hs = humans(pub);
-    if (hs.length !== new Set(hs).size) throw err('bad_seats', 'Each player takes one seat');
+    if (hs.length !== new Set(hs).size) throw err('bad_seats', gtx('games.badminton.each_player_takes_one_seat', 'Each player takes one seat'));
     const stake = Math.max(0, Math.min(MAX_STAKE, Math.floor(Number(o.stake) || 0)));
     // Rated + stakes: Standard singles between two people only. Doubles records team results, unrated.
     const twoHumanSingles = discipline === 'singles' && hs.length === 2;
@@ -347,7 +373,7 @@
     if (!c || pub.status !== 'playing') return {};
     const who = pub.seats[c.seat];
     if (!isBot(who)) return {};
-    if (depth > 400) throw err('runaway', 'Rally never ended');
+    if (depth > 400) throw err('runaway', gtx('games.badminton.rally_never_ended', 'Rally never ended'));
     const bp = R.botPlay(rallyOf(pub), rallyContact(c), E.mulberry32(seedOf(rng)));
     const at = Math.round(c.startAt + E.tapFor(bp.timing, rng) * c.dur);
     return resolveTap(m, at, rng, { shot: bp.choice.shot, x: bp.choice.x, hold: bp.choice.hold, timing: bp.timing }, '', depth + 1);
@@ -495,14 +521,14 @@
     const matchId = cleanMatchId(a.matchId);
 
     if (op === 'create') {
-      if (current) throw err('exists', 'That match already exists');
+      if (current) throw err('exists', gtx('games.badminton.that_match_already_exists', 'That match already exists'));
       const seats = { A0: uid };
       ['A1', 'B0', 'B1'].forEach((s) => {
         const v = a.seats && a.seats[s];
         seats[s] = isBot(v) ? v : cleanUid(v) || tierSeat(a.tier, a.persona);
       });
       const names = {};
-      names.A0 = cleanName(a.name) || 'Player';
+      names.A0 = cleanName(a.name) || gtx('dangal.party.player', 'Player');
       if (a.names) ['A1', 'B0', 'B1'].forEach((s) => (names[s] = a.names[s]));
       const simple = {};
       if (a.simple) simple[uid] = true;
@@ -516,13 +542,13 @@
       if (!current) {
         // Singles challenge: whoever arrives first creates it (host = playerA settings win).
         const opp = cleanUid(a.opponentUid);
-        if (!opp || opp === uid) throw err('bad_opponent', 'Pick a real opponent');
+        if (!opp || opp === uid) throw err('bad_opponent', gtx('games.badminton.err.opp', 'Pick a real opponent'));
         const hostA = cleanUid(a.playerA);
         const playerA = hostA === opp ? opp : uid;
         const playerB = playerA === uid ? opp : uid;
         const hostArgs = playerA === uid ? a : {};
         const names = {};
-        names[uid] = cleanName(a.name) || 'Player';
+        names[uid] = cleanName(a.name) || gtx('dangal.party.player', 'Player');
         const simple = {};
         if (a.simple) simple[uid] = true;
         const m = newMatch({ matchId, discipline: 'singles', format: hostArgs.format, stake: hostArgs.stake, seats: { A0: playerA, B0: playerB }, names, host: playerA, now, simple });
@@ -531,7 +557,7 @@
       }
       const m = hydrate(current);
       const pub = m.pub;
-      if (!pub.players[uid]) throw err('not_in_match', 'This match is for other players');
+      if (!pub.players[uid]) throw err('not_in_match', gtx('games.badminton.err.notIn', 'This match is for other players'));
       pub.joined[uid] = true;
       const seat = seatOfUid(pub, uid);
       if (a.name && seat) pub.names[seat] = cleanName(a.name) || pub.names[seat];
@@ -550,15 +576,15 @@
       return { match: m, result: { joined: true, seat } };
     }
 
-    if (!current) throw err('match_not_found', 'Match not found');
+    if (!current) throw err('match_not_found', gtx('games.badminton.match_not_found', 'Match not found'));
     const m = hydrate(current);
     const pub = m.pub;
-    if (!pub.players[uid] && op !== 'tick') throw err('not_in_match', 'This match is for other players');
+    if (!pub.players[uid] && op !== 'tick') throw err('not_in_match', gtx('games.badminton.err.notIn', 'This match is for other players'));
     if (!pub.players[uid]) return null;
 
     if (op === 'fill') {
-      if (pub.status !== 'waiting') throw err('not_waiting', 'The match has started');
-      if (uid !== pub.host) throw err('not_host', 'Only the host can fill seats');
+      if (pub.status !== 'waiting') throw err('not_waiting', gtx('games.badminton.the_match_has_started', 'The match has started'));
+      if (uid !== pub.host) throw err('not_host', gtx('games.badminton.only_the_host_can_fill_seats', 'Only the host can fill seats'));
       seatList(pub).forEach((s) => {
         const v = pub.seats[s];
         if (!isBot(v) && !pub.joined[v]) {
@@ -570,19 +596,19 @@
       });
       pub.rated = false;
       pub.stake = 0;
-      if (humans(pub).length < 1) throw err('bad_seats', 'Someone has to play');
+      if (humans(pub).length < 1) throw err('bad_seats', gtx('games.badminton.someone_has_to_play', 'Someone has to play'));
       if (allJoined(pub)) start(m, now, rng);
       return { match: m, result: { filled: true, started: pub.status === 'playing' } };
     }
 
     if (op === 'hit') {
-      if (pub.status !== 'playing') throw err('not_playing', 'This match isn’t live');
+      if (pub.status !== 'playing') throw err('not_playing', gtx('games.badminton.this_match_isn_t_live', 'This match isn’t live'));
       const c = pub.contact;
-      if (!c || (pub.phase !== 'serve' && pub.phase !== 'rally')) throw err('no_contact', 'The shuttle isn’t coming to you');
-      if (Number(a.n) !== c.n || Number(a.k) !== c.k) throw err('stale_contact', 'That shot already happened');
-      if (pub.seats[c.seat] !== uid) throw err('not_your_shot', 'Your partner or opponent has this one');
+      if (!c || (pub.phase !== 'serve' && pub.phase !== 'rally')) throw err('no_contact', gtx('games.badminton.the_shuttle_isn_t_coming_to', 'The shuttle isn’t coming to you'));
+      if (Number(a.n) !== c.n || Number(a.k) !== c.k) throw err('stale_contact', gtx('games.badminton.that_shot_already_happened', 'That shot already happened'));
+      if (pub.seats[c.seat] !== uid) throw err('not_your_shot', gtx('games.badminton.your_partner_or_opponent_has_this', 'Your partner or opponent has this one'));
       const elapsed = now - c.startAt;
-      if (elapsed < -200) throw err('too_early', 'Wait for the shuttle');
+      if (elapsed < -200) throw err('too_early', gtx('games.badminton.wait_for_the_shuttle', 'Wait for the shuttle'));
       // Only the tap time is read — a claimed winner, score or code is ignored.
       const tap = clampTap(a.t, Math.max(0, elapsed), a.rtt);
       const p = tap / c.dur;
@@ -689,7 +715,7 @@
     }
 
     if (op === 'rematch') {
-      if (pub.status !== 'over') throw err('not_over', 'Finish this match first');
+      if (pub.status !== 'over') throw err('not_over', gtx('games.badminton.finish_this_match_first', 'Finish this match first'));
       if (pub.nextMatchId) return { match: m, result: { nextMatchId: pub.nextMatchId } };
       pub.rematch[uid] = true;
       if (humans(pub).every((u) => pub.rematch[u])) {
@@ -723,7 +749,7 @@
       return { match: m, result: { settled: true } };
     }
 
-    throw err('bad_op', 'Unknown match action');
+    throw err('bad_op', gtx('games.badminton.unknown_match_action', 'Unknown match action'));
   }
 
   /** Stats for the sheet / share card, from the log. */

@@ -3,6 +3,32 @@
  * The deck and the title being acted live in `hidden`; `pub` only gets a title once it is guessed,
  * passed or the turn ends. UMD: window.CharadesCore / require().
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
   const PC = node ? require('./party-core.js') : root.PartyCore;
@@ -34,19 +60,19 @@
   const TURNS_PER_TEAM = [2, 3, 4, 5, 6];
   const TARGETS = [3, 5, 7, 10];
   const DIFFICULTY = ['all', 'easy', 'medium', 'hard'];
-  const TEAM_NAMES = ['Team A', 'Team B'];
+  const TEAM_NAMES = /* i18n-copy */ [gtx('games.charades.team_a', 'Team A'), gtx('games.charades.team_b', 'Team B')];
 
   /** Gesture cheat sheet (how-to + the actor's in-game peek). */
   const GESTURES = [
-    { icon: '🖐️', en: 'Number of words', how: 'Hold up that many fingers' },
-    { icon: '☝️', en: 'Which word', how: 'Hold up fingers again for the word you’re acting' },
-    { icon: '💪', en: 'Syllables', how: 'Lay fingers on your forearm' },
-    { icon: '👂', en: 'Sounds like', how: 'Tug your ear' },
-    { icon: '🎥', en: 'Movie', how: 'Crank an old film camera' },
-    { icon: '🎵', en: 'Song', how: 'Pretend to sing' },
-    { icon: '📺', en: 'TV show', how: 'Draw a box in the air' },
-    { icon: '📖', en: 'Book', how: 'Open your palms like a book' },
-    { icon: '⭕', en: 'Whole title', how: 'Sweep a big circle with your arms' },
+    { icon: '🖐️', en: gtx('games.charades.number_of_words', 'Number of words'), how: gtx('games.charades.hold_up_that_many_fingers', 'Hold up that many fingers') },
+    { icon: '☝️', en: gtx('games.charades.which_word', 'Which word'), how: gtx('games.charades.hold_up_fingers_again_for_the', 'Hold up fingers again for the word you’re acting') },
+    { icon: '💪', en: gtx('games.charades.gesture.syllables', 'Syllables'), how: gtx('games.charades.lay_fingers_on_your_forearm', 'Lay fingers on your forearm') },
+    { icon: '👂', en: gtx('games.charades.sounds_like', 'Sounds like'), how: gtx('games.charades.tug_your_ear', 'Tug your ear') },
+    { icon: '🎥', en: gtx('games.charades.gesture.movie', 'Movie'), how: gtx('games.charades.crank_an_old_film_camera', 'Crank an old film camera') },
+    { icon: '🎵', en: gtx('games.charades.gesture.song', 'Song'), how: gtx('games.charades.pretend_to_sing', 'Pretend to sing') },
+    { icon: '📺', en: gtx('games.charades.tv_show', 'TV show'), how: gtx('games.charades.draw_a_box_in_the_air', 'Draw a box in the air') },
+    { icon: '📖', en: gtx('games.charades.gesture.book', 'Book'), how: gtx('games.charades.open_your_palms_like_a_book', 'Open your palms like a book') },
+    { icon: '⭕', en: gtx('games.charades.whole_title', 'Whole title'), how: gtx('games.charades.sweep_a_big_circle_with_your', 'Sweep a big circle with your arms') },
   ];
 
   function mergeSettings(s) {
@@ -56,6 +82,7 @@
     if (TURN_SEC.indexOf(num(src.turnSec)) >= 0) out.turnSec = num(src.turnSec);
     if (Number.isInteger(num(src.passes)) && num(src.passes) >= 0 && num(src.passes) <= 3) out.passes = num(src.passes);
     out.speed = src.speed === true || src.speed === 'true';
+    out.contentLang = PC.contentLang(src.contentLang);
     if (src.goal === 'points' || src.goal === 'turns') out.goal = src.goal;
     if (TURNS_PER_TEAM.indexOf(num(src.turnsPerTeam)) >= 0) out.turnsPerTeam = num(src.turnsPerTeam);
     if (TARGETS.indexOf(num(src.targetPoints)) >= 0) out.targetPoints = num(src.targetPoints);
@@ -154,10 +181,11 @@
     return t ? { key: t.key, en: t.en, hi: t.hi, pack: t.pack, kind: t.kind, difficulty: t.difficulty } : null;
   }
 
-  function matchTitle(text, key) {
+  /** Typed guess vs the current title, in the room content language (`lang`) + English. */
+  function matchTitle(text, key, lang) {
     const t = titleOf(key);
     if (!t) return false;
-    return PC.fuzzyMatch(text, [t.en, t.hi].concat(t.alts || []));
+    return PC.fuzzyMatch(text, PC.guessLabels(t, lang));
   }
 
   function draw(hidden) {
@@ -294,7 +322,7 @@
         if (!a.id || a.id === p.actor || teamOf(p, a.id) !== p.team) return { error: 'not_guesser' };
         const text = String(a.text == null ? '' : a.text).trim().slice(0, 80);
         if (!text) return { error: 'empty' };
-        if (!matchTitle(text, hidden.current)) return { pub: p, matched: false };
+        if (!matchTitle(text, hidden.current, s.contentLang)) return { pub: p, matched: false };
         credit(p, hidden, s, a.id);
         return { pub: p, matched: true };
       }

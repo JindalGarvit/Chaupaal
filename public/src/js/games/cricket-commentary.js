@@ -9,6 +9,32 @@
  * Numbers in lines only ever come from the match facts ({r}, {score}, {need} …), so the AI
  * grounding check can hold AI lines to the same rule.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.CricketCommentary = factory();
@@ -22,7 +48,7 @@
   // Placeholders: {bat} batter · {bowl} bowler · {r} batter runs · {b} balls faced · {score} 34/2
   // {need} runs needed · {left} balls left · {shot} shot · {del} delivery · {m} milestone
   // {team} batting side · {winner} · {margin} "12 runs" · {target}
-  const T = {
+  const T = /* i18n-catalog: games.streetcricket.comm */ {
     calm: {
       four: [
         '{bat} finds the gap — four.',
@@ -500,12 +526,21 @@
     }
     return h >>> 0;
   }
+  /** One template in the reader's language — catalog key games.streetcricket.comm.<persona>.<kind>.<n>. */
+  function fillKey(persona, kind, i, tpl, f) {
+    const params = {};
+    Object.keys(f).forEach((k) => (params[k] = f[k] == null ? '' : f[k]));
+    const line = gtx('games.streetcricket.comm.' + persona + '.' + kind + '.' + (i + 1), tpl.replace(/\{(\w+)\}/g, '{{$1}}'), params);
+    return line.replace(/\{\{\w+\}\}/g, '').replace(/\s+/g, ' ').trim();
+  }
   function fill(tpl, f) {
     return tpl.replace(/\{(\w+)\}/g, (_, k) => (f[k] == null ? '' : String(f[k]))).replace(/\s+/g, ' ').trim();
   }
-  const SHOT_NAME = { drive: 'drive', cut: 'cut', pull: 'pull', sweep: 'sweep', loft: 'lofted shot', flick: 'flick', defend: 'push', push: 'push', leave: 'leave' };
-  const DEL_NAME = { yorker: 'yorker', full: 'full ball', good: 'good-length ball', short: 'short ball', bouncer: 'bouncer', fulltoss: 'full toss' };
+  const SHOT_NAME = /* i18n-catalog: games.streetcricket.shot */ { drive: 'drive', cut: 'cut', pull: 'pull', sweep: 'sweep', loft: 'lofted shot', flick: 'flick', defend: 'push', push: 'push', leave: 'leave' };
+  const DEL_NAME = /* i18n-catalog: games.streetcricket.delivery */ { yorker: 'yorker', full: 'full ball', good: 'good-length ball', short: 'short ball', bouncer: 'bouncer', fulltoss: 'full toss' };
 
+  const shotName = (k) => (SHOT_NAME[k] ? gtx('games.streetcricket.shot.' + k, SHOT_NAME[k]) : gtx('games.streetcricket.shot_generic', 'shot'));
+  const deliveryName = (k) => (DEL_NAME[k] ? gtx('games.streetcricket.delivery.' + k, DEL_NAME[k]) : gtx('games.streetcricket.delivery_generic', 'delivery'));
   function plural(n, w) {
     return n + ' ' + w + (n === 1 ? '' : 's');
   }
@@ -520,7 +555,7 @@
     const out = [];
     if (!state || !state.innings) return out;
     state.innings.forEach((inn, ii) => {
-      const team = state.config.sides[inn.bat] ? state.config.sides[inn.bat].name : 'Side';
+      const team = state.config.sides[inn.bat] ? state.config.sides[inn.bat].name : gtx('games.streetcricket.side', 'Side');
       let runs = 0;
       let wk = 0;
       let legal = 0;
@@ -553,8 +588,8 @@
           left,
           team,
           target: inn.target || 0,
-          shot: SHOT_NAME[b.shot] || 'shot',
-          del: DEL_NAME[b.length] || 'delivery',
+          shot: shotName(b.shot),
+          del: deliveryName(b.length),
         };
         let onBall = 0;
         const push = (kind, extra) => {
@@ -591,7 +626,16 @@
       const r = state.result;
       const supers = state.innings.filter((i) => i.super);
       const winner = r.winner >= 0 && state.config.sides[r.winner] ? state.config.sides[r.winner].name : '';
-      const margin = r.by === 'runs' ? plural(r.runs, 'run') : r.by === 'wickets' ? plural(r.wickets, 'wicket') : r.by === 'superover' ? 'the Super Over' : r.by === 'boundaries' ? 'boundary count' : '';
+      const margin =
+        r.by === 'runs'
+          ? gtx('games.streetcricket.margin.runs', plural(r.runs, 'run'), { count: r.runs })
+          : r.by === 'wickets'
+            ? gtx('games.streetcricket.margin.wickets', plural(r.wickets, 'wicket'), { count: r.wickets })
+            : r.by === 'superover'
+              ? gtx('games.streetcricket.margin.superover', 'the Super Over')
+              : r.by === 'boundaries'
+                ? gtx('games.streetcricket.margin.boundaries', 'boundary count')
+                : '';
       const base = { key: 'result', inn: state.cur, winner, margin, score: '', team: winner };
       if (supers.length) out.push(Object.assign({ kind: 'superOver', key: 'super' }, base));
       if (r.kind === 'tie') out.push(Object.assign({ kind: 'tie' }, base));
@@ -623,7 +667,7 @@
           const k = (start + i) % pool.length;
           if (u[k]) continue;
           u[k] = 1;
-          return fill(pool[k], m).slice(0, MAX_LINE);
+          return fillKey(p, m.kind, k, pool[k], m).slice(0, MAX_LINE);
         }
         return '';
       },
@@ -650,7 +694,7 @@
     const r = state.result;
     const main = state.innings.filter((i) => !i.super);
     const s = [];
-    s.push(r.text + (fan ? '!' : '.'));
+    s.push(fan ? gtx('games.streetcricket.recap.result_fan', '{{result}}!', { result: r.text }) : gtx('games.streetcricket.recap.result', '{{result}}.', { result: r.text }));
     let best = null;
     let bestBowl = null;
     main.forEach((inn) => {
@@ -661,10 +705,22 @@
         if (!bestBowl || b.w > bestBowl.w || (b.w === bestBowl.w && b.r < bestBowl.r)) bestBowl = { name: b.name, w: b.w, r: b.r };
       });
     });
-    if (best && best.r > 0) s.push(fan ? best.name + ' lit it up with ' + best.r + ' off ' + best.b + (best.f6 ? ', including ' + plural(best.f6, 'six') : '') + '!' : best.name + ' top-scored with ' + best.r + ' off ' + best.b + '.');
-    if (bestBowl && bestBowl.w > 0) s.push(fan ? bestBowl.name + ' struck with ' + bestBowl.w + '-' + bestBowl.r + '!' : bestBowl.name + ' took ' + bestBowl.w + '-' + bestBowl.r + '.');
+    if (best && best.r > 0) {
+      const p = { name: best.name, r: best.r, b: best.b, count: best.f6 || 0 };
+      s.push(
+        fan
+          ? best.f6
+            ? gtx('games.streetcricket.recap.top_fan_sixes', best.name + ' lit it up with ' + best.r + ' off ' + best.b + ', including ' + plural(best.f6, 'six') + '!', p)
+            : gtx('games.streetcricket.recap.top_fan', '{{name}} lit it up with {{r}} off {{b}}!', p)
+          : gtx('games.streetcricket.recap.top', '{{name}} top-scored with {{r}} off {{b}}.', p)
+      );
+    }
+    if (bestBowl && bestBowl.w > 0) {
+      const p = { name: bestBowl.name, w: bestBowl.w, r: bestBowl.r };
+      s.push(fan ? gtx('games.streetcricket.recap.bowl_fan', '{{name}} struck with {{w}}-{{r}}!', p) : gtx('games.streetcricket.recap.bowl', '{{name}} took {{w}}-{{r}}.', p));
+    }
     const reviews = main.reduce((n, i) => n + i.balls.filter((b) => b.drs).length, 0);
-    if (s.length < 3 && reviews) s.push(plural(reviews, 'review') + ' used.');
+    if (s.length < 3 && reviews) s.push(gtx('games.streetcricket.recap.reviews', plural(reviews, 'review') + ' used.', { count: reviews }));
     return s.slice(0, 3).join(' ').slice(0, MAX_RECAP);
   }
 

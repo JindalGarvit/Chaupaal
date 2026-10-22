@@ -19,7 +19,8 @@ function assert(cond, msg) {
 }
 
 const root = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const { readWithCopy } = require('./lib/i18n-source');
+const read = (p) => readWithCopy(p);
 
 const PC = require(path.join(root, 'public/src/js/games/party-core.js'));
 const RM = require(path.join(root, 'public/src/js/games/rajamantri-core.js'));

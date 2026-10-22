@@ -1,5 +1,5 @@
 // ===================== CATEGORY RATINGS + DANGAL GRID =====================
-const NEWS_CATEGORIES = ['GK','Sports','Tech','Business','India','World'];
+const NEWS_CATEGORIES = /* i18n-values: akhbaar.cat */ ['GK','Sports','Tech','Business','India','World'];
 const CATEGORY_ICONS = {GK:'🧠',Sports:'🏏',Tech:'💻',Business:'📈',India:'🇮🇳',World:'🌍'};
 
 const LEADERBOARD_PAGE=10;
@@ -7,7 +7,7 @@ let lbCursor=null;
 let lbHasMore=false;
 let lbEntries=[];
 let lbLoading=false;
-const LB_SAMPLE=[{name:'Riya S.',score:'15/15',profileType:'personal'},{name:'Dev K.',score:'14/15',profileType:'personal'},{name:'Neha P.',score:'13/15',profileType:'professional'},{name:'Arjun M.',score:'12/15',profileType:'personal'}];
+const LB_SAMPLE=[{name:t('dangal.riya_s'),score:'15/15',profileType:'personal'},{name:t('dangal.dev_k'),score:'14/15',profileType:'personal'},{name:t('dangal.neha_p'),score:'13/15',profileType:'professional'},{name:t('dangal.arjun_m'),score:'12/15',profileType:'personal'}];
 
 async function loadLeaderboard(){
   lbCursor=null; lbHasMore=true; lbEntries=[];
@@ -36,7 +36,7 @@ async function loadLeaderboardPage({reset=false}={}){
     const page=snap.docs.map(d=>{
       const data=d.data()||{};
       return {
-        name:data.name?.split(' ')[0]||'Player',
+        name:data.name?.split(' ')[0]||t('dangal.party.player'),
         score:`${data.score}/${data.total||15}`,
         profileType:data.profileType||null,
         uid:d.id,
@@ -59,7 +59,7 @@ function renderLeaderboardEmpty(el){
   if(!el) return;
   el.removeAttribute('aria-busy');
   el.classList.remove('ui-skeleton-stack');
-  const msg=typeof t==='function'?t('rp_lb_empty'):'No scores yet today — play Akhbaar to climb the board.';
+  const msg=typeof t==='function'?t('rp_lb_empty'):t('dangal.no_scores_yet_today_play_akhbaar');
   el.innerHTML=`<div class="rp-empty">${msg}</div>`;
 }
 
@@ -67,8 +67,8 @@ function renderLeaderboardUI(entries,el,{hasMore=false,demo=false}={}){
   const medals=['🥇','🥈','🥉'];
   el.removeAttribute('aria-busy');
   el.classList.remove('ui-skeleton-stack');
-  const youLabel=typeof t==='function'?t('rp_you'):'You';
-  el.innerHTML=(demo?`<div class="rp-demo-hint">Demo</div>`:'')+entries.map((e,i)=>`
+  const youLabel=typeof t==='function'?t('rp_you'):t('dangal.classics.you');
+  el.innerHTML=(demo?`<div class="rp-demo-hint">${tHtml('dangal.demo')}</div>`:'')+entries.map((e,i)=>`
     <div class="rp-leaderboard-item">
       <div class="rp-rank ${i===0?'gold':''}">${medals[i]||i+1}</div>
       <div class="rp-name">${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(e.name,e):e.name}</div>
@@ -83,12 +83,12 @@ function renderLeaderboardUI(entries,el,{hasMore=false,demo=false}={}){
     const mineIdx=entries.findIndex((e)=>e.uid&&myUid&&e.uid===myUid);
     const rank=mineIdx>=0?mineIdx+1:null;
     if(!demo&&rank!=null){
-      el.innerHTML+=`<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${rank}" data-score="${String(myScore).replace(/"/g,'')}" style="margin-top:8px;width:100%;">Share my rank</button>`;
+      el.innerHTML+=`<button type="button" class="btn btn--sm" data-share-rank="1" data-rank="${rank}" data-score="${String(myScore).replace(/"/g,'')}" style="margin-top:8px;width:100%;">${tHtml('dangal.share_my_rank')}</button>`;
     }
   }
   if(hasMore&&typeof ensureLoadMoreButton==='function'){
     ensureLoadMoreButton(el,{
-      label:typeof t==='function'?t('rp_show_more'):'Show more',
+      label:typeof t==='function'?t('rp_show_more'):t('dangal.show_more'),
       onLoadMore:()=>loadLeaderboardPage({reset:false}),
     });
   }
@@ -145,13 +145,13 @@ async function recordDangalGameLike(gameId, btn) {
       btn.classList.add('is-liked');
       btn.setAttribute('aria-pressed', 'true');
       if (envelope.data?.alreadyLiked) {
-        if (typeof showToast === 'function') showToast('Already liked');
+        if (typeof showToast === 'function') showToast(t('dangal.already_liked'));
       } else if (typeof showToast === 'function') {
-        showToast('Liked');
+        showToast(t('dangal.liked'));
       }
     }
   } catch (e) {
-    if (typeof showToast === 'function') showToast('Could not like — try again');
+    if (typeof showToast === 'function') showToast(t('dangal.could_not_like_try_again'));
   }
 }
 
@@ -163,7 +163,7 @@ function dangalTileHtml(g) {
       ? dangalHonestyBadgeHtml(g)
       : g.solo || g.gameType === 'solo'
         ? '<span class="dangal-solo-tag">SOLO</span>'
-        : '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
+        : '<span class="dangal-honesty-tag dangal-honesty-tag--practice">' + tHtml('dangal.solo.practice') + '</span>';
   const genreHint =
     g.genre && typeof genreLabel === 'function'
       ? `<span class="dangal-genre-tag">${genreLabel(g.genre)}</span>`
@@ -187,7 +187,7 @@ function dangalTileHtml(g) {
       ${rating ? `<div class="dangal-game-rating-pill">★ ${rating}</div>` : ''}
       ${progressPill}
     </div>
-    <button type="button" class="dangal-game-like" data-like-game="${g.id}" aria-label="Like ${g.name}">♥ Like</button>
+    <button type="button" class="dangal-game-like" data-like-game="${g.id}" aria-label="${tHtml('dangal.like_name', { name: g.name })}">${tHtml('dangal.like')}</button>
   </div>`;
 }
 
@@ -215,13 +215,13 @@ function renderDangalContinueAndChips(host) {
   if (pending && pending.challenger) {
     const gName =
       pending.game === 'akhbaar'
-        ? 'Akhbaar'
+        ? t('dangal.akhbaar')
         : ((typeof getGame === 'function' && getGame(pending.game)?.name) || pending.game);
     const chipEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const chipScore = (pending.params && pending.params.label) || (Number.isFinite(pending.score) ? pending.score : 'their score');
+    const chipScore = (pending.params && pending.params.label) || (Number.isFinite(pending.score) ? pending.score : t('dangal.their_score'));
     challengeChip = `<button type="button" class="dangal-challenge-chip" id="dangalChallengeChip">
-      <div><strong>${chipEsc(pending.challenger)} challenged you</strong><span>Beat ${chipEsc(chipScore)} on ${chipEsc(gName)}</span></div>
-      <span>Play →</span>
+      <div><strong>${tHtml('dangal.name_challenged_you', { name: { html: '<bdi>' + chipEsc(pending.challenger) + '</bdi>' } })}</strong><span>${tHtml('dangal.beat_chipesc_on_chipesc2', { chipEsc: { html: chipEsc(chipScore) }, chipEsc2: { html: chipEsc(gName) } })}</span></div>
+      <span>${tHtml('dangal.play')}</span>
     </button>`;
   }
 
@@ -233,7 +233,7 @@ function renderDangalContinueAndChips(host) {
       const contMark =
         typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 18 }) : g.icon || '';
       continueChip = `<button type="button" class="dangal-continue-chip" id="dangalContinueChip" data-game="${g.id}">
-        <div><strong>Continue · <span class="dangal-continue-mark">${contMark}</span> ${g.name}</strong><span>Pick up where you left off</span></div>
+        <div><strong>${tHtml('dangal.continue_2')} <span class="dangal-continue-mark">${contMark}</span> ${g.name}</strong><span>${tHtml('dangal.pick_up_where_you_left_off')}</span></div>
         <span>→</span>
       </button>`;
     }
@@ -290,14 +290,14 @@ function renderDangalGotdSlot(host, gotd) {
   card.innerHTML = `
     <div class="dangal-gotd-icon">${gotdMark}</div>
     <div>
-      <div class="dangal-gotd-badge">Game of the Day</div>
+      <div class="dangal-gotd-badge">${tHtml('dangal.game_of_the_day')}</div>
       <div class="dangal-gotd-name">${g.name}${honesty}</div>
       <div class="dangal-gotd-desc">${g.desc}</div>
       ${genreBit}
     </div>
     <div class="dangal-gotd-actions">
-      <span class="dangal-gotd-play">Play →</span>
-      <button type="button" class="dangal-gotd-like" data-like-game="${g.id}" aria-label="Like ${g.name}">♥ Like</button>
+      <span class="dangal-gotd-play">${tHtml('dangal.play')}</span>
+      <button type="button" class="dangal-gotd-like" data-like-game="${g.id}" aria-label="${tHtml('dangal.like_name', { name: g.name })}">${tHtml('dangal.like')}</button>
     </div>`;
   const launch = () => {
     if (typeof markGamePlayed === 'function') markGamePlayed(g.id);
@@ -333,11 +333,11 @@ function renderDangalGamesGrid() {
     const hub = typeof getDangalHubSummary === 'function' ? getDangalHubSummary() : null;
     const streakBit =
       hub && hub.softDayStreak > 0
-        ? `<span class="dor-meta">${hub.softDayStreak > 1 ? `${hub.softDayStreak}-day streak` : 'Played today'} · ${hub.weekPlays} this week</span>`
+        ? `<span class="dor-meta">${hub.softDayStreak > 1 ? tHtml('dangal.softdaystreak_day_streak', { softDayStreak: hub.softDayStreak }) : tHtml('common.played_today')} · ${tHtml('dangal.n_this_week', { count: hub.weekPlays })}</span>`
         : hub
-          ? `<span class="dor-meta">${hub.weekPlays} play${hub.weekPlays === 1 ? '' : 's'} this week</span>`
+          ? `<span class="dor-meta">${tHtml('dangal.plays_this_week', { count: hub.weekPlays })}</span>`
           : '';
-    overall.innerHTML = `<div class="dor-main"><span class="dor-label">${typeof t === 'function' ? t('dangal_pulse_title') : 'Tarakki'}</span><span class="dor-val">${hub ? hub.totalPlayed || 0 : avgQuiz}</span></div>${streakBit}`;
+    overall.innerHTML = `<div class="dor-main"><span class="dor-label">${typeof t === 'function' ? t('dangal_pulse_title') : tHtml('dangal.pulse_title')}</span><span class="dor-val">${hub ? hub.totalPlayed || 0 : avgQuiz}</span></div>${streakBit}`;
   }
 
   const chipEl = document.getElementById('dangalChipBalance');
@@ -358,7 +358,7 @@ function renderDangalGamesGrid() {
       if (!r || tile.querySelector('.dangal-game-rating-pill')) return;
       const pill = document.createElement('div');
       pill.className = 'dangal-game-rating-pill';
-      pill.textContent = '★ ' + r.rating + (r.provisional ? ' · Provisional' : '');
+      pill.textContent = '★ ' + r.rating + (r.provisional ? ' · ' + t('dangal.provisional') : '');
       tile.querySelector('.dangal-game-desc')?.after(pill);
     });
   });
@@ -406,15 +406,15 @@ function renderDangalGamesGrid() {
     if (!gotd?.gameId && typeof renderEmptyState === 'function') {
       renderEmptyState(gotdHost, {
         icon: '🔥',
-        title: 'Khel is warming up',
-        message: 'Browse Manch for practice, or play a solo quiz on Akhbaar.',
-        actionLabel: 'Browse Manch',
+        title: t('dangal.khel_is_warming_up'),
+        message: t('dangal.browse_manch_for_practice_or_play'),
+        actionLabel: t('dangal.browse_manch'),
         onAction: () => {
           if (typeof setDangalSection === 'function') setDangalSection('manch');
         },
         secondaryActions: [
           {
-            label: 'Practice quiz',
+            label: t('dangal.practice_quiz'),
             onAction: () => {
               if (typeof startDay0Play === 'function') startDay0Play();
               else if (typeof showTab === 'function') showTab('akhbaar');
@@ -436,14 +436,14 @@ function renderDangalGamesGrid() {
   filterBar.className = 'dangal-manch-filters';
   filterBar.setAttribute('data-nav-ignore', '1');
   filterBar.setAttribute('role', 'toolbar');
-  filterBar.setAttribute('aria-label', 'Filter games');
+  filterBar.setAttribute('aria-label', t('dangal.filter_games'));
   const modeFilters = [
-    { id: 'all', label: 'All', kind: 'all', icon: '▦', color: '#546E7A' },
+    { id: 'all', label: t('common.all'), kind: 'all', icon: '▦', color: '#546E7A' },
     // Player-count labels — "Solo" is also a section chip, so the mode chips say how many play.
-    { id: 'solo', label: '1 player', kind: 'mode', gameType: 'solo', icon: '①', color: '#00897B' },
-    { id: 'dual', label: '2 players', kind: 'mode', gameType: 'dual', icon: '②', color: '#F9A825' },
-    { id: 'live', label: 'Live 1v1', kind: 'live', icon: '●', color: '#E53935' },
-    { id: 'multiplayer', label: 'Groups', kind: 'mode', gameType: 'multiplayer', icon: '③', color: '#E53935' },
+    { id: 'solo', label: t('dangal.1_player'), kind: 'mode', gameType: 'solo', icon: '①', color: '#00897B' },
+    { id: 'dual', label: t('dangal.2_players'), kind: 'mode', gameType: 'dual', icon: '②', color: '#F9A825' },
+    { id: 'live', label: t('dangal.classics.live_1v1'), kind: 'live', icon: '●', color: '#E53935' },
+    { id: 'multiplayer', label: t('dangal.groups'), kind: 'mode', gameType: 'multiplayer', icon: '③', color: '#E53935' },
   ];
   const genreFilters = (typeof getGameGenres === 'function' ? getGameGenres() : []).map((g) => ({
     id: g.id,
@@ -532,17 +532,17 @@ function renderDangalGamesGrid() {
         ? ''
         : gateStatus === 'under_18'
           ? state.genre === 'cards'
-            ? '<div class="dangal-age-note" style="grid-column:1/-1">Some card games are for players 18 and over.</div>'
+            ? '<div class="dangal-age-note" style="grid-column:1/-1">' + tHtml('dangal.some_card_games_are_for_players') + '</div>'
             : ''
-          : `<button type="button" class="dangal-age-note dangal-age-note--action" style="grid-column:1/-1" data-age-gate>Texas Hold’em and Teen Patti are 18+. <span>Confirm your age to see them</span></button>`;
+          : `<button type="button" class="dangal-age-note dangal-age-note--action" style="grid-column:1/-1" data-age-gate>${tHtml('dangal.texas_hold_em_and_teen_patti')} <span>${tHtml('dangal.confirm_your_age_to_see_them')}</span></button>`;
     if (!list.length) {
       manchGrid.innerHTML = '';
       if (typeof renderEmptyState === 'function') {
         renderEmptyState(manchGrid, {
           icon: '🎮',
-          title: 'No games here',
-          message: 'Try All to see the full library, or practice a solo quiz.',
-          actionLabel: 'Show all games',
+          title: t('dangal.no_games_here'),
+          message: t('dangal.try_all_to_see_the_full'),
+          actionLabel: t('dangal.show_all_games'),
           onAction: () => {
             const allBtn = filterBar.querySelector('[data-filter-kind="all"]');
             if (allBtn) allBtn.click();
@@ -555,7 +555,7 @@ function renderDangalGamesGrid() {
           },
           secondaryActions: [
             {
-              label: 'Practice quiz',
+              label: t('dangal.practice_quiz'),
               onAction: () => {
                 if (typeof startDay0Play === 'function') startDay0Play();
                 else if (typeof showTab === 'function') showTab('akhbaar');
@@ -565,16 +565,16 @@ function renderDangalGamesGrid() {
         });
       } else {
         manchGrid.innerHTML =
-          '<div class="cp-empty" style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);">No games match this filter.</div>';
+          '<div class="cp-empty" style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);">' + tHtml('dangal.no_games_match_this_filter') + '</div>';
       }
     } else {
       const partyNight =
         state.genre === 'party' && window.PartyHub && typeof window.PartyHub.open === 'function'
-          ? '<button type="button" class="dangal-partynight" style="grid-column:1/-1" data-party-night><span aria-hidden="true">🎉</span><span><strong>Party night</strong><small>Several games, one group — no re-invites</small></span></button>'
+          ? '<button type="button" class="dangal-partynight" style="grid-column:1/-1" data-party-night><span aria-hidden="true">🎉</span><span><strong>' + tHtml('dangal.party.party_night') + '</strong><small>' + tHtml('dangal.several_games_one_group_no_re') + '</small></span></button>'
           : '';
       const suggest =
         !state.genre && !state.live && (!state.mode || state.mode === 'all') && window.DangalAssistUI
-          ? '<button type="button" class="dangal-suggest-btn" style="grid-column:1/-1" data-suggest-open><span aria-hidden="true">🎲</span><span><strong>What should we play?</strong><small>Pick players, place and time — get a few good fits</small></span></button>'
+          ? '<button type="button" class="dangal-suggest-btn" style="grid-column:1/-1" data-suggest-open><span aria-hidden="true">🎲</span><span><strong>' + tHtml('dangal.what_should_we_play') + '</strong><small>' + tHtml('dangal.pick_players_place_and_time_get') + '</small></span></button>'
           : '';
       manchGrid.innerHTML = suggest + partyNight + list.map(dangalTileHtml).join('') + gateCard;
       wireDangalTiles(manchGrid);
@@ -677,18 +677,18 @@ function renderDangalGamesGrid() {
   if (lastGame) {
     maidanBody.innerHTML = `
       <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-resume="${lastGame.id}">
-        Play again · ${lastGame.icon || ''} ${lastGame.name}
+        ${tHtml('dangal.play_again_value_name', { value: lastGame.icon || '', name: lastGame.name })}
       </button>
-      <p class="dangal-maidan-note" style="grid-column:1/-1;font-size:12px;color:var(--muted);margin:0 0 8px;">No mid-match save yet — this restarts your last game type.</p>
-      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
-      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>`;
+      <p class="dangal-maidan-note" style="grid-column:1/-1;font-size:12px;color:var(--muted);margin:0 0 8px;">${tHtml('dangal.no_mid_match_save_yet_this')}</p>
+      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="muqabala">${tHtml('dangal.open_muqabala')}</button>
+      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">${tHtml('dangal.find_opponent')}</button>`;
   } else {
     maidanBody.innerHTML = `
       <div class="cp-empty" style="padding:16px;text-align:center;color:var(--muted);grid-column:1/-1;">
-        Nothing in progress — pick a game from Manch.
+        ${tHtml('dangal.nothing_in_progress_pick_a_game')}
       </div>
-      <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-maidan="muqabala">Open Muqabala</button>
-      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">Find opponent</button>`;
+      <button type="button" class="btn btn--primary dangal-action-btn" data-dangal-maidan="muqabala">${tHtml('dangal.open_muqabala')}</button>
+      <button type="button" class="btn dangal-action-btn" data-dangal-maidan="finder">${tHtml('dangal.find_opponent')}</button>`;
   }
   maidan.appendChild(maidanBody);
   grid.appendChild(maidan);
@@ -861,10 +861,10 @@ function openQuizCategorySheet(){
   const ratings=userProfile?.categoryRatings||{};
   sheet.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">Quiz Muqabala</div>
-      <button type="button" id="closeQuizCatSheet" class="icon-btn" aria-label="Close" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+      <div style="font-family:Space Grotesk,sans-serif;font-weight:700;font-size:18px;">${tHtml('common.quiz_muqabala')}</div>
+      <button type="button" id="closeQuizCatSheet" class="icon-btn" aria-label="${tHtml('common.close')}" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Pick a topic, then Practice or find a match</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${tHtml('dangal.pick_a_topic_then_practice_or')}</div>
     <div class="quiz-cat-grid" id="quizCatGrid">
       ${NEWS_CATEGORIES.map(cat=>`
         <button type="button" class="quiz-cat-card" data-cat="${cat}" aria-pressed="false">
@@ -875,13 +875,13 @@ function openQuizCategorySheet(){
       `).join('')}
     </div>
     <div class="dangal-limit-bar" id="dangalLimitBar" style="margin:10px 0 12px;">
-      <div class="dangal-limit-info"><span>Random matches today</span><span class="dangal-limit-count" id="dangalLimitCount">3 / 3 remaining</span></div>
+      <div class="dangal-limit-info"><span>${tHtml('dangal.random_matches_today')}</span><span class="dangal-limit-count" id="dangalLimitCount">${tHtml('dangal.3_3_remaining')}</span></div>
       <div class="dangal-limit-track"><div class="dangal-limit-fill" id="dangalLimitFill" style="width:100%"></div></div>
     </div>
     <div class="muqabala-sheet-actions">
-      <button type="button" class="btn btn--primary btn--block btn--lg dangal-action-btn" id="quizPracticeBtn">Practice vs AI</button>
-      <button type="button" class="btn btn--block btn--lg dangal-action-btn muqabala-sheet-find" id="quizFindBtn">Find opponent</button>
-      <button type="button" class="btn btn--block dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;margin-top:8px;">Find with AI</button>
+      <button type="button" class="btn btn--primary btn--block btn--lg dangal-action-btn" id="quizPracticeBtn">${tHtml('dangal.practice_vs_ai')}</button>
+      <button type="button" class="btn btn--block btn--lg dangal-action-btn muqabala-sheet-find" id="quizFindBtn">${tHtml('dangal.find_opponent')}</button>
+      <button type="button" class="btn btn--block dangal-action-btn" id="aiFindMuqabalaBtn" style="background:linear-gradient(135deg,var(--navy),#2A3158);color:#fff;margin-top:8px;">${tHtml('dangal.find_with_ai')}</button>
     </div>
   `;
   sheet.classList.remove('hidden');requestAnimationFrame(()=>sheet.classList.add('open'));
@@ -907,13 +907,13 @@ function openQuizCategorySheet(){
     startMuqabala(null, selectedCat, { skipMatchmaking:true, practice:true, simulated:true, skipCredit:true, source:'bank' });
   });
   document.getElementById('quizFindBtn')?.addEventListener('click',()=>{
-    if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily match limit reached — Practice or challenge a friend instead');return;}
+    if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast(t('dangal.daily_match_limit_reached_practice_or'));return;}
     closeSheet();
     startMuqabala(null, selectedCat);
   });
   document.getElementById('aiFindMuqabalaBtn').addEventListener('click',()=>{
     closeSheet();
-    if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast('Daily limit reached! Friend challenges are still unlimited');return;}
+    if(dailyMuqabalaCount>=DAILY_MUQABALA_LIMIT){showToast(t('dangal.daily_limit_reached_friend_challenges_are'));return;}
     openAIFinder();
   });
   updateLimitUI();

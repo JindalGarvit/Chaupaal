@@ -19,6 +19,32 @@
  * stump height) — not real Hawk-Eye. Band: hitting (|x| ≤ 0.8 and h ≤ 0.8) → out · missing
  * (|x| > 1.2 or h > 1.2, or pitched outside leg) → not out · between → umpire's call.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.CricketModel = factory();
@@ -40,15 +66,15 @@
   const VARIATION_LENGTH = { bouncer: 'bouncer', yorker: 'yorker' };
 
   const LABELS = {
-    type: { pace: 'Pace', spin: 'Spin' },
-    line: { off: 'Off', middle: 'Middle', leg: 'Leg', wide: 'Wide' },
-    length: { yorker: 'Yorker', full: 'Full', good: 'Good', short: 'Short', bouncer: 'Bouncer', fulltoss: 'Full toss' },
-    variation: { stock: 'Stock', slower: 'Slower ball', cutter: 'Cutter', bouncer: 'Bouncer', yorker: 'Yorker', turnIn: 'Turn in', turnAway: 'Turn away', armBall: 'Arm ball' },
-    shot: { drive: 'Drive', cut: 'Cut', pull: 'Pull', sweep: 'Sweep', loft: 'Loft', flick: 'Flick', defend: 'Defend', leave: 'Leave' },
-    field: { attacking: 'Attacking', balanced: 'Balanced', defensive: 'Defensive', protectOff: 'Protect off-side', protectLeg: 'Protect leg-side' },
-    pitch: { flat: 'Flat', green: 'Green', dusty: 'Dusty', tarmac: 'Street tarmac' },
-    run: { hold: 'Hold', one: 'Take 1', two: 'Push for 2' },
-    foot: { stay: 'Stay back', out: 'Step out' },
+    type: { pace: gtx('games.streetcricket.pace', 'Pace'), spin: gtx('games.streetcricket.spin', 'Spin') },
+    line: { off: gtx('dangal.solo.off', 'Off'), middle: gtx('games.streetcricket.middle', 'Middle'), leg: gtx('games.streetcricket.leg', 'Leg'), wide: gtx('games.streetcricket.flash.wide', 'Wide') },
+    length: { yorker: gtx('games.streetcricket.yorker', 'Yorker'), full: gtx('games.streetcricket.full', 'Full'), good: gtx('common.opt.feedback.good', 'Good'), short: gtx('games.streetcricket.short', 'Short'), bouncer: gtx('games.streetcricket.bouncer', 'Bouncer'), fulltoss: gtx('games.streetcricket.full_toss', 'Full toss') },
+    variation: { stock: gtx('dangal.classics.stock', 'Stock'), slower: gtx('games.streetcricket.slower_ball_2', 'Slower ball'), cutter: gtx('games.streetcricket.cutter', 'Cutter'), bouncer: gtx('games.streetcricket.bouncer', 'Bouncer'), yorker: gtx('games.streetcricket.yorker', 'Yorker'), turnIn: gtx('games.streetcricket.turn_in', 'Turn in'), turnAway: gtx('games.streetcricket.turn_away', 'Turn away'), armBall: gtx('games.streetcricket.arm_ball_2', 'Arm ball') },
+    shot: { drive: gtx('games.streetcricket.drive', 'Drive'), cut: gtx('games.streetcricket.cut', 'Cut'), pull: gtx('games.streetcricket.pull', 'Pull'), sweep: gtx('games.streetcricket.sweep', 'Sweep'), loft: gtx('games.streetcricket.loft', 'Loft'), flick: gtx('games.streetcricket.flick', 'Flick'), defend: gtx('games.streetcricket.defend', 'Defend'), leave: gtx('dangal.leave', 'Leave') },
+    field: { attacking: gtx('games.streetcricket.attacking', 'Attacking'), balanced: gtx('games.streetcricket.balanced', 'Balanced'), defensive: gtx('games.streetcricket.defensive', 'Defensive'), protectOff: gtx('games.streetcricket.protect_off_side', 'Protect off-side'), protectLeg: gtx('games.streetcricket.protect_leg_side', 'Protect leg-side') },
+    pitch: { flat: gtx('games.streetcricket.flat', 'Flat'), green: gtx('games.streetcricket.green', 'Green'), dusty: gtx('games.streetcricket.dusty', 'Dusty'), tarmac: gtx('games.streetcricket.street_tarmac', 'Street tarmac') },
+    run: { hold: gtx('games.streetcricket.hold', 'Hold'), one: gtx('games.streetcricket.take_1', 'Take 1'), two: gtx('games.streetcricket.push_for_2', 'Push for 2') },
+    foot: { stay: gtx('games.streetcricket.stay_back', 'Stay back'), out: gtx('games.streetcricket.foot.out', 'Step out') },
   };
 
   const SHOTS = ['drive', 'cut', 'pull', 'sweep', 'loft', 'flick', 'defend', 'leave'];
@@ -194,10 +220,10 @@
 
   /** Pitch conditions, rolled per match and shown before the toss. */
   const PITCHES = {
-    flat: { carry: 1, seam: 0, turn: 0, boundary: 1.08, edge: 0.9, blurb: 'Flat: true bounce, little help for bowlers' },
-    green: { carry: 1.12, seam: 0.12, turn: 0, boundary: 0.95, edge: 1.25, blurb: 'Green: pace carries and seams — edges fly' },
-    dusty: { carry: 0.92, seam: 0, turn: 0.16, boundary: 0.97, edge: 1.1, blurb: 'Dusty: the ball grips and turns for spin' },
-    tarmac: { carry: 1.18, seam: 0.04, turn: 0.04, boundary: 1.2, edge: 1, blurb: 'Street tarmac: skiddy, fast outfield, big hits' },
+    flat: { carry: 1, seam: 0, turn: 0, boundary: 1.08, edge: 0.9, blurb: gtx('games.streetcricket.flat_true_bounce_little_help_for', 'Flat: true bounce, little help for bowlers') },
+    green: { carry: 1.12, seam: 0.12, turn: 0, boundary: 0.95, edge: 1.25, blurb: gtx('games.streetcricket.green_pace_carries_and_seams_edges', 'Green: pace carries and seams — edges fly') },
+    dusty: { carry: 0.92, seam: 0, turn: 0.16, boundary: 0.97, edge: 1.1, blurb: gtx('games.streetcricket.dusty_the_ball_grips_and_turns', 'Dusty: the ball grips and turns for spin') },
+    tarmac: { carry: 1.18, seam: 0.04, turn: 0.04, boundary: 1.2, edge: 1, blurb: gtx('games.streetcricket.street_tarmac_skiddy_fast_outfield_big', 'Street tarmac: skiddy, fast outfield, big hits') },
   };
   const PITCH_ORDER = ['flat', 'green', 'dusty', 'tarmac'];
 
@@ -226,10 +252,10 @@
 
   /** Bot tiers (always labelled "Bot"). Timing distribution, read, accuracy and plan depth. */
   const TIERS = {
-    easy: { label: 'Easy', timing: [0.5, 0.18, 0.22, 0.1], read: 0.55, accuracy: [0.5, 0.2], plan: 0, aggression: 0.4 },
-    normal: { label: 'Normal', timing: [0.62, 0.14, 0.17, 0.07], read: 0.75, accuracy: [0.68, 0.16], plan: 1, aggression: 0.52 },
-    hard: { label: 'Hard', timing: [0.72, 0.1, 0.13, 0.05], read: 0.88, accuracy: [0.8, 0.12], plan: 2, aggression: 0.6 },
-    pro: { label: 'Pro', timing: [0.8, 0.08, 0.09, 0.03], read: 0.95, accuracy: [0.88, 0.08], plan: 3, aggression: 0.65 },
+    easy: { label: gtx('games.streetcricket.easy', 'Easy'), timing: [0.5, 0.18, 0.22, 0.1], read: 0.55, accuracy: [0.5, 0.2], plan: 0, aggression: 0.4 },
+    normal: { label: gtx('games.streetcricket.normal', 'Normal'), timing: [0.62, 0.14, 0.17, 0.07], read: 0.75, accuracy: [0.68, 0.16], plan: 1, aggression: 0.52 },
+    hard: { label: gtx('games.streetcricket.hard', 'Hard'), timing: [0.72, 0.1, 0.13, 0.05], read: 0.88, accuracy: [0.8, 0.12], plan: 2, aggression: 0.6 },
+    pro: { label: gtx('games.streetcricket.pro', 'Pro'), timing: [0.8, 0.08, 0.09, 0.03], read: 0.95, accuracy: [0.88, 0.08], plan: 3, aggression: 0.65 },
   };
   const TIER_ORDER = ['easy', 'normal', 'hard', 'pro'];
 

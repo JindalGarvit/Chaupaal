@@ -56,7 +56,7 @@ function beginGameOverlaySession(opts) {
 
   if (overlay) {
     if (!overlay.innerHTML || !String(overlay.innerHTML).trim()) {
-      const title = opts.title || type || 'Game';
+      const title = opts.title || type || t('games.chess.game');
       const theme = opts.theme || 'dark';
       if (typeof gameSkeletonHtml === 'function') {
         const tmp = document.createElement('div');
@@ -219,7 +219,7 @@ function beginGameOverlaySession(opts) {
     } catch (e) {
       console.error('[game] session init failed', type, e);
       alive = false;
-      if (typeof showToast === 'function') showToast('Could not start game');
+      if (typeof showToast === 'function') showToast(t('games.chess.could_not_start_game'));
       return {
         alive: () => false,
         close() {},
@@ -235,7 +235,7 @@ function beginGameOverlaySession(opts) {
     const device = document.querySelector('.device');
     if (!device) {
       alive = false;
-      if (typeof showToast === 'function') showToast('Game container not found');
+      if (typeof showToast === 'function') showToast(t('games.chess.game_container_not_found'));
       return {
         alive: () => false,
         close() {},
@@ -294,7 +294,7 @@ function openChessGame(chat) {
     window.ChessUI.open(chat);
     return;
   }
-  if (typeof showToast === 'function') showToast('Chess couldn’t load — refresh and try again');
+  if (typeof showToast === 'function') showToast(t('games.chess.chess_couldn_t_load_refresh_and'));
 }
 function startChessGame(chat) {
   openChessGame(chat);
@@ -312,8 +312,8 @@ function startChessGame(chat) {
 if (typeof registerGame === 'function') {
   registerGame({
     id: 'chess',
-    name: 'Chess',
-    desc: 'Bots, Live and Daily games',
+    name: t('games.chess.rules.ruleset.name'),
+    desc: t('games.chess.bots_live_and_daily_games'),
     icon: '♟',
     ratingKey: 'chess',
     gameType: 'dual',
@@ -323,9 +323,9 @@ if (typeof registerGame === 'function') {
     selfChat: true,
     order: 10,
     meta: {
-      phaseA: 'Laws of Chess rules core (chess-core.js) — claims, auto draws, flag vs insufficient material, Chess960',
-      phaseB: 'Server-authoritative Live + Daily (server-lib/chess-engine.js), bucket ratings',
-      phaseC: 'Own engine in a Web Worker — 8 bot levels, review, coach, ECO names',
+      phaseA: t('games.chess.laws_of_chess_rules_core_chess'),
+      phaseB: t('games.chess.server_authoritative_live_daily_server_lib'),
+      phaseC: t('games.chess.own_engine_in_a_web_worker'),
       complete: true,
     },
     launch(ctx) { openChessGame(typeof chatFromLaunch === 'function' ? chatFromLaunch(ctx) : ctx.chat); },

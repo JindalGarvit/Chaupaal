@@ -6,6 +6,32 @@
  * Board: Int8Array(64), a1 = 0 … h8 = 63. Pieces: 1 P, 2 N, 3 B, 4 R, 5 Q, 6 K; black = +8.
  * Castling rights are stored as rook files so Chess960 (X-FEN / Shredder-FEN) works.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.ChessCore = factory();
@@ -15,7 +41,7 @@
   const P = 1, N = 2, B = 3, R = 4, Q = 5, K = 6;
   const WHITE = 0, BLACK = 1;
   const F_NORMAL = 0, F_BIG = 1, F_EP = 2, F_CASTLE = 3;
-  const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  const START_FEN = gtx('games.chess.rnbqkbnr_pppppppp_8_8_8_8', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const TYPE_CHARS = ' pnbrqk';
   const FILES = 'abcdefgh';
 
@@ -986,12 +1012,12 @@
       h.SetUp = '1';
       h.FEN = this.startFen;
     }
-    if (this.chess960) h.Variant = 'Chess960';
+    if (this.chess960) h.Variant = gtx('games.chess.rules.rules.7.h', 'Chess960');
     if (!h.Result) {
       const o = this.outcome();
       h.Result = o ? o.result : '*';
     }
-    const order = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result'];
+    const order = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result']; // i18n-ignore (codes / names)
     const keys = order.filter((k) => h[k] != null).concat(Object.keys(h).filter((k) => !order.includes(k)));
     const tags = keys.map((k) => `[${k} "${String(h[k]).replace(/"/g, "'")}"]`).join('\n');
     const startBlack = / b /.test(this.startFen);

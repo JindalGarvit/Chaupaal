@@ -256,7 +256,7 @@ function memDb() {
   // ---------- (f) UX + earlier dogfood fixes ----------
   {
     const cs = read('public/src/js/games/court-sports.js');
-    assert(/gameId: spec\.id, title: 'How to play '/.test(cs), 'Badminton How-to opens the shared Rules sheet');
+    assert(/gameId: spec\.id, title: (t\('games\.badminton\.how_to_play_value'|'How to play ')/.test(cs), 'Badminton How-to opens the shared Rules sheet');
     const oh = read('public/src/js/games/ohno-ui.js');
     assert(/function eventText\(e, nameOf, me\)/.test(oh) && !/function eventText[\s\S]{0,1500}\bui\./.test(oh.slice(oh.indexOf('function eventText'), oh.indexOf('function eventText') + 1500)), 'Oh No! round log no longer throws (ui is not defined)');
     const ns = read('public/src/js/core/nav-stack.js');

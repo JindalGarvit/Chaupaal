@@ -9,7 +9,7 @@
   'use strict';
 
   const GAME = 'rajamantri';
-  const LABEL = 'Raja Mantri Chor Sipahi';
+  const LABEL = t('dangal.party.raja_mantri_chor_sipahi');
   const SETTINGS_KEY = 'chaupaal_rajamantri_settings';
   const NAMES_KEY = 'chaupaal_rajamantri_names';
 
@@ -30,7 +30,7 @@
   function roleName(roleId) {
     const r = Core().ROLES[roleId];
     if (!r) return '';
-    return isHi() ? r.hi + ' · ' + r.en : r.en + ' · ' + r.gloss;
+    return isHi() && r.hi ? r.hi + ' · ' + r.en : r.en + ' · ' + r.gloss;
   }
 
   function roleIcon(roleId) {
@@ -39,10 +39,10 @@
 
   function callLine(guesserRole) {
     const c = Core().CALLS[guesserRole] || Core().CALLS.mantri;
-    return isHi() ? c.hi + ' · ' + c.en : c.en + ' · ' + c.gloss;
+    return isHi() && c.hi ? c.hi + ' · ' + c.en : c.en + ' · ' + c.gloss;
   }
 
-  const RAJA_QUOTE = () => (isHi() ? 'मैं राजा हूँ!' : 'Main Raja hoon! · I’m the King!');
+  const RAJA_QUOTE = () => (isHi() && Core().quoteHi() ? Core().quoteHi() : t('games.rajamantri.main_raja_hoon_i_m_the'));
 
   function loadSettings() {
     try {
@@ -78,7 +78,7 @@
     const roles = Core().rolesFor(Math.min(8, Math.max(4, n)));
     const thieves = roles.filter((r) => Core().ROLES[r].thief).length;
     return (
-      (n > 4 ? 'Extended · ' + roles.length + ' chits · ' + thieves + ' thieves' : 'Classic · 4 chits') +
+      (n > 4 ? t('games.rajamantri.extended_chits', { chits: roles.length, count: thieves }) : t('games.rajamantri.classic_chits')) +
       ' · ' + s.rounds + ' rounds' +
       (s.guesser === 'sipahi' ? ' · Sipahi hunts' : '')
     );
@@ -100,16 +100,16 @@
 
   function howToCardHtml() {
     return `<details class="pk-howto">
-      <summary>How to play · 20 seconds</summary>
+      <summary>${tHtml('games.rajamantri.how_to_play_20_seconds')}</summary>
       <ol>
-        <li>Everyone secretly gets a chit: <strong>Raja (King) 1000 · Mantri (Minister) 800 · Sipahi (Soldier) 500 · Chor (Thief) 0</strong>.</li>
-        <li>The Raja stands up — “Main Raja hoon!” (I’m the King!) — and calls the Mantri to find the Chor.</li>
-        <li>The Mantri reveals and points at who they think is the Chor (the Thief).</li>
-        <li>Right — everyone keeps their points. Wrong — Mantri and Chor <strong>swap</strong> points.</li>
+        <li>${tHtml('games.rajamantri.everyone_secretly_gets_a_chit')} <strong>${tHtml('games.rajamantri.raja_king_1000_mantri_minister_800')}</strong>.</li>
+        <li>${tHtml('games.rajamantri.the_raja_stands_up_main_raja')}</li>
+        <li>${tHtml('games.rajamantri.the_mantri_reveals_and_points_at')}</li>
+        <li>${tHtml('games.rajamantri.right_everyone_keeps_their_points_wrong')} <strong>${tHtml('games.rajamantri.swap')}</strong> ${tHtml('games.rajamantri.points')}</li>
       </ol>
-      <div class="pk-howto-score">5–8 players add chits in this order (points · from players):</div>
+      <div class="pk-howto-score">${tHtml('games.rajamantri.5_8_players_add_chits_in')}</div>
       ${roleTableHtml()}
-      <div class="pk-howto-score">With two thieves the hunter picks once per thief; each wrong pick hands that thief an equal share of the hunter’s points.</div>
+      <div class="pk-howto-score">${tHtml('games.rajamantri.with_two_thieves_the_hunter_picks')}</div>
     </details>`;
   }
 
@@ -119,21 +119,21 @@
     const s = Object.assign({}, settings);
     const K = Kit();
     K.openSheet({
-      title: 'Game settings',
+      title: t('games.rajamantri.game_settings'),
       bodyHtml: `
         <div class="pk-field">
-          <div class="pk-field-label">Rounds</div>
+          <div class="pk-field-label">${tHtml('games.rajamantri.rounds')}</div>
           ${K.segHtml('rounds', s.rounds, Core().ROUND_OPTIONS.map((r) => [r, String(r)]))}
         </div>
         <details class="pk-advanced">
-          <summary>Advanced</summary>
+          <summary>${tHtml('games.rajamantri.advanced')}</summary>
           <div class="pk-field">
-            <div class="pk-field-label">Who catches the Chor</div>
-            ${K.segHtml('guesser', s.guesser, [['mantri', 'Mantri'], ['sipahi', 'Sipahi']])}
-            <div class="pk-field-help">A wrong pick swaps points between the hunter and the thief.</div>
+            <div class="pk-field-label">${tHtml('games.rajamantri.who_catches_the_chor')}</div>
+            ${K.segHtml('guesser', s.guesser, /* i18n-copy */ [['mantri', t('games.rajamantri.mantri')], ['sipahi', t('games.rajamantri.sipahi')]])}
+            <div class="pk-field-help">${tHtml('games.rajamantri.a_wrong_pick_swaps_points_between')}</div>
           </div>
         </details>
-        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>Done</button>`,
+        <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-save>${tHtml('common.done')}</button>`,
       onMount(sheet, close) {
         K.wireSegs(sheet, s);
         sheet.querySelector('[data-save]').addEventListener('click', () => {
@@ -147,20 +147,20 @@
   // ---------------- shared views ----------------
 
   function chitHtml(role) {
-    if (!role) return '<div class="rm-chit rm-chit--empty">Dealing…</div>';
+    if (!role) return '<div class="rm-chit rm-chit--empty">' + tHtml('games.rajamantri.dealing') + '</div>';
     const r = Core().ROLES[role];
     const tip =
       role === 'raja'
-        ? 'You’ll announce yourself first.'
+        ? t('games.rajamantri.you_ll_announce_yourself_first')
         : role === 'mantri' || role === 'sipahi'
-          ? 'If you’re called, reveal and hunt the thief.'
+          ? t('games.rajamantri.if_you_re_called_reveal_and')
           : r.thief
-            ? 'Stay cool — don’t get caught.'
-            : 'Sit tight and keep a straight face.';
+            ? t('games.rajamantri.stay_cool_don_t_get_caught')
+            : t('games.rajamantri.sit_tight_and_keep_a_straight');
     return `<div class="rm-chit${r.thief ? ' rm-chit--thief' : ''}">
       <div class="rm-chit-icon" aria-hidden="true">${esc(r.icon)}</div>
       <div class="rm-chit-role">${esc(roleName(role))}</div>
-      <div class="rm-chit-pts">${r.points} points</div>
+      <div class="rm-chit-pts">${tHtml('dangal.points_count', { count: r.points })}</div>
       <div class="rm-chit-tip">${esc(tip)}</div>
     </div>`;
   }
@@ -183,13 +183,13 @@
     const role = Core().currentThiefRole(st);
     if (!role) return '';
     const n = st.thiefOrder.length;
-    return 'Find the ' + roleName(role) + (n > 1 ? ' (' + (st.pickIndex + 1) + ' of ' + n + ')' : '');
+    return t('games.rajamantri.find_the_rolename_value', { roleName: roleName(role), value: n > 1 ? t('games.rajamantri.pick_of_n', { pick: st.pickIndex + 1, n }) : '' });
   }
 
   function pickRevealOpts(pick, nm) {
     return pick.correct
-      ? { icon: '🎯', title: 'Caught!', sub: nm(pick.thief) + ' was the ' + roleName(pick.role) }
-      : { icon: '💨', title: 'Wrong pick!', sub: 'The ' + roleName(pick.role) + ' was ' + nm(pick.thief) + ' — points swap' };
+      ? { icon: '🎯', title: t('games.rajamantri.caught'), sub: t('games.rajamantri.nm_was_the_rolename', { nm: nm(pick.thief), roleName: roleName(pick.role) }) }
+      : { icon: '💨', title: t('games.rajamantri.wrong_pick'), sub: t('games.rajamantri.the_rolename_was_nm_points_swap', { roleName: roleName(pick.role), nm: nm(pick.thief) }) };
   }
 
   function resultHtml(res, nm, roundNo, rounds) {
@@ -197,12 +197,12 @@
     Object.keys(res.roles).forEach((id) => (base[id] = Core().ROLES[res.roles[id]].points));
     const order = Object.keys(res.roles).sort((a, b) => Core().ROLES[res.roles[b]].points - Core().ROLES[res.roles[a]].points);
     const picks = res.picks
-      .map((p) => `<div class="rm-pick ${p.correct ? 'is-right' : 'is-wrong'}">${p.correct ? '🎯' : '💨'} ${esc(nm(res.guesser))} picked ${esc(nm(p.target))} for ${esc(roleName(p.role))} — ${p.correct ? 'caught' : 'wrong, it was ' + esc(nm(p.thief))}</div>`)
+      .map((p) => `<div class="rm-pick ${p.correct ? 'is-right' : 'is-wrong'}">${tHtml('games.rajamantri.value_guesser_picked_target_for_role', { value: p.correct ? '🎯' : '💨', guesser: nm(res.guesser), target: nm(p.target), role: roleName(p.role), value2: { html: p.correct ? 'caught' : tHtml('games.rajamantri.wrong_it_was_thief', { thief: nm(p.thief) }) } })}</div>`)
       .join('');
     return `<div class="rm-result">
-      <div class="pk-progress">Round ${roundNo} of ${rounds}</div>
+      <div class="pk-progress">${tHtml('games.rajamantri.round_roundno_of_rounds', { roundNo, rounds })}</div>
       <div class="pk-result-glyph" aria-hidden="true">${res.allCaught ? '🎯' : '🦹'}</div>
-      <div class="pk-result-title">${res.allCaught ? 'Thief caught!' : 'The thief got away!'}</div>
+      <div class="pk-result-title">${res.allCaught ? tHtml('games.rajamantri.thief_caught') : tHtml('games.rajamantri.the_thief_got_away')}</div>
       ${picks}
       <div class="rm-chits">${order
         .map((id) => {
@@ -223,21 +223,21 @@
     const top = players.slice().sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0))[0];
     return `<div class="rm-final">
       <div class="pk-result-glyph" aria-hidden="true">👑</div>
-      <div class="pk-result-title">${esc(top ? top.name : '')} is the Raja of the night!</div>
-      <div class="pk-sub">Final totals</div>
+      <div class="pk-result-title">${tHtml('games.rajamantri.raja_of_night', { name: bidi(top ? top.name : '') })}</div>
+      <div class="pk-sub">${tHtml('games.rajamantri.final_totals')}</div>
       ${Kit().scoreboardHtml(players, scores)}
     </div>`;
   }
 
   function shareFinal(players, scores) {
     const top = players.slice().sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0))[0];
-    Kit().shareLine(GAME, LABEL, (top ? top.name : 'Someone') + ' is the Raja of the night 👑 (' + (scores[top && top.id] || 0) + ' pts)');
+    Kit().shareLine(GAME, LABEL, t('games.rajamantri.value_is_the_raja_of_the', { value: top ? top.name : t('common.someone'), value2: scores[top && top.id] || 0 }));
   }
 
   function shareRound(res, nm) {
     const line = res.allCaught
-      ? nm(res.guesser) + ' caught the Chor 🎯'
-      : res.picks.filter((p) => !p.correct).map((p) => nm(p.thief)).join(' & ') + ' fooled the ' + roleName(res.guesserRole) + ' 🦹';
+      ? t('games.rajamantri.nm_caught_the_chor', { nm: nm(res.guesser) })
+      : t('games.rajamantri.value_fooled_the_rolename', { value: res.picks.filter((p) => !p.correct).map((p) => nm(p.thief)).join(' & '), roleName: roleName(res.guesserRole) });
     Kit().shareLine(GAME, LABEL, line);
   }
 
@@ -246,14 +246,14 @@
   function open(ctx) {
     const c = ctx || {};
     if (!Core() || !Kit()) {
-      if (typeof showToast === 'function') showToast(LABEL + ' is still loading — try again');
+      if (typeof showToast === 'function') showToast(t('games.rajamantri.label_is_still_loading_try_again', { LABEL }));
       return;
     }
     if ((c.source === 'chat_group' || c.isGroup) && c.chat) {
       startRoom({ chat: c.chat });
       return;
     }
-    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: 'Party', confirmLeave: () => false });
+    const shell = Kit().openShell({ gameId: GAME, title: LABEL, subtitle: t('games.rajamantri.party'), confirmLeave: () => false });
     if (c.mode === 'pass') renderPassSetup(shell);
     else renderHome(shell);
   }
@@ -263,8 +263,8 @@
       Kit().homeHtml({
         game: GAME,
         icon: '👑',
-        title: 'Who’s the Chor?',
-        sub: '4–8 players · secret chits, one big accusation',
+        title: t('games.rajamantri.who_s_the_chor'),
+        sub: t('games.rajamantri.4_8_players_secret_chits_one'),
         howToHtml: howToCardHtml(),
       })
     );
@@ -281,12 +281,12 @@
     const settings = loadSettings();
     const body = shell.render(`<div class="pk-page">
       <div class="pk-setup-head">
-        <div class="pk-title">Who’s playing?</div>
-        <button type="button" class="pk-icon-btn" data-settings aria-label="Game settings">⚙︎</button>
+        <div class="pk-title">${tHtml('games.rajamantri.who_s_playing')}</div>
+        <button type="button" class="pk-icon-btn" data-settings aria-label="${tHtml('games.rajamantri.game_settings')}">⚙︎</button>
       </div>
       <div data-editor></div>
       <div class="pk-meta" data-meta></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>Start</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-start>${tHtml('games.rajamantri.start')}</button>
     </div>`);
     shell.setBack(() => renderHome(shell));
     const editor = Kit().mountPlayerEditor(body.querySelector('[data-editor]'), {
@@ -325,7 +325,7 @@
 
   function nameOf(session, id) {
     const p = session.players.find((x) => x.id === id);
-    return p ? p.name : 'Someone';
+    return p ? p.name : t('common.someone');
   }
 
   function startPassRound(shell, session) {
@@ -337,7 +337,7 @@
       secrets: dealt.secrets,
       pub: Core().createRound(ids, dealt.settings),
     };
-    shell.setSubtitle('Round ' + session.roundNo + ' of ' + session.settings.rounds);
+    shell.setSubtitle(t('games.rajamantri.round_roundno_of_rounds', { roundNo: session.roundNo, rounds: session.settings.rounds }));
     shell.guard = true;
     renderPassDeal(shell, session, 0);
   }
@@ -362,13 +362,13 @@
     const id = order[index];
     const secret = session.round.secrets[id];
     const body = shell.render(`<div class="pk-page">
-      <div class="pk-progress">Chit ${index + 1} of ${order.length}</div>
+      <div class="pk-progress">${tHtml('games.rajamantri.chit_value_of_ordercount', { value: index + 1, orderCount: order.length })}</div>
       <div data-cover></div>
     </div>`);
     Kit().mountPassCover(body.querySelector('[data-cover]'), {
       name: nameOf(session, id),
       revealHtml: () => chitHtml(secret.role),
-      doneLabel: index === order.length - 1 ? 'Hide & start' : 'Hide & pass',
+      doneLabel: index === order.length - 1 ? t('games.rajamantri.hide_start') : t('games.rajamantri.hide_pass'),
       onDone: () => renderPassDeal(shell, session, index + 1),
     });
   }
@@ -377,14 +377,14 @@
     const nm = (id) => nameOf(session, id);
     const st = session.round.pub;
     const body = shell.render(`<div class="pk-page rm-stage">
-      <div class="pk-title">Put the phone in the middle</div>
-      <div class="pk-sub">Everyone has seen their chit. Time for the Raja!</div>
+      <div class="pk-title">${tHtml('games.rajamantri.put_the_phone_in_the_middle')}</div>
+      <div class="pk-sub">${tHtml('games.rajamantri.everyone_has_seen_their_chit_time')}</div>
       ${tableHtml(st, nm)}
-      <button type="button" class="rm-big-btn" data-go>👑 Reveal the Raja</button>
+      <button type="button" class="rm-big-btn" data-go>${tHtml('games.rajamantri.reveal_the_raja')}</button>
     </div>`);
     body.querySelector('[data-go]').addEventListener('click', async () => {
       passAct(session, { type: 'revealRaja' });
-      await Kit().bigReveal({ icon: '👑', title: nm(session.round.pub.raja) + ' is the Raja!', quote: RAJA_QUOTE(), host: shell.el });
+      await Kit().bigReveal({ icon: '👑', title: t('games.rajamantri.nm_is_the_raja', { nm: nm(session.round.pub.raja) }), quote: RAJA_QUOTE(), host: shell.el });
       renderPassCall(shell, session);
     });
   }
@@ -394,14 +394,14 @@
     const st = session.round.pub;
     const role = st.guesserRole;
     const body = shell.render(`<div class="pk-page rm-stage">
-      <div class="pk-progress">The Raja calls</div>
+      <div class="pk-progress">${tHtml('games.rajamantri.the_raja_calls')}</div>
       <div class="rm-quote">“${esc(callLine(role))}”</div>
       ${tableHtml(st, nm)}
-      <button type="button" class="rm-big-btn" data-go>${esc(roleIcon(role))} Reveal the ${esc(Core().ROLES[role].en)}</button>
+      <button type="button" class="rm-big-btn" data-go>${tHtml('games.rajamantri.role_reveal_the_en', { role: roleIcon(role), en: Core().ROLES[role].en })}</button>
     </div>`);
     body.querySelector('[data-go]').addEventListener('click', async () => {
       passAct(session, { type: 'revealGuesser' });
-      await Kit().bigReveal({ icon: roleIcon(role), title: nm(session.round.pub.guesser) + ' is the ' + roleName(role) + '!', host: shell.el });
+      await Kit().bigReveal({ icon: roleIcon(role), title: t('games.rajamantri.nm_is_the_rolename', { nm: nm(session.round.pub.guesser), roleName: roleName(role) }), host: shell.el });
       renderPassGuess(shell, session);
     });
   }
@@ -411,10 +411,10 @@
     const st = session.round.pub;
     const body = shell.render(`<div class="pk-page rm-stage">
       <div class="pk-progress">${esc(huntLine(st))}</div>
-      <div class="pk-title">${esc(nm(st.guesser))}, who is it?</div>
-      <div class="pk-sub">Point at them — then tap their name.</div>
+      <div class="pk-title">${tHtml('games.rajamantri.name_who_is_it', { name: bidi(nm(st.guesser)) })}</div>
+      <div class="pk-sub">${tHtml('games.rajamantri.point_at_them_then_tap_their')}</div>
       <div data-picker></div>
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pick disabled>Pick someone</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pick disabled>${tHtml('games.rajamantri.pick_someone')}</button>
       ${tableHtml(st, nm)}
     </div>`);
     let target = null;
@@ -424,7 +424,7 @@
       onPick: (ids) => {
         target = ids[0];
         btn.disabled = !target;
-        btn.textContent = 'It’s ' + nm(target) + '!';
+        btn.textContent = t('games.rajamantri.it_s_nm', { nm: nm(target) });
       },
     });
     btn.addEventListener('click', async () => {
@@ -450,10 +450,10 @@
     const last = session.roundNo >= session.settings.rounds;
     const body = shell.render(`<div class="pk-page">
       ${resultHtml(res, nm, session.roundNo, session.settings.rounds)}
-      <div class="pk-section">Totals</div>
+      <div class="pk-section">${tHtml('games.rajamantri.totals')}</div>
       ${Kit().scoreboardHtml(session.players, session.scores, res.points)}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${last ? 'See the final board' : 'Next round'}</button>
-      <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button></div>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-next>${last ? tHtml('games.rajamantri.see_the_final_board') : tHtml('games.rajamantri.next_round')}</button>
+      <div class="pk-row"><button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button></div>
     </div>`);
     body.querySelector('[data-share]').addEventListener('click', () => shareRound(res, nm));
     body.querySelector('[data-next]').addEventListener('click', () => (last ? renderPassFinal(shell, session) : startPassRound(shell, session)));
@@ -461,15 +461,15 @@
 
   function renderPassFinal(shell, session) {
     shell.guard = false;
-    shell.setSubtitle('Final');
+    shell.setSubtitle(t('games.rajamantri.final'));
     Kit().reportPass(GAME, { players: session.players, scores: session.scores });
     const body = shell.render(`<div class="pk-page">
       ${finalHtml(session.players, session.scores)}
-      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>Play again</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${tHtml('games.rajamantri.play_again')}</button>
       ${Kit().passHubButtonHtml()}
       <div class="pk-row">
-        <button type="button" class="pk-btn pk-btn--ghost" data-share>Share</button>
-        <button type="button" class="pk-btn pk-btn--ghost" data-setup>Players &amp; settings</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-share>${tHtml('common.share')}</button>
+        <button type="button" class="pk-btn pk-btn--ghost" data-setup>${tHtml('games.rajamantri.players_settings')}</button>
       </div>
     </div>`);
     try {
@@ -526,8 +526,8 @@
     if (!prev || prev.players.join() !== st.players.join()) return;
     const nm = ctrl.name;
     const host = ctrl.shell.el;
-    if (!prev.raja && st.raja) Kit().bigReveal({ icon: '👑', title: nm(st.raja) + ' is the Raja!', quote: RAJA_QUOTE(), host });
-    else if (!prev.guesser && st.guesser) Kit().bigReveal({ icon: roleIcon(st.guesserRole), title: nm(st.guesser) + ' is the ' + roleName(st.guesserRole) + '!', host });
+    if (!prev.raja && st.raja) Kit().bigReveal({ icon: '👑', title: t('games.rajamantri.nm_is_the_raja', { nm: nm(st.raja) }), quote: RAJA_QUOTE(), host });
+    else if (!prev.guesser && st.guesser) Kit().bigReveal({ icon: roleIcon(st.guesserRole), title: t('games.rajamantri.nm_is_the_rolename', { nm: nm(st.guesser), roleName: roleName(st.guesserRole) }), host });
     else if (st.picks.length > prev.picks.length) {
       const pick = st.picks[st.picks.length - 1];
       if (pick.correct) Kit().ding();
@@ -545,8 +545,8 @@
     const secret = ctrl.view.secret && Number(ctrl.view.secret.roundNo) === Number(pub.roundNo) ? ctrl.view.secret : null;
     const myRole = secret ? secret.role : null;
     const inRound = st.players.indexOf(me) >= 0;
-    ctrl.shell.setSubtitle('Room ' + ctrl.view.code + ' · Round ' + pub.roundNo + ' of ' + settings.rounds);
-    const peek = inRound ? '<button type="button" class="pk-peek" data-peek aria-label="Hold to peek at your chit">👁 Hold to peek at your chit</button>' : '';
+    ctrl.shell.setSubtitle(t('games.rajamantri.room_code_round_roundno_of_rounds', { code: ctrl.view.code, roundNo: pub.roundNo, rounds: settings.rounds }));
+    const peek = inRound ? '<button type="button" class="pk-peek" data-peek aria-label="' + tHtml('games.rajamantri.hold_to_peek_at_your_chit_2') + '">' + tHtml('games.rajamantri.hold_to_peek_at_your_chit') + '</button>' : '';
     const wirePeek = (body) => K.mountHoldPeek(body.querySelector('[data-peek]'), () => chitHtml(myRole));
     const timed = st.phase !== 'result';
     const top = `${ctrl.hostBar(timed)}${ctrl.pausedNote()}`;
@@ -555,21 +555,21 @@
       const ready = st.players.filter((id) => pub.seen && pub.seen[id]).length;
       if (inRound && !(pub.seen && pub.seen[me])) {
         const body = ctrl.render(`<div class="pk-page">
-          <div class="pk-progress">Round ${pub.roundNo} · ${ready}/${st.players.length} ready</div>
+          <div class="pk-progress">${tHtml('games.rajamantri.round_roundno_ready_playerscount_ready', { roundNo: pub.roundNo, ready, playersCount: st.players.length })}</div>
           <div data-cover></div>
         </div>`);
         K.mountPassCover(body.querySelector('[data-cover]'), {
-          lead: 'Your chit',
+          lead: t('games.rajamantri.your_chit'),
           name: nm(me),
           revealHtml: () => chitHtml(myRole),
-          doneLabel: 'I’ve seen it',
+          doneLabel: t('games.rajamantri.i_ve_seen_it'),
           onDone: () => ctrl.act('seen'),
         });
         return;
       }
       const body = ctrl.render(`<div class="pk-page">${top}
-        <div class="pk-title">Waiting for everyone to see their chit</div>
-        <div class="pk-sub">${ready}/${st.players.length} ready</div>
+        <div class="pk-title">${tHtml('games.rajamantri.waiting_for_everyone_to_see_their')}</div>
+        <div class="pk-sub">${tHtml('dangal.ready_of', { n: ready, total: st.players.length })}</div>
         <div class="pk-timer" data-timer></div>
         ${peek}
       </div>`);
@@ -581,9 +581,9 @@
     if (st.phase === 'raja') {
       const mine = myRole === 'raja';
       const body = ctrl.render(`<div class="pk-page rm-stage">${top}
-        <div class="pk-title">${mine ? 'You’re the Raja!' : 'Who’s the Raja?'}</div>
+        <div class="pk-title">${mine ? tHtml('games.rajamantri.you_re_the_raja') : tHtml('games.rajamantri.who_s_the_raja')}</div>
         <div class="pk-timer" data-timer></div>
-        ${mine ? '<button type="button" class="rm-big-btn" data-go>👑 I’m the Raja!</button>' : '<div class="pk-wait">Waiting for the Raja to stand up…</div>'}
+        ${mine ? '<button type="button" class="rm-big-btn" data-go>' + tHtml('games.rajamantri.i_m_the_raja') + '</button>' : '<div class="pk-wait">' + tHtml('games.rajamantri.waiting_for_the_raja_to_stand') + '</div>'}
         ${tableHtml(st, nm)}
         ${peek}
       </div>`);
@@ -597,10 +597,10 @@
       const role = st.guesserRole;
       const mine = myRole === role;
       const body = ctrl.render(`<div class="pk-page rm-stage">${top}
-        <div class="pk-progress">${esc(nm(st.raja))} (Raja) calls</div>
+        <div class="pk-progress">${tHtml('games.rajamantri.raja_calls', { name: bidi(nm(st.raja)) })}</div>
         <div class="rm-quote">“${esc(callLine(role))}”</div>
         <div class="pk-timer" data-timer></div>
-        ${mine ? `<button type="button" class="rm-big-btn" data-go>${esc(roleIcon(role))} I’m the ${esc(Core().ROLES[role].en)}</button>` : `<div class="pk-wait">Waiting for the ${esc(roleName(role))}…</div>`}
+        ${mine ? `<button type="button" class="rm-big-btn" data-go>${tHtml('games.rajamantri.role_i_m_the_en', { role: roleIcon(role), en: Core().ROLES[role].en })}</button>` : `<div class="pk-wait">${tHtml('games.rajamantri.waiting_for_the_role', { role: roleName(role) })}</div>`}
         ${tableHtml(st, nm)}
         ${peek}
       </div>`);
@@ -614,9 +614,9 @@
       const mine = st.guesser === me;
       const body = ctrl.render(`<div class="pk-page rm-stage">${top}
         <div class="pk-progress">${esc(huntLine(st))}</div>
-        <div class="pk-title">${mine ? 'Who is it?' : esc(nm(st.guesser)) + ' is deciding…'}</div>
+        <div class="pk-title">${mine ? tHtml('games.rajamantri.who_is_it') : tHtml('games.rajamantri.guesser_is_deciding', { guesser: nm(st.guesser) })}</div>
         <div class="pk-timer" data-timer></div>
-        ${mine ? '<div data-picker></div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pick disabled>Pick someone</button>' : ''}
+        ${mine ? '<div data-picker></div><button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-pick disabled>' + tHtml('games.rajamantri.pick_someone') + '</button>' : ''}
         ${tableHtml(st, nm)}
         ${peek}
       </div>`);
@@ -630,7 +630,7 @@
           onPick: (ids) => {
             target = ids[0];
             btn.disabled = !target;
-            btn.textContent = 'It’s ' + nm(target) + '!';
+            btn.textContent = t('games.rajamantri.it_s_nm', { nm: nm(target) });
           },
         });
         btn.addEventListener('click', () => target && ctrl.act('pick', { target }));
@@ -643,10 +643,10 @@
       const over = !!pub.over;
       const body = ctrl.render(`<div class="pk-page">
         ${resultHtml(st.result, nm, pub.roundNo, settings.rounds)}
-        ${over ? finalHtml(players, pub.scores) : `<div class="pk-section">Totals</div>${K.scoreboardHtml(players, pub.scores, st.result.points)}`}
+        ${over ? finalHtml(players, pub.scores) : `<div class="pk-section">${tHtml('games.rajamantri.totals')}</div>${K.scoreboardHtml(players, pub.scores, st.result.points)}`}
         ${K.roomResultActions(ctrl, {
-          nextLabel: over ? 'Play again' : 'Next round',
-          waitLabel: over ? 'Waiting for the host to start a new game…' : 'Waiting for the host to deal the next round…',
+          nextLabel: over ? t('games.rajamantri.play_again') : t('games.rajamantri.next_round'),
+          waitLabel: over ? t('games.rajamantri.waiting_for_the_host_to_start') : t('games.rajamantri.waiting_for_the_host_to_deal'),
         })}
       </div>`);
       K.wireRoomResultActions(ctrl, body, {
@@ -671,7 +671,7 @@
     registerGame({
       id: 'rajamantri',
       name: LABEL,
-      desc: 'Secret chits — the Mantri has to catch the Chor',
+      desc: t('games.rajamantri.secret_chits_the_mantri_has_to'),
       icon: '👑',
       gameType: 'multiplayer',
       genre: 'party',
@@ -682,7 +682,7 @@
       selfChat: false,
       order: 21,
       meta: {
-        kit: 'party-kit.js (Pass & Play + Room)',
+        kit: t('games.rajamantri.party_kit_js_pass_play_room'),
         dealing: 'party_room → server-lib/party-deal.js; chits readable only by their owner until revealed',
       },
       launch,

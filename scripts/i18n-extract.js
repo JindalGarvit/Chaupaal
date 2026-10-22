@@ -31,7 +31,7 @@ const LEGACY_FILE = path.join(ROOT, 'public', 'src', 'i18n', 'legacy-keys.js');
 const GLOSSARY = {
   chaupaal: 'Chaupaal', dangal: 'Dangal', baithak: 'Baithak', mehfil: 'Mehfil', peepal: 'Peepal', akhbaar: 'Akhbaar',
   duniya: 'Duniya', khoj: 'Khoj', vriksha: 'Vriksha', muqabala: 'Muqabala', rajamantri: 'Raja Mantri Chor Sipahi',
-  teenpatti: 'Teen Patti', carrom: 'Carrom', ludo: 'Ludo', tambola: 'Tambola', kakuro: 'Kakuro', shabdfive: 'Shabd Five',
+  teenpatti: 'Teen Patti', carrom: 'Carrom', tambola: 'Tambola', kakuro: 'Kakuro', shabdfive: 'Shabd Five', ohno: 'Oh No!', tiptap: 'Tip Tap',
 };
 
 function loadVar(file, name) {
@@ -148,12 +148,21 @@ function rewriteJs(file, ns) {
   const line = (idx) => src.slice(0, idx).split('\n').length;
   const { findings, calls } = classify(src, isCopy);
   const edits = [];
+  // Files shared with the server (game engines) carry their English: gtx('key', 'English', params).
+  const gtxMode = /\bfunction gtx\(/.test(src);
   findings.forEach((f) => {
-    if (f.kind === 'array' || f.kind === 'concat' || f.kind === 'complex') {
+    if (f.kind === 'array' || f.kind === 'concat' || f.kind === 'complex' || (gtxMode && (f.kind === 'html-text' || f.kind === 'html-attr' || f.mode === 'html'))) {
       report.manual.push(`${rel}:${line(f.start)}  ${f.kind}${f.why ? ' (' + f.why + ')' : ''}: ${String(f.text).slice(0, 70)}`);
       return;
     }
     const key = keyFor(ns, f.text);
+    if (gtxMode) {
+      const params = (f.params || []).map((x) => (x.name === x.src ? x.name : `${x.name}: ${x.src}`));
+      const english = JSON.stringify(String(f.text)).replace(/^"|"$/g, '').replace(/'/g, "\\'");
+      edits.push({ start: f.start, end: f.end, text: `gtx('${key}', '${english}'${params.length ? `, { ${params.join(', ')} }` : ''})` });
+      report.rewrites++;
+      return;
+    }
     if (f.kind === 'html-text' || f.kind === 'html-attr') {
       const call = `tHtml('${key}')`;
       edits.push({ start: f.start, end: f.end, text: f.quote ? `${f.quote} + ${call} + ${f.quote}` : '${' + call + '}' });
@@ -166,6 +175,8 @@ function rewriteJs(file, ns) {
   });
   // Existing t()/tt() calls: make sure an English message exists; flat keys move into the namespace.
   calls.forEach((c) => {
+    // tr() in game UIs is a per-file prefixed helper (games.<id>.) — its keys are harvested separately.
+    if (c.name === 'tr') return;
     const resolved = c.key.includes('.') ? c.key : legacy[c.key];
     if (resolved && (en[resolved] != null || added[resolved] != null)) return;
     if (/[${}]/.test(c.key)) return;

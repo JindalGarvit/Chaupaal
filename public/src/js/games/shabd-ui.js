@@ -11,7 +11,7 @@
   'use strict';
 
   const GAME = 'wordguess';
-  const LABEL = 'Shabd Five';
+  const LABEL = t('games.wordguess.shabd_five');
   const STATS_KEY = 'chaupaal_shabd_stats_v2';
   const LEGACY_STATS_KEY = 'chaupaal_shabd_stats_v1';
   const DAILY_KEY = 'chaupaal_shabd_daily_v2';
@@ -24,7 +24,23 @@
   const Lex = () => window.ShabdLexicon;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  const tr = (key, fallback) => (typeof t === 'function' ? t('shabd.' + key, fallback) : fallback);
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  const tr = (key, fallback, params) => {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.wordguess.' + key, p || fallback) : fill(fallback, p);
+  };
   const toast = (m) => typeof showToast === 'function' && showToast(m);
   function readJson(k, d) {
     try {
@@ -122,7 +138,7 @@
     if (!chatId) return false;
     try {
       await sendRealtimeMessage(chatId, text, false, null, att);
-      toast(tr('sent', 'Sent to') + ' ' + (friend.name || tr('yourFriend', 'your friend')));
+      toast(tr('sent_to_value', 'Sent to {{value}}', { value: friend.name || tr('yourFriend', 'your friend') }));
       return true;
     } catch (e) {
       toast(tr('sendFailed', 'Couldn’t send — try again'));
@@ -135,6 +151,12 @@
     return `<span class="sf-mini">${(rows || [])
       .map((r) => `<span class="sf-mini-row">${String(r).split('').map((c) => `<i class="${cls[c] || ''}"></i>`).join('')}</span>`)
       .join('')}</span>`;
+  }
+
+  /** Daily / archive need a lexicon in my language (manifest: en + hi today; others "not yet" → hidden). */
+  function dailyOk() {
+    const C = window.DangalContentLocales;
+    return !C || C.modeAvailable('wordguess', 'daily', typeof currentLang !== 'undefined' ? currentLang : 'en');
   }
 
   /** Baithak card for `shabd_result` / `shabd_challenge` attachments. */
@@ -150,7 +172,7 @@
     const title = att.puzzle ? '#' + Number(att.puzzle) : tr('practice', 'Practice');
     return `<div class="sf-card${contrast}"><div class="sf-card-head">📝 <strong>${esc(LABEL)} ${esc(title)}</strong><span>${esc(score)}</span></div>
       ${miniGridHtml(Array.isArray(att.rows) ? att.rows.slice(0, 6) : [])}
-      <button type="button" class="sf-card-btn" data-shabd-open="daily">${esc(tr('playToday', 'Play today’s puzzle'))}</button></div>`;
+      ${dailyOk() ? `<button type="button" class="sf-card-btn" data-shabd-open="daily">${esc(tr('playToday', 'Play today’s puzzle'))}</button>` : ''}</div>`;
   }
 
   if (typeof document !== 'undefined') {
@@ -224,7 +246,7 @@
 
   async function openFriends(dayNo) {
     const n = dayNo == null ? today() : dayNo;
-    const x = sheet({ title: tr('friendsToday', 'Friends today') + ' · #' + Core().puzzleNo(n), bodyHtml: `<div class="sf-lb"><p class="sf-note">${esc(tr('loading', 'Loading…'))}</p></div>` });
+    const x = sheet({ title: tr('friends_today_puzzleno', 'Friends today · #{{puzzleNo}}', { puzzleNo: Core().puzzleNo(n) }), bodyHtml: `<div class="sf-lb"><p class="sf-note">${esc(tr('loading', 'Loading…'))}</p></div>` });
     if (!x) return;
     const body = x.el.querySelector('.sf-lb');
     if (!signedIn()) {
@@ -297,7 +319,7 @@
           const tk = token();
           if (!tk) return;
           const who = typeof currentUser !== 'undefined' && currentUser ? currentUser.displayName || '' : '';
-          const ok = await sendToFriend({ type: 'shabd_challenge', token: tk }, (who ? who + ' ' : '') + tr('challengeSent', 'challenged you to guess their five-letter word'), tr('challengeFriend', 'Challenge a friend'));
+          const ok = await sendToFriend({ type: 'shabd_challenge', token: tk }, tr('value_challenged_you_to_guess_their_five', '{{value}}challenged you to guess their five-letter word', { value: (who ? who + ' ' : '') }), tr('challengeFriend', 'Challenge a friend'));
           if (ok) close();
         });
         el.querySelector('[data-link]').addEventListener('click', () => {
@@ -321,10 +343,12 @@
   function open(opts) {
     const o = opts || {};
     if (Core() && !Lex() && window.PartyKit && PartyKit.ensureGameData) {
-      return PartyKit.ensureGameData('wordguess').then(() => (Lex() ? open(o) : null), () => toast(tr('loading', 'Shabd Five is still loading — try again')));
+      return PartyKit.ensureGameData('wordguess').then(() => (Lex() ? open(o) : null), () => toast(tr('loading_shabd_five_is', 'Shabd Five is still loading — try again')));
     }
-    if (!Core() || !Lex()) return toast(tr('loading', 'Shabd Five is still loading — try again'));
-    const mode = o.mode || 'daily';
+    if (!Core() || !Lex()) return toast(tr('loading_shabd_five_is', 'Shabd Five is still loading — try again'));
+    const wanted = o.mode || 'daily';
+    const mode = (wanted === 'daily' || wanted === 'archive') && !dailyOk() ? 'practice' : wanted;
+    if (mode !== wanted) toast(t('dangal.content.daily_not_yet', { lang: langName() }));
     const dayNo = mode === 'daily' ? today() : mode === 'archive' ? Math.max(0, Math.min(today() - 1, Math.floor(Number(o.dayNo) || 0))) : null;
     const answer = mode === 'challenge' ? Core().norm(o.word) : mode === 'practice' ? Lex().random() : Lex().daily(dayNo);
     if (!Core().isWord(answer)) return toast(tr('broken', 'That puzzle isn’t available'));
@@ -440,7 +464,7 @@
           return reopen({ mode: 'daily' });
         }
         const g = st.current;
-        if (g.length !== 5) return rejectGuess(tr('need5', 'Not enough letters'));
+        if (g.length !== 5) return rejectGuess(tr('need5_not_enough_letters', 'Not enough letters'));
         if (!Lex().isAllowed(g)) return rejectGuess(tr('notWord', 'Not in the word list'));
         if (st.hard) {
           const why = Core().hardModeViolation(g, st.guesses, answer);
@@ -496,7 +520,7 @@
 
     function keyboardHtml() {
       const keys = st.revealing >= 0 ? Core().keyStates(st.guesses.slice(0, -1), answer) : Core().keyStates(st.guesses, answer);
-      return `<div class="sf-kb">${['QWERTYUIOP', 'ASDFGHJKL', '↵ZXCVBNM⌫']
+      return `<div class="sf-kb">${[t('games.wordguess.qwertyuiop'), t('games.wordguess.asdfghjkl'), '↵ZXCVBNM⌫']
         .map(
           (row) =>
             `<div class="sf-kb-row">${row
@@ -522,7 +546,7 @@
       const title = typeof shabdWinTitle === 'function' && st.won ? shabdWinTitle(st.guesses.length) : st.won ? tr('solved', 'Solved!') : tr('lose', 'Out of guesses');
       const next = mode === 'daily' ? `<p class="sf-next">${esc(tr('nextIn', 'Next puzzle in'))} <b data-next>${fmtCountdown(Core().msToMidnight(new Date()))}</b></p>` : '';
       const primary = [`<button type="button" class="pk-btn pk-btn--primary" data-act="share">${esc(tr('share', 'Share'))}</button>`];
-      if (mode === 'daily') primary.push(`<button type="button" class="pk-btn pk-btn--ghost" data-act="friends">${esc(tr('friendsToday', 'Friends today'))}</button>`);
+      if (mode === 'daily' && dailyOk()) primary.push(`<button type="button" class="pk-btn pk-btn--ghost" data-act="friends">${esc(tr('friendsToday', 'Friends today'))}</button>`);
       primary.push(`<button type="button" class="pk-btn pk-btn--ghost" data-act="practice">${esc(mode === 'practice' ? tr('again', 'New word') : tr('practice', 'Practice'))}</button>`);
       return `<div class="sf-result"><div class="sf-result-title">${esc(title)}</div>${reveal}${next}
         <div class="sf-actions">${primary.join('')}</div>
@@ -544,7 +568,7 @@
       const text = shareText();
       const stats = { scoreLine: (st.won ? st.guesses.length : 'X') + '/6', score: st.won ? st.guesses.length : 0, meta: subtitle() + (st.hard ? ' · ' + tr('hard', 'Hard') : ''), text: text + '\n\n' + tr('playOn', 'Play on Chaupaal'), includeImage: false };
       if (typeof shareGameResult === 'function') shareGameResult(GAME, stats);
-      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast(tr('copied', 'Copied')));
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast(tr('copied_copied', 'Copied')));
     }
 
     function openMore() {
@@ -679,18 +703,23 @@
     open({ mode: 'challenge', word: w });
   }
 
+  function langName() {
+    const e = typeof getLangEntry === 'function' ? getLangEntry(typeof currentLang !== 'undefined' ? currentLang : 'en') : null;
+    return (e && e.native) || '';
+  }
+
   function launch(ctx) {
     const c = ctx || {};
     const chat = typeof chatFromLaunch === 'function' ? chatFromLaunch(c) : c.chat;
     if (c.mode === 'practice' || c.practiceKind) return open({ mode: 'practice', chat });
-    return open({ mode: 'daily', chat });
+    return open({ mode: dailyOk() ? 'daily' : 'practice', chat });
   }
 
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'wordguess',
       name: LABEL,
-      desc: 'Five letters, six tries · Daily · Practice · Hard mode',
+      desc: t('games.wordguess.five_letters_six_tries_daily_practice'),
       icon: '📝',
       ratingKey: GAME,
       gameType: 'solo',
@@ -700,7 +729,7 @@
       selfChat: true,
       order: 60,
       meta: {
-        core: 'shabd-core.js (tiles, hard mode, days, stats, share, challenge tokens)',
+        core: t('games.wordguess.shabd_core_js_tiles_hard_mode'),
         social: 'friends’ Daily results + stats sync via media-config { action: shabd }',
       },
       launch,

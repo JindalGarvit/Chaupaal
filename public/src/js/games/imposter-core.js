@@ -3,15 +3,40 @@
  * No DOM, no network. Public state (`pub`) is safe to share; `hidden` holds roles + words and only
  * enters `pub` at the result screen. Per-player `secrets` are handed out one player at a time.
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
-  const packs =
-    typeof module === 'object' && module.exports
-      ? require('../data/imposter-packs.js')
-      : root.IMPOSTER_PACKS;
-  const core = factory(packs);
+  const node = typeof module === 'object' && module.exports;
+  const packs = node ? require('../data/imposter-packs.js') : root.IMPOSTER_PACKS;
+  const SN = node ? require('../core/search-normalize.js') : root.SearchNormalize;
+  const core = factory(packs, SN);
   if (typeof module === 'object' && module.exports) module.exports = core;
   else root.ImposterCore = core;
-})(typeof self !== 'undefined' ? self : this, function (PACKS_MOD) {
+})(typeof self !== 'undefined' ? self : this, function (PACKS_MOD, SN) {
   'use strict';
 
   const MIN_PLAYERS = 3;
@@ -36,7 +61,8 @@
 
   /** Lowercase, strip accents / nukta / punctuation / spaces — forgiving comparison key. */
   function normalize(s) {
-    return String(s == null ? '' : s)
+    const raw = String(s == null ? '' : s);
+    return (SN && SN.fold ? SN.fold(raw) : raw)
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/\u093c/g, '')
@@ -60,20 +86,25 @@
     return prev[b.length];
   }
 
-  /** Words a guess may match: English, Hindi, and listed alternate spellings. */
-  function labelsOf(word) {
+  /**
+   * Words a guess may match: English, the room content language's label, and listed alternate spellings.
+   * `lang` unset (older rooms) → every bundled label.
+   */
+  function labelsOf(word, lang) {
     if (!word) return [];
-    return [word.en, word.hi].concat(Array.isArray(word.alts) ? word.alts : []).filter(Boolean);
+    const l = String(lang || '').toLowerCase().split('-')[0];
+    const local = l ? (l !== 'en' && word[l] ? [word[l]] : []) : [word.hi];
+    return [word.en].concat(local, Array.isArray(word.alts) ? word.alts : []).filter(Boolean);
   }
 
   /**
    * Forgiving steal match — case, spaces, punctuation, Hindi/English label, alt spellings,
    * a trailing plural "s", and small typos on longer Latin words.
    */
-  function matchGuess(guess, word) {
+  function matchGuess(guess, word, lang) {
     const g = normalize(guess);
     if (!g || !word) return false;
-    const targets = labelsOf(word).map(normalize).filter(Boolean);
+    const targets = labelsOf(word, lang).map(normalize).filter(Boolean);
     for (const t of targets) {
       if (g === t) return true;
       const sing = (x) => x.replace(/(?:es|s)$/, '');
@@ -124,12 +155,12 @@
   }
 
   const CLUE_REASON_COPY = {
-    empty: 'Type a one-word clue',
-    one_word: 'One word only',
-    too_long: 'Keep it to one short word',
-    repeat: 'Someone already said that',
-    secret: 'That gives the word away — try another',
-    part: 'Too close to the word — try another',
+    empty: gtx('games.imposter.type_a_one_word_clue', 'Type a one-word clue'),
+    one_word: gtx('games.imposter.one_word_only', 'One word only'),
+    too_long: gtx('games.imposter.keep_it_to_one_short_word', 'Keep it to one short word'),
+    repeat: gtx('games.imposter.someone_already_said_that', 'Someone already said that'),
+    secret: gtx('games.imposter.that_gives_the_word_away_try', 'That gives the word away — try another'),
+    part: gtx('games.imposter.too_close_to_the_word_try', 'Too close to the word — try another'),
   };
 
   // ---------------- dealing ----------------
@@ -151,6 +182,7 @@
   function mergeSettings(s) {
     const out = Object.assign({}, DEFAULT_SETTINGS, s || {});
     out.variant = out.variant === 'undercover' ? 'undercover' : 'classic';
+    out.contentLang = /^[a-z]{2,3}$/.test(String(out.contentLang || '').toLowerCase().split('-')[0]) ? String(out.contentLang).toLowerCase().split('-')[0] : '';
     out.hint = out.hint !== false;
     out.circuits = Number(out.circuits) === 2 ? 2 : 1;
     out.discussionSec = Math.max(0, Math.min(600, Number(out.discussionSec) || 0));
@@ -215,7 +247,7 @@
       words.push([w, '', p, '']);
     });
     if (words.length < CUSTOM_MIN) return null;
-    return { id: 'custom', en: clean(src.name) || 'Custom pack', hi: '', icon: '✨', custom: true, words: words.slice(0, CUSTOM_MAX) };
+    return { id: 'custom', en: clean(src.name) || gtx('games.imposter.custom_pack', 'Custom pack'), hi: '', icon: '✨', custom: true, words: words.slice(0, CUSTOM_MAX) };
   }
 
   /**
@@ -554,7 +586,7 @@
         if (a.id && a.id !== p.stealer) return { error: 'not_stealer' };
         const entry = p.caught.find((c) => c.id === p.stealer);
         entry.guess = String(a.guess == null ? '' : a.guess).trim().slice(0, 40);
-        entry.stealOk = matchGuess(entry.guess, hidden.majority);
+        entry.stealOk = matchGuess(entry.guess, hidden.majority, mergeSettings(settings).contentLang);
         return { pub: afterSteal(p, hidden) };
       }
 
@@ -563,7 +595,7 @@
         if (p.phase !== 'steal') return { error: 'phase' };
         const entry = p.caught.find((c) => c.id === p.stealer);
         entry.guess = String(a.guess == null ? '' : a.guess).trim().slice(0, 40);
-        const auto = entry.guess ? matchGuess(entry.guess, hidden.majority) : false;
+        const auto = entry.guess ? matchGuess(entry.guess, hidden.majority, mergeSettings(settings).contentLang) : false;
         entry.stealOk = !!a.ok;
         entry.overridden = entry.stealOk !== auto;
         return { pub: afterSteal(p, hidden) };

@@ -46,7 +46,9 @@ function collect(src) {
     const found = [];
     walk.simple(node, {
       Literal(n) {
-        if (typeof n.value === 'string' && n.value.trim() && isCopy(n.value) && !/^\p{Emoji}+$/u.test(n.value)) found.push(n.value);
+        // Chess move lists (SAN) ride along in the openings table — codes, not labels.
+        const san = /^([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8]|O-O(-O)?)( |$)/.test(n.value);
+        if (typeof n.value === 'string' && n.value.trim() && isCopy(n.value) && !san && !/^\p{Emoji}+$/u.test(n.value)) found.push(n.value);
       },
     });
     return found;

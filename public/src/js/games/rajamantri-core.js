@@ -3,6 +3,32 @@
  * Chits are dealt into `hidden`; `pub` only ever holds chits that have been revealed out loud.
  * UMD: window.RajaMantriCore / require().
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   const PC = typeof module === 'object' && module.exports ? require('./party-core.js') : root.PartyCore;
   const api = factory(PC);
@@ -16,14 +42,14 @@
 
   /** Chits. `thief` roles are the ones the guesser has to find. */
   const ROLES = {
-    raja: { id: 'raja', en: 'Raja', hi: 'राजा', gloss: 'King', points: 1000, icon: '👑' },
-    rani: { id: 'rani', en: 'Rani', hi: 'रानी', gloss: 'Queen', points: 900, icon: '👸' },
-    mantri: { id: 'mantri', en: 'Mantri', hi: 'मंत्री', gloss: 'Minister', points: 800, icon: '📜' },
-    senapati: { id: 'senapati', en: 'Senapati', hi: 'सेनापति', gloss: 'General', points: 700, icon: '⚔️' },
-    daroga: { id: 'daroga', en: 'Daroga', hi: 'दरोगा', gloss: 'Inspector', points: 600, icon: '🎖️' },
-    sipahi: { id: 'sipahi', en: 'Sipahi', hi: 'सिपाही', gloss: 'Soldier', points: 500, icon: '💂' },
-    chor: { id: 'chor', en: 'Chor', hi: 'चोर', gloss: 'Thief', points: 0, icon: '🦹', thief: true },
-    daku: { id: 'daku', en: 'Daku', hi: 'डाकू', gloss: 'Bandit', points: 0, icon: '🏴‍☠️', thief: true },
+    raja: { id: 'raja', en: 'Raja', hi: '', gloss: gtx('games.rajamantri.king', 'King'), points: 1000, icon: '👑' },
+    rani: { id: 'rani', en: 'Rani', hi: '', gloss: gtx('games.rajamantri.queen', 'Queen'), points: 900, icon: '👸' },
+    mantri: { id: 'mantri', en: 'Mantri', hi: '', gloss: gtx('games.rajamantri.minister', 'Minister'), points: 800, icon: '📜' },
+    senapati: { id: 'senapati', en: 'Senapati', hi: '', gloss: gtx('games.rajamantri.general', 'General'), points: 700, icon: '⚔️' },
+    daroga: { id: 'daroga', en: 'Daroga', hi: '', gloss: gtx('games.rajamantri.inspector', 'Inspector'), points: 600, icon: '🎖️' },
+    sipahi: { id: 'sipahi', en: 'Sipahi', hi: '', gloss: gtx('games.rajamantri.soldier', 'Soldier'), points: 500, icon: '💂' },
+    chor: { id: 'chor', en: 'Chor', hi: '', gloss: gtx('games.rajamantri.thief', 'Thief'), points: 0, icon: '🦹', thief: true },
+    daku: { id: 'daku', en: 'Daku', hi: '', gloss: gtx('games.rajamantri.bandit', 'Bandit'), points: 0, icon: '🏴‍☠️', thief: true },
   };
 
   /** Classic four, then one role per extra player in this order (documented in the how-to). */
@@ -34,8 +60,8 @@
   const ROUND_OPTIONS = [5, 10, 15];
 
   const CALLS = {
-    mantri: { en: 'Mantri, find the Chor!', hi: 'मंत्री, चोर का पता लगाओ!', gloss: 'Minister, find the Thief!' },
-    sipahi: { en: 'Sipahi, catch the Chor!', hi: 'सिपाही, चोर को पकड़ो!', gloss: 'Soldier, catch the Thief!' },
+    mantri: { en: gtx('games.rajamantri.mantri_find_the_chor', 'Mantri, find the Chor!'), hi: '', gloss: gtx('games.rajamantri.minister_find_the_thief', 'Minister, find the Thief!') },
+    sipahi: { en: gtx('games.rajamantri.sipahi_catch_the_chor', 'Sipahi, catch the Chor!'), hi: '', gloss: gtx('games.rajamantri.soldier_catch_the_thief', 'Soldier, catch the Thief!') },
   };
 
   function mergeSettings(s) {
@@ -217,6 +243,28 @@
     return JSON.parse(JSON.stringify(pub));
   }
 
+  /** Hindi role names / calls arrive as locale data (data/locales/hi/rajamantri.hi.js). */
+  let QUOTE_HI = '';
+  function applyLocale(lang, data) {
+    if (!data || lang !== 'hi') return false;
+    Object.keys(data.roles || {}).forEach((id) => {
+      if (ROLES[id]) ROLES[id].hi = data.roles[id];
+    });
+    Object.keys(data.calls || {}).forEach((id) => {
+      if (CALLS[id]) CALLS[id].hi = data.calls[id];
+    });
+    if (data.quote) QUOTE_HI = data.quote;
+    return true;
+  }
+  function quoteHi() {
+    return QUOTE_HI;
+  }
+  if (typeof module === 'object' && module.exports) {
+    try {
+      applyLocale('hi', require('../data/locales/hi/rajamantri.hi.js'));
+    } catch (e) {}
+  }
+
   function roleLabel(roleId, lang, both) {
     return PC.bilingualLabel(ROLES[roleId], lang, both);
   }
@@ -252,5 +300,7 @@
     publicView,
     roleLabel,
     standings,
+    applyLocale,
+    quoteHi,
   };
 });

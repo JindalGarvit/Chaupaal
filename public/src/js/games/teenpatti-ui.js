@@ -8,15 +8,29 @@
   'use strict';
 
   const GAME = 'teenpatti';
-  const LABEL = 'Teen Patti';
+  const LABEL = t('dangal.classics.teen_patti');
   const SETUP_KEY = 'chaupaal_teenpatti_setup';
   const Core = () => window.TeenPattiCore;
   const CK = () => window.ClassicsKit;
   const Kit = () => window.PartyKit;
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
-  function tr(key, fallback) {
-    return typeof t === 'function' ? t('teenpatti.' + key, fallback) : fallback;
+  /** English fallback with {{placeholders}} filled (no catalog loaded). */
+  function fill(s, p) {
+    return p ? String(s).replace(/\{\{(\w+)\}\}/g, (m, k) => (p[k] == null ? m : p[k] && p[k].text != null ? p[k].text : p[k])) : s;
+  }
+  /** Player names in params get bidi isolation (mixed RTL / LTR names stay intact). */
+  function isolateNames(p) {
+    if (!p || typeof bidi !== 'function') return p;
+    const o = Object.assign({}, p);
+    Object.keys(o).forEach((k) => {
+      if (/^(name|who)\d*$/.test(k) && typeof o[k] === 'string') o[k] = bidi(o[k]);
+    });
+    return o;
+  }
+  function tr(key, fallback, params) {
+    const p = isolateNames(params);
+    return typeof t === 'function' ? t('games.teenpatti.' + key, p || fallback) : fill(fallback, p);
   }
   const clone = (x) => JSON.parse(JSON.stringify(x));
   function toast(msg) {
@@ -173,7 +187,7 @@
       const handName = shown && hh.result.names ? hh.result.names[i] : '';
       return `<div class="${cls.join(' ')}" style="left:${p.x.toFixed(1)}%;top:${p.y.toFixed(1)}%">
         ${cards ? `<div class="pkr-seat-cards">${cards}</div>` : ''}
-        <div class="pkr-seat-plate">${vm.dealer === i ? '<span class="pkr-dealer" aria-label="Dealer">D</span>' : ''}
+        <div class="pkr-seat-plate">${vm.dealer === i ? '<span class="pkr-dealer" aria-label="' + tHtml('games.teenpatti.dealer') + '">D</span>' : ''}
           <div class="pkr-seat-name">${presence}${esc(nameOf(i))}</div>
           <div class="pkr-seat-stack">${s.stack}</div></div>
         ${bs}${tag ? `<div class="pkr-seat-tag">${esc(tag)}</div>` : ''}
@@ -185,7 +199,7 @@
       const hh = h();
       if (!hh || !hh.wild || !hh.wild.length) return '';
       if (vm.variant === 'ak47') return tr('akWild', 'A K 4 7 wild');
-      return tr('wildIs', 'Wild') + ': ' + (RANK_PLURAL[hh.wild[0]] || '');
+      return tr('wild_value', 'Wild: {{value}}', { value: RANK_PLURAL[hh.wild[0]] || '' });
     }
 
     function resultHtml() {
@@ -203,11 +217,11 @@
       const n = vm.seats.length;
       const anchor = vm.me >= 0 ? vm.me : 0;
       host.querySelector('[data-seats]').innerHTML = vm.seats.map((s, i) => seatHtml(i, (i - anchor + n) % n, n)).join('');
-      host.querySelector('[data-pot]').textContent = hh ? tr('pot', 'Pot') + ' ' + hh.pot + ' / ' + vm.potLimit : '';
+      host.querySelector('[data-pot]').textContent = hh ? tr('pot_pot_potlimit', 'Pot {{pot}} / {{potLimit}}', { pot: hh.pot, potLimit: vm.potLimit }) : '';
       host.querySelector('[data-stake]').innerHTML = hh && hh.phase !== 'done' ? `${esc(tr('stake', 'Stake'))} ${hh.stake} · ${esc(tr('blindCost', 'blind'))} ${hh.stake} · ${esc(tr('seenCost', 'seen'))} ${hh.stake * 2}${wildText() ? `<br><span class="tp-wildline">${esc(wildText())}</span>` : ''}` : esc(wildText());
       host.querySelector('[data-result]').innerHTML = resultHtml();
       const status = host.querySelector('[data-status]');
-      const hands = vm.over ? tr('tableOver', 'Table over') : tr('hand', 'Hand') + ' ' + (vm.handNo || 0) + '/' + vm.handsMax + ' · ' + tr('boot', 'boot') + ' ' + vm.boot;
+      const hands = vm.over ? tr('tableOver', 'Table over') : tr('hand_value_handsmax_boot_boot', 'Hand {{value}}/{{handsMax}} · boot {{boot}}', { value: vm.handNo || 0, handsMax: vm.handsMax, boot: vm.boot });
       status.innerHTML = `${esc(hands + ' · ' + variantLabel(vm.variant))}${vm.live && !vm.over ? ' <span class="cl-timer pk-timer" data-timer></span>' : ''}${vm.live && vm.chip ? ` <span class="tp-chip">⚡${esc(tr('chipTable', 'chip table'))}</span>` : ''}`;
       if (o.onHud) o.onHud(status);
       paintHand();
@@ -355,12 +369,12 @@
   }
 
   const ERRORS = {
-    not_your_turn: 'Not your turn',
-    short: 'Not enough chips for that',
-    cap: 'The stake is at the chaal limit',
-    show_blind: 'You can’t ask a blind player for a show',
-    show_two: 'Show is only for the last two players',
-    no_sideshow: 'Side show needs the previous player to be seen',
+    not_your_turn: t('games.teenpatti.not_your_turn'),
+    short: t('games.teenpatti.not_enough_chips_for_that'),
+    cap: t('games.teenpatti.the_stake_is_at_the_chaal'),
+    show_blind: t('games.teenpatti.you_can_t_ask_a_blind'),
+    show_two: t('games.teenpatti.show_is_only_for_the_last'),
+    no_sideshow: t('games.teenpatti.side_show_needs_the_previous_player'),
   };
 
   // ---------------- practice vs bots (play chips, no wallet) ----------------
@@ -371,7 +385,7 @@
     const s = Object.assign(loadSetup(), opts || {});
     const me = (K && K.myName()) || tr('you', 'You');
     const players = [{ id: 'me', name: me }];
-    for (let i = 0; i < s.bots; i++) players.push({ id: 'bot' + (i + 1), name: tr('bot', 'Bot') + ' ' + (i + 1) + ' · ' + levelLabel(s.level), bot: true, level: s.level });
+    for (let i = 0; i < s.bots; i++) players.push({ id: 'bot' + (i + 1), name: tr('bot_n_label', 'Bot {{n}} · {{label}}', { n: (i + 1), label: levelLabel(s.level) }), bot: true, level: s.level });
     const rng = CK().seededRng(CK().newSeed());
     const st = C.newMatch(players, { variant: s.variant, buyIn: 0, hands: s.hands, blindMax: s.blindMax, potX: s.potX }, rng);
     let timer = null;
@@ -379,7 +393,7 @@
     const shell = K.openShell({
       gameId: GAME,
       title: LABEL,
-      subtitle: tr('practice', 'Practice') + ' · ' + variantLabel(s.variant) + ' · ' + tr('playChips', 'play chips'),
+      subtitle: tr('practice_label_play_chips', 'Practice · {{label}} · play chips', { label: variantLabel(s.variant) }),
       confirmLeave: () => !st.over && st.handNo > 1,
       leaveBody: tr('leaveLocal', 'This table will end. Practice never touches your chips.'),
       onClose: () => {
@@ -463,7 +477,7 @@
           if (typeof recordGameResult === 'function') recordGameResult(GAME, won, false, { mode: 'practice', level: s.level, variant: s.variant });
         }
         const d = st.seats[0].stack - st.seats[0].initial;
-        const line = (won ? tr('topTable', 'You finished on top') : tr('finished', 'You finished')) + ' · ' + (d >= 0 ? '+' : '') + d + ' ' + tr('playChips', 'play chips');
+        const line = tr('value_value2_d_play_chips', '{{value}} · {{value2}}{{d}} play chips', { value: (won ? tr('topTable', 'You finished on top') : tr('finished', 'You finished')), value2: (d >= 0 ? '+' : ''), d });
         el.innerHTML = `<div class="cl-result"><div class="rm-result-line">${esc(line)}</div>
           <p class="cl-note">${esc(tr('practiceNote', 'Practice uses play chips — your wallet is untouched.'))}</p>
           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-again>${esc(tr('again', 'New table'))}</button>
@@ -520,12 +534,12 @@
   }
   function buyInLabel(s) {
     if (Number(s.bots) > 0 || !Number(s.buyIn)) return tr('playChipsTable', 'Play chips (no wallet)');
-    return tr('buyIn', 'Buy-in') + ' ⚡' + s.buyIn;
+    return tr('buy_in_buyin', 'Buy-in ⚡{{buyIn}}', { buyIn: s.buyIn });
   }
   function lobbySummary(ctrl) {
     const s = roomSettings(ctrl);
-    const bits = [variantLabel(s.variant), buyInLabel(s), s.hands + ' ' + tr('handsWord', 'hands')];
-    if (Number(s.bots) > 0) bits.push(s.bots + ' ' + (Number(s.bots) === 1 ? tr('botOne', 'bot') : tr('botMany', 'bots')));
+    const bits = [variantLabel(s.variant), buyInLabel(s), tr('hands', '{hands, plural, one {# hand} other {# hands}}', { hands: s.hands })];
+    if (Number(s.bots) > 0) bits.push(tr('bots', '{bots, plural, one {# bot} other {# bots}}', { bots: s.bots }));
     return bits.join(' · ') + ' · 18+';
   }
   function canStart(ctrl, players) {
@@ -650,7 +664,7 @@
     if (set && set.status === 'pending') bits.push(`<div class="pkr-wait">${esc(tr('settling', 'Recording the result…'))}</div>`);
     el.innerHTML = `<div class="cl-result">${bits.join('')}
       ${Kit().roomResultActions(ctrl, { nextLabel: tr('newTable', 'New table'), waitLabel: tr('waitNew', 'Waiting for the host…') })}</div>`;
-    Kit().wireRoomResultActions(ctrl, el, { nextOp: 'start', onShare: () => CK().shareWin(GAME, LABEL, variantLabel(vm.variant) + ' ' + tr('tableDone', 'table done')) });
+    Kit().wireRoomResultActions(ctrl, el, { nextOp: 'start', onShare: () => CK().shareWin(GAME, LABEL, tr('label_table_done', '{{label}} table done', { label: variantLabel(vm.variant) })) });
   }
 
   async function openRoom(code, opts) {
@@ -660,7 +674,7 @@
     if (o.join) {
       if (!K.requireSignIn()) return null;
       try {
-        const res = await K.roomCall(GAME, 'join', { code, name: K.myName() || 'Player' });
+        const res = await K.roomCall(GAME, 'join', { code, name: K.myName() || t('dangal.party.player') });
         if (res.pending) toast(tr('pendingJoin', 'Table in progress — you’ll be dealt in next table'));
       } catch (e) {
         toast(K.roomErrorText(e) || tr('joinFail', 'Couldn’t join that table'));
@@ -709,7 +723,7 @@
         <div class="pk-hero-sub">${esc(tr('tag', 'Three cards. Bet blind or seen, call a show, or pack. Virtual chips only.'))}</div>
       </div>
       <div class="pk-modes">
-        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('vsBots', 'Practice vs bots'))}</span><span class="pk-mode-sub">${esc(variantLabel(s.variant) + ' · ' + s.bots + ' ' + tr('botMany', 'bots') + ' · ' + levelLabel(s.level) + ' · ' + tr('playChips', 'play chips'))}</span></button>
+        <button type="button" class="pk-mode pk-mode--primary" data-go="bot"><span class="pk-mode-title">${esc(tr('vsBots', 'Practice vs bots'))}</span><span class="pk-mode-sub">${esc(tr('label_bots_label2_play_chips', '{{label}} · {bots, plural, one {# bot} other {# bots}} · {{label2}} · play chips', { label: variantLabel(s.variant), bots: s.bots, label2: levelLabel(s.level) }))}</span></button>
         <button type="button" class="pk-mode" data-go="friends"><span class="pk-mode-title">${esc(tr('friends', 'Play friends'))}</span><span class="pk-mode-sub">${esc(tr('friendsSub', 'Live table for 3–7 · bots can fill seats'))}</span></button>
         <div class="cl-home-links">
           <button type="button" class="pk-link" data-go="change">${esc(tr('change', 'Change table'))}</button>
@@ -751,8 +765,8 @@
   if (typeof registerGame === 'function') {
     registerGame({
       id: 'teenpatti',
-      name: 'Teen Patti',
-      desc: 'Blind or seen · side show · bots · Live tables · 18+',
+      name: t('dangal.classics.teen_patti'),
+      desc: t('games.teenpatti.blind_or_seen_side_show_bots'),
       icon: '♠',
       gameType: 'dual',
       genre: 'cards',
@@ -763,7 +777,7 @@
       ownHome: true,
       order: 34,
       meta: {
-        core: 'teenpatti-core.js (rankings, variants, betting, bots — shared with the server)',
+        core: t('games.teenpatti.teenpatti_core_js_rankings_variants_bettin'),
         live: 'party_room → server-lib/teenpatti-engine.js; server deal, cards only after you look, zero-sum chip ledger',
       },
       launch: openGame,

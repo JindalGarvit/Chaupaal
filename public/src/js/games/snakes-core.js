@@ -3,6 +3,32 @@
  * decisions, so bots only roll. UMD: client practice, party-room server adapter and tests.
  * Dice values come from the caller (server CSPRNG in Live, seeded RNG in practice).
  */
+/** Game text: the catalog (t) in the browser; the English given here where there is no catalog (server rooms, Node). */
+function gtx(key, en, params) {
+  const g = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (typeof g.t === 'function') {
+    const v = g.t(key, params || {});
+    if (v && v !== key) return v;
+  }
+  const val = (k) => {
+    const v = params && params[k];
+    return v == null ? null : typeof v === 'object' && v.text != null ? v.text : String(v);
+  };
+  // English ICU {n, plural|selectordinal, one {…} other {…}} for the no-catalog path.
+  const s = String(en).replace(/\{(\w+), (plural|selectordinal), ((?:=?\w+ \{(?:[^{}]|\{\{\w+\}\})*\}\s*)+)\}/g, (m, k, type, body) => {
+    const n = Number(val(k));
+    const cases = {};
+    body.replace(/(=?\w+) \{((?:[^{}]|\{\{\w+\}\})*)\}/g, (x, c, txt) => (cases[c] = txt));
+    let cat = 'other';
+    try {
+      cat = new Intl.PluralRules('en', { type: type === 'plural' ? 'cardinal' : 'ordinal' }).select(n);
+    } catch (e) {}
+    const txt = cases['=' + n] != null ? cases['=' + n] : cases[cat] != null ? cases[cat] : cases.other || '';
+    return txt.replace(/#/g, String(n));
+  });
+  return s.replace(/\{\{(\w+)\}\}/g, (m, k) => (val(k) == null ? m : val(k)));
+}
+
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.SnakesCore = factory();
@@ -15,47 +41,47 @@
   const LOG_MAX = 40;
   /** Okabe–Ito palette + shape markers, so colour is never the only cue. */
   const TOKENS = [
-    { id: 'orange', label: 'Orange', hex: '#E69F00', shape: 'circle' },
-    { id: 'sky', label: 'Sky', hex: '#56B4E9', shape: 'triangle' },
-    { id: 'green', label: 'Green', hex: '#009E73', shape: 'square' },
-    { id: 'yellow', label: 'Yellow', hex: '#F0E442', shape: 'diamond' },
-    { id: 'blue', label: 'Blue', hex: '#0072B2', shape: 'star' },
-    { id: 'pink', label: 'Pink', hex: '#CC79A7', shape: 'hexagon' },
+    { id: 'orange', label: gtx('games.snakes.orange', 'Orange'), hex: '#E69F00', shape: 'circle' },
+    { id: 'sky', label: gtx('games.snakes.sky', 'Sky'), hex: '#56B4E9', shape: 'triangle' },
+    { id: 'green', label: gtx('games.snakes.green', 'Green'), hex: '#009E73', shape: 'square' },
+    { id: 'yellow', label: gtx('games.snakes.yellow', 'Yellow'), hex: '#F0E442', shape: 'diamond' },
+    { id: 'blue', label: gtx('games.snakes.blue', 'Blue'), hex: '#0072B2', shape: 'star' },
+    { id: 'pink', label: gtx('games.snakes.pink', 'Pink'), hex: '#CC79A7', shape: 'hexagon' },
   ];
 
   const BOARDS = [
     {
       id: 'classic',
-      name: 'Classic',
+      name: gtx('games.snakes.classic', 'Classic'),
       theme: 'classic',
-      desc: 'The traditional layout — 10 snakes, 9 ladders',
+      desc: gtx('games.snakes.the_traditional_layout_10_snakes_9', 'The traditional layout — 10 snakes, 9 ladders'),
       snakes: { 16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 98: 78 },
       ladders: { 1: 38, 4: 14, 9: 31, 21: 42, 28: 84, 36: 44, 51: 67, 71: 91, 80: 100 },
       labels: {},
     },
     {
       id: 'jungle',
-      name: 'Jungle',
+      name: gtx('games.snakes.jungle', 'Jungle'),
       theme: 'jungle',
-      desc: 'Vines and pythons — long climbs, one nasty drop near the top',
+      desc: gtx('games.snakes.vines_and_pythons_long_climbs_one', 'Vines and pythons — long climbs, one nasty drop near the top'),
       snakes: { 17: 7, 54: 34, 62: 18, 64: 60, 87: 36, 93: 73, 95: 75, 99: 41 },
       ladders: { 3: 22, 5: 8, 11: 26, 20: 29, 27: 56, 43: 77, 50: 91, 57: 76, 72: 84 },
       labels: {},
     },
     {
       id: 'galaxy',
-      name: 'Galaxy',
+      name: gtx('games.snakes.galaxy', 'Galaxy'),
       theme: 'galaxy',
-      desc: 'Rockets up, black holes down — 8 of each',
+      desc: gtx('games.snakes.rockets_up_black_holes_down_8', 'Rockets up, black holes down — 8 of each'),
       snakes: { 25: 4, 46: 13, 53: 31, 69: 48, 76: 58, 83: 61, 92: 70, 97: 79 },
       ladders: { 2: 23, 8: 34, 19: 38, 28: 55, 40: 62, 51: 72, 65: 86, 74: 95 },
       labels: {},
     },
     {
       id: 'moksha',
-      name: 'Moksha Patam',
+      name: gtx('games.snakes.moksha_patam', 'Moksha Patam'),
       theme: 'moksha',
-      desc: 'The original Indian board: virtues climb, vices slide — more snakes than ladders',
+      desc: gtx('games.snakes.the_original_indian_board_virtues_climb', 'The original Indian board: virtues climb, vices slide — more snakes than ladders'),
       snakes: { 14: 4, 29: 9, 38: 15, 47: 21, 56: 30, 63: 37, 72: 43, 85: 52, 91: 66, 99: 54 },
       ladders: { 6: 25, 18: 40, 32: 51, 44: 65, 58: 77, 69: 88, 81: 98 },
       labels: {
@@ -99,19 +125,19 @@
       Object.keys(map || {}).forEach((k) => {
         const from = Number(k);
         const to = Number(map[k]);
-        if (!(from >= 1 && from <= 99 && to >= 1 && to <= SQUARES)) errors.push(kind + ' ' + k + ' out of range');
-        if (kind === 'snake' && !(to < from)) errors.push('snake ' + k + ' must go down');
-        if (kind === 'ladder' && !(to > from)) errors.push('ladder ' + k + ' must go up');
-        if (starts[from]) errors.push('square ' + from + ' starts two jumps');
+        if (!(from >= 1 && from <= 99 && to >= 1 && to <= SQUARES)) errors.push(gtx('games.snakes.kind_value_out_of_range', '{{kind}} {{value}} out of range', { kind, value: k }));
+        if (kind === 'snake' && !(to < from)) errors.push(gtx('games.snakes.snake_value_must_go_down', 'snake {{value}} must go down', { value: k }));
+        if (kind === 'ladder' && !(to > from)) errors.push(gtx('games.snakes.ladder_value_must_go_up', 'ladder {{value}} must go up', { value: k }));
+        if (starts[from]) errors.push(gtx('games.snakes.square_from_starts_two_jumps', 'square {{from}} starts two jumps', { from }));
         starts[from] = kind;
         jumps[from] = to;
       });
     add(b.snakes, 'snake');
     add(b.ladders, 'ladder');
     Object.keys(jumps).forEach((k) => {
-      if (starts[jumps[k]]) errors.push('jump from ' + k + ' lands on another jump (' + jumps[k] + ')');
+      if (starts[jumps[k]]) errors.push(gtx('games.snakes.jump_from_value_lands_on_another', 'jump from {{value}} lands on another jump ({{value2}})', { value: k, value2: jumps[k] }));
     });
-    if (starts[SQUARES]) errors.push('square 100 cannot start a jump');
+    if (starts[SQUARES]) errors.push(gtx('games.snakes.square_100_cannot_start_a_jump', 'square 100 cannot start a jump'));
     const seen = new Set([0]);
     const queue = [0];
     const landed = new Set();
@@ -129,9 +155,9 @@
       }
     }
     for (let sq = 1; sq <= SQUARES; sq++) {
-      if (!starts[sq] && !landed.has(sq)) errors.push('square ' + sq + ' is unreachable');
+      if (!starts[sq] && !landed.has(sq)) errors.push(gtx('games.snakes.square_sq_is_unreachable', 'square {{sq}} is unreachable', { sq }));
     }
-    if (!seen.has(SQUARES)) errors.push('100 is unreachable');
+    if (!seen.has(SQUARES)) errors.push(gtx('games.snakes.100_is_unreachable', '100 is unreachable'));
     return { ok: errors.length === 0, errors };
   }
 
@@ -141,7 +167,7 @@
     if (list.length < MIN_PLAYERS) return { error: 'need_players' };
     const seats = list.map((p, i) => ({
       id: String(p.id),
-      name: String(p.name || (p.bot ? 'Bot' : 'Player')).slice(0, 32),
+      name: String(p.name || (p.bot ? gtx('games.snakes.bot', 'Bot') : gtx('games.snakes.player', 'Player'))).slice(0, 32),
       token: TOKENS[i].id,
       bot: !!p.bot,
       pos: 0,

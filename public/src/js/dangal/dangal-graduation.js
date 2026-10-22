@@ -26,28 +26,28 @@
     ttt: { grade: 'live', sync: 'live1v1', stakes: true },
 
     // Dual / party — Muqabala Live + stakes (Phase 6)
-    quiz: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
+    quiz: { grade: 'live', sync: 'live1v1', stakes: true, label: t('dangal.classics.live_1v1') },
     snakes: { grade: 'live', sync: 'liveParty', stakes: true },
     ludo: { grade: 'live', sync: 'liveParty', stakes: true },
     uno: { grade: 'live', sync: 'liveParty', stakes: true },
     scribble: { grade: 'live', sync: 'liveParty', stakes: true },
 
     // Party kit (G1+) — Pass & Play on one phone or a Room across phones; points only, never chips
-    imposter: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
-    rajamantri: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
-    charades: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
-    mostlikely: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
-    werewolf: { grade: 'party', sync: 'partyRoom', stakes: false, label: 'Party' },
+    imposter: { grade: 'party', sync: 'partyRoom', stakes: false, label: t('dangal.party') },
+    rajamantri: { grade: 'party', sync: 'partyRoom', stakes: false, label: t('dangal.party') },
+    charades: { grade: 'party', sync: 'partyRoom', stakes: false, label: t('dangal.party') },
+    mostlikely: { grade: 'party', sync: 'partyRoom', stakes: false, label: t('dangal.party') },
+    werewolf: { grade: 'party', sync: 'partyRoom', stakes: false, label: t('dangal.party') },
 
     // Classics + court — Live 1v1 state sync (snapshot / score events)
     // Dangal P7 — server physics + ICF rules (server-lib/carrom-engine.js); singles rated, doubles 2v2 unrated
-    carrom: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1 · 2v2' },
+    carrom: { grade: 'live', sync: 'live1v1', stakes: true, label: t('dangal.live_1v1_2v2') },
     // Dangal P8 — server deal + rules (server-lib/rummy-engine.js, teenpatti-engine.js); 2–6 / 3–7 player tables
-    rummy: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 2–6' },
-    teenpatti: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 3–7' },
-    bluff: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 3–8' },
-    tambola: { grade: 'live', sync: 'liveParty', stakes: true, label: 'Live 2–100+' },
-    streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: 'Live 1v1' },
+    rummy: { grade: 'live', sync: 'liveParty', stakes: true, label: t('dangal.live_2_6') },
+    teenpatti: { grade: 'live', sync: 'liveParty', stakes: true, label: t('dangal.live_3_7') },
+    bluff: { grade: 'live', sync: 'liveParty', stakes: true, label: t('dangal.live_3_8') },
+    tambola: { grade: 'live', sync: 'liveParty', stakes: true, label: t('dangal.live_2_100') },
+    streetcricket: { grade: 'live', sync: 'live1v1', stakes: true, label: t('dangal.classics.live_1v1') },
     badminton: { grade: 'live', sync: 'live1v1', stakes: true },
     // Dangal H2 — Live kicks are resolved on the server (choices never in shared state)
     penalty: { grade: 'live', sync: 'live1v1', stakes: true },
@@ -63,12 +63,12 @@
    * challenge surfaces read this. New titles (party G1–G3) are added here in one place.
    */
   const ROSTER_SECTIONS = [
-    { id: 'solo', label: 'Solo' },
-    { id: 'board', label: 'Boards' },
-    { id: 'words', label: 'Words' },
-    { id: 'cards', label: 'Cards' },
-    { id: 'rw_sports', label: 'Sports' },
-    { id: 'party', label: 'Party' },
+    { id: 'solo', label: t('dangal.solo') },
+    { id: 'board', label: t('dangal.boards') },
+    { id: 'words', label: t('dangal.words') },
+    { id: 'cards', label: t('dangal.cards') },
+    { id: 'rw_sports', label: t('common.sports') },
+    { id: 'party', label: t('dangal.party') },
   ];
 
   /** Section ids from before H4 — still accepted from descriptors / cached docs. */
@@ -164,14 +164,14 @@
     el.className = 'dangal-retired';
     el.dataset.dangalRetired = normId(gameId);
     el.setAttribute('role', 'dialog');
-    el.setAttribute('aria-label', 'This game has retired');
+    el.setAttribute('aria-label', t('dangal.this_game_has_retired'));
     el.innerHTML = `
       <div class="dangal-retired__card">
         <div class="dangal-retired__mark" aria-hidden="true">🎲</div>
-        <div class="dangal-retired__title">This game has retired</div>
-        <p class="dangal-retired__body">It’s no longer on Chaupaal. Plenty more to play in Manch.</p>
-        <button type="button" class="dangal-retired__cta" data-retired-browse>Browse games</button>
-        <button type="button" class="dangal-retired__close" data-retired-close>Close</button>
+        <div class="dangal-retired__title">${tHtml('dangal.this_game_has_retired')}</div>
+        <p class="dangal-retired__body">${tHtml('dangal.it_s_no_longer_on_chaupaal')}</p>
+        <button type="button" class="dangal-retired__cta" data-retired-browse>${tHtml('dangal.browse_games')}</button>
+        <button type="button" class="dangal-retired__close" data-retired-close>${tHtml('common.close')}</button>
       </div>`;
     let layer = null;
     const close = () => {
@@ -221,27 +221,27 @@
     const id = g.id || '';
     const info = getGameGraduation(id);
     if (info.grade === 'party') {
-      return '<span class="dangal-honesty-tag dangal-honesty-tag--party">Party</span>';
+      return '<span class="dangal-honesty-tag dangal-honesty-tag--party">' + tHtml('dangal.party') + '</span>';
     }
     if (info.grade === 'polish') {
-      return '<span class="dangal-honesty-tag dangal-honesty-tag--polish">Coming polish</span>';
+      return '<span class="dangal-honesty-tag dangal-honesty-tag--polish">' + tHtml('dangal.coming_polish') + '</span>';
     }
     if (info.grade === 'practice') {
-      return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
+      return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">' + tHtml('dangal.solo.practice') + '</span>';
     }
     // Live graduation wins over stale solo registry flags (rally sports, etc.).
     if (info.grade === 'live' && (info.sync === 'live1v1' || info.sync === 'liveParty')) {
-      const liveLabel = info.sync === 'liveParty' ? 'Live' : 'Live 1v1';
+      const liveLabel = info.sync === 'liveParty' ? t('dangal.live') : t('dangal.classics.live_1v1');
       return `<span class="dangal-honesty-tag dangal-honesty-tag--live">${liveLabel}</span>`;
     }
     if (info.grade === 'graduated' || g.solo || g.gameType === 'solo') {
       // Graduated solos + graduated Practice sports (honest Practice, quality bar met)
       if (info.sync === 'none' && info.label === 'Practice') {
-        return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
+        return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">' + tHtml('dangal.solo.practice') + '</span>';
       }
-      return '<span class="dangal-honesty-tag dangal-honesty-tag--solo">Solo</span>';
+      return '<span class="dangal-honesty-tag dangal-honesty-tag--solo">' + tHtml('dangal.solo') + '</span>';
     }
-    return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">Practice</span>';
+    return '<span class="dangal-honesty-tag dangal-honesty-tag--practice">' + tHtml('dangal.solo.practice') + '</span>';
   }
 
   /** Live 1v1 / Live party via DangalLive challenges. Party-kit rooms are their own flow. */
@@ -332,15 +332,15 @@
     return new Promise((resolve) => {
       const status = ageGateStatus();
       if (status === 'ok') return resolve(true);
-      const label = typeof gameDisplayName === 'function' ? gameDisplayName(gameId) : 'This game';
+      const label = typeof gameDisplayName === 'function' ? gameDisplayName(gameId) : t('dangal.classics.dice.thisGame');
       const kit = window.PartyKit;
       const under = status === 'under_18';
       const body = under
-        ? `<p class="dangal-age-gate__text">${label} is for players 18 and over. Plenty more to play in Manch.</p>
-           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-age-ok>OK</button>`
-        : `<p class="dangal-age-gate__text">${label} uses virtual chips that can’t be bought or cashed out. It’s for players 18 and over.</p>
-           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-age-yes>I confirm I’m 18 or older</button>
-           <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-age-no>Not now</button>`;
+        ? `<p class="dangal-age-gate__text">${tHtml('dangal.age_gate_under', { game: label })}</p>
+           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-age-ok>${tHtml('common.ok')}</button>`
+        : `<p class="dangal-age-gate__text">${tHtml('dangal.age_gate_confirm', { game: label })}</p>
+           <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-age-yes>${tHtml('dangal.i_confirm_i_m_18_or')}</button>
+           <button type="button" class="pk-btn pk-btn--ghost pk-btn--block" data-age-no>${tHtml('common.not_now')}</button>`;
       let done = false;
       let confirmed = false;
       const finish = (v) => {
@@ -350,13 +350,13 @@
       };
       if (!kit || typeof kit.openSheet !== 'function') {
         if (under) return finish(false);
-        const ok = typeof window.confirm === 'function' && window.confirm('Confirm you’re 18 or older to play ' + label);
+        const ok = typeof window.confirm === 'function' && window.confirm(t('dangal.confirm_you_re_18_or_older', { label }));
         if (!ok) return finish(false);
         confirmAdult().then(() => finish(true), () => finish(false));
         return;
       }
       kit.openSheet({
-        title: under ? '18+ only' : 'Are you 18 or older?',
+        title: under ? t('dangal.18_only') : t('dangal.are_you_18_or_older'),
         bodyHtml: `<div class="dangal-age-gate">${body}</div>`,
         onMount(el, close) {
           el.querySelector('[data-age-ok]')?.addEventListener('click', () => close());
@@ -373,9 +373,9 @@
             } catch (e) {
               btn.disabled = false;
               if (String(e.code).toUpperCase() === 'AGE_GATE') {
-                if (typeof showToast === 'function') showToast(label + ' is for players 18 and over');
+                if (typeof showToast === 'function') showToast(t('dangal.label_is_for_players_18_and', { label }));
                 close();
-              } else if (typeof showToast === 'function') showToast(e.message || 'Couldn’t save that — try again');
+              } else if (typeof showToast === 'function') showToast(e.message || t('dangal.couldn_t_save_that_try_again'));
             }
           });
         },
