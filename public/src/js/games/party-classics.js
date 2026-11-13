@@ -2706,7 +2706,7 @@
           if (el) {
             el.hidden = false;
             el.innerHTML =
-              `${tHtml('dangal.couldnt_update_chips')} <button type="button" id="carromChipRetry" class="game-tap-target" style="margin-left:8px;">${tHtml('common.retry')}</button>`;
+              `${tHtml('dangal.couldnt_update_chips')} <button type="button" id="carromChipRetry" class="game-tap-target" style="margin-inline-start:8px;">${tHtml('common.retry')}</button>`;
             el.querySelector('#carromChipRetry')?.addEventListener('click', () => {
               settleCarromOnce(won);
             });

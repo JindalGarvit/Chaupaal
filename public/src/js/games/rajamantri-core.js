@@ -243,26 +243,40 @@ function gtx(key, en, params) {
     return JSON.parse(JSON.stringify(pub));
   }
 
-  /** Hindi role names / calls arrive as locale data (data/locales/hi/rajamantri.hi.js). */
-  let QUOTE_HI = '';
+  /**
+   * Role names / calls / the Raja's line arrive as locale data (data/locales/<lang>/rajamantri.<lang>.js)
+   * into `loc[lang]`; Hindi is also mirrored on `.hi`.
+   */
+  const QUOTES = {};
+  function setLocal(obj, lang, text) {
+    if (!obj || !text) return;
+    if (lang === 'hi') obj.hi = text;
+    obj.loc = Object.assign(obj.loc || {}, { [lang]: text });
+  }
   function applyLocale(lang, data) {
-    if (!data || lang !== 'hi') return false;
-    Object.keys(data.roles || {}).forEach((id) => {
-      if (ROLES[id]) ROLES[id].hi = data.roles[id];
-    });
-    Object.keys(data.calls || {}).forEach((id) => {
-      if (CALLS[id]) CALLS[id].hi = data.calls[id];
-    });
-    if (data.quote) QUOTE_HI = data.quote;
+    const l = String(lang || '').toLowerCase();
+    if (!data || !/^[a-z]{2,3}$/.test(l) || l === 'en') return false;
+    Object.keys(data.roles || {}).forEach((id) => setLocal(ROLES[id], l, data.roles[id]));
+    Object.keys(data.calls || {}).forEach((id) => setLocal(CALLS[id], l, data.calls[id]));
+    if (data.quote) QUOTES[l] = data.quote;
     return true;
   }
+  /** The Raja's "I'm the Raja!" line in a content language ('' when that language has none). */
+  function quoteFor(lang) {
+    return QUOTES[PC.baseLang(lang)] || '';
+  }
   function quoteHi() {
-    return QUOTE_HI;
+    return QUOTES.hi || '';
   }
   if (typeof module === 'object' && module.exports) {
-    try {
-      applyLocale('hi', require('../data/locales/hi/rajamantri.hi.js'));
-    } catch (e) {}
+    [
+      ['hi', () => require('../data/locales/hi/rajamantri.hi.js')],
+      ['ur', () => require('../data/locales/ur/rajamantri.ur.js')],
+    ].forEach(([l, load]) => {
+      try {
+        applyLocale(l, load());
+      } catch (e) {}
+    });
   }
 
   function roleLabel(roleId, lang, both) {
@@ -301,6 +315,7 @@ function gtx(key, en, params) {
     roleLabel,
     standings,
     applyLocale,
+    quoteFor,
     quoteHi,
   };
 });

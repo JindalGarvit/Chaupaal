@@ -178,7 +178,7 @@ function gtx(key, en, params) {
   /** Public copy of a title once it may be shown to everyone. */
   function reveal(key) {
     const t = titleOf(key);
-    return t ? { key: t.key, en: t.en, hi: t.hi, pack: t.pack, kind: t.kind, difficulty: t.difficulty } : null;
+    return t ? { key: t.key, en: t.en, hi: t.hi || '', loc: Object.assign({}, t.loc), pack: t.pack, kind: t.kind, difficulty: t.difficulty } : null;
   }
 
   /** Typed guess vs the current title, in the room content language (`lang`) + English. */

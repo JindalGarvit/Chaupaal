@@ -92,31 +92,106 @@ function gtx(key, en, params) {
 
   /** Khoj intent keywords by game id, then UI language: native script + Latin-script spellings people type. */
   const LANG_KEYWORDS = {
-    tiptap: { hi: ['टिप टैप', 'टाइल मिलाओ', 'तीन मिलाओ', 'मैच 3 गेम', 'tile milao', 'teen milao', 'tip tap khel'] },
-    brickbreaker: { hi: ['ब्रिक ब्रेकर', 'ईंट तोड़', 'ईंटें तोड़', 'गेंद पैडल', 'eent tod', 'int tod', 'brick tod'] },
-    ankjod: { hi: ['काकुरो', 'अंक जोड़', 'अंकों की पहेली', 'नंबर पहेली', 'ank jod', 'ankon ki paheli', 'number paheli'] },
-    wordguess: { hi: ['शब्द फ़ाइव', 'शब्द पहेली', 'शब्द खोजो', 'पाँच अक्षर', 'shabd paheli', 'shabad', 'paanch akshar', 'word paheli'] },
-    chess: { hi: ['शतरंज', 'चेस', 'शह और मात', 'शह मात', 'shatranj', 'satranj', 'shatrang', 'shah maat'] },
-    ttt: { hi: ['टिक टैक टो', 'टिक-टैक-टो', 'काटा ज़ीरो', 'ज़ीरो काटा', 'कट्टम कुट्टी', 'zero kata', 'kata zero', 'katam kuti'] },
-    snakes: { hi: ['साँप-सीढ़ी', 'साँप सीढ़ी', 'सीढ़ी', 'saanp seedhi', 'sanp sidi', 'saap sidhi', 'snake seedhi'] },
-    ludo: { hi: ['लूडो', 'लुडो', 'पचीसी', 'चौपड़', 'loodo', 'ludu', 'chaupad', 'chaupar'] },
-    uno: { hi: ['ओह नो', 'रंग वाले पत्ते', 'रंगीन पत्ते', 'ड्रॉ टू', 'oh no patte', 'rang wale patte', 'rangeen patte'] },
-    scribble: { hi: ['स्क्रिबल', 'चित्र बनाओ', 'ड्राइंग गेम', 'बनाओ और बूझो', 'chitra banao', 'drawing khel', 'banao aur bujho', 'draw karo'] },
-    quiz: { hi: ['क्विज़', 'सवाल-जवाब', 'सवाल जवाब', 'सामान्य ज्ञान', 'मुक़ाबला', 'sawal jawab', 'sawaal jawaab', 'samanya gyan'] },
-    carrom: { hi: ['कैरम', 'स्ट्राइकर', 'गोटी', 'कैरम बोर्ड', 'keram', 'kairam', 'goti', 'carom'] },
-    poker: { hi: ['पोकर', 'टेक्सस होल्डम', 'होल्डम', 'पोकर टेबल', 'pokar', 'taash poker', 'holdem patte'] },
-    teenpatti: { hi: ['तीन पत्ती', 'तीन पत्ता', 'तीन पत्ते', 'फ़्लश', 'teen pathi', 'tin patti', 'teen patta', 'flash'] },
-    rummy: { hi: ['रमी', 'रम्मी', 'ताश', 'पत्तों का खेल', 'rami', 'rammy', 'taash', 'patte'] },
-    bluff: { hi: ['ब्लफ़', 'झूठ पकड़ो', 'झाँसा', 'डाउट', 'jhooth pakdo', 'jhoot pakdo', 'doubt khel', 'blaf'] },
-    tambola: { hi: ['तम्बोला', 'तंबोला', 'हाउज़ी', 'हाउसी', 'बिंगो', 'tombola', 'tambola ticket', 'housie ticket'] },
-    streetcricket: { hi: ['गली क्रिकेट', 'क्रिकेट', 'बल्ला', 'छक्का', 'gali cricket', 'galli cricket', 'kirket', 'balla'] },
-    badminton: { hi: ['बैडमिंटन', 'शटल', 'चिड़िया', 'रैकेट', 'badmintan', 'chidiya', 'chidiya balla'] },
-    penalty: { hi: ['पेनल्टी', 'शूटआउट', 'फ़ुटबॉल', 'गोलकीपर', 'penalti', 'football khel', 'goal maaro'] },
-    imposter: { hi: ['इम्पोस्टर', 'इंपोस्टर', 'जासूस', 'नकली कौन', 'कौन झूठा', 'jasoos', 'nakli kaun', 'kaun jhootha'] },
-    rajamantri: { hi: ['राजा मंत्री चोर सिपाही', 'राजा मंत्री', 'चोर सिपाही', 'पर्ची', 'chor police', 'raja wazir', 'parchi'] },
-    charades: { hi: ['डम्ब शराड्स', 'शराड्स', 'इशारों से बताओ', 'एक्टिंग गेम', 'ishaar', 'ishar', 'acting khel'] },
-    mostlikely: { hi: ['सबसे ज़्यादा कौन', 'कौन सबसे ज़्यादा', 'इनमें से क्या', 'मैंने कभी नहीं', 'sabse zyada kaun', 'kaun sabse', 'kya chunoge', 'maine kabhi nahi'] },
-    werewolf: { hi: ['वेयरवुल्फ़', 'भेड़िया', 'माफ़िया', 'गाँव वाले', 'bhediya', 'bhedia', 'mafia khel', 'gaon wale'] },
+    tiptap: {
+      hi: ['टिप टैप', 'टाइल मिलाओ', 'तीन मिलाओ', 'मैच 3 गेम', 'tile milao', 'teen milao', 'tip tap khel'],
+      ur: ['ٹپ ٹیپ', 'ٹائل ملاؤ', 'تین ملاؤ', 'میچ 3 گیم', 'tile milao', 'teen milao', 'tip tap khel'],
+    },
+    brickbreaker: {
+      hi: ['ब्रिक ब्रेकर', 'ईंट तोड़', 'ईंटें तोड़', 'गेंद पैडल', 'eent tod', 'int tod', 'brick tod'],
+      ur: ['برک بریکر', 'اینٹ توڑ', 'اینٹیں توڑو', 'گیند پیڈل', 'eent tod', 'eenten todo', 'brick tod'],
+    },
+    ankjod: {
+      hi: ['काकुरो', 'अंक जोड़', 'अंकों की पहेली', 'नंबर पहेली', 'ank jod', 'ankon ki paheli', 'number paheli'],
+      ur: ['کاکورو', 'نمبر پہیلی', 'ہندسوں کی پہیلی', 'جمع کی پہیلی', 'number paheli', 'hindson ki paheli', 'kakuro khel'],
+    },
+    wordguess: {
+      hi: ['शब्द फ़ाइव', 'शब्द पहेली', 'शब्द खोजो', 'पाँच अक्षर', 'shabd paheli', 'shabad', 'paanch akshar', 'word paheli'],
+      ur: ['شبد فائیو', 'لفظ پہیلی', 'لفظ ڈھونڈو', 'پانچ حروف', 'lafz paheli', 'lafz dhundo', 'paanch huroof', 'word paheli'],
+    },
+    chess: {
+      hi: ['शतरंज', 'चेस', 'शह और मात', 'शह मात', 'shatranj', 'satranj', 'shatrang', 'shah maat'],
+      ur: ['شطرنج', 'چیس', 'شہ مات', 'شہ اور مات', 'shatranj', 'shatrinj', 'satranj', 'shah maat'],
+    },
+    ttt: {
+      hi: ['टिक टैक टो', 'टिक-टैक-टो', 'काटा ज़ीरो', 'ज़ीरो काटा', 'कट्टम कुट्टी', 'zero kata', 'kata zero', 'katam kuti'],
+      ur: ['ٹک ٹیک ٹو', 'زیرو کاٹا', 'کاٹا زیرو', 'کراس زیرو', 'zero kata', 'kata zero', 'cross zero'],
+    },
+    snakes: {
+      hi: ['साँप-सीढ़ी', 'साँप सीढ़ी', 'सीढ़ी', 'saanp seedhi', 'sanp sidi', 'saap sidhi', 'snake seedhi'],
+      ur: ['سانپ سیڑھی', 'سانپ اور سیڑھی', 'سیڑھی', 'saanp seedhi', 'saanp seerhi', 'sanp sirhi', 'snake seedhi'],
+    },
+    ludo: {
+      hi: ['लूडो', 'लुडो', 'पचीसी', 'चौपड़', 'loodo', 'ludu', 'chaupad', 'chaupar'],
+      ur: ['لوڈو', 'لڈو', 'پچیسی', 'چوپڑ', 'loodo', 'ludu', 'pachisi', 'chaupar'],
+    },
+    uno: {
+      hi: ['ओह नो', 'रंग वाले पत्ते', 'रंगीन पत्ते', 'ड्रॉ टू', 'oh no patte', 'rang wale patte', 'rangeen patte'],
+      ur: ['اوہ نو', 'رنگ والے پتے', 'رنگین پتے', 'ڈرا ٹو', 'oh no patte', 'rang wale patte', 'rangeen patte'],
+    },
+    scribble: {
+      hi: ['स्क्रिबल', 'चित्र बनाओ', 'ड्राइंग गेम', 'बनाओ और बूझो', 'chitra banao', 'drawing khel', 'banao aur bujho', 'draw karo'],
+      ur: ['اسکریبل', 'تصویر بناؤ', 'ڈرائنگ گیم', 'بناؤ اور بوجھو', 'tasveer banao', 'drawing khel', 'banao aur bujho', 'draw karo'],
+    },
+    quiz: {
+      hi: ['क्विज़', 'सवाल-जवाब', 'सवाल जवाब', 'सामान्य ज्ञान', 'मुक़ाबला', 'sawal jawab', 'sawaal jawaab', 'samanya gyan'],
+      ur: ['کوئز', 'سوال جواب', 'معلومات عامہ', 'مقابلہ', 'sawal jawab', 'sawaal jawaab', 'maloomat e aama', 'quiz muqabla'],
+    },
+    carrom: {
+      hi: ['कैरम', 'स्ट्राइकर', 'गोटी', 'कैरम बोर्ड', 'keram', 'kairam', 'goti', 'carom'],
+      ur: ['کیرم', 'اسٹرائیکر', 'گوٹی', 'کیرم بورڈ', 'keram', 'kairam', 'goti', 'carom'],
+    },
+    poker: {
+      hi: ['पोकर', 'टेक्सस होल्डम', 'होल्डम', 'पोकर टेबल', 'pokar', 'taash poker', 'holdem patte'],
+      ur: ['پوکر', 'ٹیکساس ہولڈم', 'ہولڈم', 'پوکر ٹیبل', 'pokar', 'taash poker', 'holdem patte'],
+    },
+    teenpatti: {
+      hi: ['तीन पत्ती', 'तीन पत्ता', 'तीन पत्ते', 'फ़्लश', 'teen pathi', 'tin patti', 'teen patta', 'flash'],
+      ur: ['تین پتی', 'تین پتا', 'تین پتے', 'فلش', 'teen pathi', 'tin patti', 'teen patta', 'flash'],
+    },
+    rummy: {
+      hi: ['रमी', 'रम्मी', 'ताश', 'पत्तों का खेल', 'rami', 'rammy', 'taash', 'patte'],
+      ur: ['رمی', 'تاش', 'پتوں کا کھیل', 'rami', 'rammy', 'taash', 'patte'],
+    },
+    bluff: {
+      hi: ['ब्लफ़', 'झूठ पकड़ो', 'झाँसा', 'डाउट', 'jhooth pakdo', 'jhoot pakdo', 'doubt khel', 'blaf'],
+      ur: ['بلف', 'جھوٹ پکڑو', 'جھانسا', 'ڈاؤٹ', 'jhoot pakdo', 'jhooth pakro', 'doubt khel', 'blaf'],
+    },
+    tambola: {
+      hi: ['तम्बोला', 'तंबोला', 'हाउज़ी', 'हाउसी', 'बिंगो', 'tombola', 'tambola ticket', 'housie ticket'],
+      ur: ['تمبولا', 'ہاؤزی', 'ہاؤسی', 'بنگو', 'tombola', 'tambola ticket', 'housie ticket'],
+    },
+    streetcricket: {
+      hi: ['गली क्रिकेट', 'क्रिकेट', 'बल्ला', 'छक्का', 'gali cricket', 'galli cricket', 'kirket', 'balla'],
+      ur: ['گلی کرکٹ', 'کرکٹ', 'بلے بازی', 'چھکا', 'gali cricket', 'galli cricket', 'kirkit', 'balla'],
+    },
+    badminton: {
+      hi: ['बैडमिंटन', 'शटल', 'चिड़िया', 'रैकेट', 'badmintan', 'chidiya', 'chidiya balla'],
+      ur: ['بیڈمنٹن', 'شٹل', 'چڑیا', 'ریکٹ', 'badmintan', 'chidiya', 'shuttle khel'],
+    },
+    penalty: {
+      hi: ['पेनल्टी', 'शूटआउट', 'फ़ुटबॉल', 'गोलकीपर', 'penalti', 'football khel', 'goal maaro'],
+      ur: ['پنالٹی', 'شوٹ آؤٹ', 'فٹبال', 'گول کیپر', 'penalti', 'football khel', 'goal maro'],
+    },
+    imposter: {
+      hi: ['इम्पोस्टर', 'इंपोस्टर', 'जासूस', 'नकली कौन', 'कौन झूठा', 'jasoos', 'nakli kaun', 'kaun jhootha'],
+      ur: ['امپوسٹر', 'جاسوس', 'نقلی کون', 'جھوٹا کون', 'jasoos', 'naqli kaun', 'jhoota kaun'],
+    },
+    rajamantri: {
+      hi: ['राजा मंत्री चोर सिपाही', 'राजा मंत्री', 'चोर सिपाही', 'पर्ची', 'chor police', 'raja wazir', 'parchi'],
+      ur: ['راجا منتری چور سپاہی', 'بادشاہ وزیر چور سپاہی', 'چور سپاہی', 'پرچی', 'badshah wazir', 'chor police', 'parchi'],
+    },
+    charades: {
+      hi: ['डम्ब शराड्स', 'शराड्स', 'इशारों से बताओ', 'एक्टिंग गेम', 'ishaar', 'ishar', 'acting khel'],
+      ur: ['ڈمب شراڈز', 'اشاروں سے بتاؤ', 'ایکٹنگ گیم', 'اشارے', 'isharon se batao', 'ishare', 'acting khel'],
+    },
+    mostlikely: {
+      hi: ['सबसे ज़्यादा कौन', 'कौन सबसे ज़्यादा', 'इनमें से क्या', 'मैंने कभी नहीं', 'sabse zyada kaun', 'kaun sabse', 'kya chunoge', 'maine kabhi nahi'],
+      ur: ['سب سے زیادہ کون', 'کون سب سے زیادہ', 'کیا چنو گے', 'میں نے کبھی نہیں', 'sab se zyada kaun', 'kaun sabse', 'kya chunoge', 'maine kabhi nahi'],
+    },
+    werewolf: {
+      hi: ['वेयरवुल्फ़', 'भेड़िया', 'माफ़िया', 'गाँव वाले', 'bhediya', 'bhedia', 'mafia khel', 'gaon wale'],
+      ur: ['ویئر وولف', 'بھیڑیا', 'مافیا', 'گاؤں والے', 'bhediya', 'bheriya', 'mafia khel', 'gaon wale'],
+    },
   };
   CATALOG.forEach((g) => (g.langKeys = LANG_KEYWORDS[g.id] || {}));
 

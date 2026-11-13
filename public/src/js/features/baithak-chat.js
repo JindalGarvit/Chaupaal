@@ -1289,7 +1289,7 @@ function renderMsgBubble(m, isGroup){
   } else if(att && att.type==='story'){
     const live = !att.expiresAt || Number(att.expiresAt) > Date.now();
     const thumb = att.thumb || att.url || '';
-    body=`<button type="button" class="ds-story-card" data-story-id="${chatEsc(att.storyId||'')}" data-story-dest="${chatEsc(att.destination||'duniya')}" ${live?'':'data-expired="1"'} style="display:block;width:120px;border:0;padding:0;background:none;text-align:left;cursor:pointer;">
+    body=`<button type="button" class="ds-story-card" data-story-id="${chatEsc(att.storyId||'')}" data-story-dest="${chatEsc(att.destination||'duniya')}" ${live?'':'data-expired="1"'} style="display:block;width:120px;border:0;padding:0;background:none;text-align:start;cursor:pointer;">
       <span style="display:block;width:120px;height:180px;border-radius:12px;overflow:hidden;background:#111;">${thumb?`<img src="${chatEsc(thumb)}" alt="" style="width:100%;height:100%;object-fit:cover;">`:''}</span>
       <span style="display:block;font-size:11px;font-weight:700;margin-top:4px;">${chatEsc(att.name||t('chat.story'))}</span>
       ${live?'':`<span style="font-size:11px;color:var(--muted);">${tHtml('chat.story_unavailable')}</span>`}

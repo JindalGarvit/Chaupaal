@@ -256,7 +256,7 @@ const notifs = async (db, uid) => (await db.collection('notifications').doc(uid)
   {
     const V = require('./store-validate');
     const all = V.validateAll();
-    assert(all.langs.length === 16 && all.errors.length === 0, `16 listing files within store limits (${all.errors.join('; ') || 'ok'})`);
+    assert(all.langs.length === 19 && all.errors.length === 0, `19 listing files within store limits (${all.errors.join('; ') || 'ok'})`);
     const bad = V.validateListing({ lang: 'xx', apple: { name: 'x'.repeat(31), subtitle: 'ok', description: 'd', keywords: 'a, b' }, google: { title: 't', shortDescription: 'y'.repeat(81), fullDescription: 'f' } }, 'xx');
     assert(bad.some((e) => /apple.name: 31 > 30/.test(e)) && bad.some((e) => /shortDescription: 81 > 80/.test(e)) && bad.some((e) => /no spaces after commas/.test(e)), 'validator catches over-limit fields');
     assert(V.len('keywords', 'हिंदी') === Buffer.byteLength('हिंदी') && V.len('name', 'हिंदी') === 5, 'keywords limited in bytes, other fields in characters');
@@ -309,7 +309,7 @@ const notifs = async (db, uid) => (await db.collection('notifications').doc(uid)
     // manifest + hreflang
     const langs = require('./build-store-assets').langs();
     const manifests = langs.filter((l) => l !== 'en').map((l) => JSON.parse(read(`public/manifests/manifest.${l}.json`)));
-    assert(langs.length === 16 && manifests.length === 15 && manifests.every((m, i) => m.lang === langs.filter((l) => l !== 'en')[i] && m.description && m.shortcuts.length === 3), '15 localised manifests (+ English) with description + shortcuts');
+    assert(langs.length === 19 && manifests.length === 18 && manifests.every((m, i) => m.lang === langs.filter((l) => l !== 'en')[i] && m.description && m.shortcuts.length === 3), '18 localised manifests (+ English) with description + shortcuts');
     assert(manifests.find((m) => m.lang === 'ar').dir === 'rtl' && /\?lang=hi/.test(manifests.find((m) => m.lang === 'hi').start_url), 'RTL manifests + language start_url');
     const W = { document: { addEventListener() {}, readyState: 'complete', querySelector: () => null }, window: {} };
     W.window = W;

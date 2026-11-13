@@ -532,7 +532,7 @@ function showNewDmSearchSheet(opts){
       }
       results.innerHTML=rows.map(r=>`
         <button type="button" class="new-dm-row" data-uid="${r.uid||''}" data-name="${(r.name||r.username||'').replace(/"/g,'&quot;')}" data-avatar="${(r.avatar||'👤').replace(/"/g,'&quot;')}"
-          style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 0;border:0;border-bottom:1px solid var(--line);background:transparent;cursor:pointer;text-align:left;">
+          style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 0;border:0;border-bottom:1px solid var(--line);background:transparent;cursor:pointer;text-align:start;">
           <div style="width:40px;height:40px;border-radius:50%;background:var(--white);display:grid;place-items:center;overflow:hidden;">${r.photoURL?`<img src="${r.photoURL}" style="width:100%;height:100%;object-fit:cover;">`:'👤'}</div>
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:14px;">${baithakEsc(r.name||r.username||t('common.user'))}</div>
@@ -579,8 +579,8 @@ function showNewDmSearchSheet(opts){
 
 function showNewChatOptions(){
   const bodyHtml=`
-    <button type="button" class="btn btn--block" data-new="dm" style="margin-bottom:8px;text-align:left;">${tHtml('baithak.start_a_new_conversation_2')}</button>
-    <button type="button" class="btn btn--block" data-new="group" style="margin-bottom:8px;text-align:left;">${tHtml('baithak.gather_a_group')}</button>`;
+    <button type="button" class="btn btn--block" data-new="dm" style="margin-bottom:8px;text-align:start;">${tHtml('baithak.start_a_new_conversation_2')}</button>
+    <button type="button" class="btn btn--block" data-new="group" style="margin-bottom:8px;text-align:start;">${tHtml('baithak.gather_a_group')}</button>`;
   if(typeof openHalfSheet==='function'){
     openHalfSheet({
       id:'baithakNewChatSheet',

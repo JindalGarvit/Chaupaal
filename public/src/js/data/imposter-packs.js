@@ -739,26 +739,61 @@
     return PACKS.find((p) => p.id === id) || null;
   }
 
-  /** Fill one language's slots from its locale file (pack names + words, matched by English). */
+  /** Languages whose overlay has been applied (in load order). */
+  const LANGS = [];
+
+  function setName(obj, lang, text) {
+    if (!text) return;
+    if (lang === 'hi') obj.hi = text;
+    obj.loc = Object.assign({}, obj.loc, { [lang]: text });
+  }
+
+  /**
+   * Fill one language from its locale file (pack names + words, matched by English).
+   * Every language lands in `pack.loc[lang]` (name) and `pack.wordLoc[lang]` (English → word);
+   * Hindi also keeps its row slots (row[1] / row[3]) for older rooms and saved state.
+   */
   function applyLocale(lang, data) {
-    if (!data || lang !== 'hi') return false;
-    if (data.mixed) MIXED.hi = data.mixed;
+    const l = String(lang || '').toLowerCase();
+    if (!data || !/^[a-z]{2,3}$/.test(l) || l === 'en') return false;
+    if (data.mixed) setName(MIXED, l, data.mixed);
     PACKS.forEach((p) => {
       const d = data.packs && data.packs[p.id];
       if (!d) return;
-      if (d.name) p.hi = d.name;
-      (p.words || []).forEach((row) => {
-        if (d.items[row[0]]) row[1] = d.items[row[0]];
-        if (d.items[row[2]]) row[3] = d.items[row[2]];
-      });
+      setName(p, l, d.name);
+      const items = d.items || {};
+      p.wordLoc = Object.assign({}, p.wordLoc, { [l]: items });
+      if (l === 'hi') {
+        (p.words || []).forEach((row) => {
+          if (items[row[0]]) row[1] = items[row[0]];
+          if (items[row[2]]) row[3] = items[row[2]];
+        });
+      }
     });
+    if (LANGS.indexOf(l) < 0) LANGS.push(l);
     return true;
   }
-  if (typeof module === 'object' && module.exports) {
-    try {
-      applyLocale('hi', require('./locales/hi/imposter-packs.hi.js'));
-    } catch (e) {}
+
+  /** A pack word's translations by language ({ hi: …, ur: … }) — only languages that have one. */
+  function wordLocals(pack, en) {
+    const out = {};
+    const wl = (pack && pack.wordLoc) || {};
+    Object.keys(wl).forEach((l) => {
+      if (wl[l] && wl[l][en]) out[l] = wl[l][en];
+    });
+    return out;
   }
 
-  return { PACKS, MIXED, getPack, applyLocale, DEFAULT_PACK: 'mixed' };
+  if (typeof module === 'object' && module.exports) {
+    [
+      ['hi', () => require('./locales/hi/imposter-packs.hi.js')],
+      ['ur', () => require('./locales/ur/imposter-packs.ur.js')],
+    ].forEach(([l, load]) => {
+      try {
+        applyLocale(l, load());
+      } catch (e) {}
+    });
+  }
+
+  return { PACKS, MIXED, LANGS, getPack, applyLocale, wordLocals, DEFAULT_PACK: 'mixed' };
 });

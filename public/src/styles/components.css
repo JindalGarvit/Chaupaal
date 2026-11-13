@@ -3889,7 +3889,7 @@ select:focus-visible,
   opacity:0;z-index:2;
 }
 .rw-sc-ball::after{
-  content:'';position:absolute;left:50%;top:2px;bottom:2px;width:2px;margin-inline-start:-1px;
+  content:'';position:absolute;left:50%;top:2px;bottom:2px;width:2px;translate:-50% 0;
   background:rgba(198,40,40,.75);border-radius:1px;
 }
 .rw-sc-pitch.is-del-quick .rw-sc-ball{border-color:#C62828;}

@@ -94,12 +94,60 @@
     }
   }
 
+  /**
+   * Default digits by Region, not language (L11/L12): a language listed here shows its own numerals only in
+   * these regions and Western 0–9 everywhere else (bn: Bangladesh → ০–৯, India → 0–9; ur: always 0–9).
+   * Languages not listed follow CLDR. The Settings choice (latn / native) always wins.
+   */
+  const NATIVE_DIGIT_REGIONS = {
+    bn: ['BD'],
+    ur: [],
+    // Arabic-Indic for the Gulf, Egypt, Levant, Iraq, Sudan, Yemen; Western for the Maghreb (MA, DZ, TN, LY) and elsewhere.
+    ar: ['SA', 'AE', 'QA', 'KW', 'BH', 'OM', 'YE', 'EG', 'SD', 'JO', 'LB', 'SY', 'PS', 'IQ'],
+  };
+  const NATIVE_NU = { bn: 'beng', ur: 'arabext', ar: 'arab', hi: 'deva', mr: 'deva', ta: 'tamldec', te: 'telu' };
+
+  function regionOf(base) {
+    const m = /-([A-Z]{2})(?:-|$)/.exec(base);
+    return m ? m[1] : regionCode();
+  }
+
+  function defaultDigits(base) {
+    const lang = String(base).split('-')[0];
+    const regions = NATIVE_DIGIT_REGIONS[lang];
+    if (!regions) return '';
+    return regions.indexOf(regionOf(base)) >= 0 ? 'native' : 'latn';
+  }
+
   function formatLocale(opts) {
     const o = opts || {};
     const base = o.locale || baseLocale(o.lang, o.region);
-    const pref = o.digits !== undefined ? o.digits : getDigitsPref();
-    if (pref === 'latn' && localeUsesNativeDigits(base)) return base + '-u-nu-latn';
+    const pref = o.digits !== undefined ? o.digits : getDigitsPref() || defaultDigits(base);
+    const native = localeUsesNativeDigits(base);
+    if (pref === 'latn' && native) return base + '-u-nu-latn';
+    if (pref === 'native' && !native) {
+      const nu = NATIVE_NU[String(base).split('-')[0]];
+      if (nu && valid(base + '-u-nu-' + nu)) return base + '-u-nu-' + nu;
+    }
     return base;
+  }
+
+  /** True when numbers render in non-Latin digits for the current UI (drives digit conversion in copy). */
+  function usesNativeDigits(opts) {
+    try {
+      return new Intl.NumberFormat(formatLocale(opts)).resolvedOptions().numberingSystem !== 'latn';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** 0–9 → the locale's digits (static numbers inside translated copy). */
+  function localiseDigits(s, opts) {
+    if (!usesNativeDigits(opts)) return String(s);
+    const f = fmt(Intl.NumberFormat, formatLocale(opts), { useGrouping: false });
+    const map = [];
+    for (let i = 0; i < 10; i++) map.push(f.format(i));
+    return String(s).replace(/[0-9]/g, (d) => map[+d]);
   }
 
   function fmt(Ctor, locale, options) {
@@ -324,6 +372,10 @@
     formatLocale,
     baseLocale,
     localeUsesNativeDigits,
+    usesNativeDigits,
+    localiseDigits,
+    defaultDigits,
+    NATIVE_DIGIT_REGIONS,
     getDigitsPref,
     setDigitsPref,
     toDate,

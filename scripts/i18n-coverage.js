@@ -93,8 +93,10 @@ function coverage() {
         needed = new Intl.PluralRules(l.html || l.code).resolvedOptions().pluralCategories;
       } catch (e) {}
       keys.forEach((k) => {
-        const want = (String(en[k]).match(/\{\{\w+\}\}/g) || []).sort().join();
-        const have = (String(pack[k]).match(/\{\{\w+\}\}/g) || []).sort().join();
+        // A translation may consume a param as an ICU variable ({n, plural, …}) instead of {{n}} (Arabic plurals).
+        const used = (s) => [...new Set([...(String(s).match(/\{\{\w+\}\}/g) || []), ...[...String(s).matchAll(/\{\s*(\w+)\s*,\s*(?:plural|select|selectordinal)\s*,/g)].map((m) => '{{' + m[1] + '}}')])].sort().join();
+        const want = used(en[k]);
+        const have = used(pack[k]);
         if (want !== have) placeholder.push(k);
         pluralBlocks(String(pack[k])).forEach((b) => {
           if (b.type !== 'plural') return;

@@ -153,13 +153,13 @@
     ctx.textAlign = ov.align || 'center';
     ctx.fillStyle = ov.color || '#fff';
     if (ov.bg) {
-      ctx.font = `${ov.style === 'poster' ? '900' : ov.style === 'serif' ? '600' : '700'} ${size}px ${ov.style === 'serif' ? 'Georgia,serif' : t('duniya.space_grotesk_sans_serif')}`;
+      ctx.font = `${ov.style === 'poster' ? '900' : ov.style === 'serif' ? '600' : '700'} ${size}px ${ov.style === 'serif' ? 'Georgia,serif' : 'Space Grotesk,sans-serif'}`; // i18n-ignore (CSS font stack)
       const m = ctx.measureText(ov.text || '');
       ctx.fillStyle = ov.bg;
       ctx.fillRect(-m.width / 2 - 12, -size, m.width + 24, size + 16);
       ctx.fillStyle = ov.color || '#fff';
     }
-    ctx.font = `${ov.style === 'poster' ? '900' : ov.style === 'serif' ? '600' : '700'} ${size}px ${ov.style === 'serif' ? 'Georgia,serif' : t('duniya.space_grotesk_sans_serif')}`;
+    ctx.font = `${ov.style === 'poster' ? '900' : ov.style === 'serif' ? '600' : '700'} ${size}px ${ov.style === 'serif' ? 'Georgia,serif' : 'Space Grotesk,sans-serif'}`; // i18n-ignore (CSS font stack)
     ctx.shadowColor = 'rgba(0,0,0,.35)';
     ctx.shadowBlur = 4;
     ctx.fillText(ov.text || '', 0, 0);

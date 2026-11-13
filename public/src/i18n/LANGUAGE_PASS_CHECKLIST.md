@@ -46,6 +46,29 @@ One dedicated pass per language. Ship only when every box is ticked or a gap is 
 - [ ] Mixed-language room: one English + one target-language user — each sees their own UI; the room content language works.
 - [ ] Real devices: Android (Chrome) + iPhone (Safari). Name anything not verified on hardware.
 
+## RTL languages (ur, ar — L11 / L16)
+- [ ] `LANG_CATALOG` entry has `dir: 'rtl'`; `<html dir="rtl" lang>` set on switch; the PWA manifest gets `dir: "rtl"`.
+- [ ] Brand names and every `{{param}}` render inside first-strong isolates (U+2068 … U+2069) — done in `i18nFormat`
+  for RTL locales; params named `*url|href|link|src|path|code|key|id` stay raw. Names / handles in markup use
+  `.cp-bidi` / `unicode-bidi: isolate`; user text uses `dir="auto"` + `unicode-bidi: plaintext`.
+- [ ] Shared CSS uses logical properties (`margin-inline-*`, `inset-inline-*`, `text-align: start`). Physical
+  `left/right` only for geometry (board coordinates, centring `left:50%` + `translate:-50% 0`, animations).
+- [ ] Directional icons come from `iconHtml()` (auto `.cp-flip-rtl`); never hand-flip media, logos, clocks.
+- [ ] Gestures read `isRtl()`: tab / section swipes, swipe pager, Duniya stories (forward = toward line start).
+- [ ] Boards, canvases, card hands stay `direction: ltr` (i18n.css list) — add new game surfaces there.
+- [ ] Script fonts: tall scripts (Nastaliq) may need a compact fallback (Naskh) for tabs / chips / badges / HUDs;
+  document which surfaces use which.
+- [ ] Digits: default by Region via `NATIVE_DIGIT_REGIONS` in `core/i18n-format.js`; the Settings toggle stores only
+  departures from that default.
+- [ ] Sweep in the real language (not only ar-XB): tab order mirrored, sheets / drawers from the correct side, chat
+  bubbles own vs others, progress bars, sliders, carousels, toasts, badges, mixed Latin text.
+
+## Long-text languages (ta, te, ml, de … — L13+)
+- [ ] Brief translators with a length budget (≤ 1.6× English on short UI strings) and imperative verb stems.
+- [ ] Length audit: list keys > 1.6× English; render them at 360 px (tabs, buttons, chips, HUDs, settings rows,
+  notification titles); fix at component level (wrap / ellipsis + long-press full text, L1 patterns), never by
+  shrinking fonts below accessible sizes.
+
 ## 8. Tests + ship
 - [ ] Copy `scripts/test-global-l10-hi.js` → `test-global-l1x-<code>.js` (set `LANG`, script range, term samples), add to `npm test`.
 - [ ] All suites green; `api/*.js` = 12; `node scripts/bust-assets.js`; `node scripts/i18n-lint.js --write-baseline`.

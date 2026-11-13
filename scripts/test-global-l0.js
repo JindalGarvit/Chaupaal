@@ -24,8 +24,9 @@ function assert(cond, msg) {
 }
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
-const LOCKED = ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'ur', 'ar', 'es', 'fr', 'pt', 'de', 'id', 'ja', 'ko', 'zh'];
-const RETIRED = ['gu', 'kn', 'ml', 'pa', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
+const LOCKED = ['en', 'hi', 'bn', 'ta', 'te', 'mr', 'pa', 'kn', 'ml', 'ur', 'ar', 'es', 'fr', 'pt', 'de', 'id', 'ja', 'ko', 'zh'];
+// kn, ml, pa returned with their language passes (L15a–c).
+const RETIRED = ['gu', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 function fakeDb() {
   const writes = [];
@@ -47,7 +48,7 @@ async function run() {
   {
     const rt = loadI18n();
     const codes = rt.LANG_CATALOG.map((l) => l.code);
-    assert(codes.length === 16 && LOCKED.every((c) => codes.includes(c)), 'catalog has exactly the 16 locked languages');
+    assert(codes.length === LOCKED.length && LOCKED.every((c) => codes.includes(c)), `catalog has exactly the ${LOCKED.length} locked languages`);
     assert(rt.LANG_CATALOG.every((l) => l.native && l.name && /^[a-z]{2,3}-[A-Z]{2}$/.test(l.tts) && l.html), 'every language has native + English name, TTS tag and html lang');
     const e = (c) => rt.LANG_CATALOG.find((l) => l.code === c);
     assert(e('zh').tts === 'zh-CN' && e('zh').html === 'zh-Hans' && /Simplified/.test(e('zh').name), 'zh = Simplified Chinese (zh-Hans), TTS zh-CN');
@@ -288,8 +289,8 @@ async function run() {
     const d3 = Object.assign({}, ...db3.writes.map((x) => x.data));
     assert(d3.lang === 'hi' && d3.region && d3.region.country === 'SG', 'profile missing choices ← this device fills them; a picked region beats a detected one');
     const retiredProfile = loadI18n();
-    retiredProfile.hydrateLocaleFromProfile({ lang: 'ml' });
-    assert(retiredProfile.currentLang === 'en' && retiredProfile.localStorage.getItem('chaupaal_lang_retired_notice') === 'ml', 'a retired language on the profile → English + notice');
+    retiredProfile.hydrateLocaleFromProfile({ lang: 'or' });
+    assert(retiredProfile.currentLang === 'en' && retiredProfile.localStorage.getItem('chaupaal_lang_retired_notice') === 'or', 'a retired language on the profile → English + notice');
   }
 
   console.log('\nUI wiring');

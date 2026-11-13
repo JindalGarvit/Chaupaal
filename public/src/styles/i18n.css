@@ -10,22 +10,39 @@
 :root:lang(bn) { --font-script: 'Kohinoor Bangla', 'Bangla Sangam MN', 'Nirmala UI', 'Vrinda', 'CP Bengali'; }
 :root:lang(ta) { --font-script: 'Tamil Sangam MN', 'Nirmala UI', 'Latha', 'CP Tamil'; }
 :root:lang(te) { --font-script: 'Kohinoor Telugu', 'Telugu Sangam MN', 'Nirmala UI', 'Gautami', 'CP Telugu'; }
+:root:lang(pa) { --font-script: 'Gurmukhi Sangam MN', 'Gurmukhi MN', 'Nirmala UI', 'Raavi', 'CP Gurmukhi'; }
+:root:lang(kn) { --font-script: 'Kannada Sangam MN', 'Kannada MN', 'Nirmala UI', 'Tunga', 'CP Kannada'; }
+:root:lang(ml) { --font-script: 'Malayalam Sangam MN', 'Malayalam MN', 'Nirmala UI', 'Kartika', 'CP Malayalam'; }
 :root:lang(ar) { --font-script: 'SF Arabic', 'Geeza Pro', 'Segoe UI', 'Tahoma', 'CP Arabic'; }
 /* Urdu reads in Nastaliq; Naskh Arabic fonts are only the fallback. */
-:root:lang(ur) { --font-script: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', 'CP Nastaliq', 'Geeza Pro', 'Segoe UI'; }
+:root:lang(ur) {
+  --font-script: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Urdu Typesetting', 'CP Nastaliq', 'Geeza Pro', 'Segoe UI';
+  --font-naskh: 'Noto Naskh Arabic', 'CP Naskh', 'Geeza Pro', 'Segoe UI', 'Tahoma';
+}
 :root:lang(ja) { --font-script: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'CP JP'; }
 :root:lang(ko) { --font-script: 'Apple SD Gothic Neo', 'Malgun Gothic', 'CP KR'; }
 :root:lang(zh) { --font-script: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'CP SC'; }
 
-:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(ar), :lang(ur), :lang(ja), :lang(ko), :lang(zh)) {
+:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(pa), :lang(kn), :lang(ml), :lang(ar), :lang(ur), :lang(ja), :lang(ko), :lang(zh)) {
   --font-ui: 'Inter', var(--font-script), system-ui, -apple-system, sans-serif;
   --font-display: 'Space Grotesk', var(--font-script), 'Inter', system-ui, sans-serif;
 }
 
 /* Taller lines for scripts with stacked marks / tall ascenders; none of them use letter-spacing. */
-:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(ar)) body { line-height: 1.6; }
+:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(pa), :lang(kn), :lang(ml), :lang(ar)) body { line-height: 1.6; }
 :root:lang(ur) body { line-height: 2; }
-:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(ar), :lang(ur)) :is(body, body *) {
+/* Nastaliq's stacked ascenders/descenders need ~2× line-height; single-line compact UI (tab labels, chips,
+   badges, pills, toasts, game HUDs, score/timer rows) can't grow that tall — those use Naskh instead.
+   Running text, headings, sheets, buttons and inputs stay Nastaliq. */
+:root:lang(ur) :is(.bottom-tabs .tab-btn, .tab-label, [class$="-chip"], [class*="-chip "], .pill, [class*="pill "],
+  .badge, [class$="-badge"], [class*="-badge "], .cp-demo-badge, .notif-badge, .toast, .cp-toast, [class*="-toast"],
+  [class*="-hud"], .pk-score, .pk-timer, .pk-chip, .game-overlay .pk-btn, .scoreboard, [class*="-score"], [class*="-timer"],
+  .rp-rating-val, .quiz-cat-rating, .cp-lang-chip) {
+  font-family: 'Inter', var(--font-naskh), system-ui, sans-serif;
+  line-height: 1.5;
+}
+:root:lang(ur) :is(button, .btn, input, select, textarea) { line-height: 1.9; }
+:root:is(:lang(hi), :lang(mr), :lang(bn), :lang(ta), :lang(te), :lang(pa), :lang(kn), :lang(ml), :lang(ar), :lang(ur)) :is(body, body *) {
   letter-spacing: normal !important;
 }
 :root:is(:lang(ar), :lang(ur)) :is([class*="label"], [class*="eyebrow"], [class*="kicker"]) { text-transform: none; }

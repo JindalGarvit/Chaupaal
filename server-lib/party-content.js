@@ -23,7 +23,7 @@ const crypto = require('crypto');
 
 const OPS = ['card_flag', 'card_retired', 'ai_pack', 'narrate'];
 const CARD_GAMES = ['imposter', 'charades', 'mostlikely'];
-const LOCALES = ['en', 'hi', 'ta'];
+const LOCALES = ['en', 'hi', 'ta', 'ur'];
 const RETIRE_AT = 5;
 /** Per-pack overrides (a pack that draws more flags by design can ask for more votes). */
 const RETIRE_AT_PACK = {};

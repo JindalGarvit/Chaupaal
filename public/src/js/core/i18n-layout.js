@@ -19,8 +19,15 @@
     bn: { family: 'Noto Sans Bengali', alias: 'CP Bengali', weights: [400, 600, 700] },
     ta: { family: 'Noto Sans Tamil', alias: 'CP Tamil', weights: [400, 600, 700] },
     te: { family: 'Noto Sans Telugu', alias: 'CP Telugu', weights: [400, 600, 700] },
+    pa: { family: 'Noto Sans Gurmukhi', alias: 'CP Gurmukhi', weights: [400, 600, 700] },
+    kn: { family: 'Noto Sans Kannada', alias: 'CP Kannada', weights: [400, 600, 700] },
+    ml: { family: 'Noto Sans Malayalam', alias: 'CP Malayalam', weights: [400, 600, 700] },
     ar: { family: 'Noto Sans Arabic', alias: 'CP Arabic', weights: [400, 600, 700] },
-    ur: { family: 'Noto Nastaliq Urdu', alias: 'CP Nastaliq', weights: [400, 700] },
+    // Nastaliq for running text; Naskh for compact UI (chips, tabs, badges, HUDs) — see i18n.css.
+    ur: [
+      { family: 'Noto Nastaliq Urdu', alias: 'CP Nastaliq', weights: [400, 700] },
+      { family: 'Noto Naskh Arabic', alias: 'CP Naskh', weights: [400, 700] },
+    ],
     ja: { family: 'Noto Sans JP', alias: 'CP JP', weights: [400, 700] },
     ko: { family: 'Noto Sans KR', alias: 'CP KR', weights: [400, 700] },
     zh: { family: 'Noto Sans SC', alias: 'CP SC', weights: [400, 700] },
@@ -49,7 +56,11 @@
 
   function ensureForLang(lang) {
     const code = typeof normalizeLang === 'function' ? normalizeLang(lang) : lang;
-    const spec = SCRIPT_FONTS[code];
+    const specs = [].concat(SCRIPT_FONTS[code] || []);
+    return Promise.all(specs.map(ensureFace)).then((r) => r.some(Boolean));
+  }
+
+  function ensureFace(spec) {
     if (!spec || loaded.has(spec.alias) || typeof fetch !== 'function' || typeof document === 'undefined') return Promise.resolve(false);
     // Opt-in regions (Global L8): never ask Google Fonts (it sees the visitor's IP) — system fonts render the script.
     try {

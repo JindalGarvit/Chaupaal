@@ -309,6 +309,7 @@
         key: p.id + ':' + titleId(en),
         en,
         hi: hi || '',
+        loc: hi ? { hi } : {},
         difficulty: DIFF[d] || d,
         alts: alts ? alts.split(',').map((s) => s.trim()).filter(Boolean) : [],
         regional,
@@ -336,25 +337,49 @@
     return BY_KEY[key] || null;
   }
 
-  /** Fill one language from its locale file (category names + titles, matched by English). */
+  /** Languages whose overlay has been applied (in load order). */
+  const LANGS = [];
+
+  function setLocal(obj, lang, text) {
+    if (!obj || !text) return;
+    if (lang === 'hi') obj.hi = text;
+    obj.loc = Object.assign(obj.loc || {}, { [lang]: text });
+  }
+
+  /**
+   * Fill one language from its locale file (category names + titles, matched by English) into
+   * `loc[lang]`; Hindi is also mirrored on `.hi` for older rooms and saved state.
+   */
   function applyLocale(lang, data) {
-    if (!data || lang !== 'hi') return false;
+    const l = String(lang || '').toLowerCase();
+    if (!data || !/^[a-z]{2,3}$/.test(l) || l === 'en') return false;
     PACKS.forEach((p) => {
       const d = data.packs && data.packs[p.id];
       if (!d) return;
-      if (d.name) p.hi = d.name;
+      setLocal(p, l, d.name);
+      const items = d.items || {};
       p.titles.forEach((t) => {
-        if (d.items[t.en]) t.hi = d.items[t.en];
-        if (BY_KEY[t.key]) BY_KEY[t.key].hi = t.hi;
+        setLocal(t, l, items[t.en]);
+        const k = BY_KEY[t.key];
+        if (k) {
+          k.hi = t.hi;
+          k.loc = t.loc;
+        }
       });
     });
+    if (LANGS.indexOf(l) < 0) LANGS.push(l);
     return true;
   }
   if (typeof module === 'object' && module.exports) {
-    try {
-      applyLocale('hi', require('./locales/hi/charades-packs.hi.js'));
-    } catch (e) {}
+    [
+      ['hi', () => require('./locales/hi/charades-packs.hi.js')],
+      ['ur', () => require('./locales/ur/charades-packs.ur.js')],
+    ].forEach(([l, load]) => {
+      try {
+        applyLocale(l, load());
+      } catch (e) {}
+    });
   }
 
-  return { PACKS, DIFFICULTIES: ['easy', 'medium', 'hard'], getPack, defaultCategories, byKey, titleId, applyLocale };
+  return { PACKS, LANGS, DIFFICULTIES: ['easy', 'medium', 'hard'], getPack, defaultCategories, byKey, titleId, applyLocale };
 });

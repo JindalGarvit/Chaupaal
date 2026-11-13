@@ -848,34 +848,57 @@
     return BY_KEY[key] || null;
   }
 
-  /** Fill one language from its locale file (pack names, likely fragments, rather pairs — by English). */
-  /** Per-language UI flavour lines that ship with the content (e.g. the Hindi script toggle). */
+  /** Per-language UI flavour lines that ship with the content (e.g. the script toggle). */
   const UI = {};
+  /** Languages whose overlay has been applied (in load order). */
+  const LANGS = [];
+
+  function setLocal(obj, lang, text) {
+    if (!obj || !text) return;
+    if (lang === 'hi') obj.hi = text;
+    obj.loc = Object.assign(obj.loc || {}, { [lang]: text });
+  }
+
+  /**
+   * Fill one language from its locale file (pack names, likely fragments, rather pairs — by English)
+   * into `loc[lang]`; Hindi is also mirrored on `.hi` for older rooms and saved state.
+   */
   function applyLocale(lang, data) {
-    if (!data || lang !== 'hi') return false;
-    if (data.ui) UI[lang] = Object.assign({}, data.ui);
+    const l = String(lang || '').toLowerCase();
+    if (!data || !/^[a-z]{2,3}$/.test(l) || l === 'en') return false;
+    if (data.ui) UI[l] = Object.assign({}, data.ui);
     PACKS.forEach((p) => {
       const d = data.packs && data.packs[p.id];
       if (!d) return;
-      if (d.name) p.hi = d.name;
-      p.likely.forEach((it) => {
-        if (d.likely && d.likely[it.en]) it.hi = d.likely[it.en];
-      });
+      setLocal(p, l, d.name);
+      p.likely.forEach((it) => setLocal(it, l, d.likely && d.likely[it.en]));
       p.rather.forEach((it) => {
         const pair = d.rather && d.rather[it.a.en + '|' + it.b.en];
         if (pair) {
-          it.a.hi = pair[0];
-          it.b.hi = pair[1];
+          setLocal(it.a, l, pair[0]);
+          setLocal(it.b, l, pair[1]);
         }
       });
     });
+    if (LANGS.indexOf(l) < 0) LANGS.push(l);
     return true;
   }
   if (typeof module === 'object' && module.exports) {
-    try {
-      applyLocale('hi', require('./locales/hi/mostlikely-packs.hi.js'));
-    } catch (e) {}
+    [
+      ['hi', () => require('./locales/hi/mostlikely-packs.hi.js')],
+      ['ur', () => require('./locales/ur/mostlikely-packs.ur.js')],
+    ].forEach(([l, load]) => {
+      try {
+        applyLocale(l, load());
+      } catch (e) {}
+    });
   }
 
-  return { PACKS, FIELD, getPack, packsFor, defaultPacks, byKey, applyLocale, uiText: (lang, k) => (UI[lang] && UI[lang][k]) || '' };
+  function uiText(lang, k) {
+    const raw = String(lang || '').toLowerCase();
+    const l = raw === 'en-xa' || raw === 'ar-xb' ? 'en' : raw.split(/[-_]/)[0];
+    return (UI[l] && UI[l][k]) || '';
+  }
+
+  return { PACKS, LANGS, FIELD, getPack, packsFor, defaultPacks, byKey, applyLocale, uiText };
 });

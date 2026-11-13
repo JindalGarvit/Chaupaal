@@ -447,7 +447,7 @@
       roundRect(ctx, -k * 0.2, -k * 0.5, k * 0.4, k * 0.46, k * 0.06);
       paintKit(ctx, look.kickKit, -k * 0.2, -k * 0.5, k * 0.4, k * 0.46);
       ctx.fillStyle = look.kickKit.pattern === 'solid' ? look.kickKit.secondary : shade(look.kickKit.primary, -0.45);
-      ctx.font = t('games.penalty.800_round_px_space_grotesk_system', { round: Math.round(k * 0.17) });
+      ctx.font = `800 ${Math.round(k * 0.17)}px "Space Grotesk", system-ui, sans-serif`; // i18n-ignore (CSS font)
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('10', 0, -k * 0.27);
@@ -562,7 +562,7 @@
       ctx.save();
       ctx.translate(G.cx, G.top + G.gh * 0.45);
       ctx.scale(s, s);
-      ctx.font = t('games.penalty.900_round_px_space_grotesk_system', { round: Math.round(G.gw * 0.12) });
+      ctx.font = `900 ${Math.round(G.gw * 0.12)}px "Space Grotesk", system-ui, sans-serif`; // i18n-ignore (CSS font)
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.lineWidth = 6;

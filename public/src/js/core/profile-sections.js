@@ -314,7 +314,7 @@
         </label>
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:14px 0 8px;">${tHtml('profile.type')}</div>
         <div class="add-section-types" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          ${CUSTOM_TYPES.map((t,i)=>`<button type="button" class="btn${i===0?' btn--primary':''}" data-sec-type="${t.id}" style="text-align:left;padding:10px 12px;"><strong style="display:block;font-size:13px;">${t.label}</strong><span style="font-size:11px;color:var(--muted);font-weight:500;">${t.hint}</span></button>`).join('')}
+          ${CUSTOM_TYPES.map((t,i)=>`<button type="button" class="btn${i===0?' btn--primary':''}" data-sec-type="${t.id}" style="text-align:start;padding:10px 12px;"><strong style="display:block;font-size:13px;">${t.label}</strong><span style="font-size:11px;color:var(--muted);font-weight:500;">${t.hint}</span></button>`).join('')}
         </div>
         <p style="font-size:12px;color:var(--muted);margin:10px 0;">${tHtml('profile.creates_a_new_profile_tab_pull')}</p>
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin:14px 0 8px;">${tHtml('profile.visibility')}</div>

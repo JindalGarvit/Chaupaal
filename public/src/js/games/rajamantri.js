@@ -22,15 +22,17 @@
     return typeof normalizeLang === 'function' ? normalizeLang(raw) : raw;
   }
 
-  function isHi() {
-    return String(lang()).indexOf('hi') === 0;
+  /** Role / call text in my language's script when its overlay has one ('' otherwise). */
+  function localOf(item) {
+    return window.PartyCore && item ? PartyCore.localOf(item, lang()) : '';
   }
 
   /** The game keeps its origin role names; everyone else gets the English meaning beside them (Raja · King). */
   function roleName(roleId) {
     const r = Core().ROLES[roleId];
     if (!r) return '';
-    return isHi() && r.hi ? r.hi + ' · ' + r.en : r.en + ' · ' + r.gloss;
+    const loc = localOf(r);
+    return loc ? loc + ' · ' + r.en : r.en + ' · ' + r.gloss;
   }
 
   function roleIcon(roleId) {
@@ -39,10 +41,13 @@
 
   function callLine(guesserRole) {
     const c = Core().CALLS[guesserRole] || Core().CALLS.mantri;
-    return isHi() && c.hi ? c.hi + ' · ' + c.en : c.en + ' · ' + c.gloss;
+    const loc = localOf(c);
+    // c.en is already in my language when the catalog translates it — then the local line stands alone.
+    if (loc) return /[A-Za-z]/.test(c.en) ? loc + ' · ' + c.en : loc;
+    return c.en + ' · ' + c.gloss;
   }
 
-  const RAJA_QUOTE = () => (isHi() && Core().quoteHi() ? Core().quoteHi() : t('games.rajamantri.main_raja_hoon_i_m_the'));
+  const RAJA_QUOTE = () => Core().quoteFor(lang()) || t('games.rajamantri.main_raja_hoon_i_m_the');
 
   function loadSettings() {
     try {

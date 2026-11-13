@@ -564,8 +564,8 @@ const errCode = async (p) => {
     const imposterUi = read('public/src/js/games/imposter.js');
     const mlUi = read('public/src/js/games/mostlikely.js');
     const rmUi = read('public/src/js/games/rajamantri.js');
-    assert(!/English \+ हिंदी/.test(imposterUi) && /hiReader\(\)\s*\?/.test(imposterUi), 'Imposter: the “English + Hindi” toggle is gone for non-Hindi readers');
-    assert(/return isHi\(\) && hiUi\('toggle'\) \? `<button type="button" class="ml-lang"/.test(mlUi) && /isHi\(\) && hiUi\('defence'\) \? `<div class="ml-defence-hi">/.test(mlUi) && !DEVANAGARI.test(mlUi), 'Most Likely: A/अ toggle + Hindi defence line only for Hindi readers (from hi locale data)');
+    assert(!/English \+ हिंदी/.test(imposterUi) && /localReader\(\)\s*\?/.test(imposterUi), 'Imposter: the “also show English” toggle only for readers whose language has word translations');
+    assert(/return localReader\(\) && localUi\('toggle'\) \? `<button type="button" class="ml-lang"/.test(mlUi) && /localReader\(\) && localUi\('defence'\) \? `<div class="ml-defence-hi">/.test(mlUi) && !DEVANAGARI.test(mlUi), 'Most Likely: script toggle + defence line only for readers whose content overlay ships them');
     assert(MlPacks.uiText('hi', 'toggle') && !MlPacks.uiText('fr', 'toggle'), 'Most Likely: script toggle ships with the hi content overlay only');
     assert(/r\.en \+ ' · ' \+ r\.gloss/.test(rmUi) && /King/.test(rmUi) && /Minister/.test(rmUi), 'RMCS keeps its name with English role subtitles (Raja · King …) and an English how-to');
     const RM = require(path.join(root, 'public/src/js/games/rajamantri-core.js'));

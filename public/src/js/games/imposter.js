@@ -36,8 +36,11 @@
     } catch (e) {}
   }
 
-  function hiReader() {
-    return String(lang()).indexOf('hi') === 0;
+  /** A reader whose language has bundled word translations (the "also show English" toggle). */
+  function localReader() {
+    const CL = window.DangalContentLocales;
+    const l = CL ? CL.contentBase(contentLang()) : String(contentLang()).split('-')[0];
+    return l !== 'en' && (CL ? CL.available('imposter.packs', l) : l === 'hi');
   }
 
   /** Global core by default; regional add-ons follow the locale until the host picks for themselves. */
@@ -97,8 +100,9 @@
 
   function packLabel(p) {
     if (!p) return '';
-    if (!hiReader() || !p.hi) return p.en;
-    return bilingual() ? p.hi + ' · ' + p.en : p.hi;
+    const loc = Core().localOf(p, lang());
+    if (!loc) return p.en;
+    return bilingual() ? loc + ' · ' + p.en : loc;
   }
 
   /** Global core first, then the regional add-ons (always pickable, only mixed in when region = in). */
@@ -196,7 +200,7 @@
             <label class="pk-toggle"><input type="checkbox" data-region ${s.region === 'in' ? 'checked' : ''}> ${tHtml('games.imposter.mix_in_india_packs_bollywood_cricket')}</label>
           </div>
           ${
-            hiReader()
+            localReader()
               ? `<div class="pk-field"><label class="pk-toggle"><input type="checkbox" data-bilingual ${bilingual() ? 'checked' : ''}> ${tHtml('games.imposter.also_show_english_words')}</label></div>`
               : ''
           }

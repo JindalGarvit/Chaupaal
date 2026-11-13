@@ -45,13 +45,14 @@
     } catch (e) {}
   }
 
-  function isHi() {
-    return String(lang()).indexOf('hi') === 0;
+  /** A reader whose language ships content flavour lines (script toggle, defence line). */
+  function localReader() {
+    return !!localUi('toggle');
   }
 
-  function hiUi(k) {
+  function localUi(k) {
     const P = window.MOSTLIKELY_PACKS;
-    return P && typeof P.uiText === 'function' ? P.uiText('hi', k) : '';
+    return P && typeof P.uiText === 'function' ? P.uiText(lang(), k) : '';
   }
 
   function loadSettings(where) {
@@ -344,7 +345,7 @@
 
   /** Hindi readers can add the English line; everyone else just reads English. */
   function langBtn() {
-    return isHi() && hiUi('toggle') ? `<button type="button" class="ml-lang" data-lang-toggle aria-pressed="${both()}" aria-label="${tHtml('games.mostlikely.also_show_english')}">${esc(hiUi('toggle'))}</button>` : '';
+    return localReader() && localUi('toggle') ? `<button type="button" class="ml-lang" data-lang-toggle aria-pressed="${both()}" aria-label="${tHtml('games.mostlikely.also_show_english')}">${esc(localUi('toggle'))}</button>` : '';
   }
 
   function wireLang(body, rerender) {
@@ -592,7 +593,7 @@
   function defenceHtml(round, nm) {
     return `<div class="ml-defence">
       <div class="ml-defence-title">${tHtml('games.mostlikely.defend_yourself')}</div>
-      ${isHi() && hiUi('defence') ? `<div class="ml-defence-hi">${esc(hiUi('defence'))}</div>` : ''}
+      ${localReader() && localUi('defence') ? `<div class="ml-defence-hi">${esc(localUi('defence'))}</div>` : ''}
       <div class="pk-sub">${tHtml('games.mostlikely.make_your_case', { names: joinNames(round.result.top, nm), count: 15 })}</div>
       <div class="pk-timer" data-timer></div>
     </div>`;

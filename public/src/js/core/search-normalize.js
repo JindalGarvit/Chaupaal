@@ -2,9 +2,11 @@
  * Language-aware search normalisation (Global L4). Pure + deterministic; no external services.
  *
  *   fold(s)       NFKC (full-/half-width, ligatures, compatibility forms) → lowercase → Latin/Greek/
- *                 Cyrillic diacritics stripped (é→e, ñ→n; Indic matras / Arabic harakat are letters
- *                 and stay; Devanagari nukta dropped, chandrabindu → anusvara) → special Latin letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
- *                 curly quotes straightened, zero-width chars dropped, whitespace collapsed.
+ *                 Cyrillic diacritics stripped (é→e, ñ→n; Indic matras are letters and stay;
+ *                 Devanagari nukta dropped, chandrabindu → anusvara) → Arabic script (Urdu, Arabic,
+ *                 Persian): harakat, hamza/madda marks and tatweel dropped (أ إ آ → ا, ئ → ی, ؤ → و),
+ *                 ي ى → ی, ك → ک, ه ھ ة ۃ → ہ, Arabic-Indic digits → 0–9 → special Latin letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
+ *                 curly quotes straightened, zero-width chars (incl. ZWNJ) dropped, whitespace collapsed.
  *   translit(s)   Latin-script Hindi/Urdu words → English search terms ("khel" → "dangal games").
  *   expand(s)     fold(s) + the transliteration terms, for keyword matching.
  *   matches(hay, q) fold-aware substring test.
@@ -16,6 +18,9 @@
 
   const SPECIAL = { ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', ð: 'd', þ: 'th', ı: 'i', ħ: 'h' };
   const SPECIAL_RE = /[ßæœøłđðþıħ]/g;
+  // Arabic-script letters typed interchangeably (Arabic vs Urdu/Persian keyboards; heh shapes look alike).
+  const ARABIC = { 'ي': 'ی', 'ى': 'ی', 'ك': 'ک', 'ه': 'ہ', 'ھ': 'ہ', 'ة': 'ہ', 'ۃ': 'ہ', 'ە': 'ہ', 'ٱ': 'ا' };
+  const ARABIC_RE = /[يىكهھةۃەٱ]/g;
 
   function fold(input) {
     let s = String(input == null ? '' : input);
@@ -28,8 +33,16 @@
       // Only combining marks that follow a Latin/Greek/Cyrillic letter (U+0300–036F) — Devanagari,
       // Tamil, Bengali vowel signs and Arabic marks live in other blocks and are kept. Devanagari nukta
       // is dropped and chandrabindu folds to anusvara: people type खबर for ख़बर and सांप for साँप.
-      s = s.normalize('NFD').replace(/[\u0300-\u036f\u093c]/g, '').replace(/\u0901/g, '\u0902').normalize('NFC');
+      // Arabic harakat, madda/hamza marks (NFD splits أ ئ ۂ ۓ into letter + mark), superscript alef
+      // and Quranic marks are optional in typing and dropped.
+      s = s
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f\u093c\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e8\u06ea-\u06ed]/g, '')
+        .replace(/\u0901/g, '\u0902')
+        .normalize('NFC');
     } catch (e) {}
+    s = s.replace(ARABIC_RE, (c) => ARABIC[c]).replace(/[\u0640\u061c]/g, '');
+    s = s.replace(/[\u0660-\u0669\u06f0-\u06f9]/g, (c) => String(c.charCodeAt(0) & 0xf));
     s = s.replace(SPECIAL_RE, (c) => SPECIAL[c] || c);
     s = s.replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
     s = s.replace(/[\u2018\u2019\u201b\u2032]/g, "'").replace(/[\u201c\u201d\u201f\u2033]/g, '"');
@@ -57,11 +70,15 @@
     shatranj: 'chess', saanp: 'snakes', seedhi: 'ladders', paheli: 'puzzle', paheliyan: 'puzzle',
     duniya: 'duniya', baithak: 'baithak', peepal: 'peepal', dangal: 'dangal', mehfil: 'mehfil',
     sajha: 'share', bhejo: 'send', likho: 'write', roznamcha: 'journal',
+    // Roman Urdu spellings.
+    khabr: 'news akhbaar', khabrain: 'news akhbaar', akhbaar: 'akhbaar news',
+    tasweer: 'photo', tasaveer: 'photo', paigham: 'message', guftugu: 'chats', gupshup: 'chats',
+    mubarakbad: 'wish', salgirah: 'birthday wish', sawalat: 'question ask', moseeqi: 'music', mausiqi: 'music',
   };
 
   function words(s) {
     return fold(s)
-      .split(/[\s,.;:!?()[\]{}"/\\|]+/)
+      .split(/[\s,.;:!?()[\]{}"/\\|،؛؟۔]+/)
       .filter(Boolean);
   }
 

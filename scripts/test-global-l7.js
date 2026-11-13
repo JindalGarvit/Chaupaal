@@ -103,6 +103,9 @@ const AI_ON = { AI_FEATURES_ENABLED: 'true', ANTHROPIC_API_KEY: 'test-key-not-re
       ta: 'இன்று மாலை நாம் சந்திக்க வேண்டும் என்று நினைக்கிறேன்',
       te: 'ఈ సాయంత్రం మనం కలవాలని నేను అనుకుంటున్నాను',
       mr: 'मला वाटते की आज संध्याकाळी आपण भेटायला हवे, तुम्हाला काय वाटते आहे?',
+      pa: 'ਮੈਨੂੰ ਲੱਗਦਾ ਹੈ ਕਿ ਸਾਨੂੰ ਅੱਜ ਸ਼ਾਮ ਮਿਲਣਾ ਚਾਹੀਦਾ ਹੈ',
+      kn: 'ಇಂದು ಸಂಜೆ ನಾವು ಭೇಟಿಯಾಗಬೇಕು ಎಂದು ನನಗೆ ಅನಿಸುತ್ತದೆ',
+      ml: 'ഇന്ന് വൈകുന്നേരം നമ്മൾ കാണണമെന്ന് എനിക്ക് തോന്നുന്നു',
       ur: 'میرا خیال ہے کہ ہمیں آج شام ملنا چاہیے، آپ کیا کہتے ہیں؟',
       ar: 'أعتقد أننا يجب أن نلتقي في المقهى هذا المساء، ما رأيك؟',
       es: 'Creo que deberíamos vernos en el café esta noche, ¿qué te parece?',
@@ -118,7 +121,7 @@ const AI_ON = { AI_FEATURES_ENABLED: 'true', ANTHROPIC_API_KEY: 'test-key-not-re
       const r = D.detect(fx[k]);
       return r.lang !== k || r.confidence < 0.6;
     });
-    assert(Object.keys(fx).length === 16 && wrong.length === 0, `all 16 languages detected with confidence ≥ 0.6 (${wrong.join(', ') || 'all ok'})`);
+    assert(Object.keys(fx).length === 19 && wrong.length === 0, `all 19 languages detected with confidence ≥ 0.6 (${wrong.join(', ') || 'all ok'})`);
     const more = [
       ['es', 'No sé si voy a llegar a tiempo, lo siento mucho'],
       ['pt', 'Eu não sei se vou conseguir chegar a tempo'],

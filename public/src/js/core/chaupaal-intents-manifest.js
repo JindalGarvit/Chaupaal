@@ -46,11 +46,26 @@
 
   // —— Tabs ——
   const TAB_KEYWORDS = {
-    akhbaar: { hi: ['अख़बार', 'ख़बर', 'समाचार', 'न्यूज़', 'khabar', 'khabr', 'samachar', 'akhbar'] },
-    duniya: { hi: ['दुनिया', 'फ़ीड', 'होम फ़ीड', 'dunia', 'duniyaa', 'feed dekho'] },
-    peepal: { hi: ['पीपल', 'पीपल का पेड़', 'pipal', 'peepal ped', 'pipal ka ped'] },
-    baithak: { hi: ['बैठक', 'चैट', 'बातें', 'बातचीत', 'baatein', 'baaten', 'baatcheet', 'gupshup'] },
-    dangal: { hi: ['दंगल', 'खेल', 'गेम', 'khel', 'game khelo'] },
+    akhbaar: {
+      hi: ['अख़बार', 'ख़बर', 'समाचार', 'न्यूज़', 'khabar', 'khabr', 'samachar', 'akhbar'],
+      ur: ['اخبار', 'خبر', 'خبریں', 'نیوز', 'khabar', 'khabr', 'khabrein', 'akhbar'],
+    },
+    duniya: {
+      hi: ['दुनिया', 'फ़ीड', 'होम फ़ीड', 'dunia', 'duniyaa', 'feed dekho'],
+      ur: ['دنیا', 'فیڈ', 'ہوم فیڈ', 'dunya', 'dunia', 'feed dekho'],
+    },
+    peepal: {
+      hi: ['पीपल', 'पीपल का पेड़', 'pipal', 'peepal ped', 'pipal ka ped'],
+      ur: ['پیپل', 'پیپل کا درخت', 'pipal', 'peepal darakht', 'pipal ka darakht'],
+    },
+    baithak: {
+      hi: ['बैठक', 'चैट', 'बातें', 'बातचीत', 'baatein', 'baaten', 'baatcheet', 'gupshup'],
+      ur: ['بیٹھک', 'چیٹ', 'بات چیت', 'باتیں', 'گپ شپ', 'baat cheet', 'baatein', 'gupshup'],
+    },
+    dangal: {
+      hi: ['दंगल', 'खेल', 'गेम', 'khel', 'game khelo'],
+      ur: ['دنگل', 'کھیل', 'گیم', 'گیمز', 'khel', 'game khelo', 'khelein'],
+    },
   };
   ['akhbaar', 'duniya', 'peepal', 'baithak', 'dangal'].forEach((tab) => {
     reg({
@@ -74,6 +89,7 @@
     icon: 'users',
     keywords: kw(['khoj', 'find people', 'discover people'], {
       hi: ['खोज', 'लोग खोजें', 'नए लोग', 'लोगों से मिलें', 'log dhundo', 'log khojo', 'naye log'],
+      ur: ['کھوج', 'لوگ ڈھونڈیں', 'نئے لوگ', 'لوگوں سے ملیں', 'log dhundo', 'naye log', 'logon se milo'],
     }),
     phrases: [/find people/i, /open khoj/i],
     priority: 72,
@@ -88,7 +104,10 @@
     category: 'navigate',
     label: t('khoj.vriksha_discussions'),
     icon: 'message-circle',
-    keywords: kw(['vriksha', 'discussions'], { hi: ['वृक्ष', 'चर्चा', 'बहस', 'vriksh', 'charcha', 'bahas', 'behes'] }),
+    keywords: kw(['vriksha', 'discussions'], {
+      hi: ['वृक्ष', 'चर्चा', 'बहस', 'vriksh', 'charcha', 'bahas', 'behes'],
+      ur: ['ورکشا', 'بحث', 'مباحثہ', 'گفتگو', 'bahas', 'behes', 'guftugu'],
+    }),
     phrases: [/open vriksha/i],
     priority: 68,
     run: () => {
@@ -101,7 +120,10 @@
     category: 'navigate',
     label: t('common.mashhoor_popular'),
     icon: 'trending',
-    keywords: kw(['mashhoor', 'popular'], { hi: ['मशहूर', 'लोकप्रिय', 'ट्रेंडिंग', 'mashoor', 'mashur', 'lokpriya', 'trending'] }),
+    keywords: kw(['mashhoor', 'popular'], {
+      hi: ['मशहूर', 'लोकप्रिय', 'ट्रेंडिंग', 'mashoor', 'mashur', 'lokpriya', 'trending'],
+      ur: ['مشہور', 'مقبول', 'ٹرینڈنگ', 'mashoor', 'mashur', 'maqbool', 'trending'],
+    }),
     phrases: [/open mashhoor/i],
     priority: 68,
     run: () => {
@@ -116,6 +138,7 @@
     icon: 'search',
     keywords: kw(['search chaupaal', 'universal search', 'look up'], {
       hi: ['चौपाल में खोजें', 'सब खोजें', 'सर्च', 'ढूँढें', 'search karo', 'dhundo', 'dhoondo'],
+      ur: ['چوپال میں تلاش', 'سب تلاش کریں', 'سرچ', 'ڈھونڈیں', 'search karo', 'talash karo', 'dhundo'],
     }),
     phrases: [/search (for|chaupaal)/i],
     priority: 70,
@@ -126,9 +149,18 @@
 
   // —— Duniya modes ——
   const DUNIYA_KEYWORDS = {
-    vishwa: { hi: ['विश्व', 'दुनिया भर', 'सबकी पोस्ट', 'vishva', 'duniya bhar', 'sabki post'] },
-    lehar: { hi: ['लहर', 'रील', 'छोटे वीडियो', 'वीडियो', 'lahar', 'leher', 'reel dekho', 'chhote video'] },
-    prasidha: { hi: ['प्रसिद्ध', 'टॉप पोस्ट', 'सबसे पसंद', 'prasiddh', 'prasidh', 'top post'] },
+    vishwa: {
+      hi: ['विश्व', 'दुनिया भर', 'सबकी पोस्ट', 'vishva', 'duniya bhar', 'sabki post'],
+      ur: ['وشوا', 'پوری دنیا', 'دنیا بھر', 'سب کی پوسٹ', 'duniya bhar', 'puri duniya', 'sab ki post'],
+    },
+    lehar: {
+      hi: ['लहर', 'रील', 'छोटे वीडियो', 'वीडियो', 'lahar', 'leher', 'reel dekho', 'chhote video'],
+      ur: ['لہر', 'ریل', 'ریلز', 'مختصر ویڈیو', 'ویڈیو', 'lahar', 'leher', 'reel dekho'],
+    },
+    prasidha: {
+      hi: ['प्रसिद्ध', 'टॉप पोस्ट', 'सबसे पसंद', 'prasiddh', 'prasidh', 'top post'],
+      ur: ['پرسدھ', 'ٹاپ پوسٹ', 'سب سے پسندیدہ', 'top post', 'pasandeeda', 'sab se pasand'],
+    },
   };
   ['vishwa', 'lehar', 'prasidha'].forEach((mode) => {
     reg({
@@ -148,9 +180,9 @@
 
   // —— Baithak sections ——
   [
-    ['sambhavanayein', 'Sambhavanayein', /sambhavanayein/i, { hi: ['संभावनाएँ', 'नए कनेक्शन', 'अनजान लोगों की चैट', 'sambhavna', 'naye connection', 'anjaan chat'] }], // i18n-ignore (brand name / code)
-    ['sabha', 'Sabha', /open sabha/i, { hi: ['सभा', 'सारी चैट', 'सब चैट', 'saari chat', 'sari chat', 'sab chat'] }], // i18n-ignore (brand name / code)
-    ['mitra', 'Mitra', /open mitra/i, { hi: ['मित्र', 'दोस्त', 'दोस्तों की चैट', 'mitr', 'dost chat', 'doston ki chat'] }], // i18n-ignore (brand name / code)
+    ['sambhavanayein', 'Sambhavanayein', /sambhavanayein/i, { hi: ['संभावनाएँ', 'नए कनेक्शन', 'अनजान लोगों की चैट', 'sambhavna', 'naye connection', 'anjaan chat'], ur: ['سمبھاونائیں', 'نئے کنکشن', 'اجنبی چیٹ', 'انجان لوگوں سے چیٹ', 'naye connection', 'ajnabi chat', 'anjaan chat'] }], // i18n-ignore (brand name / code)
+    ['sabha', 'Sabha', /open sabha/i, { hi: ['सभा', 'सारी चैट', 'सब चैट', 'saari chat', 'sari chat', 'sab chat'], ur: ['سبھا', 'ساری چیٹس', 'سب چیٹ', 'تمام چیٹس', 'saari chat', 'sab chat', 'tamam chat'] }], // i18n-ignore (brand name / code)
+    ['mitra', 'Mitra', /open mitra/i, { hi: ['मित्र', 'दोस्त', 'दोस्तों की चैट', 'mitr', 'dost chat', 'doston ki chat'], ur: ['مترا', 'دوست', 'دوستوں کی چیٹ', 'یار', 'dost chat', 'doston ki chat', 'yaar'] }], // i18n-ignore (brand name / code)
   ].forEach(([sec, label, phrase, more]) => {
     reg({
       id: `baithak.${sec}`,
@@ -175,6 +207,7 @@
     icon: 'lock',
     keywords: kw(['hidden', 'vault', 'secret chats'], {
       hi: ['छिपी चैट', 'छिपी', 'छुपी', 'गुप्त', 'तिजोरी', 'chhupi', 'chupi', 'gupt chat'],
+      ur: ['چھپی چیٹ', 'خفیہ', 'خفیہ چیٹ', 'تجوری', 'chupi chat', 'khufia', 'khufiya chat'],
     }),
     phrases: [/hidden (chats|vault)/i],
     priority: 72,
@@ -191,7 +224,10 @@
     category: 'navigate',
     label: t('khoj.akhbaar_surkhiya'),
     icon: 'newspaper',
-    keywords: kw(['surkhiya', 'headlines'], { hi: ['सुर्ख़ियाँ', 'सुर्ख़ी', 'हेडलाइन', 'मुख्य ख़बरें', 'surkhi', 'headline', 'badi khabar'] }),
+    keywords: kw(['surkhiya', 'headlines'], {
+      hi: ['सुर्ख़ियाँ', 'सुर्ख़ी', 'हेडलाइन', 'मुख्य ख़बरें', 'surkhi', 'headline', 'badi khabar'],
+      ur: ['سرخیاں', 'سرخی', 'ہیڈ لائن', 'اہم خبریں', 'surkhiyan', 'headline', 'aham khabrein'],
+    }),
     phrases: [/surkhiya/i],
     priority: 68,
     run: () => {
@@ -205,7 +241,10 @@
     category: 'navigate',
     label: t('khoj.akhbaar_khabar'),
     icon: 'newspaper',
-    keywords: kw(['khabar', 'all news'], { hi: ['ख़बर', 'सारी ख़बरें', 'सभी ख़बरें', 'khabr', 'saari khabar', 'sab khabar'] }),
+    keywords: kw(['khabar', 'all news'], {
+      hi: ['ख़बर', 'सारी ख़बरें', 'सभी ख़बरें', 'khabr', 'saari khabar', 'sab khabar'],
+      ur: ['خبر', 'ساری خبریں', 'تمام خبریں', 'khabr', 'saari khabrein', 'tamam khabrein'],
+    }),
     phrases: [/all news/i, /khabar/i],
     priority: 65,
     run: () => {
@@ -219,7 +258,10 @@
     category: 'navigate',
     label: t('khoj.akhbaar_saathi'),
     icon: 'users',
-    keywords: kw(['saathi'], { hi: ['साथी', 'दोस्तों की अपडेट', 'अपनों की ख़बर', 'sathi', 'doston ki update', 'apno ki khabar'] }),
+    keywords: kw(['saathi'], {
+      hi: ['साथी', 'दोस्तों की अपडेट', 'अपनों की ख़बर', 'sathi', 'doston ki update', 'apno ki khabar'],
+      ur: ['ساتھی', 'دوستوں کی اپ ڈیٹ', 'اپنوں کی خبر', 'sathi', 'doston ki update', 'apno ki khabar'],
+    }),
     phrases: [/saathi/i],
     priority: 65,
     run: () => {
@@ -233,7 +275,10 @@
     category: 'navigate',
     label: t('khoj.akhbaar_safar'),
     icon: 'map',
-    keywords: kw(['safar', 'journey'], { hi: ['सफ़र', 'यात्रा', 'स्ट्रीक', 'yatra', 'mera safar', 'safr'] }),
+    keywords: kw(['safar', 'journey'], {
+      hi: ['सफ़र', 'यात्रा', 'स्ट्रीक', 'yatra', 'mera safar', 'safr'],
+      ur: ['سفر', 'میرا سفر', 'اسٹریک', 'mera safar', 'safr', 'streak'],
+    }),
     phrases: [/safar/i],
     priority: 65,
     run: () => {
@@ -250,6 +295,7 @@
     icon: 'plus',
     keywords: kw(['add category', 'new category'], {
       hi: ['कैटेगरी जोड़ें', 'नई कैटेगरी', 'श्रेणी जोड़ें', 'नई श्रेणी', 'category jodo', 'nayi category', 'naya topic'],
+      ur: ['کیٹیگری شامل کریں', 'نئی کیٹیگری', 'زمرہ شامل کریں', 'نیا موضوع', 'category add karo', 'nayi category', 'naya mauzu'],
     }),
     phrases: [/add (a )?category/i],
     priority: 60,
@@ -268,7 +314,10 @@
     category: 'navigate',
     label: t('khoj.dangal_khel'),
     icon: 'gamepad',
-    keywords: kw(['khel', 'game of the day', 'gotd'], { hi: ['आज का गेम', 'आज का खेल', 'रोज़ का गेम', 'aaj ka game', 'aaj ka khel', 'roz ka game'] }),
+    keywords: kw(['khel', 'game of the day', 'gotd'], {
+      hi: ['आज का गेम', 'आज का खेल', 'रोज़ का गेम', 'aaj ka game', 'aaj ka khel', 'roz ka game'],
+      ur: ['آج کا گیم', 'آج کا کھیل', 'روز کا گیم', 'aaj ka game', 'aaj ka khel', 'roz ka game'],
+    }),
     phrases: [/game of the day/i, /gotd/i],
     priority: 68,
     run: () => {
@@ -281,7 +330,10 @@
     category: 'navigate',
     label: t('khoj.dangal_manch'),
     icon: 'library',
-    keywords: kw(['manch', 'library'], { hi: ['मंच', 'सारे गेम', 'सब गेम', 'गेम लाइब्रेरी', 'saare game', 'sare game', 'sab game'] }),
+    keywords: kw(['manch', 'library'], {
+      hi: ['मंच', 'सारे गेम', 'सब गेम', 'गेम लाइब्रेरी', 'saare game', 'sare game', 'sab game'],
+      ur: ['منچ', 'سارے گیمز', 'سب گیمز', 'گیم لائبریری', 'saare game', 'sab games', 'game library'],
+    }),
     phrases: [/open manch/i],
     priority: 65,
     run: () => {
@@ -294,7 +346,10 @@
     category: 'navigate',
     label: t('khoj.dangal_maidan'),
     icon: 'play',
-    keywords: kw(['maidan', 'resume game'], { hi: ['मैदान', 'गेम जारी रखें', 'अधूरा गेम', 'maidaan', 'game jaari', 'adhoora game', 'adhura game'] }),
+    keywords: kw(['maidan', 'resume game'], {
+      hi: ['मैदान', 'गेम जारी रखें', 'अधूरा गेम', 'maidaan', 'game jaari', 'adhoora game', 'adhura game'],
+      ur: ['میدان', 'گیم جاری رکھیں', 'ادھورا گیم', 'maidaan', 'game jaari', 'adhoora game', 'adhura game'],
+    }),
     phrases: [/resume (my )?game/i],
     priority: 65,
     run: () => {
@@ -307,7 +362,10 @@
     category: 'navigate',
     label: t('khoj.dangal_tarakki'),
     icon: 'chart',
-    keywords: kw(['tarakki', 'progress'], { hi: ['तरक़्क़ी', 'प्रगति', 'आँकड़े', 'taraqqi', 'tarakkee', 'pragati', 'progress dekho'] }),
+    keywords: kw(['tarakki', 'progress'], {
+      hi: ['तरक़्क़ी', 'प्रगति', 'आँकड़े', 'taraqqi', 'tarakkee', 'pragati', 'progress dekho'],
+      ur: ['ترقی', 'پیش رفت', 'اعداد و شمار', 'taraqqi', 'taraqi', 'progress dekho'],
+    }),
     phrases: [/tarakki/i],
     priority: 62,
     run: () => {
@@ -323,7 +381,10 @@
     category: 'navigate',
     label: t('khoj.challenge_a_friend'),
     icon: 'swords',
-    keywords: kw(['challenge', 'duel'], { hi: ['चुनौती', 'चैलेंज', 'टक्कर', 'ललकारो', 'chunauti', 'challenge karo', 'takkar'] }),
+    keywords: kw(['challenge', 'duel'], {
+      hi: ['चुनौती', 'चैलेंज', 'टक्कर', 'ललकारो', 'chunauti', 'challenge karo', 'takkar'],
+      ur: ['چیلنج', 'ٹکر', 'للکارو', 'مقابلہ کرو', 'challenge karo', 'takkar', 'lalkaro'],
+    }),
     phrases: [/challenge (someone|friend)/i],
     priority: 70,
     run: () => {
@@ -341,6 +402,7 @@
     icon: 'image',
     keywords: kw(['post', 'photo', 'upload', 'duniya post', 'share photo'], {
       hi: ['पोस्ट', 'फ़ोटो', 'तस्वीर', 'अपलोड', 'naya post', 'nayi post', 'photo dalo', 'post karo'],
+      ur: ['پوسٹ', 'تصویر', 'فوٹو', 'اپ لوڈ', 'nayi post', 'post karo', 'photo dalo', 'tasveer'],
     }),
     phrases: [/post (a |on )?duniya/i, /share (a )?photo/i, /create (a )?post/i],
     priority: 82,
@@ -356,7 +418,10 @@
     category: 'create',
     label: t('khoj.post_a_duniya_story'),
     icon: 'circle',
-    keywords: kw(['story', 'stories', 'duniya story'], { hi: ['स्टोरी', 'कहानी', 'नई स्टोरी', 'kahani', 'story dalo', 'story lagao'] }),
+    keywords: kw(['story', 'stories', 'duniya story'], {
+      hi: ['स्टोरी', 'कहानी', 'नई स्टोरी', 'kahani', 'story dalo', 'story lagao'],
+      ur: ['اسٹوری', 'کہانی', 'نئی اسٹوری', 'kahani', 'story dalo', 'story lagao'],
+    }),
     phrases: [/post (a )?story/i, /add (a )?story/i, /new story/i],
     priority: 80,
     requiresAuth: true,
@@ -373,7 +438,10 @@
     category: 'create',
     label: t('common.shortcut_baithak_instant'),
     icon: 'zap',
-    keywords: kw(['split', 'baithak story', 'status'], { hi: ['स्प्लिट', 'स्टेटस', 'नया स्प्लिट', 'status lagao', 'split dalo', 'naya split'] }),
+    keywords: kw(['split', 'baithak story', 'status'], {
+      hi: ['स्प्लिट', 'स्टेटस', 'नया स्प्लिट', 'status lagao', 'split dalo', 'naya split'],
+      ur: ['اسپلٹ', 'اسٹیٹس', 'نیا اسپلٹ', 'status lagao', 'split dalo', 'naya split'],
+    }),
     phrases: [/new split/i, /baithak story/i, /leave a split/i],
     priority: 78,
     requiresAuth: true,
@@ -390,7 +458,10 @@
     category: 'create',
     label: t('khoj.ask_on_peepal'),
     icon: 'message-circle',
-    keywords: kw(['ask', 'question', 'discuss', 'peepal'], { hi: ['सवाल', 'पूछ', 'चर्चा करें', 'राय', 'sawal', 'sawaal', 'poochh', 'puch'] }),
+    keywords: kw(['ask', 'question', 'discuss', 'peepal'], {
+      hi: ['सवाल', 'पूछ', 'चर्चा करें', 'राय', 'sawal', 'sawaal', 'poochh', 'puch'],
+      ur: ['سوال', 'پوچھیں', 'رائے', 'بحث کریں', 'sawal', 'sawaal', 'poocho', 'raye'],
+    }),
     phrases: [/ask (on )?peepal/i, /post (a )?question/i, /discuss something/i],
     priority: 78,
     requiresAuth: true,
@@ -404,7 +475,10 @@
     category: 'create',
     label: t('khoj.peepal_form_poll'),
     icon: 'list',
-    keywords: kw(['form', 'poll', 'survey'], { hi: ['पोल', 'सर्वे', 'फ़ॉर्म', 'वोटिंग', 'मतदान', 'poll banao', 'survey karo', 'voting karao'] }),
+    keywords: kw(['form', 'poll', 'survey'], {
+      hi: ['पोल', 'सर्वे', 'फ़ॉर्म', 'वोटिंग', 'मतदान', 'poll banao', 'survey karo', 'voting karao'],
+      ur: ['پول', 'سروے', 'فارم', 'ووٹنگ', 'رائے شماری', 'poll banao', 'survey karo', 'voting karao'],
+    }),
     phrases: [/create (a )?(form|poll)/i],
     priority: 70,
     requiresAuth: true,
@@ -423,6 +497,7 @@
     icon: 'users',
     keywords: kw(['mehfil', 'watch party', 'group watch'], {
       hi: ['महफ़िल', 'साथ देखें', 'मिलकर देखें', 'वॉच पार्टी', 'mahfil', 'saath dekho', 'milkar dekho', 'mehfil jamao'],
+      ur: ['محفل', 'ساتھ دیکھیں', 'مل کر دیکھیں', 'واچ پارٹی', 'mahfil', 'saath dekho', 'mil kar dekho', 'mehfil sajao'],
     }),
     phrases: [/start mehfil/i, /watch together/i],
     priority: 72,
@@ -445,7 +520,10 @@
     category: 'create',
     label: t('khoj.muqabala_challenge'),
     icon: 'swords',
-    keywords: kw(['muqabala', 'quiz challenge', 'trivia'], { hi: ['मुक़ाबला', 'क्विज़ चैलेंज', 'ज्ञान मुक़ाबला', 'muqabla', 'mukabla', 'mukabala', 'quiz takkar'] }),
+    keywords: kw(['muqabala', 'quiz challenge', 'trivia'], {
+      hi: ['मुक़ाबला', 'क्विज़ चैलेंज', 'ज्ञान मुक़ाबला', 'muqabla', 'mukabla', 'mukabala', 'quiz takkar'],
+      ur: ['مقابلہ', 'کوئز چیلنج', 'معلوماتی مقابلہ', 'muqabla', 'mukabla', 'quiz muqabla'],
+    }),
     phrases: [/muqabala/i, /quiz challenge/i],
     priority: 75,
     requiresAuth: true,
@@ -463,6 +541,7 @@
     icon: 'gamepad',
     keywords: kw(['play', 'start game', 'pick game', 'chess', 'ludo'], {
       hi: ['खेलें', 'गेम खेलो', 'गेम शुरू', 'शतरंज', 'लूडो', 'khelein', 'game shuru', 'game chuno', 'shatranj'],
+      ur: ['کھیلیں', 'گیم کھیلو', 'گیم شروع', 'شطرنج', 'لوڈو', 'khelein', 'game shuru', 'shatranj'],
     }),
     phrases: [/play (chess|ludo|game)/i, /start (a )?game/i],
     priority: 76,
@@ -482,6 +561,7 @@
     icon: 'heart',
     keywords: kw(['wish', 'birthday', 'greet', 'congratulate', 'anniversary', 'happy birthday'], {
       hi: ['बधाई', 'जन्मदिन', 'बर्थडे', 'शुभकामनाएँ', 'मुबारक', 'badhai', 'janamdin', 'shubhkamna'],
+      ur: ['مبارکباد', 'سالگرہ', 'برتھ ڈے', 'نیک خواہشات', 'مبارک', 'mubarak', 'mubarakbad', 'salgirah'],
     }),
     phrases: [/wish (my )?friend/i, /happy birthday/i, /send (a )?greeting/i],
     priority: 85,
@@ -500,6 +580,7 @@
     icon: 'message',
     keywords: kw(['message', 'dm', 'text friend', 'chat with'], {
       hi: ['मैसेज', 'संदेश', 'दोस्त को मैसेज', 'message karo', 'msg karo', 'sandesh bhejo', 'dost ko msg'],
+      ur: ['میسج', 'پیغام', 'دوست کو میسج', 'message karo', 'msg karo', 'paigham bhejo', 'dost ko msg'],
     }),
     phrases: [/message (a |my )?friend/i, /dm (someone|friend)/i],
     priority: 80,
@@ -517,7 +598,10 @@
     category: 'social',
     label: t('common.shortcut_baithak_search'),
     icon: 'users',
-    keywords: kw(['find people', 'meet people', 'khoj'], { hi: ['दोस्त', 'नए दोस्त', 'लोग ढूँढें', 'लोगों से मिलें', 'dost', 'dosth', 'naye dost', 'log dhundo'] }),
+    keywords: kw(['find people', 'meet people', 'khoj'], {
+      hi: ['दोस्त', 'नए दोस्त', 'लोग ढूँढें', 'लोगों से मिलें', 'dost', 'dosth', 'naye dost', 'log dhundo'],
+      ur: ['دوست', 'نئے دوست', 'لوگ ڈھونڈیں', 'لوگوں سے ملیں', 'dost', 'naye dost', 'log dhundo', 'dost banao'],
+    }),
     phrases: [/find (new )?people/i, /meet someone/i],
     priority: 78,
     run: () => {
@@ -533,7 +617,10 @@
     category: 'social',
     label: t('khoj.invite_friends'),
     icon: 'share',
-    keywords: kw(['invite', 'share app', 'refer'], { hi: ['इनवाइट', 'बुला', 'न्योता', 'ऐप शेयर', 'invite karo', 'bulao', 'dost bulao', 'nyota'] }),
+    keywords: kw(['invite', 'share app', 'refer'], {
+      hi: ['इनवाइट', 'बुला', 'न्योता', 'ऐप शेयर', 'invite karo', 'bulao', 'dost bulao', 'nyota'],
+      ur: ['انوائٹ', 'بلائیں', 'دعوت', 'ایپ شیئر', 'invite karo', 'bulao', 'dost bulao', 'dawat'],
+    }),
     phrases: [/invite (friends|someone)/i],
     priority: 70,
     run: () => {
@@ -548,7 +635,10 @@
     category: 'profile',
     label: t('khoj.open_your_profile'),
     icon: 'user',
-    keywords: kw(['my profile', 'open profile'], { hi: ['प्रोफ़ाइल', 'मेरी प्रोफ़ाइल', 'मेरा प्रोफ़ाइल', 'profile dekho', 'meri profile', 'mera profile'] }),
+    keywords: kw(['my profile', 'open profile'], {
+      hi: ['प्रोफ़ाइल', 'मेरी प्रोफ़ाइल', 'मेरा प्रोफ़ाइल', 'profile dekho', 'meri profile', 'mera profile'],
+      ur: ['پروفائل', 'میری پروفائل', 'میرا پروفائل', 'profile dekho', 'meri profile', 'mera profile'],
+    }),
     phrases: [/open (my )?profile/i],
     priority: 72,
     requiresAuth: true,
@@ -567,6 +657,7 @@
     icon: 'pen',
     keywords: kw(['edit profile', 'update profile'], {
       hi: ['प्रोफ़ाइल बदल', 'प्रोफ़ाइल एडिट', 'बदल', 'नाम बदल', 'profile badlo', 'badlo', 'profile edit karo'],
+      ur: ['پروفائل بدلیں', 'پروفائل ایڈٹ', 'نام بدلیں', 'ترمیم', 'profile badlo', 'badlo', 'profile edit karo'],
     }),
     phrases: [/edit (my )?profile/i],
     priority: 70,
@@ -584,7 +675,10 @@
     category: 'profile',
     label: t('common.open_archive'),
     icon: 'archive',
-    keywords: kw(['archive', 'my posts', 'saved posts'], { hi: ['आर्काइव', 'संग्रह', 'पुरानी पोस्ट', 'मेरी पोस्ट', 'archive dekho', 'purani post', 'meri post'] }),
+    keywords: kw(['archive', 'my posts', 'saved posts'], {
+      hi: ['आर्काइव', 'संग्रह', 'पुरानी पोस्ट', 'मेरी पोस्ट', 'archive dekho', 'purani post', 'meri post'],
+      ur: ['آرکائیو', 'پرانی پوسٹ', 'میری پوسٹ', 'محفوظ پوسٹ', 'archive dekho', 'purani post', 'meri post'],
+    }),
     phrases: [/open (my )?archive/i, /see (my )?archive/i],
     priority: 80,
     requiresAuth: true,
@@ -598,7 +692,10 @@
     category: 'profile',
     label: t('khoj.private_journal'),
     icon: 'book',
-    keywords: kw(['journal', 'diary', 'private notes'], { hi: ['जर्नल', 'डायरी', 'रोज़नामचा', 'निजी नोट्स', 'dayri', 'diary likho', 'roznamcha'] }),
+    keywords: kw(['journal', 'diary', 'private notes'], {
+      hi: ['जर्नल', 'डायरी', 'रोज़नामचा', 'निजी नोट्स', 'dayri', 'diary likho', 'roznamcha'],
+      ur: ['جرنل', 'ڈائری', 'روزنامچہ', 'نجی نوٹس', 'diary likho', 'roznamcha', 'zaati notes'],
+    }),
     phrases: [/open (my )?journal/i, /write (in )?journal/i],
     priority: 78,
     requiresAuth: true,
@@ -612,7 +709,10 @@
     category: 'profile',
     label: t('common.settings'),
     icon: 'settings',
-    keywords: kw(['settings', 'preferences'], { hi: ['सेटिंग्स', 'सेटिंग', 'भाषा', 'प्राइवेसी', 'setting', 'setting kholo', 'bhasha'] }),
+    keywords: kw(['settings', 'preferences'], {
+      hi: ['सेटिंग्स', 'सेटिंग', 'भाषा', 'प्राइवेसी', 'setting', 'setting kholo', 'bhasha'],
+      ur: ['سیٹنگز', 'سیٹنگ', 'ترتیبات', 'زبان', 'پرائیویسی', 'setting', 'setting kholo', 'zaban'],
+    }),
     phrases: [/open settings/i],
     priority: 75,
     run: () => {
@@ -624,7 +724,10 @@
     category: 'profile',
     label: t('common.notifications'),
     icon: 'bell',
-    keywords: kw(['notifications', 'alerts'], { hi: ['नोटिफ़िकेशन', 'सूचना', 'अलर्ट', 'घंटी', 'suchna', 'soochna', 'notification dekho'] }),
+    keywords: kw(['notifications', 'alerts'], {
+      hi: ['नोटिफ़िकेशन', 'सूचना', 'अलर्ट', 'घंटी', 'suchna', 'soochna', 'notification dekho'],
+      ur: ['نوٹیفکیشن', 'اطلاعات', 'اطلاع', 'الرٹ', 'ittila', 'ittilaat', 'notification dekho'],
+    }),
     phrases: [/open notifications/i, /notification (inbox|center)/i],
     priority: 72,
     requiresAuth: true,
@@ -638,7 +741,10 @@
     category: 'profile',
     label: t('khoj.chaupaal_money'),
     icon: 'wallet',
-    keywords: kw(['money', 'balance', 'pradhan', 'wallet', 'account'], { hi: ['पैसे', 'पैसा', 'बैलेंस', 'वॉलेट', 'प्रधान', 'paise', 'paisa', 'khata'] }),
+    keywords: kw(['money', 'balance', 'pradhan', 'wallet', 'account'], {
+      hi: ['पैसे', 'पैसा', 'बैलेंस', 'वॉलेट', 'प्रधान', 'paise', 'paisa', 'khata'],
+      ur: ['پیسے', 'پیسہ', 'بیلنس', 'والٹ', 'کھاتہ', 'paise', 'paisa', 'khata'],
+    }),
     phrases: [/chaupaal money/i, /my balance/i],
     priority: 78,
     requiresAuth: true,
@@ -654,6 +760,7 @@
     icon: 'star',
     keywords: kw(['membership', 'subscribe', 'upgrade', 'premium', 'sarpanch'], {
       hi: ['मेंबरशिप', 'सदस्यता', 'प्रीमियम', 'सब्सक्रिप्शन', 'अपग्रेड', 'सरपंच', 'sadasyata', 'premium lo'],
+      ur: ['ممبرشپ', 'رکنیت', 'پریمیم', 'سبسکرپشن', 'اپ گریڈ', 'rukniyat', 'premium lo', 'membership lo'],
     }),
     phrases: [/see membership/i, /upgrade (my )?plan/i],
     priority: 78,
@@ -670,7 +777,10 @@
     category: 'help',
     label: t('common.search_chaupaal'),
     icon: 'search',
-    keywords: kw(['search'], { hi: ['खोज', 'ढूँढो', 'तलाश', 'talaash', 'talash', 'khojna', 'dhoondhna'] }),
+    keywords: kw(['search'], {
+      hi: ['खोज', 'ढूँढो', 'तलाश', 'talaash', 'talash', 'khojna', 'dhoondhna'],
+      ur: ['تلاش', 'ڈھونڈو', 'کھوج', 'talash', 'talaash', 'dhoondo', 'dhundo'],
+    }),
     phrases: [/^search\b/i],
     priority: 55,
     run: () => {
@@ -682,7 +792,10 @@
     category: 'help',
     label: t('common.feedback_send'),
     icon: 'message-square',
-    keywords: kw(['feedback', 'bug', 'report', 'complaint'], { hi: ['फ़ीडबैक', 'शिकायत', 'सुझाव', 'बग', 'shikayat', 'sujhav', 'gadbad', 'galti batao'] }),
+    keywords: kw(['feedback', 'bug', 'report', 'complaint'], {
+      hi: ['फ़ीडबैक', 'शिकायत', 'सुझाव', 'बग', 'shikayat', 'sujhav', 'gadbad', 'galti batao'],
+      ur: ['فیڈبیک', 'شکایت', 'تجویز', 'مسئلہ', 'shikayat', 'tajweez', 'ghalti batao', 'masla'],
+    }),
     phrases: [/send feedback/i, /report (a )?bug/i],
     priority: 75,
     run: () => {
@@ -696,7 +809,10 @@
     category: 'help',
     label: t('khoj.music_hub'),
     icon: 'music',
-    keywords: kw(['music', 'songs', 'radio'], { hi: ['म्यूज़िक', 'गाना', 'गाने', 'संगीत', 'gaana', 'gaane', 'gana', 'sangeet'] }),
+    keywords: kw(['music', 'songs', 'radio'], {
+      hi: ['म्यूज़िक', 'गाना', 'गाने', 'संगीत', 'gaana', 'gaane', 'gana', 'sangeet'],
+      ur: ['میوزک', 'گانا', 'گانے', 'موسیقی', 'gaana', 'gana', 'gaane', 'mausiqi'],
+    }),
     phrases: [/open music/i, /music hub/i],
     priority: 65,
     run: () => {
@@ -709,7 +825,10 @@
     category: 'help',
     label: t('khoj.what_can_you_do'),
     icon: 'help-circle',
-    keywords: kw(['help', 'what can you do', 'commands', 'menu'], { hi: ['मदद', 'सहायता', 'क्या कर सकते हो', 'कमांड', 'madad', 'help karo', 'kya kar sakte ho'] }),
+    keywords: kw(['help', 'what can you do', 'commands', 'menu'], {
+      hi: ['मदद', 'सहायता', 'क्या कर सकते हो', 'कमांड', 'madad', 'help karo', 'kya kar sakte ho'],
+      ur: ['مدد', 'رہنمائی', 'کیا کر سکتے ہو', 'کمانڈ', 'madad', 'madad karo', 'kya kar sakte ho'],
+    }),
     phrases: [/what can you do/i, /^help$/i, /show (me )?options/i],
     priority: 90,
     run: () => {
@@ -748,6 +867,7 @@
       icon: 'gamepad',
       keywords: kw(['game with friends', 'party game', 'daily puzzle', 'daily word game', 'card game'], {
         hi: ['दोस्तों के साथ गेम', 'पार्टी गेम', 'पत्तों का गेम', 'ताश का खेल', 'रोज़ की पहेली', 'doston ke saath game', 'taash khel', 'roz ki paheli'],
+        ur: ['دوستوں کے ساتھ گیم', 'پارٹی گیم', 'تاش کا کھیل', 'پتوں کا گیم', 'روز کی پہیلی', 'doston ke saath game', 'taash khel', 'roz ki paheli'],
       }),
       phrases: [/\b(play|start)\b.+\b(with friends|game|puzzle)\b/i, /\bdaily (word|puzzle|quiz)\b/i],
       priority: 75,

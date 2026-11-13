@@ -180,7 +180,7 @@ load(REGIONAL, true);
  * A language counts as available once its core packs reach LOCALE_MIN words.
  */
 const LOCALE_MIN = 600;
-const LOCALE_FILES = { hi: () => require('./scribble-words.hi.js') };
+const LOCALE_FILES = { hi: () => require('./scribble-words.hi.js'), ur: () => require('./scribble-words.ur.js') };
 const LOCALE_PACKS = {};
 Object.keys(LOCALE_FILES).forEach((lang) => {
   let src = null;

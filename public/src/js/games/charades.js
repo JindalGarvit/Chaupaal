@@ -32,22 +32,18 @@
     return typeof normalizeLang === 'function' ? normalizeLang(raw) : raw;
   }
 
-  function isHi() {
-    return String(lang()).indexOf('hi') === 0;
-  }
-
   /** Titles show in the room content language (my UI language in Pass & Play), English beside them. */
   function contentLang() {
     return Kit() && Kit().roomContentLang ? Kit().roomContentLang() : lang();
   }
   function primaryOf(t) {
-    const l = String(contentLang()).split('-')[0];
-    return (l !== 'en' && t[l]) || t.en;
+    return (window.PartyCore && PartyCore.localOf(t, contentLang())) || t.en;
   }
   const DIFF = { easy: t('games.charades.easy'), medium: t('games.charades.medium'), hard: t('games.charades.hard') };
 
   function packLabel(p) {
-    return p ? (isHi() && p.hi ? p.hi + ' · ' + p.en : p.en) : '';
+    const loc = p && window.PartyCore ? PartyCore.localOf(p, lang()) : '';
+    return p ? (loc ? loc + ' · ' + p.en : p.en) : '';
   }
 
   /** Global core by default; India add-ons follow the locale until the host picks categories. */

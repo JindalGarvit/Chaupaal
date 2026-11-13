@@ -128,14 +128,45 @@ function gtx(key, en, params) {
     return String(lang || 'en').toLowerCase().indexOf('hi') === 0;
   }
 
+  /** Content language base code ('ur-PK' → 'ur'); pseudo-locales (en-XA / ar-XB) read English. */
+  function baseLang(lang) {
+    const raw = String(lang == null ? 'en' : lang).toLowerCase();
+    if (raw === 'en-xa' || raw === 'ar-xb') return 'en';
+    return raw.split(/[-_]/)[0] || 'en';
+  }
+
   /**
-   * Label in the reader's language. Translations are locale data: only a Hindi reader sees the
-   * Hindi label (English when there is none); `both` adds the English after it for that reader.
+   * An item's text in one content language — locale overlays fill `item.loc[lang]` (Hindi is also
+   * mirrored on `item.hi` for older rooms / saved state). '' for English or when there is none.
+   */
+  function localOf(item, lang) {
+    if (!item) return '';
+    const l = baseLang(lang);
+    if (l === 'en') return '';
+    const v = (item.loc && item.loc[l]) || (l === 'hi' ? item.hi : '');
+    return typeof v === 'string' ? v : '';
+  }
+
+  /** Every bundled translation of an item (older rooms with no content language accept all of them). */
+  function allLocals(item) {
+    if (!item) return [];
+    const out = item.hi ? [item.hi] : [];
+    Object.keys(item.loc || {}).forEach((l) => {
+      const v = item.loc[l];
+      if (typeof v === 'string' && v && out.indexOf(v) < 0) out.push(v);
+    });
+    return out;
+  }
+
+  /**
+   * Label in the reader's language. Translations are locale data: only a reader of that language
+   * sees it (English when there is none); `both` adds the English after it for that reader.
    */
   function bilingualLabel(item, lang, both) {
     if (!item) return '';
-    if (!isHindi(lang) || !item.hi) return item.en || item.hi || '';
-    return both && item.en && item.en !== item.hi ? item.hi + ' · ' + item.en : item.hi;
+    const loc = localOf(item, lang);
+    if (!loc) return item.en || item.hi || '';
+    return both && item.en && item.en !== loc ? loc + ' · ' + item.en : loc;
   }
 
   /** Room content language code ('' = not set: older rooms accept every bundled label). */
@@ -151,9 +182,9 @@ function gtx(key, en, params) {
   function guessLabels(item, lang) {
     if (!item) return [];
     const l = contentLang(lang);
-    const local = l ? (l !== 'en' && item[l] ? [item[l]] : []) : [item.hi];
+    const local = l ? (localOf(item, l) ? [localOf(item, l)] : []) : allLocals(item);
     return [item.en].concat(local, Array.isArray(item.alts) ? item.alts : []).filter(Boolean);
   }
 
-  return { normalize, levenshtein, fuzzyMatch, shuffle, rngOr, bilingualLabel, isHindi, contentLang, guessLabels };
+  return { normalize, levenshtein, fuzzyMatch, shuffle, rngOr, bilingualLabel, isHindi, baseLang, localOf, allLocals, contentLang, guessLabels };
 });

@@ -48,6 +48,9 @@ function loadCatalog() {
 }
 
 const params = (s) => [...new Set(String(s).match(/\{\{\w+\}\}/g) || [])].sort();
+/** Params a translation consumes: {{x}} or as an ICU variable ({x, plural, …} — Arabic turns "{{n}} members" into plurals). */
+const paramsUsed = (s) =>
+  [...new Set([...(String(s).match(/\{\{\w+\}\}/g) || []), ...[...String(s).matchAll(/\{\s*(\w+)\s*,\s*(?:plural|select|selectordinal)\s*,/g)].map((m) => '{{' + m[1] + '}}')])].sort();
 const glossTokens = (s) => [...new Set(String(s).match(/\{\{@[a-z0-9]+\}\}/g) || [])].sort();
 
 function bracesBalance(s) {
@@ -106,8 +109,8 @@ function check() {
           return;
         }
         if (typeof v !== 'string') errors.push(`${code}: ${k} is not a string`);
-        const want = params(en[k]);
-        const have = params(v);
+        const want = paramsUsed(en[k]);
+        const have = paramsUsed(v);
         want.forEach((p) => {
           if (!have.includes(p)) errors.push(`${code}: ${k} drops ${p}`);
         });

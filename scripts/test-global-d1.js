@@ -71,7 +71,8 @@ const sp = (s) => String(s).replace(/[\u00a0\u202f]/g, ' ');
     const r = COV.coverage();
     assert(r.contextMissing.length === 0 && r.enPluralGaps.length === 0, `English: context note for every key (${r.enKeys} keys), plural blocks complete`);
     const langs = Object.keys(r.langs);
-    assert(langs.length === 15 && langs.every((c) => r.langs[c].placeholderMismatches.length === 0 && r.langs[c].pluralGaps.length === 0 && r.langs[c].glossaryViolations.length === 0), 'all 15 packs: no placeholder / plural / glossary problems');
+    const bad = langs.filter((c) => !(r.langs[c].placeholderMismatches.length === 0 && r.langs[c].pluralGaps.length === 0 && r.langs[c].glossaryViolations.length === 0));
+    assert(langs.length >= 15 && bad.length === 0, `all ${langs.length} packs: no placeholder / plural / glossary problems${bad.length ? ' (' + bad.join(', ') + ')' : ''}`);
     const rep = COV.languageReport(r, 'ta');
     assert(/# Tamil \(ta\)/.test(rep.md) && /## Missing by namespace/.test(rep.md) && rep.csv.startsWith('key,english,context,translation\n') && rep.csv.split('\n').length > 1000, 'per-language worksheet + translator CSV (key, English, context)');
     assert(/\{\{name\}\} = a person's display name/.test(COV.contextFor('notifications.card.bday_title', '{{name}}’s birthday')), 'context notes explain placeholders');
@@ -224,7 +225,7 @@ const sp = (s) => String(s).replace(/[\u00a0\u202f]/g, ' ');
     const apis = fs.readdirSync(path.join(ROOT, 'api')).filter((f) => f.endsWith('.js'));
     assert(apis.length === 12, `api/*.js === 12 (got ${apis.length})`);
     const L = vm.runInNewContext(read('public/src/js/core/i18n.js').match(/const LANG_CATALOG = (\[[\s\S]*?\]);/)[1]);
-    assert(L.length === 16, '16 UI languages');
+    assert(L.length === 19, '19 UI languages');
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

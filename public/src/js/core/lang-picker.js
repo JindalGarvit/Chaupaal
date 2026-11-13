@@ -203,9 +203,11 @@
     const row = document.getElementById('westernDigitsRow');
     const F = typeof ChaupaalFormat !== 'undefined' ? ChaupaalFormat : null;
     if (row && F) {
-      row.hidden = !F.localeUsesNativeDigits(F.baseLocale());
+      const base = F.baseLocale();
+      const lang = String(base).split('-')[0];
+      row.hidden = !(F.localeUsesNativeDigits(base) || (F.NATIVE_DIGIT_REGIONS && lang in F.NATIVE_DIGIT_REGIONS));
       const box = document.getElementById('toggleWesternDigits');
-      if (box) box.checked = F.getDigitsPref() === 'latn';
+      if (box) box.checked = F.usesNativeDigits ? !F.usesNativeDigits() : F.getDigitsPref() === 'latn';
     }
   }
 
@@ -216,7 +218,10 @@
     box.addEventListener('change', () => {
       const F = typeof ChaupaalFormat !== 'undefined' ? ChaupaalFormat : null;
       if (!F) return;
-      const v = box.checked ? 'latn' : '';
+      // Store only a departure from the Region default (Bangladesh → native, elsewhere → Western).
+      const regionDefault = F.defaultDigits ? F.defaultDigits(F.baseLocale()) : '';
+      const want = box.checked ? 'latn' : 'native';
+      const v = want === (regionDefault || (F.localeUsesNativeDigits(F.baseLocale()) ? 'native' : 'latn')) ? '' : want;
       F.setDigitsPref(v);
       if (typeof i18nProfileWrite === 'function') i18nProfileWrite({ digits: v || null });
     });

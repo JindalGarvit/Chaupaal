@@ -380,7 +380,9 @@
         (e) => {
           const dx = e.changedTouches[0].clientX - sx;
           if (Math.abs(dx) > 60) {
-            if (dx < 0) next(false);
+            // Stories advance in reading direction: swipe toward the line start (left in LTR, right in RTL).
+            const forward = typeof isRtl === 'function' && isRtl() ? dx > 0 : dx < 0;
+            if (forward) next(false);
             else prev();
           }
         },

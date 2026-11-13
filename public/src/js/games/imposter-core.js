@@ -93,8 +93,32 @@ function gtx(key, en, params) {
   function labelsOf(word, lang) {
     if (!word) return [];
     const l = String(lang || '').toLowerCase().split('-')[0];
-    const local = l ? (l !== 'en' && word[l] ? [word[l]] : []) : [word.hi];
+    const local = l ? (localOf(word, l) ? [localOf(word, l)] : []) : allLocals(word);
     return [word.en].concat(local, Array.isArray(word.alts) ? word.alts : []).filter(Boolean);
+  }
+
+  /** A word / category in one content language: `loc[lang]` (Hindi also on `.hi` for older rooms). */
+  function localOf(word, lang) {
+    if (!word) return '';
+    const raw = String(lang || '').toLowerCase();
+    const l = raw === 'en-xa' || raw === 'ar-xb' ? 'en' : raw.split(/[-_]/)[0];
+    if (!l || l === 'en') return '';
+    const v = (word.loc && word.loc[l]) || (l === 'hi' ? word.hi : '');
+    return typeof v === 'string' ? v : '';
+  }
+
+  function allLocals(word) {
+    const out = word && word.hi ? [word.hi] : [];
+    Object.keys((word && word.loc) || {}).forEach((l) => {
+      const v = word.loc[l];
+      if (typeof v === 'string' && v && out.indexOf(v) < 0) out.push(v);
+    });
+    return out;
+  }
+
+  /** Shareable face of a word / category: English + every bundled translation. */
+  function face(w) {
+    return w ? { en: w.en, hi: w.hi || '', loc: Object.assign({}, w.loc) } : null;
   }
 
   /**
@@ -206,8 +230,10 @@ function gtx(key, en, params) {
     return mixRegional || !global.length ? PACKS_MOD.PACKS : global;
   }
 
-  function toWord(en, hi, alts) {
-    return { en, hi: hi || '', alts: Array.isArray(alts) ? alts.slice() : [] };
+  function toWord(pack, en, hi, alts) {
+    const loc = PACKS_MOD.wordLocals ? PACKS_MOD.wordLocals(pack, en) : {};
+    if (hi) loc.hi = hi;
+    return { en, hi: hi || loc.hi || '', loc, alts: Array.isArray(alts) ? alts.slice() : [] };
   }
 
   /** Stable identity of a word (survives reordering / dedupe edits): `pack:normalized english`. */
@@ -304,26 +330,26 @@ function gtx(key, en, params) {
     const imposters = shuffle(ids, rng).slice(0, k);
     const pick = pickWord(s.pack, rng, o.usedKeys, s.mixRegional, { difficulty: s.difficulty, exclude: o.exclude, custom: o.custom });
     const row = pick.row;
-    let majority = toWord(row[0], row[1], row[4]);
-    let minority = toWord(row[2], row[3]);
+    let majority = toWord(pick.p, row[0], row[1], row[4]);
+    let minority = toWord(pick.p, row[2], row[3]);
     // Undercover: either side of the pair can be the majority, so "my word feels rarer" isn't a tell.
     if (s.variant === 'undercover' && rng() < 0.5) {
       const t = majority;
       majority = minority;
       minority = t;
     }
-    const category = { id: pick.p.id, en: pick.p.en, hi: pick.p.hi };
+    const category = { id: pick.p.id, en: pick.p.en, hi: pick.p.hi || '', loc: Object.assign({}, pick.p.loc) };
     const secrets = {};
     ids.forEach((id) => {
       const isImp = imposters.indexOf(id) >= 0;
       if (s.variant === 'undercover') {
         const w = isImp ? minority : majority;
         // No role flag — an Undercover imposter must not be able to tell from their own card.
-        secrets[id] = { word: { en: w.en, hi: w.hi } };
+        secrets[id] = { word: face(w) };
       } else if (isImp) {
-        secrets[id] = { imposter: true, hint: s.hint ? { en: category.en, hi: category.hi } : null };
+        secrets[id] = { imposter: true, hint: s.hint ? face(category) : null };
       } else {
-        secrets[id] = { word: { en: majority.en, hi: majority.hi } };
+        secrets[id] = { word: face(majority) };
       }
     });
     const hidden = {
@@ -463,8 +489,8 @@ function gtx(key, en, params) {
       winner,
       imposters: hidden.imposters.slice(),
       survivors,
-      majority: { en: hidden.majority.en, hi: hidden.majority.hi },
-      minority: hidden.minority ? { en: hidden.minority.en, hi: hidden.minority.hi } : null,
+      majority: face(hidden.majority),
+      minority: face(hidden.minority),
       category: hidden.category ? Object.assign({}, hidden.category) : null,
       caught: pub.caught.map((c) => Object.assign({}, c)),
       points,
@@ -675,10 +701,10 @@ function gtx(key, en, params) {
   /** Friendly word label in the player's language; bilingual shows both. */
   function wordLabel(word, lang, bilingual) {
     if (!word) return '';
-    const hi = String(lang || '').toLowerCase().indexOf('hi') === 0;
-    // Translations are locale data: only a Hindi UI ever shows them, and only where one exists.
-    if (!hi || !word.hi) return word.en || word.hi || '';
-    return bilingual && word.en ? word.hi + ' · ' + word.en : word.hi;
+    // Translations are locale data: only a reader of that language sees them, and only where one exists.
+    const loc = localOf(word, lang);
+    if (!loc) return word.en || word.hi || '';
+    return bilingual && word.en ? loc + ' · ' + word.en : loc;
   }
 
   return {
@@ -706,6 +732,7 @@ function gtx(key, en, params) {
     hydrateState,
     publicView,
     wordLabel,
+    localOf,
     wordKey,
     rowDifficulty,
     customPack,

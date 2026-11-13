@@ -21,7 +21,7 @@
 // eslint-disable-next-line no-var -- a window property, so the server renderer / tests can set it.
 var currentLang = 'en';
 
-/** The 16 languages Chaupaal ships. Single source for the picker, <html lang/dir> and TTS tags. */
+/** The 19 languages Chaupaal ships. Single source for the picker, <html lang/dir> and TTS tags. */
 const LANG_CATALOG = [
   { code: 'en', native: 'English', name: 'English', tts: 'en-US', html: 'en', region: 'US' },
   { code: 'hi', native: 'हिंदी', name: 'Hindi', tts: 'hi-IN', html: 'hi', region: 'IN' },
@@ -29,6 +29,9 @@ const LANG_CATALOG = [
   { code: 'ta', native: 'தமிழ்', name: 'Tamil', tts: 'ta-IN', html: 'ta', region: 'IN' },
   { code: 'te', native: 'తెలుగు', name: 'Telugu', tts: 'te-IN', html: 'te', region: 'IN' },
   { code: 'mr', native: 'मराठी', name: 'Marathi', tts: 'mr-IN', html: 'mr', region: 'IN' },
+  { code: 'pa', native: 'ਪੰਜਾਬੀ', name: 'Punjabi', tts: 'pa-IN', html: 'pa', region: 'IN' },
+  { code: 'kn', native: 'ಕನ್ನಡ', name: 'Kannada', tts: 'kn-IN', html: 'kn', region: 'IN' },
+  { code: 'ml', native: 'മലയാളം', name: 'Malayalam', tts: 'ml-IN', html: 'ml', region: 'IN' },
   { code: 'ur', native: 'اردو', name: 'Urdu', tts: 'ur-PK', html: 'ur', dir: 'rtl', region: 'PK' },
   { code: 'ar', native: 'العربية', name: 'Arabic', tts: 'ar-SA', html: 'ar', dir: 'rtl', region: 'SA' },
   { code: 'es', native: 'Español', name: 'Spanish', tts: 'es-ES', html: 'es', region: 'ES' },
@@ -46,10 +49,10 @@ const LANG_CATALOG = [
  * Their last packs are archived in scripts/i18n-retired/ — to bring one back, move its pack to
  * public/src/i18n/, add it to LANG_CATALOG and drop it from this list.
  */
-const I18N_RETIRED_LANGS = ['gu', 'kn', 'ml', 'pa', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
+const I18N_RETIRED_LANGS = ['gu', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"3ba9ff5e","id":"2775a026","ja":"0673b3d7","ko":"56677136","mr":"43439d48","pt":"19118eeb","ta":"40370478","te":"11127969","ur":"41de7b19","zh":"e0fda911"};
+const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"832edec0","id":"2775a026","ja":"0673b3d7","kn":"db038fc4","ko":"56677136","ml":"ec4d4874","mr":"43439d48","pa":"3b4db0de","pt":"19118eeb","ta":"40370478","te":"11127969","ur":"860f55f1","zh":"e0fda911"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({
@@ -264,24 +267,56 @@ function i18nIcu(s, params, locale) {
  * Format one message. mode 'text' → plain string (rich tags stripped); 'html' → escaped HTML with
  * only the rich-tag whitelist and every param escaped.
  */
+const I18N_RTL_BASES = new Set(['ur', 'ar', 'fa', 'he']);
+/** Params that may end up inside a URL / attribute value must not carry invisible bidi marks. */
+const I18N_RAW_PARAM = /(url|href|link|src|path|code|key|id)$/i;
+/** First-strong isolate: a Latin brand / @handle / number inside an RTL sentence keeps its own order. */
+const i18nIsolate = (s) => '\u2068' + s + '\u2069';
+
+/** Locale digits for static numbers in copy ("24 hours") when the locale shows non-Latin numerals. */
+const i18nDigitMaps = new Map();
+function i18nDigitMap(locale) {
+  if (!i18nDigitMaps.has(locale)) {
+    let map = null;
+    try {
+      const f = new Intl.NumberFormat(locale, { useGrouping: false });
+      if (f.resolvedOptions().numberingSystem !== 'latn') map = Array.from({ length: 10 }, (_, i) => f.format(i));
+    } catch (e) {}
+    i18nDigitMaps.set(locale, map);
+  }
+  return i18nDigitMaps.get(locale);
+}
+/** Only free-standing numbers change: tokens, tags, entities and codes like T20 / e4 / 3D keep their digits. */
+function i18nLocalDigits(s, locale) {
+  const map = i18nDigitMap(locale || 'en');
+  if (!map) return s;
+  return s.replace(/\{\{[^}]*\}\}|<[^>]*>|&[a-z#0-9]+;|[A-Za-z_][A-Za-z0-9_]*\d[A-Za-z0-9_]*|\d+[A-Za-z_][A-Za-z0-9_]*|\d+/g, (m) => (/^\d+$/.test(m) ? m.replace(/\d/g, (d) => map[d]) : m));
+}
+
 function i18nFormat(msg, params, locale, mode) {
   const p = params && typeof params === 'object' ? params : {};
+  const rtl = I18N_RTL_BASES.has(String(locale || 'en').toLowerCase().split('-')[0]);
   let s = String(msg == null ? '' : msg);
   if (s.indexOf('{') >= 0) s = i18nIcu(s, p, locale || 'en');
+  s = i18nLocalDigits(s, locale);
   if (mode === 'html') {
     s = i18nEscape(s).replace(/&lt;(\/?)(strong|b|em|i)&gt;/gi, '<$1$2>').replace(/&lt;br\s*\/?&gt;/gi, '<br>');
   } else {
     s = s.replace(I18N_RICH, (m) => (/^<br/i.test(m) ? '\n' : ''));
   }
-  s = s.replace(/\{\{@([a-z0-9]+)\}\}/g, (m, id) => (I18N_GLOSSARY[id] != null ? I18N_GLOSSARY[id] : m));
+  s = s.replace(/\{\{@([a-z0-9]+)\}\}/g, (m, id) => (I18N_GLOSSARY[id] != null ? (rtl ? i18nIsolate(I18N_GLOSSARY[id]) : I18N_GLOSSARY[id]) : m));
   s = s.replace(/\{\{(\w+)\}\}/g, (m, k) => {
     if (!(k in p)) return m;
     const v = p[k];
+    const iso = rtl && !I18N_RAW_PARAM.test(k) ? i18nIsolate : (x) => x;
     // { html } = markup the caller already escaped (e.g. a display name with a verified badge).
     if (v && typeof v === 'object' && 'html' in v) {
-      return mode === 'html' ? String(v.html) : String(v.text != null ? v.text : String(v.html).replace(/<[^>]*>/g, ''));
+      return iso(mode === 'html' ? String(v.html) : String(v.text != null ? v.text : String(v.html).replace(/<[^>]*>/g, '')));
     }
-    return mode === 'html' ? i18nEscape(v) : String(v);
+    if (v == null || v === '') return mode === 'html' ? i18nEscape(v == null ? '' : v) : String(v == null ? '' : v);
+    // Numbers follow the locale's digits (Bangladesh → ০–৯); grouping is left to callers that format on purpose.
+    const val = typeof v === 'number' && Number.isFinite(v) && i18nDigitMap(locale || 'en') ? i18nLocalDigits(String(v), locale) : v;
+    return iso(mode === 'html' ? i18nEscape(val) : String(val));
   });
   return s;
 }
@@ -331,10 +366,34 @@ function i18nCoverage(prefix, lang) {
   return (i18nCoverageCache[ck] = { have, total });
 }
 
+/**
+ * The signed-in user's grammatical gender for `{_g, select, female {…} male {…} other {…}}` (languages whose
+ * second-person verbs agree: ar, mr …). Unknown / "prefer to self-describe" → other (neutral), never male.
+ */
+function i18nUserGender() {
+  try {
+    const p = (typeof userProfile !== 'undefined' && userProfile) || null;
+    const g = String((p && (p.gender || (p.profile && p.profile.gender))) || '').toLowerCase();
+    if (g === 'female' || g === 'woman') return 'female';
+    if (g === 'male' || g === 'man') return 'male';
+  } catch (e) {}
+  return 'other';
+}
+
 function i18nRender(key, vars, fallback, mode) {
+  if (!vars || typeof vars !== 'object' || !('_g' in vars)) vars = Object.assign({ _g: i18nUserGender() }, vars && typeof vars === 'object' ? vars : {});
   const lang = i18nPseudo ? 'en' : normalizeLang(typeof currentLang !== 'undefined' ? currentLang : 'en');
   const hit = i18nLookup(key, lang);
-  if (hit) return pseudoize(i18nFormat(hit.v, vars, getLangEntry(hit.code).html, mode), mode);
+  if (hit) {
+    // The UI language formats with the Region-aware locale (digits / plurals); an English fallback stays English.
+    let loc = getLangEntry(hit.code).html;
+    if (hit.code === lang && typeof ChaupaalFormat !== 'undefined' && ChaupaalFormat.formatLocale) {
+      try {
+        loc = ChaupaalFormat.formatLocale() || loc;
+      } catch (e) {}
+    }
+    return pseudoize(i18nFormat(hit.v, vars, loc, mode), mode);
+  }
   if (fallback) return pseudoize(i18nFormat(fallback, vars, 'en', mode), mode);
   i18nDevWarn(String(key));
   return mode === 'html' ? i18nEscape(key) : String(key);
@@ -810,7 +869,7 @@ function hydrateLocaleFromProfile(profile) {
     if (explicit) writes.contentLangs = getContentLangs();
   }
   try {
-    if ((p.digits === 'latn' || p.digits === null) && typeof ChaupaalFormat !== 'undefined') ChaupaalFormat.setDigitsPref(p.digits || '');
+    if ((p.digits === 'latn' || p.digits === 'native' || p.digits === null) && typeof ChaupaalFormat !== 'undefined') ChaupaalFormat.setDigitsPref(p.digits || '');
   } catch (e) {}
   try {
     if (typeof ChaupaalRegion !== 'undefined' && ChaupaalRegion.hydrateFromProfile) {

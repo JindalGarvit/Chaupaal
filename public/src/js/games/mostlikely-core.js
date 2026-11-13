@@ -67,10 +67,6 @@ function gtx(key, en, params) {
 
   const BADGES = /* i18n-copy */ [gtx('games.mostlikely.certified', 'Certified 👑'), gtx('games.mostlikely.called_it', 'Called it!'), gtx('games.mostlikely.no_contest', 'No contest'), gtx('games.mostlikely.the_people_have_spoken', 'The people have spoken'), gtx('games.mostlikely.guilty_as_charged', 'Guilty as charged 😄'), gtx('games.mostlikely.crowned', 'Crowned')];
 
-  function isHi(lang) {
-    return String(lang || 'en').indexOf('hi') === 0;
-  }
-
   function validPackIds() {
     return Packs.PACKS.map((p) => p.id);
   }
@@ -277,16 +273,17 @@ function gtx(key, en, params) {
     if (mode === 'wyr') return { primary: gtx('games.mostlikely.would_you_rather', 'Would you rather…'), secondary: '' };
     if (mode === 'nhie') return { primary: gtx('games.mostlikely.never_have_i_ever_replace', 'Never have I ever {{replace}}', { replace: String(prompt.en || '').replace(/[.!]+$/, '') }), secondary: '' };
     const en = mltQuestionEn(prompt);
-    const hi = prompt.hi || '';
-    // Hindi is locale data: only a Hindi reader sees it (and, with `both`, the English under it).
-    if (!isHi(lang) || !hi) return { primary: en, secondary: '' };
-    return { primary: hi, secondary: both ? en : '' };
+    // Translations are locale data: only a reader of that language sees one (with `both`, the English under it).
+    const loc = PC.localOf(prompt, lang);
+    if (!loc) return { primary: en, secondary: '' };
+    return { primary: loc, secondary: both ? en : '' };
   }
 
   function optionLines(opt, lang, both) {
     if (!opt) return { primary: '', secondary: '' };
-    if (!isHi(lang) || !opt.hi) return { primary: opt.en, secondary: '' };
-    return { primary: opt.hi, secondary: both ? opt.en : '' };
+    const loc = PC.localOf(opt, lang);
+    if (!loc) return { primary: opt.en, secondary: '' };
+    return { primary: loc, secondary: both ? opt.en : '' };
   }
 
   function badgeFor(prompt) {
@@ -590,7 +587,7 @@ function gtx(key, en, params) {
     } else {
       r.top.forEach((id) => {
         session.crowns[id] = session.crowns[id] || [];
-        session.crowns[id].push({ key: p.key || '', en: p.en || '', hi: p.hi || '', custom: !!p.custom, votes: r.topVotes, total: r.total });
+        session.crowns[id].push({ key: p.key || '', en: p.en || '', hi: p.hi || '', loc: Object.assign({}, p.loc), custom: !!p.custom, votes: r.topVotes, total: r.total });
       });
       session.history.push({ mode: 'mlt', key: p.key || '', top: r.top.slice(), topVotes: r.topVotes, total: r.total });
     }

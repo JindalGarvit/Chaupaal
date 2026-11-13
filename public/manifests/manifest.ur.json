@@ -1,7 +1,7 @@
 {
   "name": "Chaupaal",
   "short_name": "Chaupaal",
-  "description": "Gather under the same light — news, discussions, games and friends.",
+  "description": "ایک ہی روشنی تلے اکٹھے ہوں — خبریں، بحثیں، گیمز اور دوست۔",
   "start_url": "/?lang=ur",
   "display": "standalone",
   "background_color": "#F5F5F5",
@@ -50,7 +50,7 @@
     {
       "name": "Akhbaar",
       "short_name": "Akhbaar",
-      "description": "Today’s news quiz",
+      "description": "آج کا خبروں کا کوئز",
       "url": "/?section=akhbaar",
       "icons": [
         {
@@ -62,7 +62,7 @@
     {
       "name": "Peepal",
       "short_name": "Peepal",
-      "description": "Community questions",
+      "description": "کمیونٹی کے سوالات",
       "url": "/?section=peepal",
       "icons": [
         {
@@ -74,7 +74,7 @@
     {
       "name": "Dangal",
       "short_name": "Dangal",
-      "description": "Games",
+      "description": "گیمز",
       "url": "/?section=dangal",
       "icons": [
         {
