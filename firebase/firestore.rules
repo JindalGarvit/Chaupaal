@@ -985,6 +985,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Translate (Global L7) — Admin SDK only: public-text cache, per-user daily counters, telemetry.
+    match /translateCache/{docId} {
+      allow read, write: if false;
+    }
+    match /translateUsage/{docId} {
+      allow read, write: if false;
+    }
+    match /translateStats/{docId} {
+      allow read, write: if false;
+    }
+
     // Peepal intent weight profiles + engagement — Admin SDK only
     match /intentWeightProfiles/{profileId} {
       allow read, write: if false;

@@ -68,7 +68,9 @@
     "public/src/js/features/premium.js": "settings",
     "public/src/js/features/profile-preview.js": "profile",
     "public/src/js/features/profile.js": "profile",
-    "public/src/js/features/streak.js": "settings"
+    "public/src/js/features/streak.js": "settings",
+    "public/src/js/core/translate.js": "translate",
+    "public/src/js/core/lang-detect.js": "translate"
   },
   "l3": {
     "public/src/js/features/baithak.js": "baithak",

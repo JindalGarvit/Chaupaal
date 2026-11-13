@@ -4563,7 +4563,7 @@
       <div class="mehfil-top">
         <div class="mehfil-top-row">
           ${typeof backButtonHtml === 'function' ? backButtonHtml({ attrs: 'data-mehfil-leave-top' }) : ''}
-          <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${esc(roomTitle)}</span></div>
+          <div class="mehfil-title">${mehfilMarkHtml(20)} <span>${esc(tt('mehfil_title', 'Mehfil'))} · ${typeof ugcHtml === 'function' ? ugcHtml('mehfil_title', esc(roomTitle), { scope: 'private' }) : esc(roomTitle)}</span></div>
           <div class="mehfil-status" data-mehfil-status role="status" aria-live="polite">${esc(tt('mehfil_joining', 'Joining…'))}</div>
           <div class="mehfil-my-role" data-mehfil-my-role hidden></div>
         </div>

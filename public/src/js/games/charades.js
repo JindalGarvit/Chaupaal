@@ -144,7 +144,7 @@
     const secondary = primary !== t.en ? t.en : '';
     return `<div class="ch-card">
       <div class="ch-card-kind">${esc(KIND[t.kind] || '🎭')} · ${esc(pack ? packLabel(pack) : '')}</div>
-      <div class="ch-card-title">${esc(primary)}</div>
+      <div class="ch-card-title">${t.kind === 'custom' && typeof ugcHtml === 'function' ? ugcHtml('dangal_custom_title', esc(primary), { scope: 'private' }) : esc(primary)}</div>
       ${secondary && secondary !== primary ? `<div class="ch-card-alt">${esc(secondary)}</div>` : ''}
       <div class="ch-card-diff ch-card-diff--${esc(t.difficulty)}">${esc(DIFF[t.difficulty] || t.difficulty)}</div>
       ${extra || '<div class="ch-card-tip">' + tHtml('games.charades.act_it_out_no_talking') + '</div>'}

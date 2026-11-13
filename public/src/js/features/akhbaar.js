@@ -374,10 +374,10 @@ function showNewsSummary(inner,data,idx){
   inner.innerHTML=`
     <div class="q-tag ${data.personal?'personal':'news'}" data-cat="${akhbaarEscAttr(data.category||'News')}">${tagLabel}</div>
     <div class="news-summary">
-      <div class="news-headline">${data.headline||tHtml('akhbaar.about_this_question')}</div>
+      <div class="news-headline">${data.headline?(typeof ugcHtml==='function'?ugcHtml('akhbaar_headline',data.headline,{ scope:'public', v:data.updatedAt||data.id||'' }):data.headline):tHtml('akhbaar.about_this_question')}</div>
       ${explainHtml}
       ${proofHtml}
-      <div class="news-body">${data.news||tHtml('akhbaar.this_question_is_based_on_recent')}</div>
+      <div class="news-body">${data.news?(typeof ugcHtml==='function'?ugcHtml('akhbaar_summary',data.news,{ scope:'public', v:data.updatedAt||data.id||'' }):data.news):tHtml('akhbaar.this_question_is_based_on_recent')}</div>
       ${linkHtml}${sourceLine}${wishHtml}${flagHtml}
       <div class="hint show">${hintText}</div>
     </div>

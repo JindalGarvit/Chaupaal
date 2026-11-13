@@ -387,6 +387,12 @@
     }
   }
 
+  // TODO(L8): the Privacy Policy and "What Chaupaal collects" must cover Translate (Global L7): text the
+  // viewer chooses to translate is sent to the translation provider (TRANSLATE_PROVIDER: the AI provider
+  // or a machine-translation API); private text (chats, private posts / profiles, room text) needs a
+  // one-time consent, is never stored by Chaupaal and its translations stay on the device (cleared on
+  // logout); public text translations are cached server-side by content hash + language. See
+  // server-lib/translate.js + public/src/js/core/translate.js.
   function openLegalSheet(kind) {
     const k = String(kind || 'terms').toLowerCase();
     const isPrivacy = k === 'privacy';

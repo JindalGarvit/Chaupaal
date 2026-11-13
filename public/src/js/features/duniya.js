@@ -679,6 +679,11 @@ function duniyaHeartIcon(){
   return`<svg class="duniya-heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.2-4.35-9.55-8.55C.5 8.95 2.35 4.5 6.4 4.5c2.25 0 3.75 1.3 4.6 2.55.85-1.25 2.35-2.55 4.6-2.55 4.05 0 5.9 4.45 3.95 7.95C19.2 16.65 12 21 12 21Z"/></svg>`;
 }
 
+/** Translate (L7): public posts may use the shared server cache; anything narrower stays on this device. */
+function duniyaPostScope(post){
+  return post&&(post.audience==='public'||!post.audience)&&!post.archived?'public':'private';
+}
+
 function createDuniyaPost(post, {variant='list'}={}){
   const el=document.createElement('div');el.className='duniya-post'+(variant==='tile'?' duniya-post--tile':'')+(post.isSample?' duniya-post--demo':'');el.dataset.id=post.id;
   if(post.isSample) el.dataset.demo='1';
@@ -703,7 +708,8 @@ function createDuniyaPost(post, {variant='list'}={}){
     return el;
   }
   const isFollowing=followingSet.has(post.user.uid);
-  const caption=duniyaDecorateCaption(post);
+  const ugcMeta={ scope:duniyaPostScope(post), v:post.editedAt||post.updatedAt||'' };
+  const caption=typeof ugcHtml==='function'?ugcHtml('duniya_caption',duniyaDecorateCaption(post),ugcMeta):duniyaDecorateCaption(post);
   const me=typeof currentUser!=='undefined'?currentUser?.uid:'';
   const own=duniyaViewerOwns(post);
   const previewTotal = Math.max(Number(post.comments)||0, Array.isArray(post._comments) ? post._comments.filter((c)=>!c.deleted).length : 0);
@@ -733,7 +739,7 @@ function createDuniyaPost(post, {variant='list'}={}){
   const mediaWrapAttrs=hasMediaSize?` data-has-ratio="1" class="duniya-post-media duniya-post-media--ratio${isReel?' duniya-post-media--reel':''}" style="--media-ratio:${isReel?'9/16':`${w}/${h}`};max-height:${duniyaStageMaxH()}px;"`:` class="duniya-post-media${isReel?' duniya-post-media--reel':''}"`;
   let mediaBlock='';
   if(!slides.length){
-    mediaBlock=`<div class="duniya-post-text-hero">${duniyaEsc(post.caption||'')}</div>`;
+    mediaBlock=`<div class="duniya-post-text-hero">${typeof ugcHtml==='function'?ugcHtml('duniya_caption',duniyaEsc(post.caption||''),ugcMeta):duniyaEsc(post.caption||'')}</div>`;
   } else if(slides.length===1){
     mediaBlock=`<div${mediaWrapAttrs}>${duniyaMediaHtml(slides[0],post,variant)}${post.taggedPeople?.length?`<button type="button" class="duniya-tags-hint" data-show-tags>${tHtml('duniya.tags')}</button>`:''}</div>`;
   } else {
@@ -1340,10 +1346,10 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
     <div class="duniya-comments-body">
       <div class="duniya-comments-post-context">
         <strong>${typeof formatDisplayNameHtml==='function'?formatDisplayNameHtml(post.user?.name||t('duniya.post'),post.user):(post.user?.name||tHtml('duniya.post'))}</strong>
-        <span>${String(post.caption||'').slice(0,150)}</span>
+        <span>${duniyaEsc(String(post.caption||'').slice(0,150))}</span>
       </div>
       <div id="duniyaCommentsList" class="comments-list">
-        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments,{ surface:'duniya', previewReplies:2 }):''}
+        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments,{ surface:'duniya', previewReplies:2, scope:duniyaPostScope(post) }):''}
       </div>
     </div>
     <div id="duniyaReplyHint" class="comment-reply-hint hidden"></div>
@@ -1396,7 +1402,7 @@ function openDuniyaDetail(post,{focusCommentId=null,focusComposer=false}={}){
     if (!listEl) return;
     if(typeof enrichCommentAggregates==='function') enrichCommentAggregates(comments);
     if(typeof rankCommentsForPreview==='function') post._previewComments = rankCommentsForPreview(comments,{limit:2,viewerUid:currentUser?.uid});
-    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments,{ surface:'duniya', previewReplies:2 }) : '';
+    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments,{ surface:'duniya', previewReplies:2, scope:duniyaPostScope(post) }) : '';
     syncDuniyaPostUI(post);
     if (typeof wireCommentsList === 'function') {
       wireCommentsList(listEl, comments, {

@@ -970,6 +970,31 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Translate (Global L7): flag + batched translation; never logs or stores private text ──
+  if (action === 'translate_config') {
+    const { flags } = require('../server-lib/translate');
+    const f = flags();
+    return sendSuccess(res, { enabled: f.enabled, maxChars: f.maxChars, maxChunks: f.maxChunks, maxItems: f.maxItems });
+  }
+  if (action === 'translate') {
+    try {
+      const { checkActionRateLimit } = require('../server-lib/rate-limit');
+      const rate = await checkActionRateLimit(user.uid, 'translate');
+      if (rate && rate.ok === false) return sendError(res, 429, 'RATE_LIMITED', 'Too many translations. Try again shortly.');
+    } catch (e) {}
+    try {
+      const { sharedTranslator } = require('../server-lib/translate');
+      const adminApp = initAdmin();
+      const tr = sharedTranslator(adminApp ? { db: adminApp.firestore(), admin: adminApp } : {});
+      return sendSuccess(res, await tr.translate(user.uid, body));
+    } catch (e) {
+      if (e?.code === 'TRANSLATE_OFF') return sendError(res, 503, 'TRANSLATE_OFF', 'Translation is off');
+      if (e?.code === 'VALIDATION_ERROR') return sendError(res, 400, 'VALIDATION_ERROR', 'Nothing to translate');
+      console.warn('[media-config] translate', e?.code || 'error');
+      return sendError(res, 500, 'TRANSLATE_ERROR', 'Couldn’t translate right now');
+    }
+  }
+
   // ─── Shabd Five: stats sync across devices, friends' Daily leaderboard ──
   if (action === 'shabd') {
     try {

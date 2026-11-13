@@ -43,7 +43,7 @@
   <link rel="stylesheet" href="/src/styles/social-comments.css?v=1073b687">
   <link rel="stylesheet" href="/src/styles/mehfil.css?v=f7f20e1f">
   <link rel="stylesheet" href="/src/styles/mehfil-cinema.css?v=f9d39e27">
-  <link rel="stylesheet" href="/src/styles/i18n.css?v=423c8d1b">
+  <link rel="stylesheet" href="/src/styles/i18n.css?v=cdf2a993">
 </head>
 <body>
 <div class="device">
@@ -690,6 +690,13 @@
             </div>
             <label class="switch"><input type="checkbox" id="toggleWesternDigits"><span class="slider"></span></label>
           </div>
+          <div class="toggle-row" id="autoTranslateRow" hidden>
+            <div>
+              <div class="toggle-label" data-i18n="translate.auto_public">Auto-translate public posts</div>
+              <div class="toggle-desc" data-i18n="translate.auto_public_desc">Public posts in languages you don’t read show translated as you scroll. Off by default.</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="toggleAutoTranslate"><span class="slider"></span></label>
+          </div>
           <select class="modal-select" id="langSelect" hidden aria-hidden="true" tabindex="-1"></select>
         </div>
       </details>
@@ -899,7 +906,7 @@
   <script src="/src/js/config/app-check.js?v=c74ed63b"></script>
   <script src="/src/js/core/environment.js?v=0cfc62f2"></script>
   <!-- i18n first: every script may call t() while it loads -->
-  <script src="/src/i18n/en.js?v=0fda6351"></script>
+  <script src="/src/i18n/en.js?v=c9655371"></script>
   <script src="/src/i18n/legacy-keys.js?v=56133b74"></script>
   <script src="/src/js/core/i18n.js?v=7d47fcf1"></script>
   <script src="/src/js/core/region.js?v=aa214603"></script>
@@ -925,7 +932,7 @@
   <script src="/src/js/data/samples.js?v=0abc920f"></script>
   <script src="/src/js/data/akhbaar-bank.js?v=e8c7e2d1"></script>
   <script src="/src/js/core/state.js?v=13b9a164"></script>
-  <script src="/src/js/core/ui-states.js?v=cd331905"></script>
+  <script src="/src/js/core/ui-states.js?v=906ef28c"></script>
   <script src="/src/js/core/firestore-page.js?v=eadcbc42"></script>
   <script src="/src/js/core/drafts.js?v=7e13515d"></script>
   <script src="/src/js/core/soft-delete.js?v=47bf1b9a"></script>
@@ -933,7 +940,7 @@
   <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
   <script src="/src/js/core/comment-ranking.js?v=635f86ba"></script>
   <script src="/src/js/core/comment-msg-cache.js?v=fd3cbb34"></script>
-  <script src="/src/js/core/comments.js?v=84475e0e"></script>
+  <script src="/src/js/core/comments.js?v=29e1a140"></script>
   <script src="/src/js/core/social-persistence.js?v=6aafcc5c"></script>
   <script src="/src/js/core/open-user-profile.js?v=dbeddfc7"></script>
   <script src="/src/js/core/relationships.js?v=291f165d"></script>
@@ -957,7 +964,7 @@
   <script src="/src/js/core/swipe-pager.js?v=17d37354"></script>
   <script src="/src/js/core/section-swipe.js?v=ff382588"></script>
   <script src="/src/js/core/section-modes.js?v=d05f2ea9"></script>
-  <script src="/src/js/core/first-run.js?v=d88daf8d"></script>
+  <script src="/src/js/core/first-run.js?v=3dcafe65"></script>
   <script src="/src/js/core/contacts-find.js?v=35f30346"></script>
   <script src="/src/js/core/teen-mode.js?v=0a05ff28"></script>
   <script src="/src/js/core/professional-badge.js?v=10f20988"></script>
@@ -991,9 +998,11 @@
   <script src="/src/js/ai/call-ai.js?v=a05a7047"></script>
   <script src="/src/js/ai/anthropic.js?v=ee230737"></script>
   <script src="/src/js/core/search-normalize.js?v=65d200b8"></script>
+  <script src="/src/js/core/lang-detect.js?v=1c28cc73"></script>
+  <script src="/src/js/core/translate.js?v=f7921a37"></script>
   <script src="/src/js/core/search-field.js?v=6e8ce6ce"></script>
   <script src="/src/js/core/search.js?v=a038ad0f"></script>
-  <script src="/src/js/core/deeplinks.js?v=b1b252e4"></script>
+  <script src="/src/js/core/deeplinks.js?v=ecb52319"></script>
   <script src="/src/js/core/rate-limit-client.js?v=bb25b0bf"></script>
   <script src="/src/js/core/theme.js?v=612dd3bb"></script>
   <script src="/src/js/core/discovery-core.js?v=009ded0e"></script>
@@ -1002,11 +1011,11 @@
   <script src="/src/js/auth/auth-ui.js?v=43ac8d4d"></script>
   <script src="/src/js/auth/phone-otp.js?v=4e876241"></script>
   <script src="/src/js/auth/auth-profiles.js?v=1a1681f3"></script>
-  <script src="/src/js/features/akhbaar.js?v=5a041825"></script>
+  <script src="/src/js/features/akhbaar.js?v=90d23fc8"></script>
   <script src="/src/js/features/dangal.js?v=814e9324"></script>
   <script src="/src/js/features/dangal-ratings.js?v=2bd8e294"></script>
   <script src="/src/js/features/baithak-data.js?v=659d2064"></script>
-  <script src="/src/js/features/baithak-chat-actions.js?v=8c4f641b"></script>
+  <script src="/src/js/features/baithak-chat-actions.js?v=30bdeac7"></script>
   <script src="/src/js/core/baithak-msg-cache.js?v=18f851c4"></script>
   <script src="/src/js/core/baithak-transport.js?v=d3b64024"></script>
   <script src="/src/js/features/baithak-search.js?v=1e818664"></script>
@@ -1017,9 +1026,9 @@
   <script src="/src/js/features/chaupaal-command.js?v=0062b4b5"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=b563f61f"></script>
   <script src="/src/js/features/chat-rating.js?v=680302d3"></script>
-  <script src="/src/js/features/baithak-chat.js?v=abbfafd7"></script>
+  <script src="/src/js/features/baithak-chat.js?v=7e4720ce"></script>
   <script src="/src/js/features/mehfil-effects.js?v=ebcbad3d"></script>
-  <script src="/src/js/features/mehfil.js?v=7ebebe4e"></script>
+  <script src="/src/js/features/mehfil.js?v=4ad8baac"></script>
   <script src="/src/js/features/chaupaal-hub.js?v=1dab5340"></script>
   <script src="/src/js/features/chaupaal-ai-profile.js?v=e8e34625"></script>
   <script src="/src/js/features/music-card.js?v=8cf184f7"></script>
@@ -1038,7 +1047,7 @@
 
 
 
-  <script src="/src/js/features/categories.js?v=9b1b0d55"></script>
+  <script src="/src/js/features/categories.js?v=8ac3846d"></script>
   <script src="/src/js/features/category-prefs.js?v=a31a4c0d"></script>
   <script src="/src/js/features/peepal.js?v=91ef6ca9"></script>
   <script src="/src/js/features/onboarding.js?v=dfaf0b84"></script>
@@ -1105,17 +1114,17 @@
   <script type="text/x-lazy" data-party-lazy src="/src/js/data/locales/hi/mostlikely-packs.hi.js?v=cd78b164"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/data/locales/hi/rajamantri.hi.js?v=efac1347"></script>
   <script src="/src/js/dangal/content-locales.js?v=ecd5d767"></script>
-  <script src="/src/js/games/party-kit.js?v=e9c07f12"></script>
+  <script src="/src/js/games/party-kit.js?v=2d000ea3"></script>
   <script src="/src/js/games/imposter.js?v=fd7f4497"></script>
   <script src="/src/js/games/party-core.js?v=639af1e0"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/data/charades-packs.js?v=3e3787af"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/rajamantri-core.js?v=0db40808"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/charades-core.js?v=24e0b500"></script>
   <script src="/src/js/games/rajamantri.js?v=8f41cff9"></script>
-  <script src="/src/js/games/charades.js?v=ba84c43b"></script>
+  <script src="/src/js/games/charades.js?v=81ecbe72"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/data/mostlikely-packs.js?v=8e05439c"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/mostlikely-core.js?v=83056a51"></script>
-  <script src="/src/js/games/mostlikely.js?v=07ed62a9"></script>
+  <script src="/src/js/games/mostlikely.js?v=c66c57af"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/werewolf-core.js?v=02a1e433"></script>
   <script src="/src/js/games/werewolf.js?v=4cb38349"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/party-hub-core.js?v=0f0ce4f5"></script>
@@ -1139,7 +1148,7 @@
   <script src="/src/js/games/ohno-ui.js?v=538e4265"></script>
   <script src="/src/js/games/shabd-ui.js?v=72861975"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/scribble-core.js?v=5d22da4a"></script>
-  <script src="/src/js/games/scribble-ui.js?v=49a7d3d3"></script>
+  <script src="/src/js/games/scribble-ui.js?v=f17a465a"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/quiz-core.js?v=84fd55c4"></script>
   <script src="/src/js/games/quiz-ui.js?v=a57c32d9"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/carrom-physics.js?v=cfda6123"></script>
@@ -1153,14 +1162,14 @@
   <script src="/src/js/games/bluff-ui.js?v=3f46cf8b"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/games/tambola-core.js?v=ab932af3"></script>
   <script src="/src/js/games/tambola-ui.js?v=2434539a"></script>
-  <script src="/src/js/main.js?v=f565f242"></script>
+  <script src="/src/js/main.js?v=f57f8244"></script>
   <script src="/src/js/features/akhbaar-catbar.js?v=fdfcfa0d"></script>
-  <script src="/src/js/features/duniya-story.js?v=d7cfd9bd"></script>
+  <script src="/src/js/features/duniya-story.js?v=82cd8dda"></script>
   <script src="/src/js/features/duniya-story-media.js?v=473e1661"></script>
   <script src="/src/js/features/duniya-story-editor.js?v=9dca5002"></script>
   <script src="/src/js/features/duniya-story-viewer.js?v=051aa2ce"></script>
   <script src="/src/js/features/duniya-compose.js?v=96ab755b"></script>
-  <script src="/src/js/features/duniya.js?v=172e2692"></script>
+  <script src="/src/js/features/duniya.js?v=495a8e41"></script>
   <script src="/src/js/core/archive-bootstrap.js?v=e50b274d"></script>
   <script src="/src/js/features/media-picker.js?v=062de9b6"></script>
   <script src="/src/js/features/premium.js?v=92e2d244"></script>

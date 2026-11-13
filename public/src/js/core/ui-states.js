@@ -192,6 +192,7 @@
     METHOD_NOT_ALLOWED: 'bad_request',
     CONFIG_INVALID: 'bad_request',
     RATE_LIMITED: 'rate_limited',
+    TRANSLATE_OFF: 'translate_failed',
     FORBIDDEN: 'forbidden',
     FIRESTORE_DENIED: 'forbidden',
     UNAUTHORIZED: 'sign_in_required',

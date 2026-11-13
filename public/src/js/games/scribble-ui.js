@@ -522,7 +522,7 @@
       return txt ? `<li class="sc-msg is-sys">${esc(txt)}</li>` : '';
     }
     if (c.k === 'close') return `<li class="sc-msg is-close">${esc(c.t)}</li>`;
-    return `<li class="sc-msg"><b>${esc(who)}</b> ${esc(c.t || '')}</li>`;
+    return `<li class="sc-msg"><b>${esc(who)}</b> ${typeof ugcHtml === 'function' ? ugcHtml('scribble_chat', esc(c.t || ''), { scope: 'private' }) : esc(c.t || '')}</li>`;
   }
 
   function openPlayerSheet(ctrl, st, id) {

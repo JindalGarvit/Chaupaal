@@ -251,6 +251,8 @@
       (!view.locked
         ? [dp.currentCity || dp.city || u.city, dp.occupation || dp.headline].filter(Boolean).join(' · ')
         : '');
+    // Translate (L7): only a public profile may use the shared server cache.
+    const profileScope = String(dp.profileVisibility || u.profileVisibility || 'public') === 'public' ? 'public' : 'private';
     const lockedNote = view.locked
       ? `<p class="public-profile-locked-note">${tHtml('common.locked_profile_note', { visibility: view.visibilityLabel || t('common.private_profile') })}</p>`
       : '';
@@ -267,8 +269,8 @@
           </div>
           <div class="public-profile-name">${nameHtml}</div>
           ${uname ? `<div class="public-profile-uname">@${esc(uname)}</div>` : ''}
-          ${identityLine ? `<div class="public-profile-identity">${esc(identityLine)}</div>` : ''}
-          ${bioHtml ? `<p class="public-profile-bio">${bioHtml}</p>` : ''}
+          ${identityLine ? `<div class="public-profile-identity">${typeof ugcHtml === 'function' ? ugcHtml('profile_identity', esc(identityLine), { scope: profileScope }) : esc(identityLine)}</div>` : ''}
+          ${bioHtml ? `<p class="public-profile-bio">${typeof ugcHtml === 'function' ? ugcHtml('profile_bio', bioHtml, { scope: profileScope, v: dp.updatedAt || '' }) : bioHtml}</p>` : ''}
           ${lockedNote}
           <div data-public-profile-counts data-rel-counts-uid="${esc(profileUid)}" class="relationship-counts-loading public-profile-chrome-slot">
             <span class="public-profile-chrome-label">${tHtml('common.connections')}</span>

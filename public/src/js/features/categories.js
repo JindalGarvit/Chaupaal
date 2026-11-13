@@ -1923,7 +1923,7 @@ function openPeepalCommentsSheet(q,{focusCommentId=null,focusComposer=false}={})
   function refreshComments(){
     refreshPeepalPreviewComments(q);
     listEl.innerHTML = typeof renderCommentsHtml === 'function'
-      ? renderCommentsHtml(comments,{ surface:'peepal', previewReplies:2 })
+      ? renderCommentsHtml(comments,{ surface:'peepal', previewReplies:2, scope:'public' })
       : '';
     if(typeof wireCommentsList==='function'){
       wireCommentsList(listEl, comments, {
@@ -2116,7 +2116,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
           <div class="peepal-user-meta">${escPeepalText(q.user.city||'')} · ${escPeepalText(typeof formatRelativeTime==='function'?formatRelativeTime(q.timeAgo||q.ts):q.timeAgo)}</div>
         </div>
       </div>
-      <div class="peepal-question-text">${escPeepalText(q.question)}</div>
+      <div class="peepal-question-text">${typeof ugcHtml==='function'?ugcHtml('peepal_question',escPeepalText(q.question),{ scope:'public', v:q.editedAt||'' }):escPeepalText(q.question)}</div>
       ${q.attachment?.type==='image'?`<div class="peepal-media"${attachmentWrapAttrs}><img src="${typeof mediaUrlFor==='function'?mediaUrlFor({media:q.attachment.data,thumb:q.attachment.thumb},'detail'):(q.attachment.data||q.attachment.thumb)}" alt="${tHtml('peepal.image_for_post', { name: q.user?.name||'Peepal' })}" decoding="async"${attachmentSizeAttrs}></div>`:''}
       ${renderPeepalOptions(q)}
       ${renderPeepalReactionBar(q)}
@@ -2127,7 +2127,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
       </div>
       <div style="font-size:13px;font-weight:700;margin-bottom:12px;">${tHtml('peepal.comments_count_title', { count: q.comments || 0 })}</div>
       <div id="peepalCommentsList" class="comments-list">
-        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments):''}
+        ${typeof renderCommentsHtml==='function'?renderCommentsHtml(comments,{ scope:'public' }):''}
       </div>
     </div>
     <div id="peepalReplyHint" class="comment-reply-hint hidden"></div>
@@ -2225,7 +2225,7 @@ function openPeepalDetail(q,{focusCommentId=null,focusComposer=false}={}){
 
   function refreshComments() {
     if (!listEl) return;
-    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments) : '';
+    listEl.innerHTML = typeof renderCommentsHtml === 'function' ? renderCommentsHtml(comments,{ scope:'public' }) : '';
     if (typeof wireCommentsList === 'function') {
       wireCommentsList(listEl, comments, {
         ...commentActions,

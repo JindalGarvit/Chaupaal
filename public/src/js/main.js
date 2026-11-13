@@ -123,6 +123,7 @@
             }catch(e){}
             try{ if(typeof baithakMsgCache?.clearAll==='function') baithakMsgCache.clearAll(); }catch(e){}
             try{ if(typeof commentMsgCache?.clearAll==='function') commentMsgCache.clearAll(); }catch(e){}
+            try{ if(typeof ChaupaalTranslate?.clearAll==='function') ChaupaalTranslate.clearAll(); }catch(e){}
             // Guests: onboarding only — never auto-stack auth mid-onboarding.
             // Soft "Sign in to save" banner appears after onboarding finishes.
             setTimeout(()=>{

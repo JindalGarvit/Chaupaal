@@ -272,6 +272,19 @@
       },
     });
 
+    const TR = typeof ChaupaalTranslate !== 'undefined' ? ChaupaalTranslate : null;
+    if (TR && TR.enabled() && !chat.isSelf && !chat.isChaupaal) {
+      const autoOn = TR.isChatAuto(id);
+      actions.push({
+        label: autoOn ? t('translate.auto_chat_off') : t('translate.auto_chat_on'),
+        icon: 'globe',
+        fn: async () => {
+          const ok = await TR.setChatAuto(id, !autoOn);
+          if (ok && typeof showToast === 'function') showToast(autoOn ? t('translate.auto_chat_off_done') : t('translate.auto_chat_on_done'));
+        },
+      });
+    }
+
     actions.push({
       label: tt('baithak_mark_unread', 'Mark as unread'),
       icon: 'mail',

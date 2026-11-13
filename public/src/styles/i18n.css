@@ -48,6 +48,29 @@ bdi,
   text-align: start;
 }
 
+/* ── Translate (L7): user text keeps its own direction; the link is small, inline and calm ── */
+.ugc-text { unicode-bidi: isolate; }
+.ugc-tr-bar {
+  display: inline-block;
+  margin-inline-start: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted, #6b7280);
+  unicode-bidi: isolate;
+}
+.ugc-tr {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #2563eb);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+[data-ugc-place="inside"] > .ugc-tr-bar { display: block; margin: 4px 0 0; color: inherit; opacity: 0.85; }
+[data-ugc-place="inside"] .ugc-tr { color: inherit; }
+
 /* ── Directional icons mirror in RTL; media, logos, clocks, boards and cards never do ── */
 /* Text arrows (←) flip as a whole; SVG arrows already carry .cp-flip-rtl (never flip both).
    ‹ › « » are Unicode bidi-mirrored and flip on their own — don't add them here. */

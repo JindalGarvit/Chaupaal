@@ -6,6 +6,8 @@
  *      party_cards = most-flagged party cards ("Bad card"), retired first (server-lib/party-content.js)
  *      dangal_ai   = Dangal AI caps table + per-hook per-day calls / cache hits / fallbacks / errors / est. $
  *                    (Firestore dangalAiStats/{day}, server-lib/dangal-ai.js)
+ *      translate   = Translate flag + per-surface per-day requests / cache hits / failures / capped / est. $
+ *                    (Firestore translateStats/{day}, server-lib/translate.js) — counts only, no content
  * POST { action: 'revert_intent_weights', profileId }  (intent weights only)
  * POST { action: 'quiz_approve' | 'quiz_retire', qid }  (Quiz Muqabala moderation)
  *
@@ -100,6 +102,26 @@ module.exports = async function handler(req, res) {
       const shared = AI.sharedAI({ db, admin });
       await shared.flushStats(true).catch(() => {});
       return sendSuccess(res, { policy: AI.policyTable(), costPerCall: AI.COST_BY_TIER, days: rows, budget, instance: shared.telemetry() });
+    }
+
+    if (view === 'translate') {
+      const T = require('../server-lib/translate');
+      const days = Math.min(14, Math.max(1, Number(req.query?.days) || 7));
+      const rows = [];
+      for (let i = 0; i < days; i++) {
+        const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        try {
+          const snap = await db.collection('translateStats').doc(day).get();
+          if (snap.exists) rows.push(Object.assign({ day }, snap.data() || {}));
+        } catch (e) {}
+      }
+      let budget = null;
+      try {
+        const b = await db.collection('chaupaalMeta').doc('translateBudget').get();
+        budget = b.exists ? b.data() || null : null;
+      } catch (e) {}
+      const f = T.flags();
+      return sendSuccess(res, { flag: { enabled: f.enabled, reason: f.reason || '', provider: f.provider || null }, costPerChar: T.COST_PER_CHAR, days: rows, budget });
     }
 
     if (view === 'party_cards') {

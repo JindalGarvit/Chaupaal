@@ -1194,7 +1194,7 @@ function renderMsgBubble(m, isGroup){
 
   if(m.music && typeof renderMusicCard==='function'){
     const card=renderMusicCard(m.music,{variant:'chat'});
-    const caption=(typeof m.text==='string' && m.text && !m.text.includes('data-music-card') && !/^🎵\s/.test(m.text))?`<div class="music-card-caption">${chatEsc(m.text)}</div>`:'';
+    const caption=(typeof m.text==='string' && m.text && !m.text.includes('data-music-card') && !/^🎵\s/.test(m.text))?`<div class="music-card-caption">${typeof ugcHtml==='function'?ugcHtml('baithak_caption',chatEsc(m.text),{ scope:'private' }):chatEsc(m.text)}</div>`:'';
     body=card+(caption||'');
     rich=true;
   } else if(att && att.type==='photo' && att.url){
@@ -1308,7 +1308,7 @@ function renderMsgBubble(m, isGroup){
   // App-written labels ("📷 Photo", "Sent a story") are stored in English; user text shows as typed.
   if(!rich){
     const auto=typeof ChatEvents!=='undefined'?ChatEvents.autoText(body):null;
-    body=chatEsc(auto!=null?auto:body);
+    body=auto!=null?chatEsc(auto):(typeof ugcHtml==='function'?ugcHtml('baithak_msg',chatEsc(body),{ scope:'private' }):chatEsc(body));
   }
 
   const deliveryKey = 'chat.status.' + (m.failed ? 'failed' : m.pending ? 'sending' : m.read ? 'read' : m.delivered ? 'delivered' : 'sent');

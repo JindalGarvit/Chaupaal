@@ -114,7 +114,7 @@
         <div class="comment-body">
           <div class="comment-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml((c.user && c.user.name) || t('common.user'), c.user) : escapeHtml((c.user && c.user.name) || t('common.user'))}</div>
           ${replyLabel}
-          <div class="comment-text">${c.deleted ? escapeHtml(tt('comment_deleted', 'Comment deleted')) : formatCommentText(c.text)}</div>
+          <div class="comment-text">${c.deleted ? escapeHtml(tt('comment_deleted', 'Comment deleted')) : typeof ugcHtml === 'function' ? ugcHtml(surface + '_comment', formatCommentText(c.text), { scope: o.scope === 'public' ? 'public' : 'private', v: c.editedAt || '' }) : formatCommentText(c.text)}</div>
           <div class="comment-meta">
             <span class="comment-time">${escapeHtml(c.time || t('common.just_now_2'))}${c.editedAt ? ' · edited' : ''}</span>
             ${!c.deleted ? `<button type="button" class="comment-reply-btn" data-reply="${escapeHtml(c.id)}">${escapeHtml(tt('comment_reply', 'Reply'))}</button>` : ''}
@@ -139,6 +139,7 @@
         const hidden = replies.slice(preview);
         const rowOpts = {
           surface: o.surface || 'peepal',
+          scope: o.scope,
           likedMap: o.likedMap,
           commentById,
           allComments: comments,

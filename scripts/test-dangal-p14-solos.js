@@ -256,7 +256,8 @@ async function main() {
     const dupe = await Solo.soloAction(db, 'uA', { op: 'submit', game: 'ankjod', board, run: { solution: digits, ms: msA - 5000, hints: 0 }, token: sA.token }, t0 + msA + 9000);
     assert(dupe.ranked === false && dupe.reason === 'practice', 'a second submission for the same Daily is practice, never ranked');
     const sB = await Solo.soloAction(db, 'uB', { op: 'daily_start', game: 'ankjod', dayNo: today }, t0);
-    const lie = await Solo.soloAction(db, 'uB', { op: 'submit', game: 'ankjod', board, run: { solution: digits, ms: cells * 500, hints: 0 }, token: sB.token }, t0 + 1000);
+    // Longer than 1 s elapsed + the 10 s start slack, whatever today's puzzle size.
+    const lie = await Solo.soloAction(db, 'uB', { op: 'submit', game: 'ankjod', board, run: { solution: digits, ms: Math.max(cells * 500, 20000), hints: 0 }, token: sB.token }, t0 + 1000);
     assert(lie.ranked === false && lie.reason === 'timing', 'a Daily time longer than the time since it started is rejected');
     const sC = await Solo.soloAction(db, 'uC', { op: 'daily_start', game: 'ankjod', dayNo: today }, t0);
     await Solo.soloAction(db, 'uC', { op: 'submit', game: 'ankjod', board, run: { solution: digits, ms: cells * 600, hints: 0 }, token: sC.token }, t0 + cells * 600 + 1000);

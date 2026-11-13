@@ -379,7 +379,7 @@
     if (mode === 'nhie') {
       return `<div class="ml-prompt ml-prompt--nhie">${tag}
         <div class="ml-prompt-lead">${esc(typeof t === 'function' ? t('nhie_lead', 'Never have I ever…') : t('games.mostlikely.never_have_i_ever_3'))}</div>
-        <div class="ml-prompt-q">${esc(nhieText(prompt))}</div>
+        <div class="ml-prompt-q">${prompt && prompt.custom && typeof ugcHtml === 'function' ? ugcHtml('dangal_custom_prompt', esc(nhieText(prompt)), { scope: 'private' }) : esc(nhieText(prompt))}</div>
       </div>`;
     }
     if (mode === 'wyr') {
@@ -394,7 +394,7 @@
     }
     const l = C.promptLines(prompt, 'mlt', lang(), both());
     return `<div class="ml-prompt">${langBtn()}${tag}
-      <div class="ml-prompt-q">${esc(l.primary)}</div>
+      <div class="ml-prompt-q">${prompt && prompt.custom && typeof ugcHtml === 'function' ? ugcHtml('dangal_custom_prompt', esc(l.primary), { scope: 'private' }) : esc(l.primary)}</div>
       ${l.secondary ? `<div class="ml-prompt-sub">${esc(l.secondary)}</div>` : ''}
     </div>`;
   }

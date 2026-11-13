@@ -182,7 +182,7 @@ function stickerText(type, value) {
       const pill = ov.bg ? ' is-pill' : '';
       const st = ov.style === 'serif' ? ' is-serif' : ov.style === 'poster' ? ' is-poster' : '';
       const bg = ov.bg ? `background:${esc(ov.bg)};` : '';
-      return `<div class="${cls} ds-text${pill}${st}" data-ov="${id}" style="${style}color:${esc(ov.color || '#fff')};${bg}text-align:${esc(ov.align || 'center')}">${esc(ov.text)}</div>`;
+      return `<div class="${cls} ds-text${pill}${st}" data-ov="${id}" style="${style}color:${esc(ov.color || '#fff')};${bg}text-align:${esc(ov.align || 'center')}">${typeof ugcHtml === 'function' ? ugcHtml('duniya_story_text', esc(ov.text), { scope: 'private', place: 'inside' }) : esc(ov.text)}</div>`;
     }
     if (ov.type === 'emoji') return `<div class="${cls} ds-emoji" data-ov="${id}" style="${style}">${esc(ov.emoji)}</div>`;
     if (ov.type === 'gif') {
