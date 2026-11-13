@@ -4,10 +4,12 @@
  *
  * getRegionPrefs() is the one place later prompts read region defaults from: currency, phone
  * calling code, time zone, first day of week, 12/24 h, measurement system, and the content
- * region/area used for regional packs and sources (L6). Surfaces don't consume it yet.
+ * region/area used for regional packs and sources (L6: icebreakers, Akhbaar sources, seasonal
+ * calendar, Dangal defaults). Settings overrides (currency, 12/24 h, first day, measurement) win.
  *
  * Storage: guests → localStorage `chaupaal_region` { country, source }; signed in → users/{uid}.region
- * (same shape). source 'user' (picked in Settings) always beats 'auto' (detected).
+ * (same shape). source 'user' (picked in Settings) always beats 'auto' (detected). Overrides →
+ * `chaupaal_region_overrides` + users/{uid}.regionPrefs (departures from the derived defaults only).
  */
 (function () {
   'use strict';
@@ -290,6 +292,13 @@
    * Returns profile fields to write when this device knows better ({} when nothing to write).
    */
   function hydrateFromProfile(profile) {
+    const writes = {};
+    // Overrides: the profile's set wins (null = cleared on another device); none yet → upload this device's.
+    if (profile && 'regionPrefs' in profile) writeOverrides(cleanOverrides(profile.regionPrefs));
+    else {
+      const local = getOverrides();
+      if (Object.keys(local).length) writes.regionPrefs = local;
+    }
     const remote = profile && profile.region && validCountry(profile.region.country) ? profile.region : null;
     const local = getRegion();
     if (remote && (remote.source === 'user' || local.source !== 'user')) {
@@ -298,9 +307,10 @@
       const sub = validSubdivision(country, remote.subdivision);
       if (sub) rec.subdivision = sub;
       writeStored(rec);
-      return {};
+      return writes;
     }
-    return { region: local };
+    writes.region = local;
+    return writes;
   }
 
   function intlWeekStart(country) {
@@ -323,28 +333,106 @@
     return null;
   }
 
-  /** Defaults every surface should read region-dependent behaviour from (consumed from L6). */
-  function getRegionPrefs(code) {
-    const country = validCountry(code) || getRegion().country;
+  // ─── Overrides (Global L6): Settings → Language & region → More ──────────────────
+  // Each derived default (currency, 12/24 h, first day of week, measurement) can be pinned by the
+  // user. Stored as departures only: localStorage `chaupaal_region_overrides` + users/{uid}.regionPrefs.
+  const LS_OVR = 'chaupaal_region_overrides';
+  const OVERRIDE_FIELDS = ['currency', 'hour12', 'firstDayOfWeek', 'measurement'];
+  const MEASUREMENTS = ['metric', 'imperial', 'uk'];
+
+  function cleanOverrides(o) {
+    const src = o && typeof o === 'object' ? o : {};
+    const out = {};
+    const cur = String(src.currency || '').toUpperCase();
+    if (/^[A-Z]{3}$/.test(cur) && Object.values(COUNTRIES).some((c) => c.currency === cur)) out.currency = cur;
+    if (typeof src.hour12 === 'boolean') out.hour12 = src.hour12;
+    const fd = Number(src.firstDayOfWeek);
+    if (src.firstDayOfWeek != null && src.firstDayOfWeek !== '' && Number.isInteger(fd) && fd >= 0 && fd <= 6) out.firstDayOfWeek = fd;
+    if (MEASUREMENTS.indexOf(src.measurement) >= 0) out.measurement = src.measurement;
+    return out;
+  }
+
+  function getOverrides() {
+    try {
+      return cleanOverrides(JSON.parse(localStorage.getItem(LS_OVR) || 'null'));
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeOverrides(o) {
+    try {
+      if (Object.keys(o).length) localStorage.setItem(LS_OVR, JSON.stringify(o));
+      else localStorage.removeItem(LS_OVR);
+    } catch (e) {}
+  }
+
+  /** value null / undefined / 'auto' clears the override (back to the Region default). */
+  function setOverride(field, value, opts) {
+    const o = opts || {};
+    if (OVERRIDE_FIELDS.indexOf(field) < 0) return getOverrides();
+    const next = getOverrides();
+    if (value == null || value === 'auto' || value === '') delete next[field];
+    else Object.assign(next, cleanOverrides({ [field]: value }));
+    writeOverrides(next);
+    if (o.persistRemote) profileWrite({ regionPrefs: Object.keys(next).length ? next : null });
+    try {
+      document.dispatchEvent(new CustomEvent('chaupaal:region-changed', { detail: Object.assign({}, getRegion(), { overrides: next }) }));
+    } catch (e) {}
+    return next;
+  }
+
+  /** Defaults derived from the country alone (what "Automatic" means in Settings). */
+  function derivedPrefs(country) {
     const c = COUNTRIES[country];
-    const detected = detectRegion();
-    const deviceTz = deviceTimeZone();
     const weekStart = intlWeekStart(country);
     const hour12 = intlHour12(country);
     return {
-      country,
-      subdivision: country === getRegion().country ? getSubdivision() : null,
-      name: c.name,
       currency: c.currency,
-      callingCode: c.callingCode,
-      // The phone's clock when it is in this country (or we can't tell); else UTC as a neutral default.
-      timeZone: detected.country === country || !TZ_COUNTRY[deviceTz] ? deviceTz || 'UTC' : 'UTC',
       firstDayOfWeek: weekStart != null ? weekStart : SUNDAY_START.has(country) ? 0 : SATURDAY_START.has(country) ? 6 : 1,
       hour12: hour12 != null ? hour12 : HOUR12.has(country),
       measurement: IMPERIAL.has(country) ? 'imperial' : country === 'GB' ? 'uk' : 'metric',
-      contentRegion: country.toLowerCase(),
-      contentArea: AREA_OF[country] || 'global',
     };
+  }
+
+  /**
+   * Defaults every surface should read region-dependent behaviour from. For the user's own region
+   * the Settings overrides win; asking about another country (getRegionPrefs('DE')) gives its plain
+   * defaults. `defaults` = the derived values, `overridden` = which fields the user pinned.
+   */
+  function getRegionPrefs(code) {
+    const own = getRegion().country;
+    const country = validCountry(code) || own;
+    const c = COUNTRIES[country];
+    const detected = detectRegion();
+    const deviceTz = deviceTimeZone();
+    const defaults = derivedPrefs(country);
+    const ovr = country === own ? getOverrides() : {};
+    const overridden = {};
+    OVERRIDE_FIELDS.forEach((f) => {
+      if (f in ovr) overridden[f] = true;
+    });
+    return Object.assign(
+      {
+        country,
+        subdivision: country === own ? getSubdivision() : null,
+        name: c.name,
+        callingCode: c.callingCode,
+        // The phone's clock when it is in this country (or we can't tell); else UTC as a neutral default.
+        timeZone: detected.country === country || !TZ_COUNTRY[deviceTz] ? deviceTz || 'UTC' : 'UTC',
+        contentRegion: country.toLowerCase(),
+        contentArea: AREA_OF[country] || 'global',
+        defaults,
+        overridden,
+      },
+      defaults,
+      ovr
+    );
+  }
+
+  /** Sorted unique ISO 4217 codes for the currency override picker. */
+  function listCurrencies() {
+    return Array.from(new Set(Object.values(COUNTRIES).map((c) => c.currency))).sort();
   }
 
   /** [{ code, name }] sorted for the picker; names localised via Intl.DisplayNames when available. */
@@ -363,6 +451,13 @@
         return { code: c.code, name, en: c.name };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** 'GB' → 🇬🇧 (regional indicator pair); '' for unknown codes. */
+  function flagEmoji(code) {
+    const c = validCountry(code);
+    if (!c) return '';
+    return String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65, 0x1f1e6 + c.charCodeAt(1) - 65);
   }
 
   function countryName(code, lang) {
@@ -387,6 +482,11 @@
     US_STATES,
     hydrateFromProfile,
     getRegionPrefs,
+    getOverrides,
+    setOverride,
+    OVERRIDE_FIELDS,
+    listCurrencies,
+    flagEmoji,
     listCountries,
     countryName,
   };

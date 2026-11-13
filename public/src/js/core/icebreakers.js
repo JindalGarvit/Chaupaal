@@ -29,17 +29,11 @@
       heavy: true,
     },
     { id: 'ib13', category: 'reflective', text: t('profile.what_s_a_place_that_feels') },
-    // Chaupaal / India / community (14–18) — weighted first in suggestions
-    { id: 'ib14', category: 'local', text: t('profile.what_s_your_go_to_order') },
+    // Local / community — global wording; regional flavour comes from REGIONAL_PROMPTS
     {
       id: 'ib15',
       category: 'local',
       text: t('profile.if_friends_landed_in_your_city'),
-    },
-    {
-      id: 'ib16',
-      category: 'local',
-      text: t('profile.which_indian_festival_hits_different_for'),
     },
     {
       id: 'ib17',
@@ -47,10 +41,90 @@
       text: t('profile.what_s_a_local_slang_word'),
     },
     { id: 'ib18', category: 'local', text: t('profile.train_journey_or_road_trip_and') },
+    { id: 'ib21', category: 'local', text: t('profile.ib.go_to_order') },
+    { id: 'ib22', category: 'local', text: t('profile.ib.festival') },
     // Extras (19–20)
     { id: 'ib19', category: 'extra', text: t('profile.what_s_something_you_re_learning') },
     { id: 'ib20', category: 'extra', text: t('profile.what_s_a_compliment_you_still') },
   ];
+  const CORE_PROMPTS = ICEBREAKER_PROMPTS.slice();
+
+  /**
+   * Optional regional sets (Global L6), picked by the user's Region (contentRegion) — never by UI
+   * language. ib14 / ib16 keep their ids so answers saved before L6 still resolve to the same question.
+   */
+  const REGIONAL_PROMPTS = {
+    in: [
+      { id: 'ib14', category: 'local', text: t('profile.what_s_your_go_to_order') },
+      { id: 'ib16', category: 'local', text: t('profile.which_indian_festival_hits_different_for') },
+    ],
+    pk: [
+      { id: 'ib_pk1', category: 'local', text: t('profile.ib.pk_chai') },
+      { id: 'ib_pk2', category: 'local', text: t('profile.ib.pk_eid') },
+    ],
+    bd: [
+      { id: 'ib_bd1', category: 'local', text: t('profile.ib.bd_adda') },
+      { id: 'ib_bd2', category: 'local', text: t('profile.ib.bd_boishakh') },
+    ],
+    us: [
+      { id: 'ib_us1', category: 'local', text: t('profile.ib.us_road_trip') },
+      { id: 'ib_us2', category: 'local', text: t('profile.ib.us_holiday_dish') },
+    ],
+    gb: [
+      { id: 'ib_gb1', category: 'local', text: t('profile.ib.gb_tea') },
+      { id: 'ib_gb2', category: 'local', text: t('profile.ib.gb_chippy') },
+    ],
+    gulf: [
+      { id: 'ib_gulf1', category: 'local', text: t('profile.ib.gulf_karak') },
+      { id: 'ib_gulf2', category: 'local', text: t('profile.ib.gulf_weekend') },
+    ],
+    br: [
+      { id: 'ib_br1', category: 'local', text: t('profile.ib.br_padaria') },
+      { id: 'ib_br2', category: 'local', text: t('profile.ib.br_festa') },
+    ],
+    de: [
+      { id: 'ib_de1', category: 'local', text: t('profile.ib.de_bakery') },
+      { id: 'ib_de2', category: 'local', text: t('profile.ib.de_market') },
+    ],
+    jp: [
+      { id: 'ib_jp1', category: 'local', text: t('profile.ib.jp_konbini') },
+      { id: 'ib_jp2', category: 'local', text: t('profile.ib.jp_season') },
+    ],
+    id: [
+      { id: 'ib_id1', category: 'local', text: t('profile.ib.id_street_food') },
+      { id: 'ib_id2', category: 'local', text: t('profile.ib.id_lebaran') },
+    ],
+  };
+  const REGIONAL_SET_OF = {
+    IN: 'in', PK: 'pk', BD: 'bd', US: 'us', GB: 'gb', IM: 'gb', JE: 'gb', GG: 'gb',
+    AE: 'gulf', SA: 'gulf', QA: 'gulf', KW: 'gulf', BH: 'gulf', OM: 'gulf',
+    BR: 'br', PT: 'br', DE: 'de', AT: 'de', CH: 'de', JP: 'jp', ID: 'id',
+  };
+  Object.values(REGIONAL_PROMPTS).forEach((list) =>
+    list.forEach((p) => {
+      p.regional = true;
+      ICEBREAKER_PROMPTS.push(p);
+    })
+  );
+
+  function userCountry() {
+    try {
+      return typeof getRegionPrefs === 'function' ? getRegionPrefs().country : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /** Regional set id for a country ('' = global core only). */
+  function regionalSetFor(country) {
+    return REGIONAL_SET_OF[String(country || '').toUpperCase()] || '';
+  }
+
+  /** Prompts offered to this user: the global core + their Region's set (if any). */
+  function activePrompts(country) {
+    const set = regionalSetFor(country === undefined ? userCountry() : country);
+    return CORE_PROMPTS.concat(set ? REGIONAL_PROMPTS[set] : []);
+  }
 
   const CELEBRATION_LINES = /* i18n-copy */ [
     t('profile.nice_answer_that_s_exactly_the'),
@@ -93,29 +167,29 @@
   }
 
   /**
-   * Weighted suggestion: local first, then fun/reflective/deep/extra.
-   * Heavy #12 (ib12) only after user has ≥1 lighter answer.
+   * Weighted suggestion over the user's prompts (global core + their Region's set): a regional prompt
+   * ~1 in 3 when the Region has a set, otherwise lighter prompts first. No region gets extra weight by
+   * default. Heavy #12 (ib12) only after the user has ≥1 lighter answer.
    */
-  function suggestIcebreakerPrompt(answers = getMyIcebreakers()) {
+  function suggestIcebreakerPrompt(answers = getMyIcebreakers(), opts = {}) {
+    const rnd = typeof opts.random === 'function' ? opts.random : Math.random;
     const taken = answeredIds(answers);
     const unlockedHeavy = answers.length >= 1;
-    const pool = ICEBREAKER_PROMPTS.filter((p) => {
+    const pool = activePrompts(opts.country).filter((p) => {
       if (taken.has(p.id)) return false;
       if (p.heavy && !unlockedHeavy) return false;
       return true;
     });
     if (!pool.length) return null;
-    const local = pool.filter((p) => p.category === 'local');
-    const rest = pool.filter((p) => p.category !== 'local');
-    // ~65% chance to pick local when available
-    if (local.length && (Math.random() < 0.65 || !rest.length)) {
-      return local[Math.floor(Math.random() * local.length)];
+    const regional = pool.filter((p) => p.regional);
+    const rest = pool.filter((p) => !p.regional);
+    if (regional.length && (rnd() < 0.35 || !rest.length)) {
+      return regional[Math.floor(rnd() * regional.length)];
     }
-    const lightFirst = rest.filter((p) => p.category === 'fun' || p.category === 'reflective' || p.category === 'extra');
-    const deep = rest.filter((p) => p.category === 'deep');
-    const tier = lightFirst.length && Math.random() < 0.7 ? lightFirst : rest.length ? rest : deep;
+    const lightFirst = rest.filter((p) => p.category === 'fun' || p.category === 'reflective' || p.category === 'extra' || p.category === 'local');
+    const tier = lightFirst.length && rnd() < 0.7 ? lightFirst : rest;
     const use = tier.length ? tier : pool;
-    return use[Math.floor(Math.random() * use.length)];
+    return use[Math.floor(rnd() * use.length)];
   }
 
   function normalizeAnswers(list) {
@@ -531,7 +605,7 @@
       browsePanel.hidden = !browsePanel.hidden;
       if (browsePanel.hidden) return;
       const cats = { local: t('profile.india_local'), fun: t('profile.cat_fun'), reflective: t('profile.cat_reflective'), deep: t('profile.cat_deep'), extra: t('profile.cat_extra') };
-      browsePanel.innerHTML = ICEBREAKER_PROMPTS.filter((p) => !taken.has(p.id) && !(p.heavy && !unlockedHeavy))
+      browsePanel.innerHTML = activePrompts().filter((p) => !taken.has(p.id) && !(p.heavy && !unlockedHeavy))
         .map(
           (p) =>
             `<button type="button" class="icebreaker-browse-item" data-pick="${p.id}"><div class="icebreaker-browse-cat">${cats[p.category] || p.category}</div>${p.text}</button>`
@@ -645,6 +719,13 @@
   }
 
   window.ICEBREAKER_PROMPTS = ICEBREAKER_PROMPTS;
+  window.ICEBREAKER_CORE_PROMPTS = CORE_PROMPTS;
+  window.ICEBREAKER_REGIONAL_PROMPTS = REGIONAL_PROMPTS;
+  window.icebreakerRegionalSetFor = regionalSetFor;
+  window.activeIcebreakerPrompts = activePrompts;
+  window.ICEBREAKER_REGIONAL_PROMPTS = REGIONAL_PROMPTS;
+  window.icebreakerSetFor = regionalSetFor;
+  window.activeIcebreakerPrompts = activePrompts;
   window.getIcebreakerPromptById = getPromptById;
   window.suggestIcebreakerPrompt = suggestIcebreakerPrompt;
   window.getMyIcebreakers = getMyIcebreakers;

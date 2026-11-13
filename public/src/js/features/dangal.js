@@ -34,11 +34,21 @@ const AI_FILTERS = {
 
 let selectedFilters = {};
 
+/** Country filter default = the user's Region when it's in the list (Global L6), else Any. */
+function aiFinderDefaultCountry(){
+  try{
+    const code = typeof getRegionPrefs === 'function' ? getRegionPrefs().country : '';
+    const alias = { GB:'UK', US:'USA', AE:'UAE', TR:'Turkey' };
+    const name = alias[code] || (typeof ChaupaalRegion !== 'undefined' && ChaupaalRegion.COUNTRIES[code] ? ChaupaalRegion.COUNTRIES[code].name : '');
+    return UN_COUNTRIES.includes(name) ? name : 'Any';
+  }catch(e){ return 'Any'; }
+}
+
 function openAIFinder(){
   const overlay = document.getElementById('aiFinder');
   overlay.classList.remove('hidden');
   requestAnimationFrame(()=>overlay.classList.add('open'));
-  selectedFilters = {country:'India', category:'GK', level:t('dangal.filter.similar_to_me')};
+  selectedFilters = {country:aiFinderDefaultCountry(), category:'GK', level:t('dangal.filter.similar_to_me')};
 
   overlay.innerHTML = `
     <div class="ai-finder-header">
@@ -121,7 +131,7 @@ function openAIFinder(){
       const data = await callAI({
           tier:'fast', max_tokens:300, feature:'dangal_matchmaking',
       lang: typeof aiUiLang==='function'?aiUiLang():undefined, langJson: true,
-          system:`You are a matchmaking assistant for Chaupaal, an Indian news quiz app. A user describes their ideal Muqabala opponent. Extract filters and return ONLY JSON: {"region":"...","country":"...","gender":"...","age":"...","category":"...","level":"...","summary":"one friendly sentence about who we will find"}. Use these options - region: ${AI_FILTERS.region.join('/')}, gender: ${AI_FILTERS.gender.join('/')}, age: ${AI_FILTERS.age.join('/')}, category: ${AI_FILTERS.category.join('/')}, level: ${AI_FILTERS.level.join('/')}. If not mentioned use "Any" or "Similar to me".`,
+          system:`You are a matchmaking assistant for Chaupaal, a global social app with news quizzes. A user describes their ideal Muqabala opponent. Extract filters and return ONLY JSON: {"region":"...","country":"...","gender":"...","age":"...","category":"...","level":"...","summary":"one friendly sentence about who we will find"}. Use these options - country: ${AI_FILTERS.country.join('/')}, region (only when the country is India): ${AI_FILTERS.region.join('/')}, gender: ${AI_FILTERS.gender.join('/')}, age: ${AI_FILTERS.age.join('/')}, category: ${AI_FILTERS.category.join('/')}, level: ${AI_FILTERS.level.join('/')}. If not mentioned use "Any" or "Similar to me".`,
           messages:[{role:"user",content:text}]
         });
       const raw = data.text||data.content?.map(b=>b.text||'').join('')||'{}';
@@ -259,7 +269,7 @@ function wirePeepalAskAiTarget(){
       const data = await callAI({
           tier:'fast', max_tokens:200, feature:'peepal_ai_target',
       lang: typeof aiUiLang==='function'?aiUiLang():undefined,
-          system:`You are a content targeting assistant for Chaupaal, an Indian social news app. Given a question, suggest the most relevant target audience in 1-2 sentences. Be specific and friendly. Consider Indian demographics. Light markdown is OK.`,
+          system:`You are a content targeting assistant for Chaupaal, a global social news app. Given a question, suggest the most relevant target audience in 1-2 sentences. Be specific and friendly. Consider the asker's region and audience; don't assume a country. Light markdown is OK.`,
           messages:[{role:"user",content:t('dangal.question_value_who_should_this_reach', { value: qText||t('dangal.general_question') })}]
         });
       const text = data.text||data.content?.map(b=>b.text||'').join('')||t('dangal.best_for_general_audience');
@@ -392,7 +402,7 @@ async function generateMuqabalaQuestionsAI({ category, count } = {}){
       tier: 'fast',
       max_tokens: 1400,
       feature: 'muqabala_quiz_gen',
-      system: `You generate multiple-choice quiz questions for Chaupaal Muqabala (Indian social news quiz). Return ONLY a JSON array of ${n} objects: [{"q":"question text","options":["A","B","C","D"],"correct":0}] where correct is the 0-based index of the right answer. Category focus: ${cat}. Keep options short. No markdown fences.`,
+      system: `You generate multiple-choice quiz questions for Chaupaal Muqabala (the news quiz in a global social app; questions should make sense to players anywhere). Return ONLY a JSON array of ${n} objects: [{"q":"question text","options":["A","B","C","D"],"correct":0}] where correct is the 0-based index of the right answer. Category focus: ${cat}. Keep options short. No markdown fences.`,
       messages: [{ role: 'user', content: t('dangal.generate_n_cat_mcq_questions_for', { n, cat }) }],
     });
     const raw = (data.text || data.content?.map(b=>b.text||'').join('') || '').replace(/```json|```/g,'').trim();

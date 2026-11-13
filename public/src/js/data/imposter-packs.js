@@ -788,6 +788,7 @@
     [
       ['hi', () => require('./locales/hi/imposter-packs.hi.js')],
       ['ur', () => require('./locales/ur/imposter-packs.ur.js')],
+      ['bn', () => require('./locales/bn/imposter-packs.bn.js')],
     ].forEach(([l, load]) => {
       try {
         applyLocale(l, load());

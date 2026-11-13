@@ -40,7 +40,18 @@
     "games.streetcricket.": "Street cricket: use the common cricket terms of the target language; commentary is lively but short.",
     "games.tambola.": "Tambola (housie/bingo): number calls; keep traditional calls short.",
     "games.poker.": "Poker with virtual chips only (no real money) — never imply cash.",
-    "games.teenpatti.": "Teen Patti with virtual chips only (no real money) — never imply cash."
+    "games.teenpatti.": "Teen Patti with virtual chips only (no real money) — never imply cash.",
+    "profile.ib.": "Icebreaker prompt (a question shown on a profile for others to answer / ask about). Global core prompts plus optional regional sets picked by the user’s Region (id prefix: pk_, bd_, us_, gb_, gulf_, br_, de_, jp_, id_). Keep local references — they only show to people in that region. Friendly, one question.",
+    "discovery.sample_g.": "Guest-only labeled SAMPLE profile text (global set): a short bio or an icebreaker answer by a fictional person. Casual, first person, no real people.",
+    "duniya.sample_g.": "Guest-only labeled SAMPLE post caption (global set) in the Duniya feed. Keep #hashtags and @handles as they are.",
+    "baithak.sample_g.": "Guest-only labeled SAMPLE chat message / preview (global demo chats). Casual chat tone; a \"Someone:\" prefix is the sender label.",
+    "settings.region_": "Settings → Language & region. “More” holds the defaults derived from the Region (currency, time format, first day of week, units); each can be set to Automatic or a fixed choice.",
+    "settings.time_": "Settings → Language & region → Time format option. {{example}} = a sample time in that format.",
+    "settings.units_": "Settings → Language & region → Units option (measurement system); keep the unit abbreviations in brackets.",
+    "settings.lang_region": "Settings section title: Language & region.",
+    "auth.country_code": "Phone field country-code picker (flag + calling code button before the phone number, opens a searchable country list).",
+    "notifications.card.festival_": "Festival / holiday greeting card from Chaupaal, shown only to people in regions that observe it (_name = the festival’s name, _wish = a short warm greeting). Use the customary greeting in your language where one exists.",
+    "chat.ritual.": "Daily duel trivia question in a chat (global general knowledge; options are separate)."
   },
   "keys": {},
   "params": {
@@ -58,6 +69,10 @@
     "age": "an age in years",
     "version": "a policy version date",
     "lang": "a language name",
-    "score": "a game score"
+    "score": "a game score",
+    "example": "a short formatted example (e.g. a time like 1:30 PM)",
+    "value": "the automatic value (e.g. a currency, a weekday, a unit system)",
+    "country": "a country name",
+    "code": "a phone calling code like +44"
   }
 }

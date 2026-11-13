@@ -63,13 +63,15 @@ function catCacheSlug(raw) {
 
 /**
  * Shareable cache doc ids (generate-once / serve-many).
- * Primary: `{cat}__{istDay}` [+ `__c_{city}`] [+ `__i_{industry}`]
+ * Primary: `{cat}__{istDay}` [+ `__r_{sourceRegion}`] [+ `__c_{city}`] [+ `__i_{industry}`]
  * Fallback: bare `{cat}` for legacy docs.
  */
 function catCacheDocIds(catName, scope = {}) {
   const cat = catCacheSlug(catName);
   if (!cat) return [];
   const parts = [cat, catIstDayKey()];
+  const region = catCacheSlug(scope.region);
+  if (region && region !== 'intl') parts.push(`r_${region}`);
   const city = catCacheSlug(scope.city);
   if (city) parts.push(`c_${city}`);
   const industry = catCacheSlug(scope.industry);
@@ -171,6 +173,7 @@ function persistCategoryCacheDoc(catName, patch, scope = {}){
     cacheVersion: CAT_CACHE_VERSION,
     generatedBy: 'client',
     istDay: catIstDayKey(),
+    region: scope.region || 'intl',
     city: scope.city || null,
     industry: scope.industry || null,
     cacheKey: primary,
@@ -178,7 +181,7 @@ function persistCategoryCacheDoc(catName, patch, scope = {}){
   // Write day-keyed shareable doc — all users with same slice reuse it
   db.collection('category_cache').doc(primary).set(payload, {merge:true}).catch(()=>{});
   // Mirror legacy bare id when no geo/industry scope
-  if (!scope.city && !scope.industry && ids[1]) {
+  if (!scope.city && !scope.industry && !scope.region && ids[1]) {
     db.collection('category_cache').doc(ids[1]).set({ ...payload, cacheKey: ids[1] }, {merge:true}).catch(()=>{});
   }
 }
@@ -228,14 +231,36 @@ async function loadCatDetailTab(cat, tab){
   }
 }
 
+/** Akhbaar source region (core/akhbaar-sources.js) for this reader's Region; unknown → International. */
+function viewerSourceRegion(){
+  try{
+    const country = typeof getRegionPrefs === 'function' ? getRegionPrefs().country : '';
+    return typeof AkhbaarSources !== 'undefined' ? AkhbaarSources.regionFor(country) : 'intl';
+  }catch(e){ return 'intl'; }
+}
+
 function viewerCatScope(){
   try{
     const p = typeof userProfile !== 'undefined' ? userProfile : null;
     return {
+      region: viewerSourceRegion(),
       city: p?.profile?.currentCity || p?.city || '',
       industry: p?.industry || p?.profile?.industry || '',
     };
-  }catch(e){ return {}; }
+  }catch(e){ return { region: viewerSourceRegion() }; }
+}
+
+/** Narrowest shareable doc first: region + city/industry → region → International base. */
+async function fetchCategoryCacheDocScoped(catName, scope, usable){
+  const tries = [scope];
+  if (scope.city || scope.industry) tries.push({ region: scope.region });
+  if (scope.region && scope.region !== 'intl') tries.push({});
+  let doc = null;
+  for (const sc of tries) {
+    doc = await fetchCategoryCacheDoc(catName, sc);
+    if (usable(doc)) return doc;
+  }
+  return doc;
 }
 
 async function loadCatNews(cat, body){
@@ -245,10 +270,7 @@ async function loadCatNews(cat, body){
     const local = readCache('news', cat.name, {ignoreTtl:true});
     if(local){ body.innerHTML=''; renderCatNewsItems(local, body); return; }
     // Prefer city/industry-scoped shareable cache, then base category
-    let doc = await fetchCategoryCacheDoc(cat.name, scope);
-    if(!hasUsableCatCache(doc, 'news') && (scope.city || scope.industry)){
-      doc = await fetchCategoryCacheDoc(cat.name, {});
-    }
+    const doc = await fetchCategoryCacheDocScoped(cat.name, scope, (d)=>hasUsableCatCache(d, 'news'));
     if(hasUsableCatCache(doc, 'news')){
       writeCache('news', cat.name, doc.news);
       body.innerHTML=''; renderCatNewsItems(doc.news, body); return;
@@ -260,10 +282,7 @@ async function loadCatNews(cat, body){
   const cached = readCache('news', cat.name);
   if(cached){ body.innerHTML=''; renderCatNewsItems(cached, body); return; }
 
-  let doc = await fetchCategoryCacheDoc(cat.name, scope);
-  if(!isScheduledCatCacheFresh(doc, 'news') && (scope.city || scope.industry)){
-    doc = await fetchCategoryCacheDoc(cat.name, {});
-  }
+  const doc = await fetchCategoryCacheDocScoped(cat.name, scope, (d)=>isScheduledCatCacheFresh(d, 'news'));
   if(isScheduledCatCacheFresh(doc, 'news')){
     writeCache('news', cat.name, doc.news);
     body.innerHTML=''; renderCatNewsItems(doc.news, body); return;
@@ -303,10 +322,7 @@ async function loadCatMCQ(cat, body){
   if(CAT_LIVE_AI_PAUSED){
     const local = readCache('mcq', cat.name, {ignoreTtl:true});
     if(local){ body.innerHTML=''; renderCatMCQItems(local, body); return; }
-    let doc = await fetchCategoryCacheDoc(cat.name, scope);
-    if(!hasUsableCatCache(doc, 'mcq') && (scope.city || scope.industry)){
-      doc = await fetchCategoryCacheDoc(cat.name, {});
-    }
+    const doc = await fetchCategoryCacheDocScoped(cat.name, scope, (d)=>hasUsableCatCache(d, 'mcq'));
     if(hasUsableCatCache(doc, 'mcq')){
       writeCache('mcq', cat.name, doc.mcq);
       body.innerHTML=''; renderCatMCQItems(doc.mcq, body); return;
@@ -318,10 +334,7 @@ async function loadCatMCQ(cat, body){
   const cached = readCache('mcq', cat.name);
   if(cached){ body.innerHTML=''; renderCatMCQItems(cached, body); return; }
 
-  let doc = await fetchCategoryCacheDoc(cat.name, scope);
-  if(!isScheduledCatCacheFresh(doc, 'mcq') && (scope.city || scope.industry)){
-    doc = await fetchCategoryCacheDoc(cat.name, {});
-  }
+  const doc = await fetchCategoryCacheDocScoped(cat.name, scope, (d)=>isScheduledCatCacheFresh(d, 'mcq'));
   if(isScheduledCatCacheFresh(doc, 'mcq')){
     writeCache('mcq', cat.name, doc.mcq);
     body.innerHTML=''; renderCatMCQItems(doc.mcq, body); return;
@@ -377,17 +390,17 @@ function renderCatMCQItems(items, body){
 
 function getSampleCatNews(cat){
   // Offline fallback — no article URLs (unverified). Optional topic search only.
-  const q = encodeURIComponent(t('peepal.name_india_news', { name: cat.name }));
+  const q = t('peepal.name_india_news', { name: cat.name });
   return[
-    {headline:t('peepal.major_update_in_name', { name: cat.name }),body:t('peepal.several_developments_were_observed_in_the', { name: cat.name }),source:'Chaupaal',link:`https://news.google.com/search?q=${q}&hl=en-IN&gl=IN&ceid=IN:en`},
+    {headline:t('peepal.major_update_in_name', { name: cat.name }),body:t('peepal.several_developments_were_observed_in_the', { name: cat.name }),source:'Chaupaal',link:newsSearchUrl(q)},
     {headline:t('peepal.name_aage_ki_raah', { name: cat.name }),body:t('peepal.name_ke_baare_mein_naye_developments', { name: cat.name }),source:'Chaupaal',link:null},
     {headline:t('peepal.developments_in_the_name_space', { name: cat.name }),body:t('peepal.according_to_recent_reporting_activity_in', { name: cat.name }),source:'Chaupaal',link:null},
   ];
 }
 function getSampleCatMCQ(cat){
-  const q = encodeURIComponent(t('peepal.name_india_news', { name: cat.name }));
+  const q = t('peepal.name_india_news', { name: cat.name });
   return[
-    {q:t('peepal.which_is_a_major_recent_development', { name: cat.name }),options:[t('peepal.sample_opt_growth'),t('peepal.sample_opt_decline'),t('peepal.sample_opt_no_change'),t('peepal.sample_opt_no_data')],correct:0,explain:t('peepal.name_has_seen_significant_activity_recentl', { name: cat.name }),synopsis:t('peepal.recent_reports_highlight_developments_in_n', { name: cat.name }),source:'Chaupaal',link:`https://news.google.com/search?q=${q}&hl=en-IN&gl=IN&ceid=IN:en`},
+    {q:t('peepal.which_is_a_major_recent_development', { name: cat.name }),options:[t('peepal.sample_opt_growth'),t('peepal.sample_opt_decline'),t('peepal.sample_opt_no_change'),t('peepal.sample_opt_no_data')],correct:0,explain:t('peepal.name_has_seen_significant_activity_recentl', { name: cat.name }),synopsis:t('peepal.recent_reports_highlight_developments_in_n', { name: cat.name }),source:'Chaupaal',link:newsSearchUrl(q)},
     {q:t('peepal.india_s_role_in_global_name', { name: cat.name }),options:[t('peepal.sample_opt_leader'),t('peepal.sample_opt_minor'),t('peepal.sample_opt_inactive'),t('peepal.sample_opt_declining')],correct:0,explain:t('peepal.india_has_been_expanding_its_footprint', { name: cat.name }),synopsis:t('peepal.india_continues_to_strengthen_its_position', { name: cat.name }),source:'Chaupaal',link:null},
   ];
 }
@@ -422,8 +435,19 @@ function isArticleUrl(link){
   }catch(e){ return false; }
 }
 
+/** Google News search for a topic in the reader's region + UI language (no country words added to the query). */
+function newsSearchUrl(query){
+  let country = 'US';
+  let lang = 'en';
+  try{
+    country = (typeof getRegionPrefs === 'function' && getRegionPrefs().country) || 'US';
+    lang = typeof currentLang !== 'undefined' && currentLang ? String(currentLang).split('-')[0] : 'en';
+  }catch(e){}
+  return `https://news.google.com/search?q=${encodeURIComponent(query)}&hl=${lang}-${country}&gl=${country}&ceid=${country}:${lang}`;
+}
+
 function topicSearchUrl(topic){
-  return `https://news.google.com/search?q=${encodeURIComponent(topic+' India')}&hl=en-IN&gl=IN&ceid=IN:en`;
+  return newsSearchUrl(topic);
 }
 
 /** Keep real article URLs; drop invented homepages; optional topic-search fallback only when link missing and allowSearchFallback. */
@@ -484,6 +508,7 @@ function catMCQLooksGrounded(items){
 async function callCatAIWithSearch({model, tier, max_tokens, system, user}){
   return callAI({
     enableWebSearch: true,
+    sourceRegion: viewerSourceRegion(),
     model,
     tier: tier || (model ? undefined : 'fast'),
     max_tokens,
@@ -493,9 +518,16 @@ async function callCatAIWithSearch({model, tier, max_tokens, system, user}){
   });
 }
 
+/** Prompt audience for live calls — the reader's source region (English; stored content is canonical). */
+function catAudience(){
+  const rid = viewerSourceRegion();
+  const reg = typeof AkhbaarSources !== 'undefined' ? AkhbaarSources.REGIONS[rid] : null;
+  return rid === 'intl' || !reg ? 'a global audience' : `readers in ${reg.promptName}`; // i18n-ignore (LLM prompt)
+}
+
 async function generateCatNewsGrounded(cat){
-  const system = `You are a news curator for Chaupaal, an Indian news app.
-You MUST use the web_search tool to find real, recent articles about "${cat.name}" (prefer Indian/global mainstream sources).
+  const system = `You are a news curator for Chaupaal, a global social app, writing for ${catAudience()}.
+You MUST use the web_search tool to find real, recent articles about "${cat.name}" from mainstream sources.
 For each item: summarize ONLY from what the search returned, and set "link" to that article's exact URL from the search results.
 If you cannot find a usable real article URL for an item, set "link" to null — NEVER invent or guess a URL, and NEVER use a publisher homepage.
 Return ONLY a valid JSON array (no markdown, no commentary) with this exact shape:
@@ -515,8 +547,8 @@ Produce exactly 3 items.`;
 
 async function generateCatMCQGrounded(cat){
   const personalityCtx = buildPersonalityContext();
-  const system = `You are a quiz maker for Chaupaal, an Indian news & social app.
-You MUST use the web_search tool to find real, recent articles about "${cat.name}" for an Indian audience.${personalityCtx?t('peepal.user_context_personalityctx', { personalityCtx }):''}
+  const system = `You are a quiz maker for Chaupaal, a global social app, writing for ${catAudience()}.
+You MUST use the web_search tool to find real, recent articles about "${cat.name}".${personalityCtx?t('peepal.user_context_personalityctx', { personalityCtx }):''}
 Each question must be grounded in a searched story: write the synopsis from the article found, and set "link" to that article's exact URL from search results.
 If no usable real article URL exists for a question, set "link" to null — NEVER invent URLs or use publisher homepages.
 Return ONLY a valid JSON array (no markdown) with this exact shape:

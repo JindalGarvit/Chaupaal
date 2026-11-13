@@ -1,12 +1,21 @@
 // ===================== DUNIYA DATA =====================
 // D0 truth: guests may see labeled SAMPLE; signed-in prefer live → offline real cache → honest empty / labeled demo.
-const SAMPLE_DUNIYA=[
+// Guest-only labeled samples: global by default, the India set for Region IN (Global L6).
+const SAMPLE_DUNIYA_IN=[
   {id:'d1',isSample:true,user:{name:'India Today',avatar:'📺',uid:'it',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/news1/600/400',caption:t('duniya.breaking_major_policy_announcement_from_un'),likes:2847,comments:142,shares:389,timestamp:'2h',tags:[],followed:false,likedByMe:false},
   {id:'d2',isSample:true,user:{name:'Priya Krishnan',avatar:'👩‍🎨',uid:'pk',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/art2/600/600',caption:t('duniya.my_latest_artwork_inspired_by_the'),likes:934,comments:67,shares:28,timestamp:'4h',tags:['ArtLovers'],followed:false,likedByMe:false},
   {id:'d3',isSample:true,user:{name:'StartupIndia',avatar:'🚀',uid:'si',profileType:'professional'},type:'video',media:'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',thumb:'https://picsum.photos/seed/startupvid/600/800',caption:t('duniya.5_indian_startups_that_are_changing'),likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
   {id:'d4',isSample:true,user:{name:'Chef Rahul',avatar:'👨‍🍳',uid:'cr',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/food4/600/500',caption:t('duniya.dal_makhani_recipe_that_took_me'),likes:3102,comments:892,shares:1567,timestamp:'8h',tags:[],followed:false,likedByMe:false},
   {id:'d5',isSample:true,user:{name:'Riya Sharma',avatar:'😊',uid:'rs',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/travel5/600/700',caption:t('duniya.ladakh_calling_nothing_compares_to_this'),likes:1204,comments:89,shares:45,timestamp:'1d',tags:['Dev_travels'],followed:true,likedByMe:true},
 ];
+const SAMPLE_DUNIYA_GLOBAL=[
+  {id:'d1',isSample:true,user:{name:'World News Desk',avatar:'📺',uid:'wn',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/news1/600/400',caption:t('duniya.sample_g.news'),likes:2847,comments:142,shares:389,timestamp:'2h',tags:[],followed:false,likedByMe:false},
+  {id:'d2',isSample:true,user:{name:'Maya Okafor',avatar:'👩‍🎨',uid:'mo',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/art2/600/600',caption:t('duniya.sample_g.art'),likes:934,comments:67,shares:28,timestamp:'4h',tags:['ArtLovers'],followed:false,likedByMe:false},
+  {id:'d3',isSample:true,user:{name:'Startup Stories',avatar:'🚀',uid:'ss',profileType:'professional'},type:'video',media:'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',thumb:'https://picsum.photos/seed/startupvid/600/800',caption:t('duniya.sample_g.startups'),likes:5201,comments:321,shares:1204,timestamp:'6h',tags:[],followed:false,likedByMe:false},
+  {id:'d4',isSample:true,user:{name:'Chef Sam',avatar:'👨‍🍳',uid:'cs',profileType:'professional'},type:'image',media:'https://picsum.photos/seed/food4/600/500',caption:t('duniya.sample_g.recipe'),likes:3102,comments:892,shares:1567,timestamp:'8h',tags:[],followed:false,likedByMe:false},
+  {id:'d5',isSample:true,user:{name:'Ana Souza',avatar:'😊',uid:'as',profileType:'personal'},type:'image',media:'https://picsum.photos/seed/travel5/600/700',caption:t('duniya.sample_g.travel'),likes:1204,comments:89,shares:45,timestamp:'1d',tags:['Sam_travels'],followed:true,likedByMe:true},
+];
+const SAMPLE_DUNIYA=(function(){ try { return typeof getRegionPrefs === 'function' && getRegionPrefs().country === 'IN'; } catch (e) { return false; } })()?SAMPLE_DUNIYA_IN:SAMPLE_DUNIYA_GLOBAL;
 
 const DUNIYA_FEED_CACHE_PREFIX='chaupaal_duniya_feed_cache_v1';
 const DUNIYA_FEED_CACHE_TTL_MS=7*24*60*60*1000;

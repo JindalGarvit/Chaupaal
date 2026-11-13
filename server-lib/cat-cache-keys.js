@@ -4,7 +4,8 @@
  * Keys are shareable across users with the same relevance slice — generate once,
  * serve many. Never include viewer uid / blocks / private context.
  *
- * Format: `{catSlug}__{istDay}` optionally `__c_{citySlug}` and/or `__i_{industrySlug}`
+ * Format: `{catSlug}__{istDay}` optionally `__r_{sourceRegion}` (akhbaar-sources; intl = none),
+ * `__c_{citySlug}` and/or `__i_{industrySlug}`
  * Legacy docs used bare `{catSlug}` — readers should fall back.
  *
  * TTL: IST calendar day bucket + REFRESH_MS (24h) freshness check.
@@ -58,6 +59,9 @@ function buildCatCacheDocId(opts = {}) {
         : istDayKey(opts.day instanceof Date ? opts.day : new Date());
     parts.push(day);
   }
+  // Akhbaar source region (L6); International is the unscoped base doc.
+  const region = slugPart(opts.region);
+  if (region && region !== 'intl') parts.push(`r_${region}`);
   const city = slugPart(opts.city);
   if (city) parts.push(`c_${city}`);
   const industry = slugPart(opts.industry);

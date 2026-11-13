@@ -1188,13 +1188,15 @@ function wireAuthEvents() {
 
   async function handlePhoneSend({ phoneInputId, containerId, errEl, statusId, sendBtn, resendBtn }) {
     if (errEl) errEl.textContent = '';
-    const phoneRaw = document.getElementById(phoneInputId)?.value;
+    const phoneInput = document.getElementById(phoneInputId);
+    const phoneRaw = phoneInput?.value;
     if (sendBtn) sendBtn.disabled = true;
     try {
       if (typeof PhoneOtp === 'undefined') {
         throw Object.assign(new Error('Phone OTP module missing'), { code: 'auth/internal-error' });
       }
-      const { phone } = await PhoneOtp.sendOtp({ phoneRaw, containerId });
+      const dial = typeof PhoneOtp.dialForInput === 'function' ? PhoneOtp.dialForInput(phoneInput) : undefined;
+      const { phone } = await PhoneOtp.sendOtp({ phoneRaw, containerId, dial });
       setOtpStatus(statusId, t('auth.otp_sent_to', { phone }), true);
       if (typeof showToast === 'function') showToast(t('auth_otp_sent'));
       const otpId = containerId === LOGIN_OTP_HOST ? 'loginPhoneOtp' : 'regPhoneOtpCode';

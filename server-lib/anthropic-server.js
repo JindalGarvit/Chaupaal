@@ -15,6 +15,8 @@ async function callAnthropicServer(body) {
     messages: body?.messages,
     max_tokens: body?.max_tokens,
     enableWebSearch: body?.enableWebSearch === true,
+    country: body?.country,
+    allowedDomains: body?.allowedDomains,
     feature: body?.feature || 'server_cron',
   });
   // Callers expect Anthropic Messages JSON

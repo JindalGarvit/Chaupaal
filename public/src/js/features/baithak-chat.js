@@ -1712,16 +1712,32 @@ function leaveGroupChat(chat){
 }
 
 // ===================== DAILY DUEL RITUAL =====================
+/** Global core for everyone; the India set is added only when the user's Region is India (L6). */
 const RITUAL_QUESTIONS = [
-  {q:t('chat.when_is_mahatma_gandhi_s_birthday'),options:["September 27","October 2","November 14","January 26"],correct:1},
-  {q:t('chat.what_is_india_s_national_animal'),options:["Lion","Elephant","Tiger","Peacock"],correct:2},
-  {q:t('chat.in_which_city_is_the_taj'),options:["Delhi","Jaipur","Agra","Lucknow"],correct:2},
   {q:t('chat.which_is_the_largest_planet_in'),options:["Saturn","Mars","Jupiter","Neptune"],correct:2},
-  {q:t('chat.jai_hind_kiska_nara_tha'),options:["Gandhi","Nehru","Subhas Chandra Bose","Patel"],correct:2},
+  {q:t('chat.ritual.largest_ocean'),options:["Atlantic","Indian","Pacific","Arctic"],correct:2},
+  {q:t('chat.ritual.continents'),options:["5","6","7","8"],correct:2},
+  {q:t('chat.ritual.giza'),options:["Mexico","Egypt","Peru","Greece"],correct:1},
+  {q:t('chat.ritual.legs_spider'),options:["6","8","10","12"],correct:1},
+  {q:t('chat.ritual.olympic_rings'),options:["4","5","6","7"],correct:1},
 ];
+const RITUAL_QUESTIONS_REGIONAL = {
+  IN: [
+    {q:t('chat.when_is_mahatma_gandhi_s_birthday'),options:["September 27","October 2","November 14","January 26"],correct:1},
+    {q:t('chat.what_is_india_s_national_animal'),options:["Lion","Elephant","Tiger","Peacock"],correct:2},
+    {q:t('chat.in_which_city_is_the_taj'),options:["Delhi","Jaipur","Agra","Lucknow"],correct:2},
+    {q:t('chat.jai_hind_kiska_nara_tha'),options:["Gandhi","Nehru","Subhas Chandra Bose","Patel"],correct:2},
+  ],
+};
+
+function ritualQuestionPool(){
+  let country = '';
+  try { country = typeof getRegionPrefs === 'function' ? getRegionPrefs().country : ''; } catch (e) {}
+  return RITUAL_QUESTIONS.concat(RITUAL_QUESTIONS_REGIONAL[country] || []);
+}
 
 function startDailyDuelRitual(chat){
-  const questions = [...RITUAL_QUESTIONS].sort(()=>Math.random()-0.5).slice(0,5);
+  const questions = ritualQuestionPool().sort(()=>Math.random()-0.5).slice(0,5);
   let qIdx = 0, myAnswers = [], theirAnswers = [];
 
   const overlay = document.createElement('div');

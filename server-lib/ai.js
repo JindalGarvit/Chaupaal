@@ -35,6 +35,26 @@ class AiDisabledError extends Error {
   }
 }
 
+/**
+ * Global L6: viewer-facing calls carry the reader's Region (ISO country) so answers use local conventions —
+ * never a hard-coded country. No region → the prompt is unchanged.
+ */
+function regionLine(region) {
+  const code = String(region || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  let name = code;
+  try {
+    name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
+  } catch (e) {}
+  return `The reader's region is ${name} (${code}): use local conventions (currency, units, date format, examples) where relevant, without assuming anything else about them.`;
+}
+
+function withRegion(system, region) {
+  const line = regionLine(region);
+  if (!line) return system;
+  return system ? `${system}\n\n${line}` : line;
+}
+
 function getProvider(name = AI_PROVIDER) {
   const id = resolveProviderId(name);
   const p = PROVIDERS[id];
@@ -54,12 +74,15 @@ function getProvider(name = AI_PROVIDER) {
  * @param {string} [opts.system]
  * @param {number} [opts.max_tokens]
  * @param {boolean} [opts.enableWebSearch] - Anthropic only; ignored elsewhere
+ * @param {string} [opts.country] - web search: ISO country for approximate user location (no default)
+ * @param {string[]} [opts.allowedDomains] - web search: restrict results to these publishers (Akhbaar sources)
  * @param {string} [opts.feature]
  * @param {boolean} [opts.bypassKillSwitch]
  * @param {string} [opts.lang] - UI text for ONE viewer: "Respond in <lang>" is added, the answer is
  *   checked for that script/language, and a wrong-language answer is retried once in English
  *   (result.lang = 'en', result.langFallback = true). Omit for shared/stored content (English canonical).
  * @param {boolean} [opts.langJson] - the answer is JSON: only its string values are checked
+ * @param {string} [opts.region] - the ONE viewer's Region (ISO country) → a local-conventions line in the system prompt
  */
 async function callAI(opts = {}) {
   if (!opts.bypassKillSwitch && !isAiFeaturesEnabled()) {
@@ -84,6 +107,9 @@ async function callAI(opts = {}) {
         system,
         max_tokens: opts.max_tokens || 1024,
         enableWebSearch: opts.enableWebSearch === true,
+        country: opts.country,
+        timezone: opts.timezone,
+        allowedDomains: opts.allowedDomains,
       });
     } catch (e) {
       if (e?.code === 'AI_NOT_CONFIGURED') {
@@ -97,11 +123,12 @@ async function callAI(opts = {}) {
     return { raw, text };
   }
 
-  let out = await once(lang ? AiLang.withLang(opts.system, lang) : opts.system);
+  const system = withRegion(opts.system, opts.region);
+  let out = await once(lang ? AiLang.withLang(system, lang) : system);
   let usedLang = lang;
   let langFallback = false;
   if (lang && lang !== 'en' && !AiLang.validate(out.text, lang, { json: !!opts.langJson }).ok) {
-    out = await once(AiLang.withLang(opts.system, 'en'));
+    out = await once(AiLang.withLang(system, 'en'));
     usedLang = 'en';
     langFallback = true;
   }
@@ -119,6 +146,7 @@ async function callAI(opts = {}) {
 
 module.exports = {
   callAI,
+  regionLine,
   getProvider,
   AiDisabledError,
   PROVIDERS,

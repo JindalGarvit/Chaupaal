@@ -209,6 +209,78 @@
       const box = document.getElementById('toggleWesternDigits');
       if (box) box.checked = F.usesNativeDigits ? !F.usesNativeDigits() : F.getDigitsPref() === 'latn';
     }
+    refreshRegionMore();
+  }
+
+  /**
+   * Settings → Language & region → More: currency, time format, first day, units. The first option is
+   * "Automatic (<region default>)"; picking it clears the override.
+   */
+  function regionMoreOptions(field, prefs) {
+    const R = regionApi();
+    const F = typeof ChaupaalFormat !== 'undefined' ? ChaupaalFormat : null;
+    const sample = new Date(Date.UTC(2026, 0, 4, 13, 30));
+    const timeLabel = (h12) => {
+      const example = F ? F.formatTime(sample, { hour12: h12, timeZone: 'UTC' }) : '';
+      return h12 ? txv('settings.time_12h', '12-hour ({{example}})', { example }) : txv('settings.time_24h', '24-hour ({{example}})', { example });
+    };
+    // 2026-01-04 is a Sunday → day d is 4 + d.
+    const dayLabel = (d) => (F ? F.formatDate(Date.UTC(2026, 0, 4 + d, 12), 'weekdayName', { timeZone: 'UTC' }) : String(d));
+    const unitLabel = (u) =>
+      u === 'imperial' ? tx('settings.units_imperial', 'US (mi, lb)') : u === 'uk' ? tx('settings.units_uk', 'UK (mi, kg)') : tx('settings.units_metric', 'Metric (km, kg)');
+    let curNames = null;
+    try {
+      curNames = new Intl.DisplayNames([F ? F.baseLocale() : 'en', 'en'], { type: 'currency' });
+    } catch (e) {}
+    const curLabel = (c) => {
+      let n = c;
+      try {
+        n = (curNames && curNames.of(c)) || c;
+      } catch (e) {}
+      return n === c ? c : `${c} · ${n}`;
+    };
+    const label = { currency: curLabel, hour12: timeLabel, firstDayOfWeek: dayLabel, measurement: unitLabel }[field];
+    const values = {
+      currency: R ? R.listCurrencies() : [],
+      hour12: [true, false],
+      firstDayOfWeek: [1, 6, 0],
+      measurement: ['metric', 'imperial', 'uk'],
+    }[field];
+    const auto = txv('settings.region_auto', 'Automatic ({{value}})', { value: label(prefs.defaults[field]) });
+    return [{ value: 'auto', label: auto }].concat(values.map((v) => ({ value: String(v), label: label(v) })));
+  }
+
+  const REGION_MORE = { regionCurrencySelect: 'currency', regionHourSelect: 'hour12', regionWeekSelect: 'firstDayOfWeek', regionUnitsSelect: 'measurement' };
+
+  function refreshRegionMore() {
+    const R = regionApi();
+    if (!R || typeof R.getRegionPrefs !== 'function') return;
+    const prefs = R.getRegionPrefs();
+    Object.keys(REGION_MORE).forEach((id) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const field = REGION_MORE[id];
+      sel.innerHTML = regionMoreOptions(field, prefs)
+        .map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`)
+        .join('');
+      sel.value = prefs.overridden[field] ? String(prefs[field]) : 'auto';
+    });
+  }
+
+  function wireRegionMore() {
+    const R = regionApi();
+    if (!R || typeof R.setOverride !== 'function') return;
+    Object.keys(REGION_MORE).forEach((id) => {
+      const sel = document.getElementById(id);
+      if (!sel || sel.dataset.wired === '1') return;
+      sel.dataset.wired = '1';
+      sel.addEventListener('change', () => {
+        const field = REGION_MORE[id];
+        const raw = sel.value;
+        const value = raw === 'auto' ? null : field === 'hour12' ? raw === 'true' : field === 'firstDayOfWeek' ? Number(raw) : raw;
+        R.setOverride(field, value, { persistRemote: true });
+      });
+    });
   }
 
   function wireDigits() {
@@ -274,6 +346,7 @@
     document.getElementById('contentLangsBtn')?.addEventListener('click', () => openContentLangsPicker());
     document.getElementById('regionPickerBtn')?.addEventListener('click', () => openRegionPicker());
     wireDigits();
+    wireRegionMore();
     refreshSettings();
     ['chaupaal:lang-changed', 'chaupaal:content-langs-changed', 'chaupaal:region-changed'].forEach((ev) =>
       document.addEventListener(ev, refreshSettings)
@@ -285,6 +358,7 @@
     openContentLangsPicker,
     openRegionPicker,
     refreshSettings,
+    regionMoreOptions,
     chipHtml,
     wireChip,
     maybeShowRetiredNotice,

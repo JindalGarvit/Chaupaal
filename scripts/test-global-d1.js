@@ -74,7 +74,8 @@ const sp = (s) => String(s).replace(/[\u00a0\u202f]/g, ' ');
     const bad = langs.filter((c) => !(r.langs[c].placeholderMismatches.length === 0 && r.langs[c].pluralGaps.length === 0 && r.langs[c].glossaryViolations.length === 0));
     assert(langs.length >= 15 && bad.length === 0, `all ${langs.length} packs: no placeholder / plural / glossary problems${bad.length ? ' (' + bad.join(', ') + ')' : ''}`);
     const rep = COV.languageReport(r, 'ta');
-    assert(/# Tamil \(ta\)/.test(rep.md) && /## Missing by namespace/.test(rep.md) && rep.csv.startsWith('key,english,context,translation\n') && rep.csv.split('\n').length > 1000, 'per-language worksheet + translator CSV (key, English, context)');
+    // The CSV lists the keys still missing in that language (+ header) — Tamil's own pass shrinks it.
+    assert(/# Tamil \(ta\)/.test(rep.md) && /## Missing by namespace/.test(rep.md) && rep.csv.startsWith('key,english,context,translation\n') && rep.csv.trim().split('\n').length === r.langs.ta.missing + 1, 'per-language worksheet + translator CSV (key, English, context)');
     assert(/\{\{name\}\} = a person's display name/.test(COV.contextFor('notifications.card.bday_title', '{{name}}’s birthday')), 'context notes explain placeholders');
     const hi = rtFor('hi', 'IN');
     const ta = rtFor('ta', 'IN');
@@ -127,9 +128,10 @@ const sp = (s) => String(s).replace(/[\u00a0\u202f]/g, ' ');
   console.log('\nGlobal-first defaults');
   {
     const CO = require('../server-lib/companion-outreach');
-    const oct20 = new Date(Date.UTC(2026, 9, 20, 12));
+    // L6: lunar dates come from the shared calendar's per-year table (Diwali 2026 = 8 Nov).
+    const diwali26 = new Date(Date.UTC(2026, 10, 8, 12));
     const jan1 = new Date(Date.UTC(2026, 0, 1, 12));
-    assert(CO.festivalForDate(oct20, 'UTC', 'IN')?.id === 'diwali' && !CO.festivalForDate(oct20, 'UTC', 'US') && !CO.festivalForDate(oct20, 'UTC', null), 'bug: Indian festivals went to everyone → region-scoped (Diwali for IN, not US / unknown)');
+    assert(CO.festivalForDate(diwali26, 'UTC', 'IN')?.id === 'diwali' && !CO.festivalForDate(diwali26, 'UTC', 'US') && !CO.festivalForDate(diwali26, 'UTC', null), 'bug: Indian festivals went to everyone → region-scoped (Diwali for IN, not US / unknown)');
     assert(CO.festivalForDate(jan1, 'UTC', 'BR')?.id === 'new_year' && CO.festivalForDate(new Date(Date.UTC(2026, 11, 25, 12)), 'UTC', 'DE')?.id === 'christmas', 'New Year for everyone; Christmas where observed');
     assert(!CO.FESTIVAL_CALENDAR.some((f) => f.wish || f.name) && /Happy Diwali/.test(CO.festivalText(CO.FESTIVAL_CALENDAR.find((f) => f.id === 'diwali'), 'en').wish), 'festival copy from the catalog, not inline English');
     const EV = require('../server-lib/events-provider');

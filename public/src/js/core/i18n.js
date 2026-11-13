@@ -52,7 +52,7 @@ const LANG_CATALOG = [
 const I18N_RETIRED_LANGS = ['gu', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"832edec0","id":"2775a026","ja":"0673b3d7","kn":"db038fc4","ko":"56677136","ml":"ec4d4874","mr":"43439d48","pa":"3b4db0de","pt":"19118eeb","ta":"40370478","te":"11127969","ur":"860f55f1","zh":"e0fda911"};
+const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"b9bebcaa","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"832edec0","id":"2775a026","ja":"0673b3d7","kn":"db038fc4","ko":"56677136","ml":"ec4d4874","mr":"43439d48","pa":"3b4db0de","pt":"19118eeb","ta":"5e78654a","te":"11127969","ur":"860f55f1","zh":"e0fda911"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({
@@ -286,6 +286,70 @@ function i18nDigitMap(locale) {
   }
   return i18nDigitMaps.get(locale);
 }
+/**
+ * French punctuation spacing by Region (Global L18). Packs are written with no space before ; : ! ? and none inside
+ * « »; France / Belgium / Switzerland / Africa get a narrow no-break space (U+202F) before ; ! ? and a no-break
+ * space before :, Canada only before : (Office québécois de la langue française). Guillemets get U+202F inside
+ * everywhere. Tokens, tags, entities and URLs are never touched.
+ */
+function i18nFrTypography(s, locale) {
+  if (!/^fr(-|$)/i.test(String(locale || ''))) return s;
+  const ca = /^fr-CA(-|$)/i.test(String(locale));
+  return s
+    .split(/(\{\{[^}]*\}\}|<[^>]*>|&[a-z#0-9]+;|https?:\/\/\S+)/i)
+    .map((part, i) => {
+      if (i % 2) return part;
+      let t = part.replace(/«[ \u00a0\u202f]*/g, '«\u202f').replace(/[ \u00a0\u202f]*»/g, '\u202f»');
+      // A segment right after a {{token}} may start with the punctuation mark itself.
+      if (i > 0) t = t.replace(/^[ \u00a0]*:(?=\s|$)/, '\u00a0:');
+      t = t.replace(/(\S)[ \u00a0\u202f]*:(?=\s|$)/g, '$1\u00a0:');
+      if (!ca) {
+        if (i > 0) t = t.replace(/^[ \u00a0]*([;!?])/, '\u202f$1');
+        t = t.replace(/([^\s\u202f])[ \u00a0]*([;!?])/g, '$1\u202f$2');
+      }
+      return t;
+    })
+    .join('');
+}
+
+/**
+ * Korean particles after a dynamic value (Global L23): `{{name|이/가}}`, `{{game|을/를}}`, `{{x|은/는}}`, `{{x|과/와}}`,
+ * `{{x|으로/로}}`, `{{x|아/야}}` — first form after a final consonant (batchim), second after a vowel; for 으로/로 a
+ * ㄹ-final word also takes 로. Digits use their Korean readings (1 일, 3 삼 …), Latin words / letters their English
+ * pronunciation. Returns the particle only (the value is rendered as usual).
+ */
+const I18N_KO_DIGIT_FINAL = { 0: 'c', 1: 'l', 2: 'v', 3: 'c', 4: 'v', 5: 'v', 6: 'c', 7: 'l', 8: 'l', 9: 'v' };
+const I18N_KO_LETTER_FINAL = { l: 'l', m: 'c', n: 'c', r: 'l' };
+function i18nKoFinal(value) {
+  const s = String(value == null ? '' : value)
+    .replace(/[\u2068\u2069\u200e\u200f]/g, '')
+    .replace(/[\s.,!?…·'"’”)\]}>~\-_:;]+$/u, '');
+  const ch = s.slice(-1);
+  if (!ch) return 'c';
+  const code = ch.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) {
+    const jong = (code - 0xac00) % 28;
+    return jong === 0 ? 'v' : jong === 8 ? 'l' : 'c';
+  }
+  if (/[0-9]/.test(ch)) return I18N_KO_DIGIT_FINAL[ch];
+  if (/[a-z]/i.test(ch)) {
+    const word = s.match(/[A-Za-z]+$/)[0].toLowerCase();
+    if (word.length === 1) return I18N_KO_LETTER_FINAL[word] || 'v';
+    if (/ng$|[mn]$/.test(word)) return 'c';
+    if (/l$|le$/.test(word)) return 'l';
+    if (/[kptbdgc]$|ck$/.test(word)) return 'c';
+    return 'v';
+  }
+  return 'c';
+}
+function i18nJosa(value, spec) {
+  const parts = String(spec || '').split('/');
+  if (parts.length !== 2) return '';
+  const fin = i18nKoFinal(value);
+  if (parts[0] === '으로') return fin === 'v' || fin === 'l' ? parts[1] : parts[0];
+  return fin === 'v' ? parts[1] : parts[0];
+}
+
 /** Only free-standing numbers change: tokens, tags, entities and codes like T20 / e4 / 3D keep their digits. */
 function i18nLocalDigits(s, locale) {
   const map = i18nDigitMap(locale || 'en');
@@ -304,9 +368,15 @@ function i18nFormat(msg, params, locale, mode) {
   } else {
     s = s.replace(I18N_RICH, (m) => (/^<br/i.test(m) ? '\n' : ''));
   }
-  s = s.replace(/\{\{@([a-z0-9]+)\}\}/g, (m, id) => (I18N_GLOSSARY[id] != null ? (rtl ? i18nIsolate(I18N_GLOSSARY[id]) : I18N_GLOSSARY[id]) : m));
-  s = s.replace(/\{\{(\w+)\}\}/g, (m, k) => {
+  s = i18nFrTypography(s, locale);
+  s = s.replace(/\{\{@([a-z0-9]+)(?:\|([^{}|]+\/[^{}|]+))?\}\}/g, (m, id, josa) => {
+    if (I18N_GLOSSARY[id] == null) return m;
+    const name = I18N_GLOSSARY[id];
+    return (rtl ? i18nIsolate(name) : name) + (josa ? i18nJosa(name, josa) : '');
+  });
+  s = s.replace(/\{\{(\w+)(?:\|([^{}|]+\/[^{}|]+))?\}\}/g, (m, k, josa) => {
     if (!(k in p)) return m;
+    if (josa) return i18nFormat('{{' + k + '}}', p, locale, mode) + i18nJosa(p[k] && typeof p[k] === 'object' ? p[k].text || String(p[k].html || '').replace(/<[^>]*>/g, '') : p[k], josa);
     const v = p[k];
     const iso = rtl && !I18N_RAW_PARAM.test(k) ? i18nIsolate : (x) => x;
     // { html } = markup the caller already escaped (e.g. a display name with a verified badge).

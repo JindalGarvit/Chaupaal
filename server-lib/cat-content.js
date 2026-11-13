@@ -6,6 +6,7 @@
  * Generate once per key; all users with that relevance slice reuse the same doc.
  */
 const { callAnthropicServer } = require('./anthropic-server');
+const AkhbaarSources = require('../public/src/js/core/akhbaar-sources.js');
 const {
   CACHE_VERSION,
   TTL_MS,
@@ -102,7 +103,23 @@ function catMCQLooksGrounded(items) {
   return true;
 }
 
-async function callCatAIWithSearch({ model, tier, max_tokens, system, user }) {
+/**
+ * Source scope for a cache job (L6): the region's publishers become the search tool's allowed_domains
+ * and approximate location. No region → International. Prompts stay English (stored content is canonical).
+ */
+function sourceScope(scope = {}) {
+  const regionId = AkhbaarSources.REGIONS[scope.region] ? scope.region : 'intl';
+  const reg = AkhbaarSources.REGIONS[regionId];
+  return {
+    regionId,
+    allowedDomains: AkhbaarSources.domainsFor(regionId),
+    country: AkhbaarSources.searchCountry(regionId),
+    audience: regionId === 'intl' ? 'a global audience' : `readers in ${reg.promptName}`,
+    sourceNames: reg.sources.map((s) => s.name).join(', '),
+  };
+}
+
+async function callCatAIWithSearch({ model, tier, max_tokens, system, user, src }) {
   return callAnthropicServer({
     enableWebSearch: true,
     model,
@@ -111,18 +128,21 @@ async function callCatAIWithSearch({ model, tier, max_tokens, system, user }) {
     system,
     messages: [{ role: 'user', content: user }],
     feature: 'category_cron',
+    country: src && src.country,
+    allowedDomains: src && src.allowedDomains,
   });
 }
 
 /**
  * @param {string} catName
- * @param {{ city?: string, industry?: string }} [scope]
+ * @param {{ city?: string, industry?: string, region?: string }} [scope]
  */
 async function generateCatNewsGrounded(catName, scope = {}) {
+  const src = sourceScope(scope);
   const cityBit = scope.city ? ` relevant to ${scope.city}` : '';
   const industryBit = scope.industry ? ` with an angle for ${scope.industry} professionals` : '';
-  const system = `You are a news curator for Chaupaal, an Indian news app.
-You MUST use the web_search tool to find real, recent articles about "${catName}"${cityBit}${industryBit} (prefer Indian/global mainstream sources).
+  const system = `You are a news curator for Chaupaal, a global social app, writing for ${src.audience}.
+You MUST use the web_search tool to find real, recent articles about "${catName}"${cityBit}${industryBit} from these sources: ${src.sourceNames}.
 For each item: summarize ONLY from what the search returned, and set "link" to that article's exact URL from the search results.
 If you cannot find a usable real article URL for an item, set "link" to null — NEVER invent or guess a URL, and NEVER use a publisher homepage.
 Return ONLY a valid JSON array (no markdown, no commentary) with this exact shape:
@@ -131,10 +151,10 @@ Produce exactly 3 items.`;
 
   const user = `Search the web for recent news in category "${catName}"${cityBit}${industryBit}, then return 3 grounded news items as JSON.`;
 
-  let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 2000, system, user });
+  let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 2000, system, user, src });
   let items = parseJsonArrayLoose(extractAnthropicText(data));
   if (!catNewsLooksGrounded(items)) {
-    data = await callCatAIWithSearch({ tier: 'balanced', max_tokens: 2500, system, user });
+    data = await callCatAIWithSearch({ tier: 'balanced', max_tokens: 2500, system, user, src });
     items = parseJsonArrayLoose(extractAnthropicText(data));
   }
   return sanitizeCatNewsItems(items);
@@ -142,13 +162,14 @@ Produce exactly 3 items.`;
 
 /**
  * @param {string} catName
- * @param {{ city?: string, industry?: string }} [scope]
+ * @param {{ city?: string, industry?: string, region?: string }} [scope]
  */
 async function generateCatMCQGrounded(catName, scope = {}) {
+  const src = sourceScope(scope);
   const cityBit = scope.city ? ` relevant to ${scope.city}` : '';
   const industryBit = scope.industry ? ` for ${scope.industry} professionals` : '';
-  const system = `You are a quiz maker for Chaupaal, an Indian news & social app.
-You MUST use the web_search tool to find real, recent articles about "${catName}"${cityBit}${industryBit} for an Indian audience.
+  const system = `You are a quiz maker for Chaupaal, a global social app, writing for ${src.audience}.
+You MUST use the web_search tool to find real, recent articles about "${catName}"${cityBit}${industryBit} from these sources: ${src.sourceNames}.
 Each question must be grounded in a searched story: write the synopsis from the article found, and set "link" to that article's exact URL from search results.
 If no usable real article URL exists for a question, set "link" to null — NEVER invent URLs or use publisher homepages.
 Return ONLY a valid JSON array (no markdown) with this exact shape:
@@ -165,10 +186,10 @@ Produce exactly 5 questions.`;
 
   const user = `Search the web for recent "${catName}" news${cityBit}${industryBit}, then return 5 grounded MCQ questions as JSON.`;
 
-  let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 3000, system, user });
+  let data = await callCatAIWithSearch({ tier: 'fast', max_tokens: 3000, system, user, src });
   let items = parseJsonArrayLoose(extractAnthropicText(data));
   if (!catMCQLooksGrounded(items)) {
-    data = await callCatAIWithSearch({ tier: 'balanced', max_tokens: 3500, system, user });
+    data = await callCatAIWithSearch({ tier: 'balanced', max_tokens: 3500, system, user, src });
     items = parseJsonArrayLoose(extractAnthropicText(data));
   }
   return sanitizeCatMCQItems(items);
@@ -183,4 +204,5 @@ module.exports = {
   isCatCacheFresh,
   generateCatNewsGrounded,
   generateCatMCQGrounded,
+  sourceScope,
 };

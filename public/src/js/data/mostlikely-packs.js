@@ -887,6 +887,7 @@
     [
       ['hi', () => require('./locales/hi/mostlikely-packs.hi.js')],
       ['ur', () => require('./locales/ur/mostlikely-packs.ur.js')],
+      ['bn', () => require('./locales/bn/mostlikely-packs.bn.js')],
     ].forEach(([l, load]) => {
       try {
         applyLocale(l, load());

@@ -7,7 +7,8 @@
  */
 'use strict';
 
-const GENDER_SLASH = /\b\p{L}+[oa]\/[ao]s?\b|\b\p{L}+\(a\)|\b\p{L}{2,}@s?\b|\b(?:tod|amig|nuev|invitad|bienvenid|usuari|jugador)(?:x|e)s?\b/iu;
+// Slash / parenthesis / @ / x endings and the common neo-pronoun "e" forms (explicit list — "jugadores" is a normal plural).
+const GENDER_SLASH = /\b\p{L}+[oa]\/[ao]s?\b|\b\p{L}+\(a\)|\b\p{L}{2,}@s?\b|\b(?:tod|amig|nuev|invitad|bienvenid|usuari|jugador)xs?\b|\b(?:todes|amigues|nueves|invitades|bienvenides|usuaries|elles)\b/iu;
 const VOSOTROS = /\b(vosotros|vosotras|vuestro|vuestra|vuestros|vuestras|sois|estáis|tenéis|podéis|queréis|habéis|hacéis|vais)\b/iu;
 const REGIONALISMS = ['coger', 'coge', 'cogen', 'coges', 'cogí', 'cogió', 'cogido', 'cogemos', 'cógelo', 'concha', 'pisto', 'chingar', 'chingón', 'cachar', 'pinche', 'boludo', 'guay', 'mola', 'ordenador', 'gilipollas', 'tío', 'tía', 'vale'];
 const REGION_RE = new RegExp('(^|[^\\p{L}])(' + REGIONALISMS.join('|') + ')(?=$|[^\\p{L}])', 'iu');

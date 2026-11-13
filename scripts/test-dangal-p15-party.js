@@ -411,7 +411,8 @@ const errCode = async (p) => {
     const us = kitSandbox({ lang: 'en' }).K.contentPrefs();
     const india = kitSandbox({ lang: 'en', india: true }).K.contentPrefs();
     const hindi = kitSandbox({ lang: 'hi' }).K.contentPrefs();
-    assert(us.region === 'global' && india.region === 'in' && hindi.region === 'in', 'locale defaults: global core outside India; India locale / Hindi suggests the regional add-ons');
+    // Global L6: regional packs follow the Region, not the UI language (a Hindi UI outside India → global core).
+    assert(us.region === 'global' && india.region === 'in' && hindi.region === 'global', 'locale defaults: global core outside India; the India Region (not a Hindi UI) suggests the regional add-ons');
 
     const { K, fire } = kitSandbox({ uid: A });
     let away = 0;

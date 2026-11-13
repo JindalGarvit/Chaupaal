@@ -22,26 +22,12 @@ const CHECKIN_CEILING_DAYS = 21;
 const FEEDBACK_MIN_DAYS = 28;
 
 /**
- * Festivals / national days (month 1–12), scoped by region (D1 global-first: regions: null = everyone;
- * otherwise only users whose region is listed). Copy: notifications.card.festival_<id>_{name,wish}.
- * Year-agnostic MM-DD; lunar festivals soft-match ±1 day (approximate — maintain yearly).
+ * Festivals / national days scoped by region — the shared L6 calendar (core/seasonal-calendar.js; D1
+ * global-first: regions: null = everyone, otherwise only users whose region is listed). Lunar dates come
+ * from a per-year table there. Copy: notifications.card.festival_<id>_{name,wish}.
  */
-const FESTIVAL_CALENDAR = [
-  { id: 'new_year', month: 1, day: 1, regions: null },
-  { id: 'republic_day', month: 1, day: 26, regions: ['IN'] },
-  { id: 'holi', month: 3, day: 14, regions: ['IN', 'NP'] },
-  { id: 'independence_day', month: 8, day: 15, regions: ['IN'] },
-  { id: 'ganesh_chaturthi', month: 8, day: 27, regions: ['IN'] },
-  { id: 'gandhi_jayanti', month: 10, day: 2, regions: ['IN'] },
-  { id: 'diwali', month: 10, day: 20, regions: ['IN', 'NP', 'LK', 'MY', 'SG', 'MU', 'FJ', 'TT', 'GY', 'SR'] },
-  {
-    id: 'christmas',
-    month: 12,
-    day: 25,
-    regions: 'US GB CA AU NZ IE DE FR ES IT PT NL BE AT CH SE NO DK FI PL CZ SK HU RO HR SI GR CY MT LU IS LI BR MX AR CO CL PE PH ZA KE NG GH'.split(' '),
-  },
-];
-const LUNAR = ['holi', 'diwali', 'ganesh_chaturthi'];
+const SeasonalCalendar = require('../public/src/js/core/seasonal-calendar.js');
+const FESTIVAL_CALENDAR = SeasonalCalendar.EVENTS;
 
 function festivalText(fest, lang) {
   const { serverT } = require('./i18n-server');
@@ -52,25 +38,7 @@ function festivalText(fest, lang) {
 }
 
 function festivalForDate(date = new Date(), tz = 'UTC', country = null) {
-  let month;
-  let day;
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      month: 'numeric',
-      day: 'numeric',
-    }).formatToParts(date);
-    month = Number(parts.find((p) => p.type === 'month')?.value);
-    day = Number(parts.find((p) => p.type === 'day')?.value);
-  } catch {
-    month = date.getUTCMonth() + 1;
-    day = date.getUTCDate();
-  }
-  const c = String(country || '').toUpperCase();
-  const here = FESTIVAL_CALENDAR.filter((f) => !f.regions || (c && f.regions.indexOf(c) >= 0));
-  const exact = here.find((f) => f.month === month && f.day === day);
-  if (exact) return exact;
-  return here.find((f) => f.month === month && Math.abs(f.day - day) <= 1 && LUNAR.includes(f.id)) || null;
+  return SeasonalCalendar.eventForDate(date, tz, country);
 }
 
 function daysSince(ts) {

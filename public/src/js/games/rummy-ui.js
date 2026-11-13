@@ -68,8 +68,9 @@
     if (s.format === 'deals') return tr('deals_deals', 'Deals · {{deals}}', { deals: s.deals });
     return tr('points', 'Points Rummy');
   }
-  /** India → 13-card by default; everywhere else → Gin. Both are always available. */
+  /** Region default (dangalLocaleDefaults): 13-card in South Asia, Gin elsewhere. Both are always available. */
   function localeMode() {
+    if (typeof dangalLocaleDefaults === 'function') return dangalLocaleDefaults().rummyMode;
     return typeof isIndiaLocale === 'function' && isIndiaLocale() ? '13' : 'gin';
   }
   function loadSetup() {

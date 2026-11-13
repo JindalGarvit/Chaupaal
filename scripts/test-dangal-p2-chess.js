@@ -408,7 +408,7 @@ async function aiChecks() {
     if (!row.moves.every((s) => g.move(s))) bad++;
   });
   assert(bad === 0 && Eco.TABLE.length >= 120, 'ECO: ' + Eco.TABLE.length + ' bundled lines, all legal');
-  assert(Eco.lookup(['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4']).name === 'Ruy López: Morphy Defence', 'ECO longest-prefix lookup');
+  assert(Eco.lookup(['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4']).name === 'Ruy López: Morphy Defense', 'ECO longest-prefix lookup');
   assert(Eco.lookup(['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6']).eco === 'B90', 'ECO: Najdorf');
 
   const chess = Rules.get('chess');

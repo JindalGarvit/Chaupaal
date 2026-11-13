@@ -397,11 +397,38 @@
     }
   }
 
-  /** Cards order: Poker leads everywhere except India, where Teen Patti leads. Both always listed. */
+  /**
+   * Dangal locale defaults (Global L6) — keyed off the user's Region (getRegionPrefs().country /
+   * contentRegion), never the UI language: a Hindi UI in the UK gets UK defaults, an English UI in India
+   * gets India defaults. Every option stays one tap away everywhere; this only picks the starting point.
+   */
+  const RUMMY_13_CARD = new Set(['IN', 'PK', 'BD', 'NP', 'LK']);
+  const BLUFF_FOLLOW_RANK = new Set(['IN', 'PK', 'BD', 'NP', 'LK']);
+  const TEEN_PATTI_FIRST = new Set(['IN', 'PK', 'BD', 'NP']);
+  const PARTY_PACK_REGION = { IN: 'in' };
+
+  function regionCountry() {
+    try {
+      if (typeof getRegionPrefs === 'function') return String(getRegionPrefs().country || '').toUpperCase();
+    } catch (e) {}
+    return isIndiaLocale() ? 'IN' : '';
+  }
+
+  function dangalLocaleDefaults(country) {
+    const c = String(country || regionCountry() || '').toUpperCase();
+    return {
+      country: c,
+      rummyMode: RUMMY_13_CARD.has(c) ? '13' : 'gin',
+      bluffStyle: BLUFF_FOLLOW_RANK.has(c) ? 'follow' : 'sequence',
+      cardsLead: TEEN_PATTI_FIRST.has(c) ? ['teenpatti', 'poker'] : ['poker', 'teenpatti'],
+      partyRegion: PARTY_PACK_REGION[c] || 'global',
+    };
+  }
+
+  /** Cards order: Teen Patti leads where it's the house game (South Asia), Poker elsewhere. Both always listed. */
   function orderCardsForLocale(list) {
     const arr = (list || []).slice();
-    const first = isIndiaLocale() ? 'teenpatti' : 'poker';
-    const second = first === 'poker' ? 'teenpatti' : 'poker';
+    const [first, second] = dangalLocaleDefaults().cardsLead;
     const iF = arr.findIndex((g) => g && g.id === first);
     const iS = arr.findIndex((g) => g && g.id === second);
     if (iF > iS && iS >= 0) {
@@ -444,5 +471,6 @@
   window.confirmAdultForGames = confirmAdult;
   window.openAgeGateSheet = openAgeGateSheet;
   window.isIndiaLocale = isIndiaLocale;
+  window.dangalLocaleDefaults = dangalLocaleDefaults;
   window.orderCardsForLocale = orderCardsForLocale;
 })();

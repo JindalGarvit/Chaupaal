@@ -47,11 +47,13 @@ function loadCatalog() {
   };
 }
 
-const params = (s) => [...new Set(String(s).match(/\{\{\w+\}\}/g) || [])].sort();
+/** {{x|이/가}} (Korean particle modifier) is the param {{x}}. */
+const stripJosa = (s) => String(s).replace(/\{\{(@?\w+)\|[^{}|]+\/[^{}|]+\}\}/g, '{{$1}}');
+const params = (s) => [...new Set(stripJosa(s).match(/\{\{\w+\}\}/g) || [])].sort();
 /** Params a translation consumes: {{x}} or as an ICU variable ({x, plural, …} — Arabic turns "{{n}} members" into plurals). */
 const paramsUsed = (s) =>
-  [...new Set([...(String(s).match(/\{\{\w+\}\}/g) || []), ...[...String(s).matchAll(/\{\s*(\w+)\s*,\s*(?:plural|select|selectordinal)\s*,/g)].map((m) => '{{' + m[1] + '}}')])].sort();
-const glossTokens = (s) => [...new Set(String(s).match(/\{\{@[a-z0-9]+\}\}/g) || [])].sort();
+  [...new Set([...(stripJosa(s).match(/\{\{\w+\}\}/g) || []), ...[...String(s).matchAll(/\{\s*(\w+)\s*,\s*(?:plural|select|selectordinal)\s*,/g)].map((m) => '{{' + m[1] + '}}')])].sort();
+const glossTokens = (s) => [...new Set(stripJosa(s).match(/\{\{@[a-z0-9]+\}\}/g) || [])].sort();
 
 function bracesBalance(s) {
   let d = 0;

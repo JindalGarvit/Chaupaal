@@ -5,9 +5,10 @@
  *                 Cyrillic diacritics stripped (é→e, ñ→n; Indic matras are letters and stay;
  *                 Devanagari nukta dropped, chandrabindu → anusvara) → Arabic script (Urdu, Arabic,
  *                 Persian): harakat, hamza/madda marks and tatweel dropped (أ إ آ → ا, ئ → ی, ؤ → و),
- *                 ي ى → ی, ك → ک, ه ھ ة ۃ → ہ, Arabic-Indic digits → 0–9 → special Latin letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
- *                 curly quotes straightened, zero-width chars (incl. ZWNJ) dropped, whitespace collapsed.
- *   translit(s)   Latin-script Hindi/Urdu words → English search terms ("khel" → "dangal games").
+ *                 ي ى → ی, ك → ک, ه ھ ة ۃ → ہ, Arabic-Indic digits → 0–9 → Bengali: য় ড় ঢ় one form
+ *                 (NFKC), chandrabindu dropped, khanda ta ৎ → ত্, ০–৯ → 0–9 → special Latin letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
+ *                 curly quotes straightened, zero-width chars (incl. ZWJ/ZWNJ) dropped, whitespace collapsed.
+ *   translit(s)   Latin-script Hindi/Urdu/Bengali words → English search terms ("khel" → "dangal games").
  *   expand(s)     fold(s) + the transliteration terms, for keyword matching.
  *   matches(hay, q) fold-aware substring test.
  *
@@ -34,15 +35,18 @@
       // Tamil, Bengali vowel signs and Arabic marks live in other blocks and are kept. Devanagari nukta
       // is dropped and chandrabindu folds to anusvara: people type खबर for ख़बर and सांप for साँप.
       // Arabic harakat, madda/hamza marks (NFD splits أ ئ ۂ ۓ into letter + mark), superscript alef
-      // and Quranic marks are optional in typing and dropped.
+      // and Quranic marks are optional in typing and dropped. Bengali chandrabindu is often skipped
+      // (খুজুন for খুঁজুন) and khanda ta is also typed as ত + hasanta (উত্‌সব for উৎসব).
       s = s
         .normalize('NFD')
-        .replace(/[\u0300-\u036f\u093c\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e8\u06ea-\u06ed]/g, '')
+        .replace(/[\u0300-\u036f\u093c\u0981\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e8\u06ea-\u06ed]/g, '')
         .replace(/\u0901/g, '\u0902')
+        .replace(/\u09ce/g, '\u09a4\u09cd')
         .normalize('NFC');
     } catch (e) {}
     s = s.replace(ARABIC_RE, (c) => ARABIC[c]).replace(/[\u0640\u061c]/g, '');
     s = s.replace(/[\u0660-\u0669\u06f0-\u06f9]/g, (c) => String(c.charCodeAt(0) & 0xf));
+    s = s.replace(/[\u09e6-\u09ef]/g, (c) => String(c.charCodeAt(0) - 0x09e6));
     s = s.replace(SPECIAL_RE, (c) => SPECIAL[c] || c);
     s = s.replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
     s = s.replace(/[\u2018\u2019\u201b\u2032]/g, "'").replace(/[\u201c\u201d\u201f\u2033]/g, '"');
@@ -74,6 +78,10 @@
     khabr: 'news akhbaar', khabrain: 'news akhbaar', akhbaar: 'akhbaar news',
     tasweer: 'photo', tasaveer: 'photo', paigham: 'message', guftugu: 'chats', gupshup: 'chats',
     mubarakbad: 'wish', salgirah: 'birthday wish', sawalat: 'question ask', moseeqi: 'music', mausiqi: 'music',
+    // Banglish (Latin-script Bengali) spellings.
+    khela: 'dangal games', khelbo: 'play games', khelun: 'play games', khobor: 'news akhbaar', khabor: 'news akhbaar',
+    bondhu: 'friends', bondu: 'friends', bondhuder: 'friends', gaan: 'music songs', chobi: 'photo', chhobi: 'photo',
+    golpo: 'story', proshno: 'question ask', jonmodin: 'birthday wish', shubhechha: 'wish', daba: 'chess',
   };
 
   function words(s) {
@@ -82,7 +90,7 @@
       .filter(Boolean);
   }
 
-  /** English terms for the Latin-script Hindi/Urdu words in s ('' when none). */
+  /** English terms for the Latin-script Hindi/Urdu/Bengali words in s ('' when none). */
   function translit(s) {
     const out = [];
     for (const w of words(s)) if (TRANSLIT[w]) out.push(TRANSLIT[w]);

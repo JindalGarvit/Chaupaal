@@ -11,11 +11,21 @@ const WEB_SEARCH_TOOL = {
   max_uses: 2,
 };
 
-/** Global-first (D1): no default country; a caller may pass the user's region for local results. */
+/**
+ * Global-first (D1): no default country; a caller may pass the user's region for local results.
+ * L6: Akhbaar passes its region's publisher list as allowedDomains (server-lib/akhbaar-sources).
+ */
 function webSearchTool(req) {
   const country = String((req && req.country) || '').toUpperCase();
-  if (!/^[A-Z]{2}$/.test(country)) return WEB_SEARCH_TOOL;
-  return { ...WEB_SEARCH_TOOL, user_location: { type: 'approximate', country, ...(req.timezone ? { timezone: String(req.timezone).slice(0, 64) } : {}) } };
+  const domains = Array.isArray(req && req.allowedDomains)
+    ? req.allowedDomains.map((d) => String(d || '').trim().toLowerCase()).filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 20)
+    : [];
+  let tool = WEB_SEARCH_TOOL;
+  if (/^[A-Z]{2}$/.test(country)) {
+    tool = { ...tool, user_location: { type: 'approximate', country, ...(req.timezone ? { timezone: String(req.timezone).slice(0, 64) } : {}) } };
+  }
+  if (domains.length) tool = { ...tool, allowed_domains: domains };
+  return tool;
 }
 
 /**

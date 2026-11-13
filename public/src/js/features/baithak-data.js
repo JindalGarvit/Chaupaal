@@ -5,13 +5,15 @@ function baithakEsc(s) {
 
 // ===================== SAMPLE BAITHAK DATA =====================
 // Guest-only Demo rows. Signed-in must never seed these into baithakChats.
+// Global names / copy by default; the India flavour only for Region IN (Global L6).
+const SAMPLE_REGION_IN = (function(){ try { return typeof getRegionPrefs === 'function' && getRegionPrefs().country === 'IN'; } catch (e) { return false; } })();
 const SAMPLE_CHATS = [
   // Pinned locally too — ensureSelfChatPinned / pinSelfChat always re-assert this at render time
   {id:'chat_self',type:'self',isSelf:true,pinned:true,undeletable:true,name:'Me (You)',avatar:'📝',preview:t('baithak.notes_to_self_try_games_features'),time:t('baithak.pinned'),unread:0,duelStreak:0},
   // Demo rows (offline only) — unread 0 so they never look like real notifications
-  {id:'chat_riya',type:'dm',name:'Riya Sharma',avatar:'😊',preview:t('baithak.ready_for_tomorrow_s_muqabala'),time:'2m',unread:0,streak:7,duelStreak:12,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib14',answer:t('baithak.cutting_chai_extra_adrak_non_negotiable')}],icebreakers:[{promptId:'ib14',answer:t('baithak.cutting_chai_extra_adrak_non_negotiable')}]},
-  {id:'chat_arjun',type:'dm',name:'Arjun Mehta',avatar:'🏔️',preview:t('baithak.that_sports_question_was_wrong_though'),time:'18m',unread:0,streak:3,duelStreak:5,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:t('baithak.road_trip_windows_down_random_dhabas')}],icebreakers:[{promptId:'ib18',answer:t('baithak.road_trip_windows_down_random_dhabas')}]},
-  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:t('baithak.someone_did_you_read_the_airtrunk'),time:'1h',unread:0,members:12,isSample:true,isDemo:true},
+  {id:'chat_riya',type:'dm',name:SAMPLE_REGION_IN?'Riya Sharma':'Alex Chen',avatar:'😊',preview:t('baithak.ready_for_tomorrow_s_muqabala'),time:'2m',unread:0,streak:7,duelStreak:12,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:SAMPLE_REGION_IN?[{promptId:'ib14',answer:t('baithak.cutting_chai_extra_adrak_non_negotiable')}]:[{promptId:'ib21',answer:t('discovery.sample_g.alex_ib')}],icebreakers:SAMPLE_REGION_IN?[{promptId:'ib14',answer:t('baithak.cutting_chai_extra_adrak_non_negotiable')}]:[{promptId:'ib21',answer:t('discovery.sample_g.lee_ib')}]},
+  {id:'chat_arjun',type:'dm',name:SAMPLE_REGION_IN?'Arjun Mehta':'Sam Rivera',avatar:'🏔️',preview:t('baithak.that_sports_question_was_wrong_though'),time:'18m',unread:0,streak:3,duelStreak:5,isSample:true,isDemo:true,profileType:'personal',theirIcebreakers:[{promptId:'ib18',answer:SAMPLE_REGION_IN?t('baithak.road_trip_windows_down_random_dhabas'):t('discovery.sample_g.sam_ib')}],icebreakers:[{promptId:'ib18',answer:SAMPLE_REGION_IN?t('baithak.road_trip_windows_down_random_dhabas'):t('discovery.sample_g.sam_ib')}]},
+  {id:'grp_tech',type:'group',name:'Tech Geeks 💻',avatar:'💻',preview:SAMPLE_REGION_IN?t('baithak.someone_did_you_read_the_airtrunk'):t('baithak.sample_g.tech_news_preview'),time:'1h',unread:0,members:12,isSample:true,isDemo:true},
   {id:'grp_news',type:'group',name:'Daily Akhbaar Club',avatar:'📰',preview:t('baithak.today_s_score_13_20'),time:'3h',unread:0,members:8,isSample:true,isDemo:true},
 ];
 
@@ -21,30 +23,30 @@ const SAMPLE_MESSAGES = {
   ],
   chat_riya: [
     {from:'them',text:t('baithak.ready_for_tomorrow_s_dangal_muqabala'),time:'10:12'},
-    {from:'me',text:t('baithak.absolutely_i_ll_crush_it_on'),time:'10:14'},
+    {from:'me',text:SAMPLE_REGION_IN?t('baithak.absolutely_i_ll_crush_it_on'):t('baithak.sample_g.crush_it'),time:'10:14'},
     {from:'them',text:t('baithak.haha_we_ll_see_what_else'),time:'10:15'},
   ],
   chat_arjun: [
-    {from:'them',text:t('baithak.manali_is_absolutely_beautiful_right_now'),time:t('common.yesterday')},
+    {from:'them',text:SAMPLE_REGION_IN?t('baithak.manali_is_absolutely_beautiful_right_now'):t('baithak.sample_g.mountains'),time:t('common.yesterday')},
     {from:'me',text:t('baithak.lucky_you_when_are_you_back'),time:t('common.yesterday')},
     {from:'them',text:t('baithak.that_sports_question_was_wrong_though'),time:'18m'},
   ],
   grp_tech: [
-    {from:'group',name:'Priya',text:t('baithak.airtrunk_investing_30b_in_india'),time:'1h'},
-    {from:'group',name:'Rahul',text:t('baithak.that_s_a_huge_step'),time:'58m'},
-    {from:'group',name:t('common.someone'),text:t('baithak.did_you_read_the_airtrunk_news'),time:'45m'},
+    {from:'group',name:SAMPLE_REGION_IN?'Priya':'Maya',text:SAMPLE_REGION_IN?t('baithak.airtrunk_investing_30b_in_india'):t('baithak.sample_g.tech_news'),time:'1h'},
+    {from:'group',name:SAMPLE_REGION_IN?'Rahul':'Lee',text:t('baithak.that_s_a_huge_step'),time:'58m'},
+    {from:'group',name:t('common.someone'),text:SAMPLE_REGION_IN?t('baithak.did_you_read_the_airtrunk_news'):t('baithak.sample_g.tech_news_q'),time:'45m'},
   ],
   grp_news: [
-    {from:'group',name:'Sakshi',text:t('baithak.finally_got_13_20_today'),time:'3h'},
-    {from:'group',name:'Dev',text:t('baithak.sample_i_scored_15'),time:'3h'},
+    {from:'group',name:SAMPLE_REGION_IN?'Sakshi':'Noor',text:t('baithak.finally_got_13_20_today'),time:'3h'},
+    {from:'group',name:SAMPLE_REGION_IN?'Dev':'Kai',text:t('baithak.sample_i_scored_15'),time:'3h'},
   ],
 };
 
 const SAMPLE_STORIES = [
   // Offline fixtures only — NEVER paint as live friend Splits (B3). Tray uses renderBaithakInstants.
-  {id:'s1',name:'Riya',avatar:'😊',type:'score',score:14,total:20,streak:24,seen:false,auto:false,deletable:false,visibility:'friends',uid:'u1',isSample:true,isDemo:true},
-  {id:'s2',name:'Arjun',avatar:'🏔️',type:'birthday',seen:false,auto:true,deletable:false,visibility:'friends',uid:'u6',isSample:true,isDemo:true},
-  {id:'s3',name:'Priya',avatar:'👩',type:'score',score:18,total:20,streak:7,seen:true,auto:false,deletable:false,visibility:'friends',uid:'u2',isSample:true,isDemo:true},
+  {id:'s1',name:SAMPLE_REGION_IN?'Riya':'Alex',avatar:'😊',type:'score',score:14,total:20,streak:24,seen:false,auto:false,deletable:false,visibility:'friends',uid:'u1',isSample:true,isDemo:true},
+  {id:'s2',name:SAMPLE_REGION_IN?'Arjun':'Sam',avatar:'🏔️',type:'birthday',seen:false,auto:true,deletable:false,visibility:'friends',uid:'u6',isSample:true,isDemo:true},
+  {id:'s3',name:SAMPLE_REGION_IN?'Priya':'Maya',avatar:'👩',type:'score',score:18,total:20,streak:7,seen:true,auto:false,deletable:false,visibility:'friends',uid:'u2',isSample:true,isDemo:true},
 ];
 
 /** @deprecated B3 — SAMPLE friend rings are forbidden. Always use Split tray. */

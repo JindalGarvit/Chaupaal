@@ -753,7 +753,7 @@ async function openAiKeyboard(targetInput,context=''){
         max_tokens:600,
         feature:'assistant_keyboard',
         lang: typeof aiUiLang==='function'?aiUiLang():undefined,
-        system:`You are Chaupaal AI, an intelligent assistant in Chaupaal — India's social news and discovery app. Help users search for information, summarise news, write replies, explain topics, or answer anything. ${context?`Context: ${context}.`:''}Be concise, friendly, conversational. Never mention Claude or Anthropic — you are Chaupaal AI. Use light markdown (headings, bold, lists) when it helps readability.`, // i18n-ignore (LLM system prompt)
+        system:`You are Chaupaal AI, an intelligent assistant in Chaupaal — a global social news and discovery app. Help users search for information, summarize news, write replies, explain topics, or answer anything. ${context?`Context: ${context}.`:''}Be concise, friendly, conversational. Never mention Claude or Anthropic — you are Chaupaal AI. Use light markdown (headings, bold, lists) when it helps readability.`, // i18n-ignore (LLM system prompt)
         messages:aiKbHistory
       });
       const text=data.text||data.content?.map(b=>b.text||'').join('')||t('onboarding.sorry_i_couldn_t_get_a');

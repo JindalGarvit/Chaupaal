@@ -11,6 +11,7 @@
  *   AI_DAILY_CALL_CAP                 shared with enrichment
  *   AI_PROVIDER + provider keys       anthropic | openai-compatible | …
  *   CAT_CACHE_CITIES / CAT_CACHE_INDUSTRIES  optional (max 8 / 6)
+ *   CAT_CACHE_REGIONS                 optional Akhbaar source regions, e.g. in,us,uk (max 6; base = International)
  *
  * Pause / AI-off / budget → 200 no-op (no spend, prior caches kept).
  * Do not raise maxDuration unless inspect proves duration failure.
@@ -47,6 +48,16 @@ const INDUSTRY_SCOPES = (process.env.CAT_CACHE_INDUSTRIES || '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean)
+  .slice(0, 6);
+/**
+ * Akhbaar source regions (L6, server-lib via core/akhbaar-sources.js). The base job is International;
+ * CAT_CACHE_REGIONS=in,us,uk adds region-scoped docs (max 6) so a reader gets their region's publishers.
+ */
+const AkhbaarSources = require('../public/src/js/core/akhbaar-sources.js');
+const REGION_SCOPES = (process.env.CAT_CACHE_REGIONS || '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter((r) => r && r !== 'intl' && AkhbaarSources.REGIONS[r])
   .slice(0, 6);
 
 const SCHEDULED_CATEGORIES = [
@@ -119,6 +130,7 @@ async function refreshOne(db, catName, scope = {}) {
   const id =
     buildCatCacheDocId({
       category: catName,
+      region: scope.region,
       city: scope.city,
       industry: scope.industry,
       day,
@@ -166,6 +178,7 @@ async function refreshOne(db, catName, scope = {}) {
     cacheVersion: CACHE_VERSION,
     generatedBy: 'cron',
     istDay: day,
+    region: scope.region || 'intl',
     city: scope.city || null,
     industry: scope.industry || null,
     cacheKey: id,
@@ -180,7 +193,7 @@ async function refreshOne(db, catName, scope = {}) {
   }
   await ref.set(payload, { merge: true });
   // Also mirror to legacy bare-category id for older clients (base scope only)
-  if (!scope.city && !scope.industry) {
+  if (!scope.city && !scope.industry && !scope.region) {
     await db
       .collection('category_cache')
       .doc(catName.toLowerCase())
@@ -201,6 +214,9 @@ function buildRefreshJobs(categories) {
   const jobs = [];
   for (const cat of categories) {
     jobs.push({ catName: cat, scope: {} });
+    for (const region of REGION_SCOPES) {
+      jobs.push({ catName: cat, scope: { region } });
+    }
     for (const city of GEO_SCOPES) {
       jobs.push({ catName: cat, scope: { city } });
     }
@@ -371,6 +387,7 @@ module.exports = async function handler(req, res) {
 
 module.exports.runRefresh = runRefresh;
 module.exports.SCHEDULED_CATEGORIES = SCHEDULED_CATEGORIES;
+module.exports.buildRefreshJobs = buildRefreshJobs;
 module.exports.skipPayload = skipPayload;
 
 // Pro/Fluid: batch can take several minutes on a cold cache — leave as configured in vercel.json

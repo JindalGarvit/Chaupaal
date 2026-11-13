@@ -126,7 +126,41 @@
     }
   }
 
+  // ─── IME composition: Enter that confirms a kana/kanji/hangul/pinyin candidate must not submit ────
+  // One capture-phase guard instead of a check in every Enter handler (chat, comments, Khoj, game guesses,
+  // forms). Safari fires the confirming Enter as keyCode 229 / right after compositionend, so both count.
+  // Safari-only quirk handling: Android keyboards compose plain words too and commit right before Enter, so the
+  // 229 / just-ended heuristics would swallow legitimate sends there — Chrome / Firefox / Android rely on isComposing.
+  const SAFARI = typeof navigator !== 'undefined' && /AppleWebKit/.test(navigator.userAgent || '') && !/Chrome|Chromium|CriOS|Android|Edg/.test(navigator.userAgent || '');
+  let composing = false;
+  let composedAt = 0;
+  function imeEnter(e, safari) {
+    if (e.key !== 'Enter' && e.keyCode !== 13 && e.keyCode !== 229) return false;
+    if (e.isComposing) return true;
+    if (!(safari === undefined ? SAFARI : safari)) return false;
+    const recent = typeof performance !== 'undefined' && performance.now() - composedAt < 60;
+    return composing || e.keyCode === 229 || recent;
+  }
+  function guardIme(e) {
+    // Let the browser commit the composition (no preventDefault); keep app handlers from treating it as a submit.
+    if (imeEnter(e)) e.stopImmediatePropagation();
+  }
+  function trackComposition() {
+    document.addEventListener('compositionstart', () => (composing = true), true);
+    document.addEventListener(
+      'compositionend',
+      () => {
+        composing = false;
+        composedAt = typeof performance !== 'undefined' ? performance.now() : 0;
+      },
+      true
+    );
+    const target = typeof window !== 'undefined' && typeof window.addEventListener === 'function' ? window : document;
+    ['keydown', 'keypress', 'keyup'].forEach((type) => target.addEventListener(type, guardIme, true));
+  }
+
   function init() {
+    trackComposition();
     try {
       ensureForLang(typeof currentLang !== 'undefined' ? currentLang : 'en');
     } catch (e) {}
@@ -138,7 +172,7 @@
   }
 
   window.ChaupaalFonts = { SCRIPT_FONTS, ensureForLang, rewriteFaces, cssUrl };
-  window.ChaupaalLayout = { autoDir, truncated };
+  window.ChaupaalLayout = { autoDir, truncated, imeEnter };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

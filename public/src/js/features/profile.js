@@ -304,7 +304,7 @@ function renderProfileModal(){
       ${payoffLine('skills')}
       ${profileField(t('profile.work_mode'), 'workMode', 'select', '', ['', 'In-office', 'Remote', 'Hybrid', 'Freelance', 'Between jobs'])}
       ${profileField(t('profile.career_level'), 'careerLevel', 'select', '', ['', 'Student / Intern', 'Entry level (0-2 yrs)', 'Mid level (3-6 yrs)', 'Senior (7-10 yrs)', 'Lead / Manager', 'Director / VP', 'C-Suite / Founder'])}
-      ${profileField(t('profile.annual_income_optional'), 'annualIncome', 'select', '', ['', 'Prefer not to say', 'Under ₹3L', '₹3L-6L', '₹6L-10L', '₹10L-20L', '₹20L-40L', 'Above ₹40L'])}
+      ${profileField(t('profile.annual_income_optional'), 'annualIncome', 'select', '', incomeOptionsForRegion())}
       ${privacyInline('annualIncome', t('profile.income'))}
     `,
     Links: () => `
@@ -358,6 +358,14 @@ function renderProfileModal(){
     Relationships: () => SECTIONS['Looking for'](),
     Social: () => SECTIONS.More(),
   };
+
+  /** Income brackets in local terms where we have them (India: ₹ lakh bands); relative tiers elsewhere (Global L6). */
+  function incomeOptionsForRegion(){
+    let country='';
+    try{ country=typeof getRegionPrefs==='function'?getRegionPrefs().country:''; }catch(e){}
+    if(country==='IN') return /* i18n-values: annualIncome */ ['', 'Prefer not to say', 'Under ₹3L', '₹3L-6L', '₹6L-10L', '₹10L-20L', '₹20L-40L', 'Above ₹40L'];
+    return /* i18n-values: annualIncome */ ['', 'Prefer not to say', 'Lower income', 'Lower-middle income', 'Middle income', 'Upper-middle income', 'Higher income'];
+  }
 
   function profileField(label,key,type,placeholder,options){
     const val=dp[key];

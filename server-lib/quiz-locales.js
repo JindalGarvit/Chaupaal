@@ -20,6 +20,7 @@ const CORE_MIN = 500;
 const REGISTRY = {
   hi: () => require('./data/quiz-locales/hi.json'),
   ur: () => require('./data/quiz-locales/ur.json'),
+  bn: () => require('./data/quiz-locales/bn.json'),
 };
 
 const cache = {};

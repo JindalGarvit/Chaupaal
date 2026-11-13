@@ -3,7 +3,7 @@
  *
  * Console / env checklist (OTP never arrives usually means one of these):
  * 1. Firebase Console → Authentication → Sign-in method → Phone: Enabled
- * 2. Blaze billing (SMS quota) + SMS region policy allows India (+91)
+ * 2. Blaze billing (SMS quota) + SMS region policy allows the countries you sign users up from
  * 3. Authentication → Settings → Authorized domains includes this host
  * 4. App Check: if Auth enforcement is ON, reCAPTCHA v3 site key must match;
  *    Phone Auth still needs RecaptchaVerifier containers in the DOM
@@ -64,7 +64,135 @@
     return '+' + cc + nat;
   }
 
+  /** @deprecated D1 — use toE164(raw) (region code) or the field's picked code; kept for old callers. */
   const toE164India = (raw) => toE164(raw, '+91');
+
+  // ─── Country-code picker (Global L6) ───────────────────────────────────────────────
+  // A "🇬🇧 +44" button before each phone field; defaults to the Region's calling code and opens a
+  // searchable country sheet. The pick lives on input.dataset.dial; storage stays E.164 (toE164).
+
+  const escHtml = (s) =>
+    String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const foldText = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  function regionApi() {
+    return typeof ChaupaalRegion !== 'undefined' ? ChaupaalRegion : null;
+  }
+
+  /** Country list rows matching a query by local name, English name, ISO code or calling code digits. */
+  function countryCodeMatches(query, lang) {
+    const R = regionApi();
+    if (!R) return [];
+    const q = foldText(String(query || '').trim().replace(/^\+/, ''));
+    return R.listCountries(lang).filter((c) => {
+      if (!q) return true;
+      const dial = R.COUNTRIES[c.code].callingCode.replace('+', '');
+      return foldText(c.name + ' ' + c.en + ' ' + c.code).includes(q) || dial.startsWith(q);
+    });
+  }
+
+  function openCountryCodeSheet({ current, onPick }) {
+    const R = regionApi();
+    if (!R || typeof openHalfSheet !== 'function') return null;
+    const lang = typeof currentLang !== 'undefined' ? currentLang : 'en';
+    const row = (c) => {
+      const dial = R.COUNTRIES[c.code].callingCode;
+      const on = c.code === current;
+      return `<button type="button" class="cp-lang-row${on ? ' is-on' : ''}" data-code="${escHtml(c.code)}" role="option" aria-selected="${on ? 'true' : 'false'}">
+        <span class="cp-lang-text"><span class="cp-lang-native">${escHtml(R.flagEmoji(c.code))} ${escHtml(c.name)}</span><span class="cp-lang-en" dir="ltr">${escHtml(dial)}</span></span>
+        <span class="cp-lang-check" aria-hidden="true">${on ? '✓' : ''}</span>
+      </button>`;
+    };
+    const paintList = (sheet, q) => {
+      const list = sheet.querySelector('[data-cc-list]');
+      const rows = countryCodeMatches(q, lang);
+      const cur = rows.filter((c) => c.code === current);
+      list.innerHTML = cur.concat(rows.filter((c) => c.code !== current)).map(row).join('');
+      const empty = sheet.querySelector('[data-cc-empty]');
+      if (empty) empty.hidden = rows.length > 0;
+    };
+    return openHalfSheet({
+      id: 'cpCountryCodePicker',
+      expand: true,
+      title: escHtml(t('auth.country_code')),
+      bodyHtml: `<div class="cp-lang-sheet">
+        <input type="search" class="cp-lang-search" data-cc-search placeholder="${escHtml(t('auth.country_code_search'))}" autocomplete="off" enterkeyhint="search">
+        <div class="cp-lang-list" role="listbox" data-cc-list></div>
+        <p class="cp-lang-empty" data-cc-empty hidden>${escHtml(t('settings.lang_no_match'))}</p>
+      </div>`,
+      onMount(sheet, close) {
+        paintList(sheet, '');
+        const input = sheet.querySelector('[data-cc-search]');
+        input?.addEventListener('input', () => paintList(sheet, input.value));
+        sheet.querySelector('[data-cc-list]')?.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-code]');
+          if (!btn) return;
+          close();
+          if (typeof onPick === 'function') onPick(btn.dataset.code);
+        });
+      },
+    });
+  }
+
+  /** Put the picker before a phone input (idempotent). Follows Region changes until the user picks. */
+  function attachCountryPicker(input) {
+    const R = regionApi();
+    if (!input || !R || input.dataset.ccWired === '1') return null;
+    input.dataset.ccWired = '1';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'auth-input auth-cc-btn';
+    btn.dir = 'ltr';
+    btn.style.cssText = 'flex:0 0 auto;width:auto;padding-inline:10px;white-space:nowrap;cursor:pointer;';
+    const row = document.createElement('div');
+    row.className = 'auth-phone-row';
+    row.style.cssText = 'display:flex;gap:8px;align-items:stretch;';
+    input.parentNode.insertBefore(row, input);
+    row.appendChild(btn);
+    row.appendChild(input);
+    input.style.flex = '1 1 auto';
+    input.style.minWidth = '0';
+    const set = (code, picked) => {
+      const c = R.COUNTRIES[code] ? code : R.getRegionPrefs().country;
+      const dial = R.COUNTRIES[c].callingCode;
+      input.dataset.country = c;
+      input.dataset.dial = dial;
+      if (picked) input.dataset.ccPicked = '1';
+      btn.textContent = `${R.flagEmoji(c)} ${dial}`;
+      btn.setAttribute('aria-label', t('auth.country_code_change', { country: R.countryName(c, typeof currentLang !== 'undefined' ? currentLang : 'en'), code: dial }));
+    };
+    set(R.getRegionPrefs().country, false);
+    btn.addEventListener('click', () =>
+      openCountryCodeSheet({
+        current: input.dataset.country,
+        onPick: (code) => {
+          set(code, true);
+          input.focus();
+        },
+      })
+    );
+    document.addEventListener('chaupaal:region-changed', () => {
+      if (input.dataset.ccPicked !== '1') set(R.getRegionPrefs().country, false);
+    });
+    return btn;
+  }
+
+  /** The calling code picked on a phone field (falls back to the Region's). */
+  function dialForInput(input) {
+    return (input && input.dataset && input.dataset.dial) || regionDialCode();
+  }
+
+  function wirePhoneFields() {
+    ['loginPhone', 'regPhoneOtpInput'].forEach((id) => attachCountryPicker(document.getElementById(id)));
+  }
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wirePhoneFields);
+    else setTimeout(wirePhoneFields, 0);
+  }
 
   function mapPhoneAuthError(err) {
     const code = String(err?.code || '');
@@ -165,8 +293,8 @@
   /**
    * @returns {Promise<{ confirmation: firebase.auth.ConfirmationResult, phone: string }>}
    */
-  async function sendOtp({ phoneRaw, containerId, forceVisible }) {
-    const phone = toE164(phoneRaw);
+  async function sendOtp({ phoneRaw, containerId, forceVisible, dial }) {
+    const phone = toE164(phoneRaw, dial);
     if (!phone) {
       const err = Object.assign(new Error('invalid phone'), { code: 'auth/invalid-phone-number' });
       throw err;
@@ -287,6 +415,10 @@
   window.PhoneOtp = {
     toE164,
     toE164India,
+    attachCountryPicker,
+    openCountryCodeSheet,
+    countryCodeMatches,
+    dialForInput,
     mapPhoneAuthError,
     sendOtp,
     confirmOtp,

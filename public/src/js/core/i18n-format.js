@@ -192,6 +192,7 @@
     dayMonth: { day: 'numeric', month: 'short' },
     weekday: { weekday: 'long', day: 'numeric', month: 'short' },
     weekdayShort: { weekday: 'short', day: 'numeric', month: 'short' },
+    weekdayName: { weekday: 'long' },
     month: { month: 'long' },
     monthYear: { month: 'long', year: 'numeric' },
   };

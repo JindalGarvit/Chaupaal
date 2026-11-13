@@ -248,8 +248,9 @@
   // ---------------- content locale ----------------
 
   /**
-   * Which content a party deck starts with. Global core everywhere; regional add-ons (India packs)
-   * are suggested for the India locale / a Hindi UI and stay one tap away for everyone else.
+   * Which content a party deck starts with. Global core everywhere; regional add-ons (India packs) are
+   * suggested by the Region (dangalLocaleDefaults — never the UI language) and stay one tap away for
+   * everyone else.
    */
   function contentPrefs() {
     let lang = 'en';
@@ -257,11 +258,12 @@
       if (typeof currentLang !== 'undefined' && currentLang) lang = String(typeof currentLang === 'function' ? currentLang() : currentLang);
     } catch (e) {}
     lang = lang.toLowerCase().slice(0, 2) || 'en';
-    let india = false;
+    let region = 'global';
     try {
-      india = typeof isIndiaLocale === 'function' ? !!isIndiaLocale() : false;
+      if (typeof dangalLocaleDefaults === 'function') region = dangalLocaleDefaults().partyRegion;
+      else if (typeof isIndiaLocale === 'function' && isIndiaLocale()) region = 'in';
     } catch (e) {}
-    return { lang, region: india || lang === 'hi' ? 'in' : 'global', hindi: lang === 'hi' };
+    return { lang, region, hindi: lang === 'hi' };
   }
 
   /**

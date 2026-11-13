@@ -66,6 +66,7 @@
   }
   /** Locale default: Follow the rank where it's the common house style (South Asia); Sequence elsewhere. */
   function localeStyle() {
+    if (typeof dangalLocaleDefaults === 'function') return dangalLocaleDefaults().bluffStyle;
     return typeof isIndiaLocale === 'function' && isIndiaLocale() ? 'follow' : 'sequence';
   }
   function loadSetup() {

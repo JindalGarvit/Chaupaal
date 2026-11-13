@@ -68,12 +68,20 @@
       }
     } catch (e) {}
     if (opts.enableWebSearch === true) body.enableWebSearch = true;
+    if (opts.enableWebSearch === true && opts.sourceRegion) body.sourceRegion = String(opts.sourceRegion).slice(0, 16);
     // Optional feature tag for future analytics / cost attribution
     if (opts.feature) body.feature = opts.feature;
     // UI text for this viewer: the server asks for that language and falls back to English when the
     // answer comes back in the wrong one (AiLang). Shared/stored content omits lang (English canonical).
     if (opts.lang) body.lang = typeof AiLang !== 'undefined' ? AiLang.normalize(opts.lang) : String(opts.lang);
     if (opts.langJson) body.langJson = true;
+    // Same viewer → their Region too (Global L6): local conventions without a hard-coded country.
+    if (opts.lang && opts.region !== false) {
+      try {
+        const region = opts.region || (typeof getRegionPrefs === 'function' ? getRegionPrefs().country : '');
+        if (/^[A-Z]{2}$/.test(String(region || ''))) body.region = String(region);
+      } catch (e) {}
+    }
 
     const headers = { 'Content-Type': 'application/json' };
     try {

@@ -2,7 +2,7 @@
  * Unified AI proxy — provider-agnostic.
  * Route: POST /api/anthropic (legacy path kept; also reachable as /api/ai via vercel rewrite).
  *
- * Body: { model|tier, messages, system?, max_tokens?, enableWebSearch?, feature? }
+ * Body: { model|tier, messages, system?, max_tokens?, enableWebSearch?, sourceRegion?, feature? }
  * Success: { ok: true, data } where data keeps Anthropic-compatible { content, ... }
  *           plus { text } for convenience.
  *
@@ -94,14 +94,23 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    // Akhbaar (L6): the client names a source region; publishers come from the shared registry only.
+    let searchScope = {};
+    if (incoming.enableWebSearch === true && typeof incoming.sourceRegion === 'string') {
+      const AkhbaarSources = require('../public/src/js/core/akhbaar-sources.js');
+      const rid = AkhbaarSources.REGIONS[incoming.sourceRegion] ? incoming.sourceRegion : 'intl';
+      searchScope = { country: AkhbaarSources.searchCountry(rid), allowedDomains: AkhbaarSources.domainsFor(rid) };
+    }
     const result = await callAI({
       model: checked.value.model,
       messages: checked.value.messages,
       system: checked.value.system,
       max_tokens: checked.value.max_tokens,
       enableWebSearch: incoming.enableWebSearch === true,
+      ...searchScope,
       feature: typeof incoming.feature === 'string' ? incoming.feature.slice(0, 64) : null,
       lang: typeof incoming.lang === 'string' ? incoming.lang.slice(0, 12) : null,
+      region: typeof incoming.region === 'string' && /^[A-Za-z]{2}$/.test(incoming.region) ? incoming.region.toUpperCase() : null,
       langJson: incoming.langJson === true,
     });
 

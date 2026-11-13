@@ -47,6 +47,10 @@
 }
 :root:is(:lang(ar), :lang(ur)) :is([class*="label"], [class*="eyebrow"], [class*="kicker"]) { text-transform: none; }
 
+/* German compounds: hyphenate instead of overflowing (soft hyphens in packs mark breaks in the tightest labels). */
+:root:lang(de) body { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
+:root:lang(de) :is(.btn, button, .tab-label, [class$="-chip"], [role="tab"]) { hyphens: manual; -webkit-hyphens: manual; }
+
 /* CJK: break per the language's rules; Korean keeps words whole. */
 :root:is(:lang(ja), :lang(zh)) body { line-break: strict; word-break: normal; overflow-wrap: anywhere; }
 :root:lang(ko) body { word-break: keep-all; overflow-wrap: anywhere; }

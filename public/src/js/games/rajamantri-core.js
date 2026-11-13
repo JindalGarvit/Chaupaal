@@ -272,6 +272,7 @@ function gtx(key, en, params) {
     [
       ['hi', () => require('../data/locales/hi/rajamantri.hi.js')],
       ['ur', () => require('../data/locales/ur/rajamantri.ur.js')],
+      ['bn', () => require('../data/locales/bn/rajamantri.bn.js')],
     ].forEach(([l, load]) => {
       try {
         applyLocale(l, load());

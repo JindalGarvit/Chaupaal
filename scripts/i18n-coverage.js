@@ -94,7 +94,7 @@ function coverage() {
       } catch (e) {}
       keys.forEach((k) => {
         // A translation may consume a param as an ICU variable ({n, plural, …}) instead of {{n}} (Arabic plurals).
-        const used = (s) => [...new Set([...(String(s).match(/\{\{\w+\}\}/g) || []), ...[...String(s).matchAll(/\{\s*(\w+)\s*,\s*(?:plural|select|selectordinal)\s*,/g)].map((m) => '{{' + m[1] + '}}')])].sort().join();
+        const used = (s) => [...new Set([...(String(s).replace(/\{\{(@?\w+)\|[^{}|]+\/[^{}|]+\}\}/g, '{{$1}}').match(/\{\{\w+\}\}/g) || []), ...[...String(s).matchAll(/\{\s*(\w+)\s*,\s*(?:plural|select|selectordinal)\s*,/g)].map((m) => '{{' + m[1] + '}}')])].sort().join();
         const want = used(en[k]);
         const have = used(pack[k]);
         if (want !== have) placeholder.push(k);

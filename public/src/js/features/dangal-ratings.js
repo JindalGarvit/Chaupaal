@@ -520,7 +520,12 @@ function renderDangalGamesGrid() {
       list = [...list].sort((a, b) => Number(b._manchScore || 0) - Number(a._manchScore || 0));
     }
     if (state.genre === 'cards') {
-      const lead = typeof isIndiaLocale === 'function' && isIndiaLocale() ? ['teenpatti', 'poker'] : ['poker', 'teenpatti'];
+      const lead =
+        typeof dangalLocaleDefaults === 'function'
+          ? dangalLocaleDefaults().cardsLead
+          : typeof isIndiaLocale === 'function' && isIndiaLocale()
+            ? ['teenpatti', 'poker']
+            : ['poker', 'teenpatti'];
       list = [...list].sort((a, b) => {
         const ia = lead.indexOf(a.id);
         const ib = lead.indexOf(b.id);
