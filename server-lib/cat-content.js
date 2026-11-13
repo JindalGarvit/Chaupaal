@@ -57,10 +57,21 @@ function normalizeCatLink(link) {
   return null;
 }
 
+/** Publisher rule: a summary is ≤80 words (never article text). Space-less scripts are capped by characters. */
+const SUMMARY_MAX_WORDS = 80;
+const SUMMARY_MAX_CHARS = 480;
+function clampSummary(text) {
+  const s = String(text || '').trim();
+  const words = s.split(/\s+/);
+  let out = words.length > SUMMARY_MAX_WORDS ? words.slice(0, SUMMARY_MAX_WORDS).join(' ') : s;
+  if (out.length > SUMMARY_MAX_CHARS) out = out.slice(0, SUMMARY_MAX_CHARS);
+  return out === s ? s : out.replace(/[\s,;:.–—-]+$/, '') + '…';
+}
+
 function sanitizeCatNewsItems(items) {
   return (items || []).map((item) => ({
     headline: item.headline || '',
-    body: item.body || '',
+    body: clampSummary(item.body),
     source: item.source || '',
     date: item.date || 'Today',
     link: normalizeCatLink(item.link),

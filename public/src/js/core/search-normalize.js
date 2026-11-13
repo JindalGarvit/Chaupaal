@@ -6,9 +6,11 @@
  *                 Devanagari nukta dropped, chandrabindu → anusvara) → Arabic script (Urdu, Arabic,
  *                 Persian): harakat, hamza/madda marks and tatweel dropped (أ إ آ → ا, ئ → ی, ؤ → و),
  *                 ي ى → ی, ك → ک, ه ھ ة ۃ → ہ, Arabic-Indic digits → 0–9 → Bengali: য় ড় ঢ় one form
- *                 (NFKC), chandrabindu dropped, khanda ta ৎ → ত্, ০–৯ → 0–9 → special Latin letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
+ *                 (NFKC), chandrabindu dropped, khanda ta ৎ → ত্, ০–৯ → 0–9 → Tamil: two-part vowel signs
+ *                 one form (NFKC), ஶ → ஸ, ௦–௯ → 0–9 → Telugu: arasunna ఁ dropped, ౦–౯ → 0–9 → special Latin
+ *                 letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
  *                 curly quotes straightened, zero-width chars (incl. ZWJ/ZWNJ) dropped, whitespace collapsed.
- *   translit(s)   Latin-script Hindi/Urdu/Bengali words → English search terms ("khel" → "dangal games").
+ *   translit(s)   Latin-script Hindi/Urdu/Bengali/Tamil/Telugu words → English search terms ("khel" → "dangal games").
  *   expand(s)     fold(s) + the transliteration terms, for keyword matching.
  *   matches(hay, q) fold-aware substring test.
  *
@@ -36,17 +38,20 @@
       // is dropped and chandrabindu folds to anusvara: people type खबर for ख़बर and सांप for साँप.
       // Arabic harakat, madda/hamza marks (NFD splits أ ئ ۂ ۓ into letter + mark), superscript alef
       // and Quranic marks are optional in typing and dropped. Bengali chandrabindu is often skipped
-      // (খুজুন for খুঁজুন) and khanda ta is also typed as ত + hasanta (উত্‌সব for উৎসব).
+      // (খুজুন for খুঁজুন) and khanda ta is also typed as ত + hasanta (উত্‌সব for উৎসব). Telugu
+      // arasunna (ఁ) is archaic and usually left out; Tamil ஸ்ரீ is typed with ஶ or ஸ.
       s = s
         .normalize('NFD')
-        .replace(/[\u0300-\u036f\u093c\u0981\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e8\u06ea-\u06ed]/g, '')
+        .replace(/[\u0300-\u036f\u093c\u0981\u0c00\u0c01\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e8\u06ea-\u06ed]/g, '')
         .replace(/\u0901/g, '\u0902')
         .replace(/\u09ce/g, '\u09a4\u09cd')
+        .replace(/\u0bb6/g, '\u0bb8')
         .normalize('NFC');
     } catch (e) {}
     s = s.replace(ARABIC_RE, (c) => ARABIC[c]).replace(/[\u0640\u061c]/g, '');
     s = s.replace(/[\u0660-\u0669\u06f0-\u06f9]/g, (c) => String(c.charCodeAt(0) & 0xf));
-    s = s.replace(/[\u09e6-\u09ef]/g, (c) => String(c.charCodeAt(0) - 0x09e6));
+    // Bengali, Tamil and Telugu digit blocks all start at U+xxE6.
+    s = s.replace(/[\u09e6-\u09ef\u0be6-\u0bef\u0c66-\u0c6f]/g, (c) => String((c.charCodeAt(0) & 0xf) - 6));
     s = s.replace(SPECIAL_RE, (c) => SPECIAL[c] || c);
     s = s.replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
     s = s.replace(/[\u2018\u2019\u201b\u2032]/g, "'").replace(/[\u201c\u201d\u201f\u2033]/g, '"');
@@ -82,6 +87,19 @@
     khela: 'dangal games', khelbo: 'play games', khelun: 'play games', khobor: 'news akhbaar', khabor: 'news akhbaar',
     bondhu: 'friends', bondu: 'friends', bondhuder: 'friends', gaan: 'music songs', chobi: 'photo', chhobi: 'photo',
     golpo: 'story', proshno: 'question ask', jonmodin: 'birthday wish', shubhechha: 'wish', daba: 'chess',
+    // Tanglish (Latin-script Tamil) spellings.
+    vilayattu: 'dangal games', vilaiyattu: 'dangal games', vilayaattu: 'dangal games', vilayadu: 'play games', vilaiyadu: 'play games',
+    seithigal: 'news akhbaar', seidhigal: 'news akhbaar', seithikal: 'news akhbaar',
+    nanbar: 'friends', nanban: 'friends', nanbargal: 'friends', nanbarkal: 'friends',
+    isai: 'music', paattu: 'music songs', paadal: 'music songs', kelvi: 'question ask',
+    sathurangam: 'chess', chathurangam: 'chess', sadhurangam: 'chess', paramapadham: 'snakes and ladders', paramapadam: 'snakes and ladders',
+    vazhthu: 'wish', vaazhthu: 'wish', pirandhanaal: 'birthday wish', piranthanaal: 'birthday wish', thedu: 'search', thedal: 'search',
+    // Latin-script Telugu spellings.
+    aatalu: 'dangal games', snehitulu: 'friends', snehithulu: 'friends', snehitudu: 'friends', nestam: 'friends',
+    vartalu: 'news akhbaar', vaartalu: 'news akhbaar', varthalu: 'news akhbaar',
+    sangeetham: 'music', paatalu: 'music songs', patalu: 'music songs', prashna: 'question ask',
+    chadarangam: 'chess', chadharangam: 'chess', vaikunthapali: 'snakes and ladders', vaikuntapali: 'snakes and ladders',
+    subhakankshalu: 'wish', shubhakankshalu: 'wish', puttinaroju: 'birthday wish', vetakandi: 'search', vethakandi: 'search', vetuku: 'search', dabbu: 'money',
   };
 
   function words(s) {

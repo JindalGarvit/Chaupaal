@@ -888,6 +888,8 @@
       ['hi', () => require('./locales/hi/mostlikely-packs.hi.js')],
       ['ur', () => require('./locales/ur/mostlikely-packs.ur.js')],
       ['bn', () => require('./locales/bn/mostlikely-packs.bn.js')],
+      ['ta', () => require('./locales/ta/mostlikely-packs.ta.js')],
+      ['te', () => require('./locales/te/mostlikely-packs.te.js')],
     ].forEach(([l, load]) => {
       try {
         applyLocale(l, load());

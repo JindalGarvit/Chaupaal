@@ -52,7 +52,7 @@ const LANG_CATALOG = [
 const I18N_RETIRED_LANGS = ['gu', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"b9bebcaa","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"832edec0","id":"2775a026","ja":"0673b3d7","kn":"db038fc4","ko":"56677136","ml":"ec4d4874","mr":"43439d48","pa":"3b4db0de","pt":"19118eeb","ta":"5e78654a","te":"11127969","ur":"860f55f1","zh":"e0fda911"};
+const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"7f7d376b","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"77ccdc36","id":"2775a026","ja":"0673b3d7","kn":"db038fc4","ko":"56677136","ml":"ec4d4874","mr":"43439d48","pa":"3b4db0de","pt":"19118eeb","ta":"e1a81b75","te":"c92bf860","ur":"88b8fb5e","zh":"e0fda911"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({

@@ -375,6 +375,8 @@
       ['hi', () => require('./locales/hi/charades-packs.hi.js')],
       ['ur', () => require('./locales/ur/charades-packs.ur.js')],
       ['bn', () => require('./locales/bn/charades-packs.bn.js')],
+      ['ta', () => require('./locales/ta/charades-packs.ta.js')],
+      ['te', () => require('./locales/te/charades-packs.te.js')],
     ].forEach(([l, load]) => {
       try {
         applyLocale(l, load());

@@ -21,6 +21,8 @@ const REGISTRY = {
   hi: () => require('./data/quiz-locales/hi.json'),
   ur: () => require('./data/quiz-locales/ur.json'),
   bn: () => require('./data/quiz-locales/bn.json'),
+  ta: () => require('./data/quiz-locales/ta.json'),
+  te: () => require('./data/quiz-locales/te.json'),
 };
 
 const cache = {};
