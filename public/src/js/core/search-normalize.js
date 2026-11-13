@@ -3,7 +3,7 @@
  *
  *   fold(s)       NFKC (full-/half-width, ligatures, compatibility forms) → lowercase → Latin/Greek/
  *                 Cyrillic diacritics stripped (é→e, ñ→n; Indic matras / Arabic harakat are letters
- *                 and stay) → special Latin letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
+ *                 and stay; Devanagari nukta dropped, chandrabindu → anusvara) → special Latin letters (ß→ss, æ→ae, ø→o, ł→l, đ→d, ı→i) → katakana→hiragana →
  *                 curly quotes straightened, zero-width chars dropped, whitespace collapsed.
  *   translit(s)   Latin-script Hindi/Urdu words → English search terms ("khel" → "dangal games").
  *   expand(s)     fold(s) + the transliteration terms, for keyword matching.
@@ -26,8 +26,9 @@
     s = s.toLowerCase();
     try {
       // Only combining marks that follow a Latin/Greek/Cyrillic letter (U+0300–036F) — Devanagari,
-      // Tamil, Bengali vowel signs and Arabic marks live in other blocks and are kept.
-      s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC');
+      // Tamil, Bengali vowel signs and Arabic marks live in other blocks and are kept. Devanagari nukta
+      // is dropped and chandrabindu folds to anusvara: people type खबर for ख़बर and सांप for साँप.
+      s = s.normalize('NFD').replace(/[\u0300-\u036f\u093c]/g, '').replace(/\u0901/g, '\u0902').normalize('NFC');
     } catch (e) {}
     s = s.replace(SPECIAL_RE, (c) => SPECIAL[c] || c);
     s = s.replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));

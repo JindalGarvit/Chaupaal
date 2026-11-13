@@ -117,7 +117,7 @@ function keyFor(ns, english) {
 function copyTranslations() {
   const dir = path.join(ROOT, 'public', 'src', 'i18n');
   fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.json'))
+    .filter((f) => f.endsWith('.json') && f !== 'glossary.json')
     .forEach((f) => {
       const file = path.join(dir, f);
       const pack = JSON.parse(fs.readFileSync(file, 'utf8'));

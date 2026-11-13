@@ -78,7 +78,7 @@ function check() {
     if (!(nk in en)) errors.push(`legacy: ${flat} → ${nk} has no English message`);
   });
 
-  const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json'));
+  const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json') && f !== 'glossary.json');
   files.forEach((f) => {
     const code = f.replace(/\.json$/, '');
     if (!codes.includes(code)) errors.push(`pack ${f} is not in LANG_CATALOG${retired.includes(code) ? ' (retired)' : ''}`);

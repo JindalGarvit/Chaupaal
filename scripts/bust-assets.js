@@ -34,7 +34,7 @@ const I18N_JS = path.join(ROOT, 'public', 'src', 'js', 'core', 'i18n.js');
 if (fs.existsSync(I18N_DIR) && fs.existsSync(I18N_JS)) {
   const versions = {};
   fs.readdirSync(I18N_DIR)
-    .filter((f) => f.endsWith('.json'))
+    .filter((f) => f.endsWith('.json') && f !== 'glossary.json')
     .sort()
     .forEach((f) => (versions[f.replace(/\.json$/, '')] = hashFile(path.join(I18N_DIR, f))));
   const js = fs.readFileSync(I18N_JS, 'utf8');

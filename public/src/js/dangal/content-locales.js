@@ -42,7 +42,7 @@
     'mostlikely.prompts': { strategy: 'translate', games: ['mostlikely'], files: { hi: ['data/locales/hi/mostlikely-packs.hi.js'] }, keys: ['games.mostlikely.nhie.'], note: 'Most Likely To / Would You Rather / Never Have I Ever core prompts' }, // i18n-ignore (developer manifest note)
     'rajamantri.roles': { strategy: 'translate', games: ['rajamantri'], files: { hi: ['data/locales/hi/rajamantri.hi.js'] }, keys: ['games.rajamantri.'], note: 'Raja Mantri Chor Sipahi roles + calls' }, // i18n-ignore (developer manifest note)
     'werewolf.narration': { strategy: 'translate', games: ['werewolf'], keys: ['games.werewolf.'], note: 'Werewolf roles + narration' }, // i18n-ignore (developer manifest note)
-    'scribble.words': { strategy: 'translate', games: ['scribble'], files: {}, min: 600, guess: true, note: 'Scribble core word packs (≥600 words per language)' }, // i18n-ignore (developer manifest note)
+    'scribble.words': { strategy: 'translate', games: ['scribble'], serverLangs: ['en', 'hi'], min: 600, guess: true, note: 'Scribble core word packs (≥600 words per language; server-lib/scribble-words.<lang>.js)' }, // i18n-ignore (developer manifest note)
 
     // ---- templated speech ----
     'streetcricket.commentary': { strategy: 'translate', games: ['streetcricket'], keys: ['games.streetcricket.comm.'], speech: true, note: 'Cricket commentary templates' }, // i18n-ignore (developer manifest note)
@@ -99,6 +99,7 @@
     if (set.strategy === 'en-only') return l === 'en';
     if (l === 'en') return true;
     if (set.langs) return set.langs.indexOf(l) >= 0;
+    if (set.serverLangs) return set.serverLangs.indexOf(l) >= 0;
     if (set.files && set.files[l] && set.files[l].length) return true;
     if (set.keys && !set.files) return keyCoverage(set.keys, l) >= KEY_COVERAGE;
     if (set.server) return Array.isArray(root.__quizQuestionLangs) && root.__quizQuestionLangs.indexOf(l) >= 0;
@@ -185,7 +186,7 @@
   function roomChoices(gameId) {
     const langs = ['en'];
     const cands = typeof root.LANG_CATALOG !== 'undefined' && Array.isArray(root.LANG_CATALOG) ? root.LANG_CATALOG.map((x) => x.code) : ['hi'];
-    const sets = [].concat(gameId).reduce((a, g) => a.concat(contentSetsFor(g).filter((id) => SETS[id].guess || SETS[id].files)), []);
+    const sets = [].concat(gameId).reduce((a, g) => a.concat(contentSetsFor(g).filter((id) => SETS[id].guess || SETS[id].files || SETS[id].serverLangs)), []);
     cands.forEach((code) => {
       const l = contentBase(code);
       if (langs.indexOf(l) >= 0) return;

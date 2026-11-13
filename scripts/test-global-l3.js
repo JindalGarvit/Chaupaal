@@ -27,12 +27,9 @@ const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const L3 = Object.keys(require('./i18n-surfaces.json').l3).filter((f) => fs.existsSync(path.join(ROOT, f)));
 const L3_NS = ['baithak', 'chat', 'mehfil', 'music', 'location', 'media'];
-const HI_TEST = {
-  'chat.sys.member_added': '{who, select, actor {Aapne {{target}} ko add kiya} target {{{actor}} ne aapko add kiya} other {{{actor}} ne {{target}} ko add kiya}}',
-  'chat.sys.member_left': '{who, select, actor {Aapne group chhod diya} other {{{actor}} ne group chhod diya}}',
-  'chat.auto.photo': '📷 Photo (hi)',
-  'chat.auto.gif': 'GIF (hi)',
-};
+const DEV = /[\u0900-\u097F]/;
+const HI_PACK = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/src/i18n/hi.json'), 'utf8'));
+const HI_TEST = { 'chat.auto.photo': HI_PACK['chat.auto.photo'], 'chat.auto.gif': HI_PACK['chat.auto.gif'] };
 
 let passed = 0;
 let failed = 0;
@@ -134,7 +131,7 @@ const strip = (html) => String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' '
     const enLine = strip(enV.ChatEvents.renderSysHtml(sys));
     const hiLine = strip(hiV.ChatEvents.renderSysHtml(sys));
     assert(enLine === 'Asha added Ravi', `en viewer: "${enLine}"`);
-    assert(hiLine === 'Asha ne Ravi ko add kiya', `hi viewer: "${hiLine}" (same message, own language)`);
+    assert(/Asha/.test(hiLine) && /Ravi/.test(hiLine) && DEV.test(hiLine), `hi viewer: "${hiLine}" (same message, own language)`);
     const asActor = viewer('en', files, { uid: 'u_asha' });
     const asTarget = viewer('en', files, { uid: 'u_ravi' });
     assert(strip(asActor.ChatEvents.renderSysHtml(sys)) === 'You added Ravi', 'actor sees "You added Ravi"');
@@ -151,11 +148,11 @@ const strip = (html) => String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' '
 
     const render = bubbleRenderer(hiV);
     const sysRow = render({ from: 'them', uid: 'u_asha', name: 'Asha', text: 'Asha added Ravi', sys }, true);
-    assert(/msg-row--system/.test(sysRow) && /ko add kiya/.test(sysRow), 'thread renders `sys` in the viewer’s language');
+    assert(/msg-row--system/.test(sysRow) && DEV.test(sysRow), 'thread renders `sys` in the viewer’s language');
     const legacy = render({ from: 'them', uid: 'u_asha', name: 'Asha', text: 'Asha added Ravi (old message)' }, true);
     assert(/Asha added Ravi \(old message\)/.test(legacy) && !/msg-row--system/.test(legacy), 'legacy text-only message still shows exactly as stored');
     const gif = render({ from: 'them', uid: 'u_asha', name: 'Asha', text: 'GIF' }, false);
-    assert(/GIF \(hi\)/.test(gif), 'old auto-label message ("GIF") reads in the viewer’s language');
+    assert(gif.includes(HI_TEST['chat.auto.gif']), 'old auto-label message ("GIF") reads in the viewer’s language');
     const typed = render({ from: 'them', uid: 'u_asha', name: 'Asha', text: 'see you at 6' }, false);
     assert(/see you at 6/.test(typed), 'user text is never translated');
     const xss = render({ from: 'them', uid: 'u_asha', name: 'Asha', text: '<img src=x onerror=alert(1)>' }, false);
@@ -180,9 +177,9 @@ const strip = (html) => String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' '
     assert(msg && msg.payload.text === 'Asha added Ravi', `writer stores English fallback text even with a Hindi UI ("${msg && msg.payload.text}")`);
     assert(writes.some((w) => w.path === 'chats/g1' && w.payload.previewSys && w.payload.previewSysAt), 'chat doc gets previewSys (+ previewSysAt guard)');
     const chat = { preview: 'Asha added Ravi', previewSys: msg.payload.sys, previewSysAt: 5, lastMessageAt: 5 };
-    assert(/ko add kiya/.test(hiV.ChatEvents.chatPreviewText(chat)), 'chat list shows the event in the viewer’s language');
+    assert(DEV.test(hiV.ChatEvents.chatPreviewText(chat)), 'chat list shows the event in the viewer’s language');
     assert(hiV.ChatEvents.chatPreviewText({ ...chat, lastMessageAt: 9, preview: 'newer text' }) === 'newer text', 'a later message (old client) wins over a stale previewSys');
-    assert(hiV.ChatEvents.chatPreviewText({ preview: '📷 Photo' }) === '📷 Photo (hi)', 'legacy auto-label preview localised');
+    assert(hiV.ChatEvents.chatPreviewText({ preview: '📷 Photo' }) === HI_TEST['chat.auto.photo'] && DEV.test(HI_TEST['chat.auto.photo']), 'legacy auto-label preview localised');
 
     const gi = read('public/src/js/features/group-info.js');
     ['group_created', 'member_added', 'member_left', 'member_removed', 'admin_added', 'admin_removed', 'group_renamed', 'group_photo_changed', 'member_joined'].forEach((ty) =>
@@ -205,13 +202,13 @@ const strip = (html) => String(html).replace(/<[^>]+>/g, '').replace(/\s+/g, ' '
     assert(srvFiles.every((f) => !/'Sent a (story|post)'|'Your space with Chaupaal'/.test(read(f))), 'server-written chat text comes from the catalog (no inline English)');
     const srv = require('../server-lib/i18n-server');
     srv.runtime().registerI18nLocale('hi', HI_TEST);
-    assert(srv.serverAutoLabel('hi', '📷 Photo') === '📷 Photo (hi)', 'push: DM auto-label rendered in the recipient’s language');
+    assert(srv.serverAutoLabel('hi', '📷 Photo') === HI_TEST['chat.auto.photo'], 'push: DM auto-label rendered in the recipient’s language');
     assert(srv.serverAutoLabel('hi', 'kal milte hain') === null, 'push: user-written preview untouched');
     assert(srv.serverAutoLabel('en', '🎵 Tum Hi Ho') === '🎵 Tum Hi Ho', 'patterned labels keep their params (🎵 {{title}})');
     const notif = require('../server-lib/notifications');
     const fakeDb = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ lang: 'hi' }) }) }) }) };
     const copy = await notif.renderPushCopy(fakeDb, 'u1', { actorName: 'Asha', previewText: '📷 Photo' });
-    assert(copy.body === '📷 Photo (hi)', `DM push body in recipient language ("${copy.body}")`);
+    assert(copy.body === HI_TEST['chat.auto.photo'], `DM push body in recipient language ("${copy.body}")`);
     assert(/ChatEvents\.autoText\(rawPreview\)/.test(read('public/src/js/core/notification-panel.js')), 'notification panel reads auto-labels in the viewer language');
   }
 

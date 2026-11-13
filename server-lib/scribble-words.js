@@ -175,12 +175,51 @@ function load(src, regional) {
 load(RAW, false);
 load(REGIONAL, true);
 
-/** Every word in these packs, tagged with difficulty (deduped, first pack wins). */
-function wordsFor(packIds) {
+/**
+ * Localised core packs (language passes): server-lib/scribble-words.<lang>.js, entries "शब्द|roman|alt".
+ * A language counts as available once its core packs reach LOCALE_MIN words.
+ */
+const LOCALE_MIN = 600;
+const LOCALE_FILES = { hi: () => require('./scribble-words.hi.js') };
+const LOCALE_PACKS = {};
+Object.keys(LOCALE_FILES).forEach((lang) => {
+  let src = null;
+  try {
+    src = LOCALE_FILES[lang]();
+  } catch (e) {
+    src = null;
+  }
+  if (!src) return;
+  const packs = {};
+  Object.keys(src).forEach((id) => {
+    const p = src[id] || {};
+    const list = (v) => (Array.isArray(v) ? v : split(v || '')).map((w) => String(w).trim()).filter(Boolean);
+    packs[id] = { id, regional: !!(PACKS[id] && PACKS[id].regional), easy: list(p.easy), medium: list(p.medium), hard: list(p.hard) };
+  });
+  LOCALE_PACKS[lang] = packs;
+});
+
+const baseLang = (lang) => String(lang || '').toLowerCase().split(/[-_]/)[0];
+
+function coreCount(lang) {
+  const packs = lang === 'en' ? PACKS : LOCALE_PACKS[lang];
+  if (!packs) return 0;
+  return Object.keys(RAW).reduce((n, id) => n + (packs[id] ? packs[id].easy.length + packs[id].medium.length + packs[id].hard.length : 0), 0);
+}
+
+/** Content languages Scribble can deal in (English + every localised set over the minimum). */
+function languages() {
+  return ['en'].concat(Object.keys(LOCALE_PACKS).filter((l) => coreCount(l) >= LOCALE_MIN));
+}
+
+/** Every word in these packs, tagged with difficulty (deduped, first pack wins), in `lang` when available. */
+function wordsFor(packIds, lang) {
+  const l = baseLang(lang);
+  const local = l && l !== 'en' && languages().indexOf(l) >= 0 ? LOCALE_PACKS[l] : null;
   const seen = new Set();
   const out = { easy: [], medium: [], hard: [] };
   (packIds || []).forEach((id) => {
-    const p = PACKS[id];
+    const p = local ? local[id] : PACKS[id];
     if (!p) return;
     ['easy', 'medium', 'hard'].forEach((d) =>
       p[d].forEach((w) => {
@@ -204,4 +243,4 @@ function stats() {
   };
 }
 
-module.exports = { PACKS, wordsFor, stats, CORE_IDS: Object.keys(RAW), REGIONAL_IDS: Object.keys(REGIONAL) };
+module.exports = { PACKS, LOCALE_PACKS, LOCALE_MIN, wordsFor, stats, languages, coreCount, CORE_IDS: Object.keys(RAW), REGIONAL_IDS: Object.keys(REGIONAL) };

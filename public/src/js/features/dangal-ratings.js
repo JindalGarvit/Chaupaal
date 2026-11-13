@@ -1,6 +1,7 @@
 // ===================== CATEGORY RATINGS + DANGAL GRID =====================
 const NEWS_CATEGORIES = /* i18n-values: akhbaar.cat */ ['GK','Sports','Tech','Business','India','World'];
-const CATEGORY_ICONS = {GK:'🧠',Sports:'🏏',Tech:'💻',Business:'📈',India:'🇮🇳',World:'🌍'};
+const CATEGORY_ICONS = {GK:'🧠',Sports:'🏅',Tech:'💻',Business:'📈',India:'🇮🇳',World:'🌍'};
+const newsCatLabel = (cat) => t('akhbaar.cat.' + String(cat).toLowerCase());
 
 const LEADERBOARD_PAGE=10;
 let lbCursor=null;
@@ -869,7 +870,7 @@ function openQuizCategorySheet(){
       ${NEWS_CATEGORIES.map(cat=>`
         <button type="button" class="quiz-cat-card" data-cat="${cat}" aria-pressed="false">
           <div class="quiz-cat-icon">${CATEGORY_ICONS[cat]}</div>
-          <div class="quiz-cat-name">${cat}</div>
+          <div class="quiz-cat-name">${newsCatLabel(cat)}</div>
           <div class="quiz-cat-rating">★ ${ratings[cat]||1200}</div>
         </button>
       `).join('')}
@@ -926,7 +927,7 @@ function initCategoryRatings(){
   if(rpRatings){
     rpRatings.innerHTML=NEWS_CATEGORIES.map(cat=>`
       <div class="rp-rating-row">
-        <span class="rp-rating-cat">${CATEGORY_ICONS[cat]} ${cat}</span>
+        <span class="rp-rating-cat">${CATEGORY_ICONS[cat]} ${newsCatLabel(cat)}</span>
         <span class="rp-rating-val">${ratings[cat]||1200}</span>
       </div>
     `).join('');

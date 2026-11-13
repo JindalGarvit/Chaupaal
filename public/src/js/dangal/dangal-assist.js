@@ -60,6 +60,7 @@ function gtx(key, en, params) {
    * Roster (registry ids). min/max players · solo = made for one · bots = practice vs a bot ·
    * together = great in one room (Pass & Play / one screen) · remote = separate phones ·
    * minutes [typical, long] · adult = chip tables are 18+ · party = Party Hub title.
+   * keys = English search terms · langKeys = Khoj intent keywords per UI language (from LANG_KEYWORDS).
    */
   const CATALOG = [
     { id: 'tiptap', name: gtx('dangal.solo.tip_tap', 'Tip Tap'), min: 1, max: 1, solo: true, minutes: [3, 5], daily: true, keys: ['match 3', 'match three', 'puzzle', 'swap tiles', 'casual'] },
@@ -88,6 +89,37 @@ function gtx(key, en, params) {
     { id: 'mostlikely', name: gtx('dangal.party.most_likely_to', 'Most Likely To'), min: 2, max: 16, sweet: [4, 10], together: true, remote: true, party: true, minutes: [10, 20], keys: ['most likely to', 'would you rather', 'never have i ever', 'icebreaker', 'party game'] },
     { id: 'werewolf', name: gtx('dangal.party.werewolf', 'Werewolf'), min: 5, max: 16, sweet: [7, 12], together: true, remote: true, party: true, minutes: [20, 40], keys: ['werewolf', 'mafia', 'social deduction', 'hidden roles', 'party game'] },
   ];
+
+  /** Khoj intent keywords by game id, then UI language: native script + Latin-script spellings people type. */
+  const LANG_KEYWORDS = {
+    tiptap: { hi: ['टिप टैप', 'टाइल मिलाओ', 'तीन मिलाओ', 'मैच 3 गेम', 'tile milao', 'teen milao', 'tip tap khel'] },
+    brickbreaker: { hi: ['ब्रिक ब्रेकर', 'ईंट तोड़', 'ईंटें तोड़', 'गेंद पैडल', 'eent tod', 'int tod', 'brick tod'] },
+    ankjod: { hi: ['काकुरो', 'अंक जोड़', 'अंकों की पहेली', 'नंबर पहेली', 'ank jod', 'ankon ki paheli', 'number paheli'] },
+    wordguess: { hi: ['शब्द फ़ाइव', 'शब्द पहेली', 'शब्द खोजो', 'पाँच अक्षर', 'shabd paheli', 'shabad', 'paanch akshar', 'word paheli'] },
+    chess: { hi: ['शतरंज', 'चेस', 'शह और मात', 'शह मात', 'shatranj', 'satranj', 'shatrang', 'shah maat'] },
+    ttt: { hi: ['टिक टैक टो', 'टिक-टैक-टो', 'काटा ज़ीरो', 'ज़ीरो काटा', 'कट्टम कुट्टी', 'zero kata', 'kata zero', 'katam kuti'] },
+    snakes: { hi: ['साँप-सीढ़ी', 'साँप सीढ़ी', 'सीढ़ी', 'saanp seedhi', 'sanp sidi', 'saap sidhi', 'snake seedhi'] },
+    ludo: { hi: ['लूडो', 'लुडो', 'पचीसी', 'चौपड़', 'loodo', 'ludu', 'chaupad', 'chaupar'] },
+    uno: { hi: ['ओह नो', 'रंग वाले पत्ते', 'रंगीन पत्ते', 'ड्रॉ टू', 'oh no patte', 'rang wale patte', 'rangeen patte'] },
+    scribble: { hi: ['स्क्रिबल', 'चित्र बनाओ', 'ड्राइंग गेम', 'बनाओ और बूझो', 'chitra banao', 'drawing khel', 'banao aur bujho', 'draw karo'] },
+    quiz: { hi: ['क्विज़', 'सवाल-जवाब', 'सवाल जवाब', 'सामान्य ज्ञान', 'मुक़ाबला', 'sawal jawab', 'sawaal jawaab', 'samanya gyan'] },
+    carrom: { hi: ['कैरम', 'स्ट्राइकर', 'गोटी', 'कैरम बोर्ड', 'keram', 'kairam', 'goti', 'carom'] },
+    poker: { hi: ['पोकर', 'टेक्सस होल्डम', 'होल्डम', 'पोकर टेबल', 'pokar', 'taash poker', 'holdem patte'] },
+    teenpatti: { hi: ['तीन पत्ती', 'तीन पत्ता', 'तीन पत्ते', 'फ़्लश', 'teen pathi', 'tin patti', 'teen patta', 'flash'] },
+    rummy: { hi: ['रमी', 'रम्मी', 'ताश', 'पत्तों का खेल', 'rami', 'rammy', 'taash', 'patte'] },
+    bluff: { hi: ['ब्लफ़', 'झूठ पकड़ो', 'झाँसा', 'डाउट', 'jhooth pakdo', 'jhoot pakdo', 'doubt khel', 'blaf'] },
+    tambola: { hi: ['तम्बोला', 'तंबोला', 'हाउज़ी', 'हाउसी', 'बिंगो', 'tombola', 'tambola ticket', 'housie ticket'] },
+    streetcricket: { hi: ['गली क्रिकेट', 'क्रिकेट', 'बल्ला', 'छक्का', 'gali cricket', 'galli cricket', 'kirket', 'balla'] },
+    badminton: { hi: ['बैडमिंटन', 'शटल', 'चिड़िया', 'रैकेट', 'badmintan', 'chidiya', 'chidiya balla'] },
+    penalty: { hi: ['पेनल्टी', 'शूटआउट', 'फ़ुटबॉल', 'गोलकीपर', 'penalti', 'football khel', 'goal maaro'] },
+    imposter: { hi: ['इम्पोस्टर', 'इंपोस्टर', 'जासूस', 'नकली कौन', 'कौन झूठा', 'jasoos', 'nakli kaun', 'kaun jhootha'] },
+    rajamantri: { hi: ['राजा मंत्री चोर सिपाही', 'राजा मंत्री', 'चोर सिपाही', 'पर्ची', 'chor police', 'raja wazir', 'parchi'] },
+    charades: { hi: ['डम्ब शराड्स', 'शराड्स', 'इशारों से बताओ', 'एक्टिंग गेम', 'ishaar', 'ishar', 'acting khel'] },
+    mostlikely: { hi: ['सबसे ज़्यादा कौन', 'कौन सबसे ज़्यादा', 'इनमें से क्या', 'मैंने कभी नहीं', 'sabse zyada kaun', 'kaun sabse', 'kya chunoge', 'maine kabhi nahi'] },
+    werewolf: { hi: ['वेयरवुल्फ़', 'भेड़िया', 'माफ़िया', 'गाँव वाले', 'bhediya', 'bhedia', 'mafia khel', 'gaon wale'] },
+  };
+  CATALOG.forEach((g) => (g.langKeys = LANG_KEYWORDS[g.id] || {}));
+
   const IDS = CATALOG.map((g) => g.id);
   const BY_ID = {};
   CATALOG.forEach((g) => (BY_ID[g.id] = g));

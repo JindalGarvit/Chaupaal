@@ -41,7 +41,7 @@ function gtx(key, en, params) {
   const P = 1, N = 2, B = 3, R = 4, Q = 5, K = 6;
   const WHITE = 0, BLACK = 1;
   const F_NORMAL = 0, F_BIG = 1, F_EP = 2, F_CASTLE = 3;
-  const START_FEN = gtx('games.chess.rnbqkbnr_pppppppp_8_8_8_8', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+  const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // i18n-ignore (FEN notation)
   const TYPE_CHARS = ' pnbrqk';
   const FILES = 'abcdefgh';
 

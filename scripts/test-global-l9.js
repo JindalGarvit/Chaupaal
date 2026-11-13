@@ -129,14 +129,15 @@ const notifs = async (db, uid) => (await db.collection('notifications').doc(uid)
     assert(st.lang === 'hi' && st.uid === 'author' && st.moderatorUid === 'modA', 'stored in the affected user’s language (hi)');
     const hi = M.renderStatement(st);
     const en = M.renderStatement(st, 'en');
-    assert(hi.lang === 'hi' && /hata diya/.test(hi.lines[0]) && /Community Guidelines/.test(hi.lines[1]) && hi.lines.some((l) => /vyakti ne faisla/.test(l)) && hi.lines.some((l) => /appeal/.test(l)), `Hindi statement: "${hi.lines[0]}"`);
+    const DEV = /[\u0900-\u097F]/;
+    assert(hi.lang === 'hi' && hi.lines.length === en.lines.length && DEV.test(hi.lines[0]) && hi.lines.filter((l) => DEV.test(l)).length >= hi.lines.length - 1 && hi.lines.some((l) => /अपील/.test(l)), `Hindi statement: "${hi.lines[0]}"`);
     assert(/removed your content/.test(en.lines[0]) && en.lines.some((l) => /reported by someone/.test(l)) && en.lines.some((l) => /person on our team/.test(l)), 'English statement (second UI language)');
     const p1 = (await db.collection('duniya').doc('p1').get()).data();
     assert(p1.deleted === true && p1.moderation.removed === true && p1.moderation.statementId === statementId, 'action applied (removed)');
     const authorN = (await notifs(db, 'author')).find((n) => n.type === 'moderation_action');
     assert(authorN && authorN.previewKey === 'notifications.push.moderation_action' && authorN.deepLink.moderation === statementId, 'affected user notified in-app (deep link to the statement)');
     const pushHi = srv.serverT('hi', 'notifications.push.moderation_action');
-    assert(/action liya/.test(pushHi), `push copy renders in Hindi ("${pushHi.slice(0, 40)}…")`);
+    assert(/[\u0900-\u097F]/.test(pushHi), `push copy renders in Hindi ("${pushHi.slice(0, 40)}…")`);
     const view = await M.getStatementForUser(db, 'author', statementId);
     assert(view.ok && view.statement.action === 'remove' && !('moderatorUid' in view.statement) && (await M.getStatementForUser(db, 'rep', statementId)).error === 'NOT_FOUND', 'only the affected user can read it; moderator identity not exposed');
     const B = { window: {}, document: { addEventListener() {}, getElementById: () => null, readyState: 'complete' }, tHtml: tEn, t: tEn };

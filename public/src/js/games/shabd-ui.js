@@ -520,7 +520,7 @@
 
     function keyboardHtml() {
       const keys = st.revealing >= 0 ? Core().keyStates(st.guesses.slice(0, -1), answer) : Core().keyStates(st.guesses, answer);
-      return `<div class="sf-kb">${[t('games.wordguess.qwertyuiop'), t('games.wordguess.asdfghjkl'), '↵ZXCVBNM⌫']
+      return `<div class="sf-kb">${['QWERTYUIOP', 'ASDFGHJKL', '↵ZXCVBNM⌫'] // i18n-ignore (keyboard rows of the English lexicon, not copy)
         .map(
           (row) =>
             `<div class="sf-kb-row">${row

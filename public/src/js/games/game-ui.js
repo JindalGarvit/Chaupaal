@@ -914,7 +914,7 @@
         // Brand
         ctx.fillStyle = '#FFC93C';
         ctx.font = '700 22px "Space Grotesk", sans-serif';
-        ctx.fillText(t('dangal.chaupaal'), 48, 80);
+        ctx.fillText((typeof I18N_GLOSSARY !== 'undefined' ? I18N_GLOSSARY.chaupaal : 'Chaupaal').toUpperCase(), 48, 80);
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.font = '600 18px "Space Grotesk", sans-serif';
         ctx.fillText(gameDisplayName(gameId), 48, 112);

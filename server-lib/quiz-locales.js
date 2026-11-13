@@ -17,7 +17,9 @@ const CORE_SIZE = 600;
 const CORE_MIN = 500;
 
 /** lang → () => locale JSON. Add a line per finished language pass. */
-const REGISTRY = {};
+const REGISTRY = {
+  hi: () => require('./data/quiz-locales/hi.json'),
+};
 
 const cache = {};
 function data(lang) {

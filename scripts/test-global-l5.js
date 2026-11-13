@@ -177,11 +177,11 @@ const placeholders = (s) => {
     });
     assert(bad.length === 0, `rules (glance, sections, source) resolve from games.<id>.rules.* for all 25 (${bad.slice(0, 6).join(', ')})`);
     const hi = viewer(['public/src/js/dangal/dangal-rules.js']);
-    hi.registerI18nLocale('hi', { 'games.chess.rules.rules.1.h': 'Chaal', 'games.chess.rules.glance.1': 'Pehla vaakya' });
     await hi.setAppLanguage('hi');
     hi.currentLang = 'hi';
     const hc = hi.DangalRules.get('chess');
-    assert(hc.rules[0].h === 'Chaal' && hc.glance[0] === 'Pehla vaakya', 'a translated rule heading / glance line shows in the Rules sheet');
+    const HI = JSON.parse(read('public/src/i18n/hi.json'));
+    assert(hc.rules[0].h === HI['games.chess.rules.rules.1.h'] && hc.glance[0] === HI['games.chess.rules.glance.1'] && DEVANAGARI.test(hc.glance[0]), 'a translated rule heading / glance line shows in the Rules sheet');
     const src = read('public/src/js/dangal/dangal-rules.js');
     assert(/const GAMES = \/\* i18n-catalog: games\.\{id\}\.rules \*\//.test(src), 'rules table is an English catalog read through gtx');
   }
@@ -189,7 +189,8 @@ const placeholders = (s) => {
   console.log('\nNo inline Hindi in default content');
   {
     const content = ['public/src/js/data/imposter-packs.js', 'public/src/js/data/charades-packs.js', 'public/src/js/data/mostlikely-packs.js'].concat(L5.filter((f) => !/mostlikely-core\.js$/.test(f)));
-    const withHi = content.filter((f) => DEVANAGARI.test(read(f)));
+    // Per-language search keyword lists ({ hi: ['…'] }) are search data, not displayed copy.
+    const withHi = content.filter((f) => DEVANAGARI.test(read(f).replace(/\b[a-z]{2}\s*:\s*\[[^\]]*\]/g, '')));
     assert(withHi.length === 0, `no Devanagari in default content / Dangal files (${withHi.join(', ')})`);
     const ml = read('public/src/js/games/mostlikely-core.js').split('\n').filter((l) => DEVANAGARI.test(l));
     assert(ml.every((l) => /\bhi: \/|^\s*\/\//.test(l)), `mostlikely-core: Devanagari only in the Hindi safety lexicon (${ml.length} lines)`);

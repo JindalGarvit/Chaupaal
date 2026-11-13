@@ -179,7 +179,7 @@ const sp = (s) => String(s).replace(/[\u00a0\u202f]/g, ' ');
     const fakeDb = (lang) => ({ collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ lang }) }) }) }) });
     const hiPush = await notif.renderPushCopy(fakeDb('hi'), 'u', { actorName: 'Chaupaal', previewKey: 'notifications.push.moderation_action', previewText: '' });
     const enPush = await notif.renderPushCopy(fakeDb('en'), 'u', { actorName: 'Chaupaal', previewKey: 'notifications.push.moderation_action', previewText: '' });
-    assert(hiPush.lang === 'hi' && hiPush.body !== enPush.body && /action liya/.test(hiPush.body), 'push in the recipient’s language (en vs hi accounts)');
+    assert(hiPush.lang === 'hi' && hiPush.body !== enPush.body && /[\u0900-\u097F]/.test(hiPush.body), 'push in the recipient’s language (en vs hi accounts)');
     const T = (lang) => (k, p) => srv.serverT(lang, 'notifications.card.' + k, p);
     assert(T('en')('journal_title') === 'Goodnight Chaupaal' && T('en')('bday_title', { name: 'Ravi' }) === 'Ravi’s birthday', 'system cards rendered per viewer (journal, birthday)');
     assert(/syncFirebaseAuthLanguage/.test(read('public/src/js/core/i18n.js')) && /languageCode/.test(read('public/src/js/core/i18n.js')), 'Firebase auth emails follow the UI language');

@@ -123,7 +123,7 @@ function assert(cond, msg) {
     const srvSrc = read('server-lib/i18n-server.js');
     assert(/path\.join\(__dirname, '\.\.', 'public', 'src', 'i18n', 'en\.js'\)/.test(srvSrc) && /'js', 'core', 'i18n\.js'\)/.test(srvSrc) && !/: '[A-Z][a-z]+ [a-z]+/.test(srvSrc), 'server renders with the client catalog + runtime (no server copy table)');
     const hiFollow = srv.serverT('hi', 'notifications.bundle_follow', { actor: 'Asha' });
-    assert(/Asha/.test(hiFollow) && /follow karne lage/.test(hiFollow) && !/</.test(hiFollow), `hi push: "${hiFollow}" (plain text)`);
+    assert(/Asha/.test(hiFollow) && /[\u0900-\u097F]/.test(hiFollow) && !/</.test(hiFollow), `hi push: "${hiFollow}" (plain text)`);
     assert(srv.serverT('xx', 'notifications.bundle_follow', { actor: 'Asha' }) === 'Asha started following you', 'unknown language → English');
     assert(srv.serverT('ja', 'notifications.push.story_like', { actor: 'Ken' }) === 'Ken liked your story', 'key missing from the pack → English');
     assert(srv.serverT('hi-IN', 'common.more') === srv.serverT('hi', 'common.more'), 'stored region tags normalise (hi-IN → hi)');
@@ -131,7 +131,7 @@ function assert(cond, msg) {
       collection: () => ({ doc: () => ({ get: async () => ({ exists: lang !== undefined, data: () => (lang ? { lang } : {}) }) }) }),
     });
     const a = await notif.renderPushCopy(fakeDb('hi'), 'u1', { actorName: 'Asha', previewKey: 'notifications.bundle_friend_request', previewParams: {}, previewText: '' });
-    assert(a.title === 'Asha' && /friend request bheji/.test(a.body) && a.lang === 'hi', `recipient lang hi → "${a.body}"`);
+    assert(a.title === 'Asha' && /[\u0900-\u097F]/.test(a.body) && a.lang === 'hi', `recipient lang hi → "${a.body}"`);
     const b = await notif.renderPushCopy(fakeDb(undefined), 'u1', { actorName: 'Asha', previewKey: 'notifications.bundle_friend_request', previewText: '' });
     assert(b.body === 'Asha sent you a friend request' && b.lang === 'en', 'no lang on the user → English');
     const c = await notif.renderPushCopy(fakeDb('hi'), 'u1', { actorName: 'Asha', previewKey: null, previewText: 'kal milte hain' });
@@ -236,9 +236,9 @@ function assert(cond, msg) {
     assert(!/i18n-values: \w+ \*\/ \[[^\]]*\bt\(/.test(tax), 'no t() inside a stored-value list');
     assert(rt.optionLabel('industry', 'Media & Entertainment') === 'Media & Entertainment', 'optionLabel → English label');
     const r3 = loadI18n({ region: false });
-    r3.registerI18nLocale('hi', { 'profile.opt.industry.media_entertainment': 'मीडिया और मनोरंजन' });
     await r3.setAppLanguage('hi');
-    assert(r3.optionLabel('industry', 'Media & Entertainment') === 'मीडिया और मनोरंजन', 'optionLabel → translated label for hi');
+    const hiMedia = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public/src/i18n/hi.json'), 'utf8'))['profile.opt.industry.media_entertainment'];
+    assert(/[\u0900-\u097F]/.test(hiMedia) && r3.optionLabel('industry', 'Media & Entertainment') === hiMedia, 'optionLabel → translated label for hi');
     assert(r3.optionLabel('industry', 'My own words') === 'My own words', 'free text shows as typed');
     assert(r3.optionLabelHtml('city', '<b>x</b>') === '&lt;b&gt;x&lt;/b&gt;', 'optionLabelHtml escapes');
     const pf = read('public/src/js/features/profile.js');

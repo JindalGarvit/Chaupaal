@@ -87,7 +87,7 @@ function gtx(key, en, params) {
       .replace(/\s+/g, ' ')
       .trim();
     if (s.length < 2 || s.length > 30) return null;
-    if (!/^[a-z][a-z '\-]*[a-z]$/.test(s)) return null;
+    if (!/^\p{L}[\p{L}\p{M} '\-]*[\p{L}\p{M}]$/u.test(s)) return null;
     return s;
   }
 
@@ -157,25 +157,45 @@ function gtx(key, en, params) {
     return prev[b.length];
   }
 
+  /**
+   * Localised packs deal "<word>|<roman>|<alt>": the first form is the word everyone sees and draws,
+   * the rest are accepted spellings (Roman-script Hindi, the English word). English words have one form.
+   */
+  const shownWord = (w) => (w == null ? w : String(w).split('|')[0].trim());
+  const wordForms = (w) =>
+    String(w == null ? '' : w)
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
   /** Allowed typo distance for near-miss / leak checks: 1 for short words, 2 for 6+ letters. */
   const closeLimit = (w) => (w.length >= 6 ? 2 : 1);
-  const isCorrect = (guess, word) => !!normGuess(word) && normGuess(guess) === normGuess(word);
-  function isClose(guess, word) {
+  const isCorrect = (guess, word) => {
     const g = normGuess(guess);
-    const w = normGuess(word);
+    return !!g && wordForms(word).some((f) => normGuess(f) && normGuess(f) === g);
+  };
+  function closeTo(g, w) {
     if (!g || !w || g === w || w.length < 3) return false;
     const d = editDistance(g, w, 2);
     return d >= 1 && d <= closeLimit(w);
   }
+  function isClose(guess, word) {
+    if (isCorrect(guess, word)) return false;
+    const g = normGuess(guess);
+    return wordForms(word).some((f) => closeTo(g, normGuess(f)));
+  }
 
-  /** Drawer / already-guessed chat filter: the word, spelled out, split up or 1–2 letters off. */
+  /** Drawer / already-guessed chat filter: any form of the word, spelled out, split up or 1–2 letters off. */
   function revealsWord(text, word) {
+    return wordForms(word).some((form) => revealsForm(text, form));
+  }
+  function revealsForm(text, word) {
     const w = normGuess(word);
     if (w.length < 2) return false;
     const compact = normGuess(text);
     if (!compact) return false;
     if (compact.indexOf(w) >= 0) return true;
-    const tokens = String(text).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const tokens = String(text).toLowerCase().split(/[^\p{L}\p{N}\p{M}]+/u).filter(Boolean);
     const span = String(word).split(/[\s-]+/).length + 1;
     for (let i = 0; i < tokens.length; i++) {
       let joined = '';
@@ -189,10 +209,21 @@ function gtx(key, en, params) {
 
   // ---------------------------------------------------------------- hints
 
+  /** User-perceived letters: a Devanagari consonant keeps its matras / virama, so hints never split a syllable. */
+  let segmenter = null;
+  try {
+    segmenter = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('und', { granularity: 'grapheme' }) : null;
+  } catch (e) {}
+  const graphemes = (s) => {
+    const str = String(s == null ? '' : s);
+    if (segmenter) return Array.from(segmenter.segment(str), (x) => x.segment);
+    return str.match(/\P{M}\p{M}*|\p{M}+/gu) || [];
+  };
+  const isLetter = (g) => /\p{L}/u.test(g);
+
   const letterIdx = (word) =>
-    String(word || '')
-      .split('')
-      .map((c, i) => (/[a-z]/.test(c) ? i : -1))
+    graphemes(shownWord(word))
+      .map((c, i) => (isLetter(c) ? i : -1))
       .filter((i) => i >= 0);
 
   /** Elapsed-ms marks for letter reveals: evenly spaced, always leaving at least two letters hidden. */
@@ -218,9 +249,8 @@ function gtx(key, en, params) {
   /** Hint pattern: '_' per hidden letter; spaces, hyphens and apostrophes shown. */
   function pattern(word, revealed) {
     const show = new Set(revealed || []);
-    return String(word || '')
-      .split('')
-      .map((c, i) => (/[a-z]/.test(c) ? (show.has(i) ? c : '_') : c))
+    return graphemes(shownWord(word))
+      .map((c, i) => (isLetter(c) ? (show.has(i) ? c : '_') : c))
       .join('');
   }
 
@@ -477,7 +507,7 @@ function gtx(key, en, params) {
       turnPts: st.phase === 'reveal' || st.phase === 'over' ? Object.assign({}, st.turnPts) : {},
       scores: Object.assign({}, st.scores),
       chat: st.chat.map((c) => Object.assign({}, c)),
-      lastWord: st.phase === 'reveal' || st.phase === 'over' ? st.lastWord : null,
+      lastWord: st.phase === 'reveal' || st.phase === 'over' ? shownWord(st.lastWord) : null,
       reason: st.reason,
       votes: Object.keys(st.votes).reduce((m, id) => ((m[id] = st.votes[id].length), m), {}),
       kicked: Object.assign({}, st.kicked),
@@ -490,8 +520,8 @@ function gtx(key, en, params) {
   /** The drawer's private card: the three choices while picking, then the word. */
   function drawerSecret(st) {
     if (!st.drawer) return null;
-    if (st.phase === 'pick') return { turnKey: st.turnKey, choices: st.choices.slice() };
-    if (st.phase === 'draw') return { turnKey: st.turnKey, word: st.word };
+    if (st.phase === 'pick') return { turnKey: st.turnKey, choices: st.choices.map(shownWord) };
+    if (st.phase === 'draw') return { turnKey: st.turnKey, word: shownWord(st.word) };
     return null;
   }
 
@@ -628,6 +658,9 @@ function gtx(key, en, params) {
     normGuess,
     editDistance,
     isCorrect,
+    shownWord,
+    wordForms,
+    graphemes,
     isClose,
     revealsWord,
     hintSchedule,

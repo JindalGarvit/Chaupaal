@@ -59,7 +59,7 @@ function createScribbleAdapter({ err, rng }) {
     if (s.settings.customOnly) {
       for (let i = 0; i < 3; i++) take(custom);
     } else {
-      const pool = Words.wordsFor(s.settings.packs);
+      const pool = Words.wordsFor(s.settings.packs, s.settings.contentLang);
       if (custom.length) {
         // Custom words join the mix as extra candidates at every difficulty.
         take(R() < 0.5 ? pool.easy.concat(custom) : pool.easy);
@@ -72,7 +72,7 @@ function createScribbleAdapter({ err, rng }) {
       }
     }
     while (out.length < 3) {
-      const all = Words.wordsFor(Core.DEFAULT_PACKS);
+      const all = Words.wordsFor(Core.DEFAULT_PACKS, s.settings.contentLang);
       take(all.easy.concat(all.medium));
     }
     return out;
