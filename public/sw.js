@@ -1,4 +1,4 @@
-const CACHE = 'chaupaal-v96b22d';
+const CACHE = 'chaupaal-v1d5da2';
 const ASSETS = [
   '/index.html',
   '/icon-charpai-v2as.png',
@@ -9,7 +9,7 @@ const ASSETS = [
   '/brand/chaupaal-mark-charpai-v2as.png',
   '/brand/chaupaal-mark-32-charpai-v2as.png',
   '/splash.png',
-  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap',
+  '/src/styles/fonts.css',
 ];
 
 function isHtmlShell(request) {

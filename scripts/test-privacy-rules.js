@@ -56,6 +56,29 @@ async function main() {
       strangerFs.doc(`users/${aliceUid}`).set({ name: 'Hacked' }, { merge: true })
     );
 
+    // ---------- Global L8: age / consent fields are server-written ----------
+    // First DOB write (signup into an existing doc) is fine; changing it, self-verifying parental
+    // consent, or writing consents / privacy prefs / deletion state from the client is not.
+    await rut.assertSucceeds(
+      aliceFs.doc(`users/${aliceUid}`).set(
+        { dob: '2010-05-01', dateOfBirth: '2010-05-01', teenMode: true, isMinor: true, parentalConsent: { verified: false, required: true } },
+        { merge: true }
+      )
+    );
+    await rut.assertSucceeds(aliceFs.doc(`users/${aliceUid}`).set({ bio: 'still editable' }, { merge: true }));
+    await rut.assertFails(aliceFs.doc(`users/${aliceUid}`).set({ dob: '1990-05-01' }, { merge: true }));
+    await rut.assertFails(aliceFs.doc(`users/${aliceUid}`).set({ teenMode: false }, { merge: true }));
+    await rut.assertFails(aliceFs.doc(`users/${aliceUid}`).set({ parentalConsent: { verified: true, required: true } }, { merge: true }));
+    await rut.assertFails(aliceFs.doc(`users/${aliceUid}`).set({ consents: { version: 'x', choices: {} } }, { merge: true }));
+    await rut.assertFails(aliceFs.doc(`users/${aliceUid}`).set({ privacy: { useAi: true } }, { merge: true }));
+    await rut.assertFails(aliceFs.doc(`users/${aliceUid}`).set({ deletionStatus: null }, { merge: true }));
+    await rut.assertFails(
+      stranger.firestore().doc(`users/${strangerUid}`).set({ name: 'S', parentalConsent: { verified: true } })
+    );
+    await rut.assertFails(aliceFs.doc(`users/${aliceUid}/consentLog/x`).set({ purpose: 'analytics', choice: 'granted' }));
+    await rut.assertFails(aliceFs.doc(`parentalConsents/x`).get());
+    await rut.assertFails(aliceFs.doc(`exportJobs/x`).get());
+
     // ---------- journal / saved / likes / comment_activity owner-only ----------
     await rut.assertSucceeds(
       aliceFs.doc(`users/${aliceUid}/journal/j1`).set({ text: 'private journal', at: Date.now() })
@@ -229,7 +252,7 @@ async function main() {
     );
 
     console.log(
-      'PASS: users owner-only; journal/saved/likes/comment_activity; users_public PII+visibility; friend_projection; userModels/signals; mehfil RTDB'
+      'PASS: users owner-only; L8 age/consent fields server-only; journal/saved/likes/comment_activity; users_public PII+visibility; friend_projection; userModels/signals; mehfil RTDB'
     );
   } finally {
     await testEnv.cleanup();

@@ -70,7 +70,11 @@
     "public/src/js/features/profile.js": "profile",
     "public/src/js/features/streak.js": "settings",
     "public/src/js/core/translate.js": "translate",
-    "public/src/js/core/lang-detect.js": "translate"
+    "public/src/js/core/lang-detect.js": "translate",
+    "public/src/js/core/compliance.js": "privacy",
+    "public/src/js/core/privacy-ui.js": "privacy",
+    "public/src/js/core/legal.js": "legal",
+    "public/src/js/data/consent-ages.js": "privacy"
   },
   "l3": {
     "public/src/js/features/baithak.js": "baithak",

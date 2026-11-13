@@ -289,6 +289,7 @@ function openSettingsModal(){
   if(typeof refreshExclusionListCount==='function'){
     try{ refreshExclusionListCount(); }catch(e){}
   }
+  try{ if(typeof ChaupaalPrivacyUI!=='undefined') ChaupaalPrivacyUI.renderPrivacyData(); }catch(e){}
 }
 window.openSettingsModal = openSettingsModal;
 
@@ -334,13 +335,6 @@ document.getElementById('openExclusionListBtn')?.addEventListener('click',()=>{
 document.getElementById('settingsArchiveBtn')?.addEventListener('click',()=>{
   document.getElementById('settingsModal')?.classList.add('hidden');
   if(typeof openArchiveHub==='function') openArchiveHub('journal');
-});
-document.getElementById('settingsExportDataBtn')?.addEventListener('click',()=>{
-  if(typeof openAccountDataExport==='function') openAccountDataExport();
-});
-document.getElementById('settingsDeleteAccountBtn')?.addEventListener('click',()=>{
-  document.getElementById('settingsModal')?.classList.add('hidden');
-  if(typeof openAccountDeletionRequest==='function') openAccountDeletionRequest();
 });
 document.getElementById('closeSettings').addEventListener('click',()=>document.getElementById('settingsModal').classList.add('hidden'));
 document.getElementById('saveSettings').addEventListener('click',()=>{

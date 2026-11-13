@@ -1,0 +1,129 @@
+/* ===================== Global L8 — privacy & data, consent, age, legal drafts ===================== */
+
+/* Consent banner: calm, non-blocking card; Accept and Reject are the same size, weight and colour. */
+.cp-consent {
+  position: absolute;
+  inset-inline: 12px;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  z-index: 9000;
+  padding: 14px 16px;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 16px;
+  background: var(--white, #fff);
+  color: var(--ink, #111);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16);
+}
+.cp-consent-title { display: block; font-size: 15px; margin-bottom: 4px; }
+.cp-consent-body { margin: 0 0 10px; font-size: 13px; line-height: 1.45; color: var(--muted, #6b7280); }
+.cp-consent-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cp-consent-btn {
+  min-height: 42px;
+  border: 1.5px solid var(--ink, #111);
+  border-radius: 12px;
+  background: var(--white, #fff);
+  color: var(--ink, #111);
+  font-weight: 700;
+}
+.cp-consent-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+.cp-consent-link {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent, #2563eb);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cp-privacy-essential { margin-top: 10px; }
+.cp-privacy-note { display: inline-block; font-size: 12px; color: var(--muted, #6b7280); }
+
+/* Under-13 screen: friendly, final, no retry affordance. */
+.cp-age-block {
+  position: absolute;
+  inset: 0;
+  z-index: 9600;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 17, 17, 0.55);
+}
+.cp-age-block-card {
+  max-width: 340px;
+  padding: 24px 20px;
+  border-radius: 20px;
+  background: var(--white, #fff);
+  color: var(--ink, #111);
+  text-align: center;
+}
+.cp-age-block-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.cp-age-block-card p { margin: 0 0 12px; line-height: 1.5; }
+.cp-age-block-emoji { font-size: 40px; }
+
+/* Deletion grace banner. */
+.cp-deletion-banner {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 8900;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  background: #fff4e5;
+  color: #7a3e00;
+  font-size: 13px;
+  border-bottom: 1px solid #f3d2a2;
+}
+.cp-deletion-banner span { flex: 1 1 200px; min-width: 0; }
+
+/* Teen mode card in Settings → Privacy & data. */
+.cp-teen-card {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--cream, #f8f5ef);
+  border: 1px solid var(--line, #e5e7eb);
+}
+.cp-teen-card .legal-v1-list { margin: 6px 0; }
+
+/* "Your data" field list. */
+.cp-your-data { margin: 8px 0 12px; }
+.cp-your-data-row { display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr); gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line, #e5e7eb); }
+.cp-your-data-row dt { font-weight: 700; font-size: 13px; }
+.cp-your-data-row dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.cp-your-data-row dd small { display: block; color: var(--muted, #6b7280); font-size: 12px; margin-top: 2px; }
+.cp-check-row { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0; font-size: 13px; line-height: 1.4; }
+
+/* Legal drafts: the review banner + footer are deliberately loud. */
+.legal-draft-banner,
+.legal-draft-footer {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff4e5;
+  border: 1px dashed #d98a1f;
+  color: #7a3e00;
+  font-size: 13px;
+  font-weight: 700;
+}
+.legal-draft-footer { margin: 16px 0 0; }
+.legal-proc-list { display: grid; gap: 10px; margin: 8px 0; }
+.legal-proc { padding: 10px 12px; border: 1px solid var(--line, #e5e7eb); border-radius: 12px; font-size: 13px; line-height: 1.45; }
+.legal-proc strong { display: block; margin-bottom: 4px; }
+.legal-proc-k { color: var(--muted, #6b7280); font-weight: 700; }
+
+.settings-legal-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin: 14px 0 4px; }
+.settings-legal-footer button {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}

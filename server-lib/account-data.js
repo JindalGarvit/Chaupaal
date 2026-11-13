@@ -148,12 +148,14 @@ async function buildAccountExport(db, uid) {
 }
 
 /**
- * Record deletion request. Does not wipe data here — cascade is a follow-up.
+ * Legacy request path (P3). Global L8 callers use account-purge.scheduleDeletion (30-day grace,
+ * then the full cascade); this stays for older clients and marks the same schedule.
  * @param {FirebaseFirestore.Firestore} db
  * @param {import('firebase-admin').auth.Auth} auth
  * @param {string} uid
  */
 async function requestAccountDeletion(db, auth, uid) {
+  const GRACE_MS = 30 * 86400000;
   const now = new Date().toISOString();
   await db
     .collection('users')
@@ -161,8 +163,9 @@ async function requestAccountDeletion(db, auth, uid) {
     .set(
       {
         deletionRequestedAt: now,
-        deletionStatus: 'requested',
+        deletionStatus: 'scheduled',
         deletionRequestedMs: Date.now(),
+        purgeAfterMs: Date.now() + GRACE_MS,
       },
       { merge: true }
     );

@@ -251,7 +251,8 @@ async function loadDuniyaPage({reset=false}={}){
       cursor: reset?null:duniyaPageCursor,
       excludeDeleted:true,
     });
-    const mapped=page.items.map(mapDuniyaDoc).filter(p=>!p.deleted&&p.archived!==true&&!(typeof isSoftDeleted==='function'&&isSoftDeleted(p)));
+    const mapped=page.items.map(mapDuniyaDoc).filter(p=>!p.deleted&&p.archived!==true&&!(typeof isSoftDeleted==='function'&&isSoftDeleted(p)))
+      .filter(p=>typeof ChaupaalPrivacy==='undefined'||ChaupaalPrivacy.discoveryOk(p));
     if(typeof enrichUsersWithProfileType==='function'){
       await enrichUsersWithProfileType(mapped.map(p=>p.user).filter(Boolean));
     }

@@ -542,6 +542,10 @@
           return;
         }
       }
+      if ((type === 'data_export_ready' || link.privacy) && typeof openPrivacyData === 'function') {
+        openPrivacyData(link.privacy || 'export');
+        return;
+      }
       if (type.includes('mehfil') && link.chatId && typeof openChatById === 'function') {
         openChatById(link.chatId, { mehfil: true });
         return;

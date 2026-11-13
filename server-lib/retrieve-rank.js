@@ -448,10 +448,16 @@ async function loadModelSafe(db, uid, { optedOut } = {}) {
   }
 }
 
+/** Non-personalised ranking: activity opt-out, "Personalised recommendations" off, Teen mode, pending parental consent. */
 function isOptedOutUser(userDoc) {
   const d = userDoc || {};
   const p = d.profile || {};
-  return d.activitySignalsOptOut === true || p.activitySignalsOptOut === true;
+  if (d.activitySignalsOptOut === true || p.activitySignalsOptOut === true) return true;
+  try {
+    return require('./privacy').personalizationOff(d);
+  } catch (e) {
+    return false;
+  }
 }
 
 /**

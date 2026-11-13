@@ -428,6 +428,11 @@
     if (flushing) return;
     if (typeof db === 'undefined' || !db) return;
     if (typeof currentUser === 'undefined' || !currentUser?.uid) return;
+    // Crash reporting is a consent purpose (Global L8): without it nothing leaves the device.
+    if (typeof ChaupaalPrivacy === 'undefined' || !ChaupaalPrivacy || !ChaupaalPrivacy.allows('crash')) {
+      writeQueue([]);
+      return;
+    }
     const session = readSessionMeta();
     if ((session.writes || 0) >= MAX_WRITES_PER_SESSION) {
       writeQueue([]); // drop queued writes for this session once capped

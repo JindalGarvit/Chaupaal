@@ -387,21 +387,25 @@
     }
   }
 
-  // TODO(L8): the Privacy Policy and "What Chaupaal collects" must cover Translate (Global L7): text the
-  // viewer chooses to translate is sent to the translation provider (TRANSLATE_PROVIDER: the AI provider
-  // or a machine-translation API); private text (chats, private posts / profiles, room text) needs a
-  // one-time consent, is never stored by Chaupaal and its translations stay on the device (cleared on
-  // logout); public text translations are cached server-side by content hash + language. See
-  // server-lib/translate.js + public/src/js/core/translate.js.
+  /**
+   * Legal pages. terms / privacy / guidelines / teens / processors are the Global L8 drafts
+   * (core/legal.js, "Draft — requires legal review" banner + footer); 'collects' is the plain list below.
+   * Translate + AI processing is covered in the Privacy Policy (legal.privacy_ai_*).
+   */
   function openLegalSheet(kind) {
     const k = String(kind || 'terms').toLowerCase();
-    const isPrivacy = k === 'privacy';
     const isCollects = k === 'collects' || k === 'data' || k === 'what-we-collect';
+    const docKind = k === 'community' ? 'guidelines' : k === 'children' ? 'teens' : k;
+    const L = typeof ChaupaalLegal !== 'undefined' ? ChaupaalLegal : null;
+    const isDoc = !isCollects && L && L.KINDS.indexOf(docKind) >= 0;
+    const isPrivacy = k === 'privacy';
     const title = isCollects
       ? t('common.what_chaupaal_collects')
-      : isPrivacy
-        ? t('common.privacy_policy')
-        : t('onboarding.terms_of_service');
+      : isDoc
+        ? t('legal.' + docKind + '_title')
+        : isPrivacy
+          ? t('common.privacy_policy')
+          : t('onboarding.terms_of_service');
     document.getElementById('legalSheetV1')?.remove();
     const sheet = document.createElement('div');
     sheet.id = 'legalSheetV1';
@@ -409,7 +413,9 @@
     sheet.dataset.navManaged = '1';
 
     let body;
-    if (isCollects) {
+    if (isDoc) {
+      body = L.render(docKind);
+    } else if (isCollects) {
       body = `
         <p class="legal-v1-lead">${tHtml('onboarding.plain_english_no_charts_no_per')}</p>
 
@@ -420,6 +426,8 @@
           <li><strong>${tHtml('onboarding.hashed_search')}</strong> ${tHtml('onboarding.a_fingerprint_of_search_text_never')}</li>
           <li><strong>${tHtml('onboarding.device_session_basics')}</strong> ${tHtml('onboarding.signed_in_sessions_push_tokens_and')}</li>
           <li><strong>${tHtml('common.chaupaal_journal')}</strong> ${tHtml('onboarding.your_archive_journal_stays_yours_soft')}</li>
+          <li><strong>${tHtml('privacy.collects_ai_h')}</strong> ${tHtml('privacy.collects_ai')}</li>
+          <li><strong>${tHtml('privacy.collects_consent_h')}</strong> ${tHtml('privacy.collects_consent')}</li>
         </ul>
 
         <h3 class="legal-v1-h">${tHtml('onboarding.what_we_use_it_for')}</h3>
@@ -453,7 +461,8 @@
           <button type="button" class="btn btn--secondary btn--block" data-collects-focus="toggleOpenToMeet">${tHtml('onboarding.open_to_meeting_people')}</button>
           <button type="button" class="btn btn--secondary btn--block" data-collects-go="export">${tHtml('common.download_my_data')}</button>
           <button type="button" class="btn btn--secondary btn--block" data-collects-go="archive">${tHtml('common.open_archive')}</button>
-          <button type="button" class="btn btn--ghost btn--block" data-collects-go="privacy">${tHtml('onboarding.short_privacy_policy')}</button>
+          <button type="button" class="btn btn--secondary btn--block" data-collects-go="choices">${tHtml('privacy.tracking_label')}</button>
+          <button type="button" class="btn btn--ghost btn--block" data-collects-go="privacy">${tHtml('legal.privacy_title')}</button>
         </div>
         <p class="legal-v1-note">${tHtml('onboarding.ranking_and_matching_read_stored_fields')}</p>`;
     } else if (isPrivacy) {
@@ -485,10 +494,11 @@
     if (typeof pushNavLayer === 'function') pushNavLayer(sheet, close);
     else if (typeof openLayer === 'function') openLayer(sheet, close, { label: title });
     sheet.querySelector('[data-legal-close]')?.addEventListener('click', close);
-    sheet.querySelectorAll('[data-legal="collects"]').forEach((btn) => {
-      btn.addEventListener('click', () => {
+    sheet.querySelectorAll('[data-legal]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // the document-level [data-legal] opener would open it a second time
         close();
-        openLegalSheet('collects');
+        openLegalSheet(btn.getAttribute('data-legal'));
       });
     });
     sheet.querySelectorAll('[data-collects-focus]').forEach((btn) => {
@@ -506,6 +516,7 @@
         if (go === 'export' && typeof openAccountDataExport === 'function') openAccountDataExport();
         else if (go === 'archive' && typeof openArchiveHub === 'function') openArchiveHub('journal');
         else if (go === 'privacy') openLegalSheet('privacy');
+        else if (go === 'choices' && typeof openConsentSettings === 'function') openConsentSettings();
       });
     });
   }

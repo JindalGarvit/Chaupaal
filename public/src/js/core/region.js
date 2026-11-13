@@ -203,9 +203,47 @@
   function readStored() {
     try {
       const o = JSON.parse(localStorage.getItem(LS) || 'null');
-      if (o && validCountry(o.country)) return { country: validCountry(o.country), source: o.source === 'user' ? 'user' : 'auto' };
+      if (o && validCountry(o.country)) {
+        const rec = { country: validCountry(o.country), source: o.source === 'user' ? 'user' : 'auto' };
+        const sub = validSubdivision(rec.country, o.subdivision);
+        if (sub) rec.subdivision = sub;
+        return rec;
+      }
     } catch (e) {}
     return null;
+  }
+
+  // ─── US state (Global L8: CCPA / CPRA "Do not sell or share" is shown for California) ──
+  const US_STATES = (
+    'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY ' +
+    'NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY PR'
+  ).split(' ');
+
+  function validSubdivision(country, sub) {
+    const s = String(sub || '').trim().toUpperCase();
+    return country === 'US' && US_STATES.indexOf(s) >= 0 ? s : null;
+  }
+
+  /** The user's US state, else a guess only where one zone means one big privacy state (Pacific → CA). */
+  function getSubdivision() {
+    const rec = getRegion();
+    if (rec.country !== 'US') return null;
+    if (rec.subdivision) return rec.subdivision;
+    return deviceTimeZone() === 'America/Los_Angeles' ? 'CA' : null;
+  }
+
+  function setSubdivision(sub, opts) {
+    const o = opts || {};
+    const rec = { ...getRegion() };
+    const s = validSubdivision(rec.country, sub);
+    if (s) rec.subdivision = s;
+    else delete rec.subdivision;
+    writeStored(rec);
+    if (o.persistRemote) profileWrite({ region: rec });
+    try {
+      document.dispatchEvent(new CustomEvent('chaupaal:region-changed', { detail: rec }));
+    } catch (e) {}
+    return rec;
   }
 
   function writeStored(rec) {
@@ -237,6 +275,8 @@
     const country = validCountry(code);
     if (!country) return null;
     const rec = { country, source: o.source === 'auto' ? 'auto' : 'user' };
+    const prev = readStored();
+    if (prev && prev.country === country && prev.subdivision) rec.subdivision = prev.subdivision;
     writeStored(rec);
     if (o.persistRemote) profileWrite({ region: rec });
     try {
@@ -253,7 +293,11 @@
     const remote = profile && profile.region && validCountry(profile.region.country) ? profile.region : null;
     const local = getRegion();
     if (remote && (remote.source === 'user' || local.source !== 'user')) {
-      writeStored({ country: validCountry(remote.country), source: remote.source === 'user' ? 'user' : 'auto' });
+      const country = validCountry(remote.country);
+      const rec = { country, source: remote.source === 'user' ? 'user' : 'auto' };
+      const sub = validSubdivision(country, remote.subdivision);
+      if (sub) rec.subdivision = sub;
+      writeStored(rec);
       return {};
     }
     return { region: local };
@@ -289,6 +333,7 @@
     const hour12 = intlHour12(country);
     return {
       country,
+      subdivision: country === getRegion().country ? getSubdivision() : null,
       name: c.name,
       currency: c.currency,
       callingCode: c.callingCode,
@@ -337,6 +382,9 @@
     detectRegion,
     getRegion,
     setRegion,
+    getSubdivision,
+    setSubdivision,
+    US_STATES,
     hydrateFromProfile,
     getRegionPrefs,
     listCountries,

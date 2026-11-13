@@ -1,14 +1,26 @@
 /**
- * Teen Mode + age helpers (Phase 2).
- * Hard line: under 13 blocked. 13–17 = teen until parentalConsent verified.
+ * Teen Mode + age helpers (Phase 2; Global L8 rules in core/compliance.js).
+ * Hard line: under 13 → no account. Under 18 → Teen mode everywhere, lifted on the 18th birthday.
+ * Parental consent (where the region's law needs it) unlocks consent-dependent processing only.
  */
 (function () {
   'use strict';
 
   const DEVICE_ID_KEY = 'chaupaal_device_id';
   const LAST_USER_KEY = 'chaupaal_last_user';
+  const C = () => (typeof ChaupaalCompliance !== 'undefined' ? ChaupaalCompliance : null);
+  const country = () => {
+    try {
+      return typeof ChaupaalPrivacy !== 'undefined' ? ChaupaalPrivacy.region().country : null;
+    } catch (e) {
+      return null;
+    }
+  };
 
+  /** Whole years, birthday-exact (0 when unknown — callers treat 0 as "no DOB"). */
   function ageFromDob(dob) {
+    const c = C();
+    if (c) return c.exactAge(dob) || 0;
     if (!dob) return 0;
     const d = dob instanceof Date ? dob : new Date(dob);
     if (Number.isNaN(d.getTime())) return 0;
@@ -77,48 +89,46 @@
 
   function userAge(userOrProfile) {
     const u = userOrProfile || (typeof userProfile !== 'undefined' ? userProfile : null) || {};
+    const c = C();
+    if (c) return c.ageOf(u).age || 0;
     if (Number.isFinite(u.age) && u.age > 0) return Number(u.age);
-    const dob = u.dob || u.dateOfBirth || u.profile?.dateOfBirth;
-    return ageFromDob(dob);
+    return ageFromDob(u.dob || u.dateOfBirth || u.profile?.dateOfBirth);
   }
 
+  function me() {
+    return typeof userProfile !== 'undefined' ? userProfile : null;
+  }
+
+  /** Under 18 by DOB (teen flags only when there is no DOB). Consent never lifts it; the 18th birthday does. */
   function isTeenModeUser(userOrProfile) {
-    const u = userOrProfile || (typeof userProfile !== 'undefined' ? userProfile : null);
+    const u = userOrProfile || me();
     if (!u) return false;
-    if (u.teenMode === true) return true;
-    if (u.isMinor === true) return true;
-    const age = userAge(u);
-    if (!isMinorAge(age)) return false;
-    // Adults who corrected DOB below 18 without consent still treated as teen-gated
-    return !u.parentalConsent?.verified;
+    const c = C();
+    if (c) return c.isTeen(u, { country: country() });
+    return u.teenMode === true || u.isMinor === true || isMinorAge(userAge(u));
   }
 
+  /** Below the region's digital consent age where its law needs a parent (IN, EU consent basis …). */
   function needsParentalConsent(userOrProfile) {
-    const u = userOrProfile || (typeof userProfile !== 'undefined' ? userProfile : null);
+    const u = userOrProfile || me();
     if (!u) return false;
-    const age = userAge(u);
-    if (!isTeenAge(age) && !(isMinorAge(age) && age >= 13)) return false;
-    return !u.parentalConsent?.verified;
+    const c = C();
+    if (c) return c.ageInfo(u, { country: country() }).needsParentalConsent;
+    return isTeenAge(userAge(u)) && !u.parentalConsent?.verified;
   }
 
   function teenHideDatingIntents() {
     return isTeenModeUser();
   }
 
-  /** Minors may only be messaged by other minors or reciprocal friends. */
+  /** Teens and adults never DM as strangers; teen ↔ teen strangers only when the recipient allows it. */
   function canMessageTarget(targetUser, relationshipState) {
+    const c = C();
+    if (c) return c.canMessage(me() || {}, targetUser || {}, relationshipState || {}, { country: country() });
     const meTeen = isTeenModeUser();
     const themTeen = isTeenModeUser(targetUser);
-    if (!meTeen && !themTeen) return { ok: true };
-    if (relationshipState?.friend) return { ok: true };
-    if (meTeen && themTeen) return { ok: true };
-    if (meTeen && !themTeen) {
-      return { ok: false, reason: 'teen_adult_stranger' };
-    }
-    if (!meTeen && themTeen) {
-      return { ok: false, reason: 'adult_teen_stranger' };
-    }
-    return { ok: true };
+    if (relationshipState?.friend || (!meTeen && !themTeen)) return { ok: true };
+    return { ok: false, reason: meTeen ? 'teen_adult_stranger' : 'adult_teen_stranger' };
   }
 
   function teenMessageBlockedToast(reason) {
@@ -126,7 +136,9 @@
     showToast(
       reason === 'teen_adult_stranger'
         ? t('settings.teen_mode_message_friends_or_other')
-        : t('settings.this_teen_can_only_be_messaged')
+        : reason === 'teen_friends_only'
+          ? t('privacy.teen_friends_only_toast')
+          : t('settings.this_teen_can_only_be_messaged')
     );
   }
 
@@ -165,6 +177,7 @@
             age: d.age,
             dob: d.dob || d.dateOfBirth,
             parentalConsent: d.parentalConsent,
+            privacy: { teenNonFriendDms: d.teenDmsOpen === true },
           };
         }
       }

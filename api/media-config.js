@@ -56,6 +56,44 @@ async function handleGet(req, res) {
   });
 }
 
+/** "Use AI features" off (or the Teen / parental-consent default) for this user (Global L8). */
+async function userAiOff(adminApp, uid) {
+  if (!adminApp || !uid) return false;
+  try {
+    const snap = await adminApp.firestore().collection('users').doc(uid).get();
+    return snap.exists ? !require('../server-lib/privacy').aiAllowedForUser(snap.data() || {}) : false;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function handleExportDownload(req, res) {
+  const adminApp = initAdmin();
+  if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+  try {
+    const { checkIpRateLimit } = require('../server-lib/rate-limit');
+    const rate = await checkIpRateLimit(clientIp(req), 'export_download');
+    if (rate && rate.ok === false) return sendError(res, 429, 'RATE_LIMITED', 'Too many downloads. Try again shortly.');
+  } catch (e) {}
+  try {
+    const { serveExportDownload } = require('../server-lib/account-export');
+    const out = await serveExportDownload(adminApp, req, res);
+    if (out.status === 302) {
+      res.setHeader('Location', out.location);
+      return res.status(302).end();
+    }
+    if (out.status === 200) {
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`);
+      return res.status(200).send(out.body);
+    }
+    return sendError(res, out.status, out.status === 410 ? 'EXPORT_EXPIRED' : 'NOT_FOUND', out.status === 410 ? 'This download link has expired' : 'Not found');
+  } catch (e) {
+    console.warn('[media-config] export download', e?.message || e);
+    return sendError(res, 500, 'EXPORT_ERROR', 'Could not download the export');
+  }
+}
+
 function clientIp(req) {
   const xf = req.headers['x-forwarded-for'];
   if (typeof xf === 'string' && xf.trim()) return xf.split(',')[0].trim();
@@ -902,10 +940,7 @@ async function handlePost(req, res) {
       if (action === 'parental_consent_start') {
         const out = await parental.startParentalConsent(adminApp, user.uid, body.contact);
         if (!out.ok) {
-          return sendSuccess(res, {
-            needParentSignup: !!out.needParentSignup,
-            error: out.error,
-          });
+          return sendSuccess(res, { error: out.error, needEmail: !!out.needEmail });
         }
         return sendSuccess(res, out);
       }
@@ -962,7 +997,7 @@ async function handlePost(req, res) {
       const ai = sharedAI(adminApp ? { db: adminApp.firestore(), admin: adminApp } : {});
       const input = body.input && typeof body.input === 'object' ? body.input : {};
       const lang = String(body.lang || (req.headers && req.headers['x-chaupaal-lang']) || 'en').slice(0, 12);
-      const out = await ai.run(hook, input, { uid: user.uid, lang });
+      const out = await ai.run(hook, input, { uid: user.uid, lang, userAiOff: await userAiOff(adminApp, user.uid) });
       return sendSuccess(res, { data: out.data, source: out.source, reason: out.reason || '' });
     } catch (e) {
       console.warn('[media-config] dangal_ai', e?.message || e);
@@ -986,7 +1021,7 @@ async function handlePost(req, res) {
       const { sharedTranslator } = require('../server-lib/translate');
       const adminApp = initAdmin();
       const tr = sharedTranslator(adminApp ? { db: adminApp.firestore(), admin: adminApp } : {});
-      return sendSuccess(res, await tr.translate(user.uid, body));
+      return sendSuccess(res, await tr.translate(user.uid, body, { userAiOff: await userAiOff(adminApp, user.uid) }));
     } catch (e) {
       if (e?.code === 'TRANSLATE_OFF') return sendError(res, 503, 'TRANSLATE_OFF', 'Translation is off');
       if (e?.code === 'VALIDATION_ERROR') return sendError(res, 400, 'VALIDATION_ERROR', 'Nothing to translate');
@@ -1455,51 +1490,95 @@ async function handlePost(req, res) {
     }
   }
 
-  if (action === 'export_account_data') {
-    try {
-      const { checkActionRateLimit } = require('../server-lib/rate-limit');
-      const rate = await checkActionRateLimit(user.uid, 'account_export');
-      if (!rate.ok) {
-        return sendError(res, 429, 'RATE_LIMITED', 'Export is limited. Try again in a little while.');
-      }
-    } catch (e) {
-      console.warn('[media-config] export rate-limit', e?.message || e);
+  // ─── Global L8: privacy & data (consent log, prefs, age, legal, export, deletion) ──
+  if (
+    action === 'privacy_state' ||
+    action === 'consent_log' ||
+    action === 'privacy_prefs' ||
+    action === 'set_birthdate' ||
+    action === 'skip_dob_prompt' ||
+    action === 'legal_accept'
+  ) {
+    if (action !== 'privacy_state') {
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'privacy_write');
+        if (rate && rate.ok === false) return sendError(res, 429, 'RATE_LIMITED', 'Too many changes. Try again shortly.');
+      } catch (e) {}
     }
     const adminApp = initAdmin();
     if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const privacy = require('../server-lib/privacy');
+    const db = adminApp.firestore();
+    const FieldValue = adminApp.firestore.FieldValue;
     try {
-      const { buildAccountExport } = require('../server-lib/account-data');
-      const payload = await buildAccountExport(adminApp.firestore(), user.uid);
-      return sendSuccess(res, { export: payload });
+      if (action === 'privacy_state') return sendSuccess(res, await privacy.privacyState(db, user.uid, { gpc: body.gpc === true }));
+      if (action === 'consent_log') return sendSuccess(res, await privacy.logConsent(db, FieldValue, user.uid, body));
+      if (action === 'privacy_prefs') return sendSuccess(res, await privacy.setPrivacyPrefs(db, FieldValue, user.uid, body.prefs || {}));
+      if (action === 'skip_dob_prompt') return sendSuccess(res, await privacy.skipDobPrompt(db, FieldValue, user.uid));
+      if (action === 'legal_accept') return sendSuccess(res, await privacy.acceptLegal(db, FieldValue, user.uid, body));
+      const out = await privacy.setBirthdate(adminApp, user.uid, body.dob, { country: body.country, subdivision: body.subdivision });
+      if (!out.ok) return sendError(res, 400, out.error || 'VALIDATION_ERROR', 'Could not save the date of birth');
+      return sendSuccess(res, out);
     } catch (e) {
-      console.warn('[media-config] export_account_data', e?.message || e);
-      return sendError(res, 500, 'EXPORT_ERROR', e?.message || 'Could not build export');
+      console.warn('[media-config]', action, e?.message || e);
+      return sendError(res, 500, 'PRIVACY_ERROR', 'Could not save that right now');
     }
   }
 
-  if (action === 'request_account_deletion') {
-    try {
-      const { checkActionRateLimit } = require('../server-lib/rate-limit');
-      const rate = await checkActionRateLimit(user.uid, 'account_delete');
-      if (!rate.ok) {
-        return sendError(res, 429, 'RATE_LIMITED', 'Deletion request already noted. Try again later if needed.');
-      }
-    } catch (e) {
-      console.warn('[media-config] delete rate-limit', e?.message || e);
-    }
-    const confirm = String(body.confirm || '').trim().toLowerCase();
-    if (confirm !== 'delete') {
-      return sendError(res, 400, 'VALIDATION_ERROR', 'Confirm deletion by sending confirm: "delete".');
-    }
+  if (action === 'request_export' || action === 'export_status' || action === 'export_account_data') {
     const adminApp = initAdmin();
     if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const exp = require('../server-lib/account-export');
+    const db = adminApp.firestore();
     try {
-      const { requestAccountDeletion } = require('../server-lib/account-data');
-      const result = await requestAccountDeletion(adminApp.firestore(), adminApp.auth(), user.uid);
-      return sendSuccess(res, result);
+      if (action === 'export_status') {
+        let job = await exp.latestJob(db, user.uid);
+        // A queued job gets another time slice on each status check (the daily cron is the backstop).
+        if (job && job.status === 'queued') job = (await exp.runExportJob(adminApp, job.id)) || job;
+        return sendSuccess(res, { job: exp.publicJob(job) });
+      }
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'account_export');
+        if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Export is limited. Try again in a little while.');
+      } catch (e) {
+        console.warn('[media-config] export rate-limit', e?.message || e);
+      }
+      const { job, reused } = await exp.createExportJob(db, user.uid);
+      const done = reused ? job : (await exp.runExportJob(adminApp, job.id)) || job;
+      return sendSuccess(res, { job: exp.publicJob(done), reused });
     } catch (e) {
-      console.warn('[media-config] request_account_deletion', e?.message || e);
-      return sendError(res, 500, 'DELETE_REQUEST_ERROR', e?.message || 'Could not record deletion request');
+      console.warn('[media-config]', action, e?.message || e);
+      return sendError(res, 500, 'EXPORT_ERROR', 'Could not start the export');
+    }
+  }
+
+  if (action === 'request_account_deletion' || action === 'cancel_account_deletion') {
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const purge = require('../server-lib/account-purge');
+    try {
+      if (action === 'cancel_account_deletion') {
+        const out = await purge.cancelDeletion(adminApp, user.uid);
+        if (!out.ok) return sendError(res, 400, out.error || 'VALIDATION_ERROR', 'Deletion can’t be cancelled');
+        return sendSuccess(res, out);
+      }
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'account_delete');
+        if (!rate.ok) return sendError(res, 429, 'RATE_LIMITED', 'Deletion request already noted. Try again later if needed.');
+      } catch (e) {
+        console.warn('[media-config] delete rate-limit', e?.message || e);
+      }
+      const confirm = String(body.confirm || '').trim().toLowerCase();
+      if (confirm !== 'delete') {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'Confirm deletion by sending confirm: "delete".');
+      }
+      return sendSuccess(res, await purge.scheduleDeletion(adminApp, user.uid, { reason: 'user_request' }));
+    } catch (e) {
+      console.warn('[media-config]', action, e?.message || e);
+      return sendError(res, 500, 'DELETE_REQUEST_ERROR', 'Could not record deletion request');
     }
   }
 
@@ -1577,7 +1656,16 @@ async function handlePost(req, res) {
       'parental_consent_verify',
       'match_contact_hashes',
       'export_account_data',
+      'request_export',
+      'export_status',
       'request_account_deletion',
+      'cancel_account_deletion',
+      'privacy_state',
+      'consent_log',
+      'privacy_prefs',
+      'set_birthdate',
+      'skip_dob_prompt',
+      'legal_accept',
       'dangal_wallet_get',
       'dangal_game_resolve',
       'dangal_ai',
@@ -1613,6 +1701,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
+    // Data export download (Global L8): the link's own token + expiry is the credential.
+    if (req.query && req.query.export) return handleExportDownload(req, res);
     return handleGet(req, res);
   }
 

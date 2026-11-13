@@ -87,6 +87,8 @@
     'customSections',
     'digitalLayout',
     'profileTheme',
+    'teenMode',
+    'teenDmsOpen',
   ];
 
   function normalizeVisibility(raw) {
@@ -215,6 +217,16 @@
       proj.profileType = u.profile?.profileType || 'personal';
     }
 
+    // Teen mode (Global L8): a marker so other clients apply the DM / discovery gates; the DOB never leaves.
+    const teen =
+      typeof ChaupaalCompliance !== 'undefined'
+        ? ChaupaalCompliance.isTeen(u)
+        : u.teenMode === true || u.isMinor === true;
+    if (teen) {
+      proj.teenMode = true;
+      if (u.privacy?.teenNonFriendDms === true) proj.teenDmsOpen = true;
+    }
+
     // Private / Friends only: identity + visibility only on the world-readable doc.
     if (visibility === 'private' || visibility === 'friends only') {
       const nested = {};
@@ -317,8 +329,32 @@
     }
 
     applyShowFlags(proj, u);
+    if (teen) {
+      TEEN_HIDDEN_FIELDS.forEach((k) => {
+        delete proj[k];
+        if (proj.profile) delete proj.profile[k];
+      });
+    }
     return proj;
   }
+
+  /** Never on a teen's world-readable card, whatever their visibility (Global L8 "sensitive fields hidden"). */
+  const TEEN_HIDDEN_FIELDS = [
+    'age',
+    'gender',
+    'city',
+    'currentCity',
+    'lookingFor',
+    'matchIntent',
+    'intents',
+    'relationshipStatus',
+    'occupation',
+    'annualIncome',
+    'religion',
+    'website',
+    'instagram',
+    'profileLinks',
+  ];
 
   async function syncPublicProfile(uid, raw) {
     if (!db || !uid) return null;
@@ -390,11 +426,20 @@
     return proj;
   }
 
+  /** A deleted account's tombstone reads as "Deleted user" everywhere (threads, games, lists). */
+  function withDeletedLabel(p) {
+    if (p && (p.deleted === true || p.deletionStatus === 'deleted')) {
+      const label = typeof t === 'function' ? t('privacy.deleted_user') : 'Deleted user'; // i18n-ignore (no-catalog fallback)
+      return { ...p, name: label, displayName: label, username: '', photoURL: '', deleted: true };
+    }
+    return p;
+  }
+
   async function getPublicProfile(uid) {
     if (!db || !uid) return null;
     try {
       const snap = await db.collection('users_public').doc(uid).get();
-      if (snap.exists) return { uid, ...snap.data() };
+      if (snap.exists) return withDeletedLabel({ uid, ...snap.data() });
       if (currentUser?.uid === uid) {
         const priv = await db.collection('users').doc(uid).get();
         if (priv.exists) {
@@ -417,7 +462,7 @@
         .where(firebase.firestore.FieldPath.documentId(), 'in', ids)
         .get();
       snap.docs.forEach((d) => {
-        out[d.id] = { uid: d.id, ...d.data() };
+        out[d.id] = withDeletedLabel({ uid: d.id, ...d.data() });
       });
     } catch (e) {
       await Promise.all(
@@ -439,5 +484,6 @@
     syncPublicProfile,
     getPublicProfile,
     getPublicProfiles,
+    withDeletedLabel,
   };
 })();

@@ -49,6 +49,9 @@ const LIMITS = {
   // Account export / deletion (P3) — expensive + sensitive
   account_export: { minute: 1, hour: 3 },
   account_delete: { minute: 1, hour: 5 },
+  // Global L8: consent log / privacy prefs / DOB / legal acceptance writes; export link downloads (per IP)
+  privacy_write: { minute: 20, hour: 200 },
+  export_download: { minute: 10, hour: 60 },
   // Signal spine batches (P4)
   signal_ingest: { minute: 30, hour: 400 },
   // User model on-demand refresh (P5)

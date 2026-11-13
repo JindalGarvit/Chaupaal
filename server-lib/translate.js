@@ -364,8 +364,10 @@ function createTranslator(deps) {
    * @param {string} uid
    * @param {{ target, items: [{ text, surface, scope, v, src }] }} body
    */
-  async function translate(uid, body) {
+  async function translate(uid, body, opts) {
     const f = flags(env);
+    // Global L8: "Use AI features" off → private text is not sent to an AI translator.
+    const privateBlocked = !!(opts && opts.userAiOff) && f.provider === 'llm';
     if (!f.enabled) throw Object.assign(new Error('Translation is off'), { code: 'TRANSLATE_OFF' });
     const target = AiLang.normalize(body && body.target);
     const list = (Array.isArray(body && body.items) ? body.items : []).slice(0, MAX_ITEMS);
@@ -382,6 +384,10 @@ function createTranslator(deps) {
       r.requests++;
       if (!text.trim()) {
         out.push({ ok: false, error: 'failed' });
+        continue;
+      }
+      if (scope === 'private' && privateBlocked) {
+        out.push({ ok: false, error: 'ai_off' });
         continue;
       }
       const id = scope === 'public' ? cacheId(text, target, it.v) : null;

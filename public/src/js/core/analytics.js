@@ -15,8 +15,26 @@
 (function () {
   let analytics = null;
 
+  /**
+   * Consent gate (Global L8). Firebase Analytics is never initialised — so it sets no cookie / id and
+   * sends nothing — until the "analytics" purpose is allowed (opt-in regions: an explicit Accept;
+   * elsewhere: on unless switched off). `client_error` counts as crash reporting. No consent module
+   * loaded → deny.
+   */
+  function purposeFor(name) {
+    return name === 'client_error' ? 'crash' : 'analytics';
+  }
+  function allowed(purpose) {
+    try {
+      return typeof ChaupaalPrivacy !== 'undefined' && !!ChaupaalPrivacy && ChaupaalPrivacy.allows(purpose) === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function getAnalytics() {
     if (analytics) return analytics;
+    if (!allowed('analytics')) return null;
     try {
       if (typeof firebase !== 'undefined' && firebase.analytics) {
         analytics = firebase.analytics();
@@ -28,12 +46,25 @@
     return analytics;
   }
 
+  // Withdrawal stops collection on this page at once (the SDK has no "uninitialise").
+  try {
+    window.addEventListener('chaupaal:consent-changed', () => {
+      try {
+        if (analytics && typeof analytics.setAnalyticsCollectionEnabled === 'function') {
+          analytics.setAnalyticsCollectionEnabled(allowed('analytics'));
+        }
+      } catch (e) {}
+    });
+  } catch (e) {}
+
   /**
    * @param {string} name
    * @param {object} [params]
    */
   function trackEvent(name, params) {
     try {
+      if (!allowed(purposeFor(name))) return;
+      if (!allowed('analytics')) return;
       const a = getAnalytics();
       if (!a) return;
       const payload = { ...(params || {}), app_surface: 'chaupaal_web' };

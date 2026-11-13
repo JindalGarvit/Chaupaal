@@ -871,6 +871,12 @@ function wireAuthEvents() {
     regData = emptyRegData();
   });
 
+  // Consent pending: Teen mode with consent-dependent features off — the app still works (Global L8).
+  document.getElementById('parentConsentLater')?.addEventListener('click', () => {
+    hideAuth();
+    if (typeof showToast === 'function') showToast(t('privacy.parent_later_toast'));
+  });
+
   document.getElementById('parentConsentSend')?.addEventListener('click', async () => {
     const contact = document.getElementById('parentConsentContact')?.value?.trim();
     const err = document.getElementById('parentConsentError');
@@ -889,15 +895,20 @@ function wireAuthEvents() {
         body: { action: 'parental_consent_start', contact },
       });
       if (!env?.ok) throw Object.assign(new Error(env?.error?.message || 'Could not start consent'), { code: env?.error?.code });
-      if (env.data?.needParentSignup || env.data?.error === 'PARENT_NOT_FOUND') {
-        if (err)
-          err.textContent =
-            t('auth.no_adult_chaupaal_account_for_that');
-        if (typeof showToast === 'function') showToast(t('auth.parent_needs_a_chaupaal_adult_account'));
-        return;
-      }
-      if (env.data?.error === 'PARENT_NOT_ADULT') {
-        if (err) err.textContent = t('auth.that_account_is_under_18_consent');
+      const startErr = env.data?.error;
+      if (startErr) {
+        const key =
+          {
+            PARENT_NOT_ADULT: 'auth.that_account_is_under_18_consent',
+            PARENT_PHONE_UNSUPPORTED: 'privacy.parent_phone_unsupported',
+            DELIVERY_UNAVAILABLE: 'privacy.parent_delivery_unavailable',
+            SELF_PARENT: 'privacy.parent_self',
+            INVALID_CONTACT: 'privacy.parent_invalid_contact',
+            RATE_LIMITED: 'errors.rate_limited',
+            NOT_REQUIRED: 'privacy.parent_not_required',
+          }[startErr] || 'auth.failed';
+        if (err) err.textContent = t(key);
+        if (startErr === 'NOT_REQUIRED') setTimeout(() => hideAuth(), 900);
         return;
       }
       document.getElementById('parentConsentOtpWrap')?.classList.remove('hidden');
@@ -916,11 +927,9 @@ function wireAuthEvents() {
         }
         if (typeof showToast === 'function') showToast(t('auth.dev_consent_code_ready'));
       } else {
-        if (hint) {
-          hint.textContent =
-            t('auth.code_delivered_to_your_parent_s');
-        }
-        if (typeof showToast === 'function') showToast(t('auth.code_sent_to_parent_s_chaupaal'));
+        const via = (env.data?.delivery || []).indexOf('email') >= 0 ? 'privacy.parent_code_emailed' : 'auth.code_delivered_to_your_parent_s';
+        if (hint) hint.textContent = t(via, { to: env.data?.sentTo || '' });
+        if (typeof showToast === 'function') showToast(t(via, { to: env.data?.sentTo || '' }));
       }
     } catch (e) {
       if (err) err.textContent = errorText(e, t('auth.failed'));
@@ -946,17 +955,23 @@ function wireAuthEvents() {
       });
       if (!env?.ok) {
         const code = env?.error?.code || '';
-        if (code === 'EXPIRED') throw new Error('Code expired — ask parent to request a new one');
-        if (code === 'INVALID_OTP') throw new Error('Incorrect code — try again');
-        if (code === 'NO_PENDING') throw new Error('No pending code — tap Send verification code first');
+        const key = {
+          EXPIRED: 'privacy.parent_code_expired',
+          INVALID_OTP: 'privacy.parent_code_wrong',
+          NO_PENDING: 'privacy.parent_code_none',
+          TOO_MANY_ATTEMPTS: 'privacy.parent_code_locked',
+        }[code];
+        if (key) throw new Error(t(key));
         throw Object.assign(new Error(env?.error?.message || 'Invalid code'), { code: env?.error?.code });
       }
       if (userProfile) {
         userProfile.parentalConsent = env.data?.parentalConsent || { verified: true, required: true };
-        userProfile.teenMode = true;
       }
       hideAuth();
       if (typeof showToast === 'function') showToast(t('auth.parental_consent_saved_welcome'));
+      try {
+        if (typeof ChaupaalPrivacyUI !== 'undefined') ChaupaalPrivacyUI.renderPrivacyData();
+      } catch (e2) {}
     } catch (e) {
       if (err) err.textContent = errorText(e, t('auth.could_not_verify'));
     } finally {
@@ -1505,8 +1520,36 @@ function wireAuthEvents() {
     syncSignupProgress();
   };
 
+  /**
+   * Under-13 answer: keep nothing. A social sign-in may already have made a Firebase Auth user with no
+   * Chaupaal profile — delete it; clear the typed fields; show the friendly "not yet" screen.
+   */
+  async function abandonUnderAgeSignup() {
+    try {
+      const u = auth?.currentUser;
+      if (u) {
+        const snap = db ? await db.collection('users').doc(u.uid).get() : null;
+        if (!snap || !snap.exists || !snap.data()?.username) await u.delete().catch(() => auth.signOut());
+      }
+    } catch (e) {
+      try {
+        await auth?.signOut();
+      } catch (e2) {}
+    }
+    regData = emptyRegData();
+    ['regName', 'regUsername', 'regDob', 'regEmail', 'regPassword', 'regCity'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    if (typeof ChaupaalPrivacyUI !== 'undefined') ChaupaalPrivacyUI.showUnderAgeBlock();
+  }
+
   /** Capture + validate identity fields into regData. Returns true on success. */
   async function captureRegIdentity({ errEl, quiet } = {}) {
+    if (typeof ChaupaalPrivacy !== 'undefined' && ChaupaalPrivacy.ageLocked()) {
+      if (typeof ChaupaalPrivacyUI !== 'undefined') ChaupaalPrivacyUI.showUnderAgeBlock();
+      return false;
+    }
     const name = document.getElementById('regName')?.value.trim();
     const usernameRaw = document.getElementById('regUsername')?.value.trim() || '';
     const username =
@@ -1542,8 +1585,15 @@ function wireAuthEvents() {
       return false;
     }
     const age = ageFromDob(dob);
+    if (!(age > 0)) {
+      showErr(t('privacy.dob_invalid'));
+      document.getElementById('regDob')?.focus();
+      return false;
+    }
     if (age < 13) {
-      showErr(t('auth.you_must_be_13_or_older'));
+      // Global L8: no account, no inline hint, no instant retry — the device remembers for a while.
+      showErr('');
+      await abandonUnderAgeSignup();
       return false;
     }
     regData.age = age;
@@ -1788,9 +1838,16 @@ function wireAuthEvents() {
           dateOfBirth: regData.dob,
           teenMode: !!regData.teenMode,
           isMinor: !!regData.isMinor,
-          parentalConsent: regData.teenMode
-            ? { verified: false, required: true, method: null, parentContact: null, verifiedAt: null }
-            : { verified: true, required: false },
+          // Only the server can mark consent verified (firestore.rules); `required` follows the region's law.
+          parentalConsent: {
+            verified: false,
+            required:
+              typeof ChaupaalCompliance !== 'undefined'
+                ? ChaupaalCompliance.ageInfo({ dob: regData.dob }, { country: ChaupaalRegion?.getRegion?.().country }).needsParentalConsent
+                : !!regData.teenMode,
+          },
+          // Teen defaults (Global L8): private profile, no location on the public card, no behavioural signals.
+          ...(regData.teenMode ? { profileVisibility: 'Private', showLocation: false, activitySignalsOptOut: true } : {}),
           photoURL,
           photoThumb: photoThumb || null,
           profileType,
@@ -1867,6 +1924,11 @@ function wireAuthEvents() {
         }
 
         userProfile = profile;
+        // Global L8: acceptance of the current Terms / Privacy versions + this device's consent choice → server log.
+        try {
+          if (typeof ChaupaalPrivacyUI !== 'undefined') ChaupaalPrivacyUI.recordSignupAcceptance();
+          if (typeof ChaupaalPrivacy !== 'undefined') ChaupaalPrivacy.hydrateFromProfile(profile);
+        } catch (e) {}
         window.activeProfileId = 'primary';
         try {
           localStorage.setItem('chaupaal_active_profile_id', 'primary');
@@ -1955,6 +2017,13 @@ function wireAuthEvents() {
             const enterApp = async () => {
               hideAuth();
               updateProfileBtn();
+              try {
+                if (typeof ChaupaalPrivacyUI !== 'undefined') ChaupaalPrivacyUI.applyTeenSurfaces();
+                if (typeof needsParentalConsent === 'function' && needsParentalConsent(userProfile)) {
+                  document.getElementById('authOverlay')?.classList.remove('hidden');
+                  showAuthScreen('authParentalConsentScreen');
+                }
+              } catch (e) {}
               if (typeof loadStreak === 'function') loadStreak();
               if (typeof registerSession === 'function') {
                 try {

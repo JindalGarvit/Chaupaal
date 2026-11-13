@@ -9,7 +9,7 @@
  * Master kill-switch: AI_FEATURES_ENABLED env must be "true" (default OFF).
  */
 const { sendError, requireMethod, parseJsonBody } = require('../server-lib/http');
-const { verifyBearer } = require('../server-lib/auth');
+const { verifyBearer, initAdmin } = require('../server-lib/auth');
 const { validateAnthropicBody } = require('../server-lib/validate');
 const {
   getIdempotencyKey,
@@ -51,6 +51,19 @@ module.exports = async function handler(req, res) {
   } catch (e) {
     // Rate limiter failure must not take AI down — degraded open, same as stories
     console.warn('[anthropic] rate-limit check failed', e?.message || e);
+  }
+
+  // Global L8: "Use AI features" off (or the Teen / parental-consent default) → no AI on their data.
+  try {
+    const app = initAdmin();
+    if (app) {
+      const snap = await app.firestore().collection('users').doc(user.uid).get();
+      if (snap.exists && !require('../server-lib/privacy').aiAllowedForUser(snap.data() || {})) {
+        return sendError(res, 403, 'AI_OFF_BY_USER', 'AI features are off in your privacy settings.');
+      }
+    }
+  } catch (e) {
+    console.warn('[anthropic] privacy check failed', e?.message || e);
   }
 
   let incoming;

@@ -81,6 +81,10 @@ async function userAllowsCompanion(db, uid) {
     const snap = await db.collection('users').doc(uid).get();
     const data = snap.data() || {};
     if (data.companionOptOut === true) return { ok: false, reason: 'opt_out', profile: data };
+    // Global L8: wishes / check-ins are marketing notes written by AI from the profile.
+    const privacy = require('./privacy');
+    if (!privacy.marketingAllowed(data)) return { ok: false, reason: 'no_marketing_consent', profile: data };
+    if (!privacy.aiAllowedForUser(data)) return { ok: false, reason: 'ai_off_by_user', profile: data };
     return { ok: true, profile: data };
   } catch {
     return { ok: true, profile: {} };

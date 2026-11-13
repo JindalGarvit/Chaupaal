@@ -158,7 +158,14 @@ module.exports = async function handler(req, res) {
   const db = admin.firestore();
 
   // Dual gate: env kill-switch. Client also checks feature_flags/ai_features.
-  const aiOn = isAiFeaturesEnabled();
+  // Global L8: "Use AI features" off for this user → the same quiet path as the kill switch.
+  let aiOn = isAiFeaturesEnabled();
+  if (aiOn) {
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      if (snap.exists && !require('../server-lib/privacy').aiAllowedForUser(snap.data() || {})) aiOn = false;
+    } catch (e) {}
+  }
 
   try {
     const chatRef = await ensureChatDoc(db, user.uid);

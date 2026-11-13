@@ -720,6 +720,14 @@ async function hydrateInboxPeers(chats){
     const peerUid=c.uid||c.peerUid||(c.participants||[]).find((u)=>u&&u!==currentUser?.uid);
     if(!peerUid) return;
     c.uid=peerUid;
+    // Global L8: the other person deleted their account — the thread stays, the name doesn't.
+    if(Array.isArray(c.deletedParticipants)&&c.deletedParticipants.indexOf(peerUid)>=0){
+      c.name=t('privacy.deleted_user');
+      c._realName=c.name;
+      c.photoURL='';
+      c.username='';
+      return;
+    }
     const mem=c.memberProfiles&&c.memberProfiles[peerUid];
     if(mem){
       if(isGenericDmTitle(c.name)&&mem.name){

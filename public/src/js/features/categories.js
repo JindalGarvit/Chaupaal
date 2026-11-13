@@ -143,7 +143,12 @@ async function fetchCategoryCacheDoc(catName, scope = {}){
       const snap = await db.collection('category_cache').doc(id).get();
       if (snap.exists) {
         const data = snap.data();
-        if (data) return { ...data, _cacheId: id };
+        if (data) {
+          const out = { ...data, _cacheId: id };
+          // Teen mode (Global L8): stricter discovery filter on shared news.
+          if (Array.isArray(out.news) && typeof ChaupaalPrivacy !== 'undefined') out.news = out.news.filter((n) => ChaupaalPrivacy.discoveryOk(n));
+          return out;
+        }
       }
     }catch(e){}
   }

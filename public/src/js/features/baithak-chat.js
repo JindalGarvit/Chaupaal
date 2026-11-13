@@ -1172,6 +1172,15 @@ function renderMsgBubble(m, isGroup){
     const line = ChatEvents.renderSysHtml(m.sys);
     if (line) return `<div class="msg-row msg-row--system" data-sys="${chatEsc(m.sys.type)}"><div class="msg-system" role="note">${line}</div></div>`;
   }
+  // Global L8: the sender deleted their account — their words are gone, the thread stays.
+  if (m.authorDeleted) {
+    return `<div class="msg-row them msg-row--deleted" data-author-deleted="1">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;">${tHtml('privacy.deleted_user')}</div>
+        <div class="msg-bubble msg-bubble--deleted"><em>${tHtml('privacy.message_removed')}</em></div>
+      </div>
+    </div>`;
+  }
   if (m.deletedForEveryone) {
     const delLabel = tHtml('baithak.msg_deleted_everyone');
     return `<div class="msg-row ${isMe ? 'me' : 'them'} msg-row--deleted" data-deleted-everyone="1">

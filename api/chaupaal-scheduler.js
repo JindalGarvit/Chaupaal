@@ -131,6 +131,8 @@ async function processRecommendation(db, uid, state, stateRef) {
     try {
       const userSnap = await db.collection('users').doc(uid).get();
       const profile = userSnap.exists ? userSnap.data() : {};
+      const privacy = require('../server-lib/privacy');
+      if (!privacy.aiAllowedForUser(profile) || privacy.personalizationOff(profile)) throw Object.assign(new Error('privacy_off'), { quiet: true });
       const interests = (profile.interests || profile.profile?.interests || []).slice(0, 8);
       const result = await callAI({
         tier: 'fast',
@@ -161,7 +163,7 @@ async function processRecommendation(db, uid, state, stateRef) {
         }
       }
     } catch (e) {
-      console.warn('[scheduler] recommendation AI', e?.message || e);
+      if (!e?.quiet) console.warn('[scheduler] recommendation AI', e?.message || e);
     }
   }
 
@@ -317,6 +319,25 @@ module.exports = async function handler(req, res) {
   const startedAt = Date.now();
   const SOFT_BUDGET_MS = 95_000;
   const withinBudget = () => Date.now() - startedAt < SOFT_BUDGET_MS;
+
+  // Global L8 — data rights first (legal deadlines): hard-delete accounts past the 30-day grace,
+  // finish queued data exports and expire old download links.
+  let accountPurge = { skipped: true };
+  let dataExports = { skipped: true };
+  try {
+    const { processDueDeletions } = require('../server-lib/account-purge');
+    accountPurge = await processDueDeletions(admin, { limit: 8, deadlineMs: startedAt + 40_000 });
+  } catch (e) {
+    accountPurge = { error: e?.message || String(e) };
+    console.warn('[scheduler] account purge', e?.message || e);
+  }
+  try {
+    const { processExportJobs } = require('../server-lib/account-export');
+    dataExports = withinBudget() ? await processExportJobs(admin, { limit: 3, deadlineMs: startedAt + 60_000 }) : { skipped: true, reason: 'duration_budget' };
+  } catch (e) {
+    dataExports = { error: e?.message || String(e) };
+    console.warn('[scheduler] data exports', e?.message || e);
+  }
 
   try {
     const { ref: cursorRef, data: cursor } = await getCursor(db);
@@ -609,6 +630,8 @@ module.exports = async function handler(req, res) {
 
     return sendSuccess(res, {
       ...results,
+      accountPurge,
+      dataExports,
       summary,
       intentWeights,
       discoveryBatch,

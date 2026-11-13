@@ -77,6 +77,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
           sys:m.sys||null,
           uid:m.uid,
           deletedForEveryone: !!m.deletedForEveryone,
+          authorDeleted: !!m.authorDeleted,
         },isGroup);
         const node=div.firstElementChild;
         if(!node) return;
@@ -130,6 +131,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
           sys:m.sys||null,
       uid:m.uid,
       deletedForEveryone: !!m.deletedForEveryone,
+      authorDeleted: !!m.authorDeleted,
     },isGroup);
     const node=div.firstElementChild;
     if(!node) return;
@@ -333,6 +335,7 @@ async function loadRealtimeMessages(chatId, msgsArea, isGroup){
               attachment:m.attachment||null,
               sys:m.sys||null,
               uid:m.uid,
+              authorDeleted:!!m.authorDeleted,
             },isGroup);
             if(div.firstElementChild){
               if(docId){ div.firstElementChild.dataset.msgId=docId; rendered.add(docId); }

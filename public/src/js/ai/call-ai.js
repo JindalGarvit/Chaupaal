@@ -42,6 +42,13 @@
       err.status = 503;
       throw err;
     }
+    // Global L8: "Use AI features" off (Settings → Privacy & data) → no AI call with their data.
+    if (typeof ChaupaalPrivacy !== 'undefined' && ChaupaalPrivacy && ChaupaalPrivacy.aiAllowed() === false) {
+      const err = new Error(t('errors.ai_off_by_user'));
+      err.code = 'AI_OFF_BY_USER';
+      err.status = 403;
+      throw err;
+    }
 
     const model =
       typeof resolveAiModel === 'function'

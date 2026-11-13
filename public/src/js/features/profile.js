@@ -766,36 +766,17 @@ function saveProfileField(key, value){
   }
   try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
 
-  // Retroactive DOB → under-18: require parental consent / teen mode
+  // Date of birth is set once through the server (Global L8: Teen mode / under-13 rules); corrections via support.
   if(key==='dateOfBirth'||key==='dob'){
-    try{
-      const age=typeof ageFromDob==='function'?ageFromDob(value):0;
-      if(typeof isBlockedAge==='function'&&isBlockedAge(age)){
-        if(typeof showToast==='function') showToast(t('profile.chaupaal_is_for_ages_13_and'));
-        digitalProfile[key]=prev[key];
-        return;
-      }
-      if(typeof isTeenAge==='function'&&isTeenAge(age)){
-        if(userProfile){
-          userProfile.teenMode=true;
-          userProfile.isMinor=true;
-          userProfile.age=age;
-        }
-        if(db&&currentUser){
-          db.collection('users').doc(currentUser.uid).set({
-            teenMode:true,
-            isMinor:true,
-            age,
-            [`profile.${key}`]:value,
-          },{merge:true}).catch(()=>{});
-        }
-        if(typeof needsParentalConsent==='function'&&needsParentalConsent({...userProfile,age,teenMode:true})&&typeof openParentalConsentSheet==='function'){
-          setTimeout(()=>openParentalConsentSheet(),400);
-        }else if(typeof showToast==='function'){
-          showToast(t('profile.teen_mode_on_some_features_stay'));
-        }
-      }
-    }catch(e){}
+    digitalProfile[key]=prev[key];
+    try{localStorage.setItem('chaupaal_digital_profile',JSON.stringify(digitalProfile));}catch(e){}
+    const hasDob=!!(userProfile&&(userProfile.dob||userProfile.dateOfBirth));
+    if(hasDob){
+      if(typeof showToast==='function') showToast(t('privacy.edit_dob_support'));
+    }else if(typeof openDobPrompt==='function'){
+      openDobPrompt({ required:true });
+    }
+    return;
   }
 
   if(db&&currentUser){

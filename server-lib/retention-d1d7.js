@@ -348,6 +348,8 @@ async function processUserRetention(db, admin, uid, state = {}, opts = {}) {
   }
   if (profile.quietMode === true) return { skipped: 'quiet' };
   if (profile.notifPrefs && profile.notifPrefs.tips === false) return { skipped: 'tips_off' };
+  // Global L8: re-engagement nudges are the "marketing" consent purpose.
+  if (!require('./privacy').marketingAllowed(profile)) return { skipped: 'no_marketing_consent' };
 
   const createdAt = profile.createdAt || state.createdAt || null;
   const dayIndex = calendarDayIndex(createdAt, tz, now);

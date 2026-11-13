@@ -396,7 +396,10 @@ const AI_ON = { AI_FEATURES_ENABLED: 'true', ANTHROPIC_API_KEY: 'test-key-not-re
     const mc = read('api/media-config.js');
     assert(/action === 'translate_config'/.test(mc) && /action === 'translate'/.test(mc) && /require\('\.\.\/server-lib\/translate'\)/.test(mc), 'route folded into api/media-config.js → server-lib/translate.js');
     assert(/view === 'translate'/.test(read('api/admin-feedback.js')), 'admin view=translate (counts, no content)');
-    assert(/TODO\(L8\)[\s\S]{0,200}Translate/.test(read('public/src/js/core/first-run.js')), 'TODO(L8) marker: privacy policy must cover translation processing');
+    assert(
+      /Translate \+ AI processing is covered in the Privacy Policy/.test(read('public/src/js/core/first-run.js')) && /'legal\.privacy_ai_3': [^\n]*never stored by/.test(read('public/src/i18n/en.js').replace(/"/g, "'")),
+      'L8 picked up the TODO: the Privacy Policy covers translation processing'
+    );
     assert(/match \/translateCache\/\{docId\} \{\s*allow read, write: if false;/.test(read('firebase/firestore.rules')), 'translate collections are Admin-only');
     const apis = fs.readdirSync(path.join(ROOT, 'api')).filter((f) => f.endsWith('.js'));
     assert(apis.length === 12, `api/*.js === 12 (got ${apis.length})`);

@@ -51,6 +51,14 @@
     const code = typeof normalizeLang === 'function' ? normalizeLang(lang) : lang;
     const spec = SCRIPT_FONTS[code];
     if (!spec || loaded.has(spec.alias) || typeof fetch !== 'function' || typeof document === 'undefined') return Promise.resolve(false);
+    // Opt-in regions (Global L8): never ask Google Fonts (it sees the visitor's IP) — system fonts render the script.
+    try {
+      const P = typeof ChaupaalPrivacy !== 'undefined' ? ChaupaalPrivacy : null;
+      const C = typeof ChaupaalCompliance !== 'undefined' ? ChaupaalCompliance : null;
+      if (P && C && C.trackingMode(P.region().country) === 'opt_in') return Promise.resolve(false);
+    } catch (e) {
+      return Promise.resolve(false);
+    }
     loaded.add(spec.alias);
     return fetch(cssUrl(spec))
       .then((r) => (r.ok ? r.text() : ''))

@@ -173,6 +173,32 @@ service cloud.firestore {
     }
 
     // ===================== USERS =====================
+    // Global L8: age, parental consent, consents, privacy prefs, legal acceptance and deletion state are
+    // server-written (POST /api/media-config) so a client cannot self-verify consent or lift Teen mode.
+    function complianceKeys() {
+      return [
+        'parentalConsentPending',
+        'deletionStatus',
+        'deletionRequestedAt',
+        'deletionRequestedMs',
+        'purgeAfterMs',
+        'consents',
+        'legalAcceptance',
+        'privacy',
+        'dobPrompt',
+        'ageCheckedAt'
+      ];
+    }
+    // First write (signup into a doc that already exists) is fine; changing a stored value is not.
+    function setOnce(k) {
+      return !(k in resource.data) || request.resource.data.get(k, null) == resource.data[k];
+    }
+    function parentalConsentUnchangedOrUnverified() {
+      return request.resource.data.get('parentalConsent', null) == resource.data.get('parentalConsent', null)
+        || (!('parentalConsent' in resource.data)
+            && request.resource.data.parentalConsent.get('verified', false) != true);
+    }
+
     match /users/{userId} {
       // Private document — owner only (email/phone/DOB/prefs). Others use users_public.
       allow read: if isOwner(userId);
@@ -184,7 +210,11 @@ service cloud.firestore {
           'referralStats',
           'referralInviterPending',
           'referralInviterUid'
-        ]);
+        ])
+        && !request.resource.data.keys().hasAny(complianceKeys())
+        && (!('parentalConsent' in request.resource.data)
+            || !('verified' in request.resource.data.parentalConsent)
+            || request.resource.data.parentalConsent.verified != true);
       allow update: if isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'relationshipCounts',
@@ -195,7 +225,10 @@ service cloud.firestore {
           'referralInviterPending',
           'referralInviterUid',
           'referralFlair'
-        ]);
+        ])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(complianceKeys())
+        && setOnce('dob') && setOnce('dateOfBirth') && setOnce('teenMode') && setOnce('isMinor')
+        && parentalConsentUnchangedOrUnverified();
 
       // Instagram-style multi-profile under one auth identity
       match /profiles/{profileId} {
@@ -213,6 +246,11 @@ service cloud.firestore {
         allow write: if false;
       }
       match /fcmTokens/{tokenId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      // Global L8 consent log (purpose, choice, policy version, region, server time) — Admin writes only.
+      match /consentLog/{entryId} {
         allow read: if isOwner(userId);
         allow write: if false;
       }
@@ -993,6 +1031,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /translateStats/{docId} {
+      allow read, write: if false;
+    }
+
+    // Global L8 — Admin SDK only: export jobs (+ fallback ZIP chunks), parental consent records,
+    // PII-free deletion audit rows. Clients use POST /api/media-config.
+    match /exportJobs/{jobId} {
+      allow read, write: if false;
+      match /chunks/{chunkId} {
+        allow read, write: if false;
+      }
+    }
+    match /parentalConsents/{recordId} {
+      allow read, write: if false;
+    }
+    match /accountDeletions/{recordId} {
       allow read, write: if false;
     }
 

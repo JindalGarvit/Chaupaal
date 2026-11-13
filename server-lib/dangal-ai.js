@@ -795,6 +795,8 @@ function createDangalAI(deps) {
 
     async function runInner() {
       if (!enabled()) return fallback(hook, inp, 'ai_off');
+      // Global L8: the player switched "Use AI features" off (or Teen / parental-consent default).
+      if (ctx && ctx.userAiOff) return fallback(hook, inp, 'user_off');
       if (hookDisabled(hook, env)) return fallback(hook, inp, 'hook_off');
       if (PREPARE[hook]) {
         const prepared = PREPARE[hook](inp);

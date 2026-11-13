@@ -451,15 +451,22 @@ async function processAkhbaarPersonalization(db, uid, state, stateRef) {
   }
 
   let profile = {};
+  let raw = null;
   try {
     const snap = await db.collection('users').doc(uid).get();
-    profile = profileBlob(snap.data() || {});
+    raw = snap.data() || {};
+    profile = profileBlob(raw);
   } catch {
     profile = {};
   }
 
   if (profile.akhbaarPersonalizeOptOut === true) {
     return { skipped: 'user_opt_out' };
+  }
+  // Global L8: AI on their profile + personalised cards need "Use AI features" and personalisation on.
+  if (raw) {
+    const privacy = require('./privacy');
+    if (!privacy.aiAllowedForUser(raw) || privacy.personalizationOff(raw)) return { skipped: 'privacy_off' };
   }
 
   const tz = state.timezone || 'Asia/Kolkata';

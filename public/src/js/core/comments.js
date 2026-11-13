@@ -107,14 +107,16 @@
     }
 
     const likedByMe = o.likedMap instanceof Map ? !!o.likedMap.get(c.id) : !!c.likedByMe;
+    // Global L8: the author deleted their account (purge redacts the comment, keeps the thread).
+    const authorGone = !!(c.authorDeleted || c.redacted);
 
     return `
       <div class="comment-item ${isReply ? 'comment-item--reply' : ''} ${c.pending ? 'comment-item--pending' : ''} ${c.deleted ? 'comment-item--deleted' : ''}" data-cid="${escapeHtml(c.id)}" ${c.parentId ? `data-parent="${escapeHtml(c.parentId)}"` : ''}>
         <div class="comment-avatar">${avatar}</div>
         <div class="comment-body">
-          <div class="comment-name">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml((c.user && c.user.name) || t('common.user'), c.user) : escapeHtml((c.user && c.user.name) || t('common.user'))}</div>
+          <div class="comment-name">${authorGone ? tHtml('privacy.deleted_user') : typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml((c.user && c.user.name) || t('common.user'), c.user) : escapeHtml((c.user && c.user.name) || t('common.user'))}</div>
           ${replyLabel}
-          <div class="comment-text">${c.deleted ? escapeHtml(tt('comment_deleted', 'Comment deleted')) : typeof ugcHtml === 'function' ? ugcHtml(surface + '_comment', formatCommentText(c.text), { scope: o.scope === 'public' ? 'public' : 'private', v: c.editedAt || '' }) : formatCommentText(c.text)}</div>
+          <div class="comment-text">${authorGone ? `<em>${tHtml('privacy.message_removed')}</em>` : c.deleted ? escapeHtml(tt('comment_deleted', 'Comment deleted')) : typeof ugcHtml === 'function' ? ugcHtml(surface + '_comment', formatCommentText(c.text), { scope: o.scope === 'public' ? 'public' : 'private', v: c.editedAt || '' }) : formatCommentText(c.text)}</div>
           <div class="comment-meta">
             <span class="comment-time">${escapeHtml(c.time || t('common.just_now_2'))}${c.editedAt ? ' · edited' : ''}</span>
             ${!c.deleted ? `<button type="button" class="comment-reply-btn" data-reply="${escapeHtml(c.id)}">${escapeHtml(tt('comment_reply', 'Reply'))}</button>` : ''}
