@@ -331,6 +331,13 @@ module.exports = async function handler(req, res) {
     accountPurge = { error: e?.message || String(e) };
     console.warn('[scheduler] account purge', e?.message || e);
   }
+  // Global L9: moderation SLA + India IT Rules (24 h acknowledge / 15-day resolve) reminders.
+  let moderationTimers = { skipped: true };
+  try {
+    moderationTimers = await require('../server-lib/moderation').processModerationTimers(admin, {});
+  } catch (e) {
+    moderationTimers = { error: e?.message || String(e) };
+  }
   try {
     const { processExportJobs } = require('../server-lib/account-export');
     dataExports = withinBudget() ? await processExportJobs(admin, { limit: 3, deadlineMs: startedAt + 60_000 }) : { skipped: true, reason: 'duration_budget' };
@@ -632,6 +639,7 @@ module.exports = async function handler(req, res) {
       ...results,
       accountPurge,
       dataExports,
+      moderationTimers,
       summary,
       intentWeights,
       discoveryBatch,

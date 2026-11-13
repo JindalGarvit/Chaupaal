@@ -891,6 +891,19 @@
       showActionSheet(tt('baithak_delete_msg', 'Delete message'), deleteActions);
     };
 
+    // Global L9: report someone else's message (notice & action).
+    if (!isMe && msgId && !isLocalOnly && typeof openReport === 'function') {
+      actions.push({
+        label: tt('moderation.report_message', 'Report'),
+        icon: 'triangle-alert',
+        danger: true,
+        fn: () =>
+          openReport(
+            { uid: row?.dataset?.uid || '', name: row?.dataset?.name || '' },
+            { targetType: 'message', targetId: msgId, chatId, snapshot: text.slice(0, 500), surface: 'baithak' }
+          ),
+      });
+    }
     if (row && !row.dataset.deletedEveryone) {
       actions.push({
         label: tt('baithak_delete_msg', 'Delete'),

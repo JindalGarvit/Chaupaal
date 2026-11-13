@@ -1048,6 +1048,16 @@ service cloud.firestore {
     match /accountDeletions/{recordId} {
       allow read, write: if false;
     }
+    // Global L9 notice & action — Admin SDK only (users read their own via /api/media-config).
+    match /reports/{reportId} {
+      allow read, write: if false;
+    }
+    match /statements/{statementId} {
+      allow read, write: if false;
+    }
+    match /appeals/{appealId} {
+      allow read, write: if false;
+    }
 
     // Peepal intent weight profiles + engagement — Admin SDK only
     match /intentWeightProfiles/{profileId} {

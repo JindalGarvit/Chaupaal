@@ -7,14 +7,21 @@
  * After block/report: ~5s Undo chip. Settings hosts Blocked & Reported lists.
  */
 (function () {
+  // Global L9 notice & action taxonomy (server-lib/moderation.js REASONS; legacy codes still map there).
   const REPORT_REASONS = [
-    { code: 'spam', label: t('common.spam') },
-    { code: 'harassment', label: t('common.harassment') },
-    { code: 'fake_profile', label: t('common.fake_profile') },
-    { code: 'inappropriate', label: t('common.inappropriate_content') },
-    { code: 'impersonation', label: t('common.impersonation') },
-    { code: 'custom', label: t('common.other_type_your_reason') },
-  ];
+    'child_safety',
+    'self_harm',
+    'violence',
+    'illegal',
+    'sexual',
+    'hate',
+    'harassment',
+    'spam',
+    'impersonation',
+    'ip',
+    'other',
+  ].map((code) => ({ code, label: t('moderation.reason_' + code) }));
+  REPORT_REASONS.push({ code: 'custom', label: t('common.other_type_your_reason') });
 
   const SAFETY_UNDO_REASONS = [
     { code: 'mistake', label: t('common.blocked_reported_by_mistake') },
@@ -218,6 +225,7 @@
             targetType: opts.targetType || 'user',
             postId: opts.postId || null,
             chatId: opts.chatId || null,
+            ...(opts.report || {}),
           },
         });
         flagId = envelope?.data?.flagId || null;
@@ -827,6 +835,8 @@
       items.push({ id: 'more_like', label: t('common.more_like_this'), icon: 'heart' });
       items.push({ id: 'not_interested', label: t('common.not_interested'), icon: 'thumbs-down' });
     }
+    // Global L9 recommender transparency.
+    if (!isOwn && typeof openWhyThis === 'function') items.push({ id: 'why', label: t('moderation.why_title'), icon: 'info' });
     // Peepal cards already expose Share on the footer action bar — one affordance.
     if (surface !== 'peepal') {
       items.push({ id: 'share', label: t('common.share'), icon: 'share' });
@@ -900,9 +910,21 @@
         if (typeof showToast === 'function') showToast(t('common.hidden_from_your_feed'));
         return;
       }
+      if (act === 'why') {
+        if (close) close();
+        openWhyThis(content, { surface });
+        return;
+      }
       if (act === 'report') {
         if (close) close();
-        openFlagSheet(user, { postId, targetType: surface });
+        const type = surface === 'duniya' ? 'duniya_post' : surface === 'peepal' ? 'peepal' : surface;
+        (typeof openReport === 'function' ? openReport : openFlagSheet)(user, {
+          postId,
+          targetId: postId,
+          targetType: type,
+          surface,
+          snapshot: String(content?.caption || content?.question || content?.text || '').slice(0, 500),
+        });
         return;
       }
       if (act === 'block') {

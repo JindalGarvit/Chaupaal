@@ -74,7 +74,12 @@
     "public/src/js/core/compliance.js": "privacy",
     "public/src/js/core/privacy-ui.js": "privacy",
     "public/src/js/core/legal.js": "legal",
-    "public/src/js/data/consent-ages.js": "privacy"
+    "public/src/js/data/consent-ages.js": "privacy",
+    "public/src/js/core/report.js": "moderation",
+    "public/src/js/core/web-locale.js": "common",
+    "public/src/js/data/region-prices.js": "premium",
+    "public/src/js/data/safety-resources.js": "moderation",
+    "public/src/js/web/delete-account.js": "privacy"
   },
   "l3": {
     "public/src/js/features/baithak.js": "baithak",

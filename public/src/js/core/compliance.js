@@ -30,7 +30,7 @@
   const DAY_MS = 86400000;
 
   const TEEN_RULES = [
-    'peepal_hidden',
+    'peepal_stricter',
     'adult_games_hidden',
     'dms_friends_only',
     'profile_private',
@@ -140,15 +140,18 @@
     return ageInfo(u, opts).teen;
   }
 
+  /** Features closed to under-18s. Peepal stays open to teens with stricter content filters. */
+  const TEEN_BLOCKED_FEATURES = ['adult_games', 'stranger_matching'];
+
   /**
-   * 18+ / age-gated features ('peepal', 'adult_games', 'stranger_dms').
-   * 'ok' | 'teen' | 'need_dob' (no DOB and the one allowed skip is used) | 'blocked'.
+   * Age-gated features ('peepal', 'adult_games', 'stranger_matching', 'stranger_dms').
+   * 'ok' | 'teen' (closed for under-18s) | 'need_dob' (no DOB and the one allowed skip is used) | 'blocked'.
    */
   function ageGate(u, feature, opts) {
     const info = ageInfo(u, opts);
     if (info.blocked) return 'blocked';
-    if (info.teen) return 'teen';
-    if (!info.known && dobSkipsUsed(u) >= 1) return 'need_dob';
+    if (info.teen && TEEN_BLOCKED_FEATURES.indexOf(feature) >= 0) return 'teen';
+    if (!info.known && !info.teen && dobSkipsUsed(u) >= 1) return 'need_dob';
     return 'ok';
   }
 
@@ -218,6 +221,7 @@
   function teenContentOk(item) {
     if (!item || typeof item !== 'object') return true;
     if (item.nsfw === true || item.ageRestricted === true || item.adultOnly === true || item.mature === true) return false;
+    if (item.moderation && (item.moderation.ageRestricted === true || item.moderation.restricted === true)) return false;
     if (item.flagged === true || item.reported === true || Number(item.reportCount) >= 3) return false;
     const cat = String(item.category || item.categoryId || item.cat || '').toLowerCase();
     if (cat && TEEN_BLOCK_CATEGORIES.indexOf(cat) >= 0) return false;
@@ -329,6 +333,7 @@
     ADULT_AGE,
     AGE_LOCK_DAYS,
     TEEN_RULES,
+    TEEN_BLOCKED_FEATURES,
     Ages,
     parseDob,
     exactAge,

@@ -107,7 +107,23 @@ function initAkhbaarCatBar() {
     }
   } catch (e) {}
 
+  // Global L9: "Why am I seeing this?" for the personalised category order.
+  if (typeof openWhyThis === 'function' && !bar.querySelector('[data-cat="why"]')) {
+    const why = document.createElement('button');
+    why.className = 'akhbaar-cat-chip akhbaar-why-chip';
+    why.dataset.cat = 'why';
+    why.dataset.catKind = 'why';
+    why.setAttribute('aria-label', t('moderation.why_title'));
+    why.textContent = 'ⓘ';
+    why.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openWhyThis({ _rankExplain: ['Fits your interests'] }, { surface: 'akhbaar' }); // i18n-ignore (server explain code)
+    });
+    bar.insertBefore(why, document.getElementById('akhbaarAddCat'));
+  }
+
   bar.querySelectorAll('.akhbaar-cat-chip').forEach((chip) => {
+    if (chip.dataset.cat === 'why') return;
     tintAkhbaarChip(chip);
     chip.addEventListener('click', () => {
       if (chip.dataset.cat === 'add') {

@@ -496,6 +496,10 @@
       if (!cache.has(profile.uid)) await hydrateRelationships([profile.uid]);
       const state = relationshipState(profile.uid);
       const actions = buildRelationshipActions(profile, state, { context });
+      // Global L9: every profile (incl. Peepal / Vriksha cards) can be reported from its menu.
+      if (typeof openReport === 'function' && profile.uid && profile.uid !== currentUser?.uid) {
+        actions.push({ label: t('moderation.report_profile'), icon: 'triangle-alert', danger: true, fn: () => openReport(profile, { targetType: 'profile', surface: context || 'profile' }) });
+      }
       if (typeof showActionSheet === 'function') {
         showActionSheet(title || t('common.more'), actions);
       }

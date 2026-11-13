@@ -913,7 +913,9 @@ async function loadPeepalPage({reset=false}={}){
       excludeDeleted:true,
     });
     // Seed docs filtered while PEEPAL_SEED_CONTENT_ENABLED is false (Trust T0).
-    const mapped=page.items.map(mapPeepalDoc).filter(q=>(PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)&&!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted)&&!(q.archived===true||q.saveOnly===true));
+    const mapped=page.items.map(mapPeepalDoc).filter(q=>(PEEPAL_SEED_CONTENT_ENABLED||!q.isSeedContent)&&!(typeof isSoftDeleted==='function'?isSoftDeleted(q):q.deleted)&&!(q.archived===true||q.saveOnly===true))
+      // Teens (Global L8/L9): Peepal stays open with the stricter teen content filter + moderation age-restrictions.
+      .filter(q=>typeof ChaupaalPrivacy==='undefined'||ChaupaalPrivacy.discoveryOk(q));
     if(typeof enrichUsersWithProfileType==='function'){
       await enrichUsersWithProfileType(mapped.map(q=>q.user).filter(Boolean));
     }

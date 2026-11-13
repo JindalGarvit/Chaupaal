@@ -2027,7 +2027,7 @@
       <div class="pk-chat-log" aria-live="polite">${
         msgs.length
           ? msgs
-              .map((m) => `<div class="pk-chat-msg${m.from === o.me ? ' is-me' : ''}"><b>${esc(m.from === o.me ? t('common.you') : o.name(m.from))}</b> ${typeof ugcHtml === 'function' ? ugcHtml('party_chat', esc(m.text), { scope: 'private' }) : esc(m.text)}</div>`)
+              .map((m) => `<div class="pk-chat-msg${m.from === o.me ? ' is-me' : ''}" data-report-chat="${m.from === o.me ? '' : esc(m.from)}" data-report-name="${esc(o.name(m.from))}"><b>${esc(m.from === o.me ? t('common.you') : o.name(m.from))}</b> ${typeof ugcHtml === 'function' ? ugcHtml('party_chat', esc(m.text), { scope: 'private' }) : esc(m.text)}</div>`)
               .join('')
           : '<div class="pk-chat-empty">' + tHtml('dangal.party.no_messages_yet') + '</div>'
       }</div>

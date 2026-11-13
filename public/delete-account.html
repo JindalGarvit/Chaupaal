@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="privacy.webdel_title">Delete your Chaupaal account</title>
+<meta name="description" content="Request deletion of your Chaupaal account and its data." data-i18n-content="privacy.webdel_meta">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/src/styles/fonts.css">
+<style>
+  body { font-family: Inter, system-ui, sans-serif; margin: 0; background: #f5f5f5; color: #111; }
+  main { max-width: 520px; margin: 0 auto; padding: 32px 20px; }
+  h1 { font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; margin: 0 0 12px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 18px; margin: 14px 0; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+  input[type=email], input[type=password] { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1.5px solid #d1d5db; border-radius: 10px; font: inherit; }
+  button { font: inherit; font-weight: 700; padding: 11px 14px; border-radius: 12px; border: 1.5px solid #111; background: #fff; cursor: pointer; width: 100%; margin-top: 10px; }
+  button.primary { background: #111; color: #fff; }
+  button.danger { background: #b42318; border-color: #b42318; color: #fff; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  ul { padding-inline-start: 18px; line-height: 1.5; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
+  .wd-msg { min-height: 20px; font-size: 14px; margin-top: 12px; }
+  .wd-msg.is-err { color: #b42318; }
+  small { color: #6b7280; }
+</style>
+</head>
+<body>
+<main>
+  <h1 data-i18n="privacy.webdel_title">Delete your Chaupaal account</h1>
+  <p data-i18n="privacy.webdel_intro">Sign in to confirm it’s your account. You can also delete it in the app: Settings → Privacy &amp; data → Delete my account.</p>
+  <div class="card">
+    <ul>
+      <li data-i18n="privacy.delete_step_grace">You’re signed out everywhere and your profile is hidden at once. Log in within 30 days to cancel.</li>
+      <li data-i18n="privacy.delete_step_purge">After 30 days we permanently delete your account, posts, comments, messages you sent, uploads and settings.</li>
+      <li data-i18n="privacy.delete_step_retained">We keep only what the law requires: payment records (with your identity removed) and a record that the deletion happened.</li>
+    </ul>
+  </div>
+
+  <section class="card" id="wdSignedOut">
+    <form id="wdLogin">
+      <label for="wdEmail" data-i18n="common.email">Email</label>
+      <input type="email" id="wdEmail" autocomplete="email" required>
+      <label for="wdPassword" data-i18n="common.password">Password</label>
+      <input type="password" id="wdPassword" autocomplete="current-password" required>
+      <button type="submit" class="primary" data-i18n="common.log_in">Log in</button>
+    </form>
+    <button type="button" id="wdGoogle" data-i18n="common.continue_with_google">Continue with Google</button>
+    <p><small data-i18n="privacy.webdel_phone_note">Signed up with a phone number? Delete from the app, or contact us from the Contact page.</small></p>
+  </section>
+
+  <section class="card" id="wdSignedIn" hidden>
+    <p><span data-i18n="privacy.webdel_account">Account:</span> <strong id="wdAccount"></strong></p>
+    <label class="check"><input type="checkbox" id="wdAck"> <span data-i18n="privacy.delete_ack">I understand this can’t be undone after 30 days.</span></label>
+    <button type="button" class="danger" id="wdSubmit" disabled data-i18n="privacy.delete_confirm">Delete my account</button>
+    <button type="button" id="wdSignOut" data-i18n="common.logout">Log out</button>
+  </section>
+  <p class="wd-msg" id="wdMsg" role="status" aria-live="polite"></p>
+  <p><small data-i18n="legal.draft_banner">Draft — requires legal review.</small></p>
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<script src="/src/i18n/en.js"></script>
+<script src="/src/js/core/i18n.js"></script>
+<script src="/src/js/core/region.js"></script>
+<script src="/src/js/core/i18n-format.js"></script>
+<script src="/src/js/config/firebase.js"></script>
+<script src="/src/js/web/delete-account.js"></script>
+</body>
+</html>

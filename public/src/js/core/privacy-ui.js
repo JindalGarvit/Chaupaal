@@ -271,28 +271,18 @@
       return false;
     }
     if (gate === 'teen' || gate === 'blocked') {
-      toast(t(feature === 'peepal' ? 'privacy.peepal_18_only' : 'privacy.teen_feature_off'));
+      toast(t('privacy.teen_feature_off'));
       return false;
     }
     return true;
   }
 
-  // ─── Teen surfaces: Peepal (18+ everywhere) hidden; profile badge class ───
-  function peepalBtn() {
-    return document.querySelector('.bottom-tabs .tab-btn[data-tab="peepal"]');
-  }
-  function fallbackTab() {
-    return [...document.querySelectorAll('.bottom-tabs .tab-btn[data-tab]')].find((b) => b.dataset.tab !== 'peepal' && !b.hidden);
-  }
+  // ─── Teen surfaces: Peepal stays open (stricter content filters apply in the feed); badge class ───
   function applyTeenSurfaces() {
     const teen = !!(P() && me() && P().isTeen());
     document.documentElement.classList.toggle('cp-teen-mode', teen);
-    const btn = peepalBtn();
-    if (btn) {
-      btn.hidden = teen;
-      if (teen && btn.classList.contains('active')) fallbackTab()?.click();
-    }
   }
+  /** Peepal asks for a DOB once the one skip is used (its filters depend on age). */
   function guardPeepalClick(e) {
     const b = e.target.closest && e.target.closest('.tab-btn[data-tab="peepal"]');
     if (!b || !me()) return;
@@ -300,13 +290,6 @@
       e.preventDefault();
       e.stopImmediatePropagation();
     }
-  }
-  function watchPeepalTab() {
-    const btn = peepalBtn();
-    if (!btn || typeof MutationObserver !== 'function') return;
-    new MutationObserver(() => {
-      if (btn.classList.contains('active') && me() && P() && P().isTeen()) fallbackTab()?.click();
-    }).observe(btn, { attributes: true, attributeFilter: ['class'] });
   }
 
   // ─── Deletion grace banner (log in within 30 days to cancel) ───
@@ -657,7 +640,6 @@
   function boot() {
     window.addEventListener('click', guardSignupEntry, true);
     window.addEventListener('click', guardPeepalClick, true);
-    watchPeepalTab();
     document.addEventListener('chaupaal:auth', (e) => {
       if (e && e.detail && e.detail.dbReady === false) return;
       afterAuth();

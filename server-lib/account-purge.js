@@ -47,6 +47,7 @@ const CASCADE = [
   { store: 'firestore', path: 'chatRatings (rated by the user)', match: 'raterUid', action: 'delete' },
   { store: 'firestore', path: 'user_flags (reports the user filed)', match: 'reporterUid', action: 'redact' },
   { store: 'firestore', path: 'chaupaalTransactions', match: 'uid', action: 'retain', why: 'payment / tax records (pseudonymised: uid replaced by a one-way hash)' },
+  { store: 'firestore', path: 'reports / statements / appeals', match: 'reporterUid / uid', action: 'retain', why: 'transparency reporting + legal hold (pseudonymised; contact, details and appeal text removed)' },
   { store: 'firestore', path: 'users_public/{uid} (+ friend_projection)', match: 'doc id', action: 'tombstone' },
   { store: 'firestore', path: 'users/{uid} (+ every sub-collection: profiles, fcmTokens, consentLog, journal, wallet, chipTransactions, gameStats …)', match: 'doc id', action: 'delete' },
   { store: 'rtdb', path: 'status/{uid}, mehfilInbox/{uid}', match: 'key', action: 'delete' },
@@ -355,6 +356,15 @@ async function purgeAccount(adminApp, uid, opts) {
       await d.ref.set({ reporterUid: 'deleted:' + hashUid(uid) }, { merge: true });
       add('user_flags_redacted', 1);
     } catch (e) {}
+  }
+  // Notices / statements / appeals: kept for transparency counts, identity removed.
+  for (const [col, field] of [['reports', 'reporterUid'], ['statements', 'uid'], ['appeals', 'uid']]) {
+    for (const d of await queryAll(db.collection(col).where(field, '==', uid))) {
+      try {
+        await d.ref.set({ [field]: 'deleted:' + hashUid(uid), contact: FieldValue.delete(), details: FieldValue.delete(), text: FieldValue.delete() }, { merge: true });
+        add(col + '_pseudonymised', 1);
+      } catch (e) {}
+    }
   }
   // Payments: kept for accounting, pseudonymised.
   for (const d of await queryAll(db.collection('chaupaalTransactions').where('uid', '==', uid))) {

@@ -542,6 +542,14 @@
           return;
         }
       }
+      if (link.moderation && typeof openStatement === 'function') {
+        openStatement(link.moderation);
+        return;
+      }
+      if (link.moderationReport && typeof openMyReports === 'function') {
+        openMyReports();
+        return;
+      }
       if ((type === 'data_export_ready' || link.privacy) && typeof openPrivacyData === 'function') {
         openPrivacyData(link.privacy || 'export');
         return;

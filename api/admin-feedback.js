@@ -71,12 +71,50 @@ module.exports = async function handler(req, res) {
           throw e;
         }
       }
+      // Global L9 moderation: claim → decide (action + statement of reasons) → appeal decision.
+      if (body.action === 'moderation_claim' || body.action === 'moderation_decide' || body.action === 'appeal_decide') {
+        const mod = require('../server-lib/moderation');
+        let out;
+        if (body.action === 'moderation_claim') out = await mod.claimReport(db, String(body.reportId || ''), user.uid);
+        else if (body.action === 'moderation_decide') out = await mod.decideReport(admin, user.uid, String(body.reportId || ''), body);
+        else out = await mod.decideAppeal(admin, user.uid, String(body.appealId || ''), body.outcome, body.note);
+        if (!out.ok) return sendError(res, out.error === 'NOT_FOUND' ? 404 : 400, out.error || 'VALIDATION_ERROR', 'Moderation action failed');
+        return sendSuccess(res, out);
+      }
       return sendError(res, 400, 'UNKNOWN_ACTION', 'Unknown action');
     }
 
     if (!requireMethod(req, res, 'GET')) return;
 
     const view = String(req.query?.view || 'log');
+
+    // Global L9: priority queue (child safety + imminent harm first) with SLA / India timers visible.
+    if (view === 'moderation_queue' || view === 'appeals') {
+      const mod = require('../server-lib/moderation');
+      if (view === 'appeals') {
+        const ap = (await db.collection('appeals').where('status', '==', 'open').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+        return sendSuccess(res, { appeals: ap.sort((a, b) => a.dueMs - b.dueMs) });
+      }
+      const docs = [];
+      for (const st of ['open', 'in_review']) docs.push(...(await db.collection('reports').where('status', '==', st).limit(500).get()).docs);
+      const queue = mod.sortQueue(docs.map((d) => ({ id: d.id, ...d.data() })), Date.now());
+      return sendSuccess(res, { queue, counts: queue.reduce((o, r) => ((o[r.queue] = (o[r.queue] || 0) + 1), o), {}), overdue: queue.filter((r) => r.overdue).length });
+    }
+    // Transparency report (JSON / CSV) and DSA Transparency Database-shaped statements export.
+    if (view === 'transparency' || view === 'dsa_export') {
+      const mod = require('../server-lib/moderation');
+      const toMs = Number(req.query?.to) || Date.now();
+      const fromMs = Number(req.query?.from) || toMs - 182 * 86400000;
+      const period = await mod.loadPeriod(db, fromMs, toMs);
+      if (view === 'dsa_export') return sendSuccess(res, { rows: mod.dsaExport(period.statements) });
+      const rep = mod.transparencyReport(period);
+      if (String(req.query?.format || '') === 'csv') {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="chaupaal-transparency.csv"');
+        return res.status(200).send(mod.transparencyCsv(rep));
+      }
+      return sendSuccess(res, rep);
+    }
 
     if (view === 'quiz') {
       const { quizAdminView } = require('../server-lib/quiz-admin');

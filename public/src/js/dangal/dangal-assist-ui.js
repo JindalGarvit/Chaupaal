@@ -248,8 +248,12 @@
             .map(
               (g) => `<button type="button" class="dangal-suggest__game" data-suggest-game="${esc(g.id)}">${typeof gameMarkHtml === 'function' ? gameMarkHtml(g.id, { size: 28 }) : ''}<span><strong>${esc(g.name)}</strong><small>${esc(g.reason)}</small></span></button>`
             )
-            .join('')
+            .join('') +
+          (typeof openWhyThis === 'function' ? `<button type="button" class="cp-why-link" data-why-games>${tHtml('moderation.why_title')}</button>` : '')
         : '<p class="dangal-suggest__empty">' + tHtml('dangal.no_game_fits_that_exactly_try') + '</p>';
+      box.querySelector('[data-why-games]')?.addEventListener('click', () =>
+        openWhyThis({ _whyText: list.map((g) => g.reason).filter(Boolean) }, { surface: 'dangal' })
+      );
     };
     root.addEventListener('click', (e) => {
       const t = e.target.closest('button');

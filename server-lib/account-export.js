@@ -146,6 +146,11 @@ async function collectExportData(db, uid) {
     blocked: blocks && blocks.exists ? plain(blocks.data()) : null,
     reportsFiled: rows(await safeGet(db.collection('user_flags').where('reporterUid', '==', uid), LIST_LIMIT)),
   };
+  sections['moderation.json'] = {
+    reportsYouMade: rows(await safeGet(db.collection('reports').where('reporterUid', '==', uid), LIST_LIMIT)),
+    decisionsAboutYou: rows(await safeGet(db.collection('statements').where('uid', '==', uid), LIST_LIMIT)).map((s) => ({ ...s, moderatorUid: undefined })),
+    yourAppeals: rows(await safeGet(db.collection('appeals').where('uid', '==', uid), LIST_LIMIT)).map((a) => ({ ...a, originalModerator: undefined, decidedBy: undefined })),
+  };
 
   const owned = {};
   for (const col of ['duniya', 'peepal', 'duniya_stories', 'baithak_stories']) {

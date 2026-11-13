@@ -1,0 +1,88 @@
+{
+  "name": "Chaupaal",
+  "short_name": "Chaupaal",
+  "description": "Gather under the same light — news, discussions, games and friends.",
+  "start_url": "/?lang=ur",
+  "display": "standalone",
+  "background_color": "#F5F5F5",
+  "theme_color": "#F5F5F5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192-charpai-v2as.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-charpai-v2as.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512-charpai-v2as.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-charpai-v2as.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "brand/chaupaal-mark-charpai-v2as.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": [
+    "news",
+    "social",
+    "education"
+  ],
+  "lang": "ur",
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Akhbaar",
+      "short_name": "Akhbaar",
+      "description": "Today’s news quiz",
+      "url": "/?section=akhbaar",
+      "icons": [
+        {
+          "src": "icon-192-charpai-v2as.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Peepal",
+      "short_name": "Peepal",
+      "description": "Community questions",
+      "url": "/?section=peepal",
+      "icons": [
+        {
+          "src": "icon-192-charpai-v2as.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Dangal",
+      "short_name": "Dangal",
+      "description": "Games",
+      "url": "/?section=dangal",
+      "icons": [
+        {
+          "src": "icon-192-charpai-v2as.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "dir": "rtl"
+}

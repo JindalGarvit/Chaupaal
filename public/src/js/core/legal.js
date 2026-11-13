@@ -75,6 +75,26 @@
       ],
     },
     processors: { version: 'privacy', sections: [['intro', 2]], table: true },
+    // Global L9: recommender transparency (DSA Art. 27) + single point of contact (DSA Art. 11/12, IT Rules).
+    recommendations: {
+      version: 'privacy',
+      sections: [
+        ['what', 2],
+        ['signals', 3],
+        ['surfaces', 4],
+        ['control', 3],
+        ['teens', 1],
+      ],
+    },
+    contact: {
+      version: 'terms',
+      sections: [
+        ['users', 2],
+        ['authorities', 3],
+        ['grievance', 3],
+        ['languages', 1],
+      ],
+    },
   };
 
   /** Service providers (processors) — names are brands; purpose / data / where are catalog keys. */

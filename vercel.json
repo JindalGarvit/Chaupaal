@@ -37,6 +37,7 @@
   "rewrites": [
     { "source": "/api/duniya-posts", "destination": "/api/stories" },
     { "source": "/api/ai", "destination": "/api/anthropic" },
+    { "source": "/delete-account", "destination": "/delete-account.html" },
 
     {
       "source": "/profile/(.*)",

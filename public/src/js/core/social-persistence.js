@@ -573,9 +573,12 @@
       onReport(comment) {
         if (typeof openFlagSheet === 'function') {
           openFlagSheet(comment.user || { uid: comment.uid, name: t('common.user') }, {
-            targetType: 'comment',
+            targetType: content && (content.question || content.surface === 'peepal') ? 'peepal_comment' : 'duniya_comment',
             postId: contentId(content),
             commentId: comment.id,
+            targetId: comment.id,
+            parentId: contentId(content),
+            snapshot: String(comment.text || '').slice(0, 500),
           });
         }
       },

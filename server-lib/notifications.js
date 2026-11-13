@@ -137,6 +137,10 @@ function hrefFromDeepLink(deepLink, { type, refId } = {}) {
   if (link.uid) {
     return `/?uid=${encodeURIComponent(String(link.uid).slice(0, 128))}`;
   }
+  // Global L8 / L9: privacy + moderation notices open their sheet (the app reads ?notif=… on boot).
+  if (link.moderation) return `/?moderation=${encodeURIComponent(String(link.moderation).slice(0, 80))}`;
+  if (link.moderationReport) return '/?reports=1';
+  if (link.privacy) return `/?privacy=${encodeURIComponent(String(link.privacy).slice(0, 20))}`;
   const section = String(link.section || '').toLowerCase();
   if (['akhbaar', 'duniya', 'peepal', 'baithak', 'dangal'].includes(section)) {
     return `/?section=${encodeURIComponent(section)}`;

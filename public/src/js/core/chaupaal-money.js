@@ -49,6 +49,18 @@
     return envelope.data;
   }
 
+  /** Global L9: the local-currency equivalent under the CM price (store price when inside a store wrapper). */
+  function localPriceHtml(tier) {
+    try {
+      if (typeof ChaupaalPricing === 'undefined') return '';
+      const country = typeof ChaupaalRegion !== 'undefined' ? ChaupaalRegion.getRegion().country : '';
+      const s = ChaupaalPricing.display(tier, country);
+      return s ? `<div class="cm-tier-local">${tHtml('premium.local_price', { price: s })}</div>` : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function formatAmount(n, opts) {
     const o = opts || {};
     const num = Math.round(Number(n) || 0);
@@ -283,6 +295,7 @@
               ? `<div class="cm-tier-card${tier === 'pradhan' ? ' is-active' : ''}">
               <div class="cm-tier-name">${tt('tier_pradhan', 'Pradhan')}</div>
               <div class="cm-tier-price">${tHtml('premium.price_per_month', { price: formatAmount(pricing.pradhan, { cmLabel: true }) })}</div>
+              ${localPriceHtml('pradhan')}
               ${tier === 'pradhan' && sub.activeUntil ? `<div class="cm-tier-renew">${typeof formatDate === 'function' ? formatDate(sub.activeUntil, 'medium') : new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
               ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="pradhan">${tt('membership_subscribe', 'Subscribe')}</button>`}
             </div>`
@@ -291,6 +304,7 @@
           <div class="cm-tier-card${tier === 'sarpanch' ? ' is-active' : ''}">
             <div class="cm-tier-name">${tt('tier_sarpanch', 'Sarpanch')}</div>
             <div class="cm-tier-price">${tHtml('premium.price_per_month', { price: formatAmount(pricing.sarpanch, { cmLabel: true }) })}</div>
+            ${localPriceHtml('sarpanch')}
             ${tier === 'sarpanch' && sub.activeUntil ? `<div class="cm-tier-renew">${typeof formatDate === 'function' ? formatDate(sub.activeUntil, 'medium') : new Date(sub.activeUntil).toLocaleDateString()}</div>` : ''}
             ${teen ? '' : `<button type="button" class="btn btn--primary btn--block" data-buy="sarpanch">${tier === 'pradhan' && !isPro ? tt('settings.membership_upgrade', 'Upgrade to Sarpanch') : tt('membership_subscribe', 'Subscribe')}</button>`}
           </div>

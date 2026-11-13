@@ -49,7 +49,7 @@ const LANG_CATALOG = [
 const I18N_RETIRED_LANGS = ['gu', 'kn', 'ml', 'pa', 'or', 'as', 'ne', 'it', 'tr', 'ru'];
 
 /** Content hashes of public/src/i18n/{code}.json — stamped by scripts/bust-assets.js. */
-const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"19726a58","id":"2775a026","ja":"0673b3d7","ko":"56677136","mr":"43439d48","pt":"19118eeb","ta":"40370478","te":"11127969","ur":"41de7b19","zh":"e0fda911"};
+const I18N_PACK_VERSIONS = {"ar":"ceb5a6da","bn":"334423a4","de":"492cabbd","es":"afefef0e","fr":"0c1353d9","hi":"c187fbd6","id":"2775a026","ja":"0673b3d7","ko":"56677136","mr":"43439d48","pt":"19118eeb","ta":"40370478","te":"11127969","ur":"41de7b19","zh":"e0fda911"};
 
 /** Brand / surface / proper-noun game names. Messages reference them as {{@id}}; never translated. */
 const I18N_GLOSSARY = Object.freeze({

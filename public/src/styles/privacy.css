@@ -115,6 +115,22 @@
 .legal-proc strong { display: block; margin-bottom: 4px; }
 .legal-proc-k { color: var(--muted, #6b7280); font-weight: 700; }
 
+/* Global L9 — Report flow, statements, Help, "Why am I seeing this?", local prices. */
+.cp-report-reason { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: start; width: 100%; }
+.cp-report-reason small { color: var(--muted, #6b7280); font-size: 12px; font-weight: 400; }
+.cp-report-reason.is-priority strong { color: var(--red, #b42318); }
+.cp-report-help { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--cream, #f8f5ef); font-size: 13px; line-height: 1.45; }
+.cp-report-help.is-urgent { background: #fdecea; }
+.cp-report-resources { margin: 6px 0 0; padding-inline-start: 18px; }
+.cp-sor p { margin: 0 0 8px; line-height: 1.5; }
+.cp-my-reports { list-style: none; margin: 0; padding: 0; }
+.cp-my-reports li { padding: 10px 0; border-bottom: 1px solid var(--line, #e5e7eb); font-size: 14px; }
+.cp-my-reports small { display: block; color: var(--muted, #6b7280); font-size: 12px; margin-top: 2px; }
+.cp-grievance { margin: 0 0 10px; padding: 10px 12px; border: 1px dashed var(--line, #e5e7eb); border-radius: 12px; }
+.cp-why-link { display: block; margin: 10px auto 0; background: none; border: 0; font: inherit; font-size: 13px; color: var(--accent, #2563eb); text-decoration: underline; cursor: pointer; }
+.akhbaar-why-chip { min-width: 36px; justify-content: center; }
+.cm-tier-local { font-size: 12px; color: var(--muted, #6b7280); margin-top: 2px; }
+
 .settings-legal-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin: 14px 0 4px; }
 .settings-legal-footer button {
   background: none;

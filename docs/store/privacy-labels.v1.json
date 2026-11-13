@@ -1,0 +1,441 @@
+{
+  "version": 1,
+  "status": "DRAFT — requires legal review",
+  "facts": {
+    "tracking": false,
+    "sellsData": false,
+    "encryptedInTransit": true,
+    "deletionRequest": {
+      "inApp": true,
+      "web": "/delete-account"
+    },
+    "childrenPolicy": "No accounts under 13; Teen mode for 13–17 (see Children & Teens notice)",
+    "thirdPartyAdvertising": false
+  },
+  "apple": {
+    "dataUsedToTrackYou": [],
+    "categories": {
+      "Contact Info": {
+        "linkedToYou": [
+          {
+            "type": "Name",
+            "purposes": [
+              "App Functionality"
+            ]
+          },
+          {
+            "type": "Email Address",
+            "purposes": [
+              "App Functionality",
+              "Developer’s Advertising or Marketing"
+            ]
+          },
+          {
+            "type": "Phone Number",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Identifiers": {
+        "linkedToYou": [
+          {
+            "type": "User ID",
+            "purposes": [
+              "App Functionality",
+              "Analytics"
+            ]
+          },
+          {
+            "type": "Device ID",
+            "purposes": [
+              "App Functionality",
+              "Analytics"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Other Data": {
+        "linkedToYou": [
+          {
+            "type": "Other Data Types (date of birth)",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Sensitive Info": {
+        "linkedToYou": [
+          {
+            "type": "Sensitive Info (gender)",
+            "purposes": [
+              "App Functionality",
+              "Product Personalization"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Location": {
+        "linkedToYou": [
+          {
+            "type": "Coarse Location",
+            "purposes": [
+              "App Functionality",
+              "Product Personalization"
+            ]
+          },
+          {
+            "type": "Precise Location",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "User Content": {
+        "linkedToYou": [
+          {
+            "type": "Emails or Text Messages",
+            "purposes": [
+              "App Functionality"
+            ]
+          },
+          {
+            "type": "Photos or Videos",
+            "purposes": [
+              "App Functionality"
+            ]
+          },
+          {
+            "type": "Audio Data",
+            "purposes": [
+              "App Functionality"
+            ]
+          },
+          {
+            "type": "Other User Content",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Contacts": {
+        "linkedToYou": [
+          {
+            "type": "Contacts",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Search History": {
+        "linkedToYou": [
+          {
+            "type": "Search History",
+            "purposes": [
+              "Product Personalization"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Usage Data": {
+        "linkedToYou": [
+          {
+            "type": "Product Interaction",
+            "purposes": [
+              "Analytics",
+              "Product Personalization"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Diagnostics": {
+        "linkedToYou": [
+          {
+            "type": "Crash Data",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Purchases": {
+        "linkedToYou": [
+          {
+            "type": "Purchase History",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      },
+      "Financial Info": {
+        "linkedToYou": [
+          {
+            "type": "Payment Info",
+            "purposes": [
+              "App Functionality"
+            ]
+          }
+        ],
+        "notLinked": [],
+        "usedForTracking": []
+      }
+    }
+  },
+  "google": {
+    "dataCollected": [
+      {
+        "category": "Personal info",
+        "type": "Name",
+        "collected": true,
+        "shared": false,
+        "optional": false,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "Personal info",
+        "type": "Email address",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality",
+          "Account management",
+          "Developer communications"
+        ]
+      },
+      {
+        "category": "Personal info",
+        "type": "Phone number",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality",
+          "Account management"
+        ]
+      },
+      {
+        "category": "Personal info",
+        "type": "User IDs",
+        "collected": true,
+        "shared": false,
+        "optional": false,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality",
+          "Analytics",
+          "Fraud prevention, security, and compliance"
+        ]
+      },
+      {
+        "category": "Device or other IDs",
+        "type": "Device or other IDs",
+        "collected": true,
+        "shared": false,
+        "optional": false,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality",
+          "Analytics"
+        ]
+      },
+      {
+        "category": "Personal info",
+        "type": "Other info (date of birth)",
+        "collected": true,
+        "shared": false,
+        "optional": false,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance"
+        ]
+      },
+      {
+        "category": "Personal info",
+        "type": "Other info (gender)",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality",
+          "Personalization"
+        ]
+      },
+      {
+        "category": "Location",
+        "type": "Approximate location",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality",
+          "Personalization"
+        ]
+      },
+      {
+        "category": "Location",
+        "type": "Precise location",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "Messages",
+        "type": "Other in-app messages",
+        "collected": true,
+        "shared": false,
+        "optional": false,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "Photos and videos",
+        "type": "Photos",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "Audio",
+        "type": "Voice or sound recordings",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "App activity",
+        "type": "Other user-generated content",
+        "collected": true,
+        "shared": false,
+        "optional": false,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "Contacts",
+        "type": "Contacts",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "App activity",
+        "type": "In-app search history",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "Personalization"
+        ]
+      },
+      {
+        "category": "App activity",
+        "type": "App interactions",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "Analytics",
+          "Personalization"
+        ]
+      },
+      {
+        "category": "App info and performance",
+        "type": "Crash logs",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "Financial info",
+        "type": "Purchase history",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "category": "Financial info",
+        "type": "User payment info",
+        "collected": true,
+        "shared": false,
+        "optional": true,
+        "ephemeral": false,
+        "purposes": [
+          "App functionality"
+        ]
+      }
+    ],
+    "dataShared": [],
+    "securityPractices": {
+      "encryptedInTransit": true,
+      "deletionRequest": true,
+      "deletionUrl": "/delete-account"
+    }
+  }
+}

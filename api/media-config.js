@@ -1526,6 +1526,33 @@ async function handlePost(req, res) {
     }
   }
 
+  // ─── Global L9: statement of reasons, appeals, the reporter's own reports ──
+  if (action === 'moderation_statement' || action === 'moderation_appeal' || action === 'moderation_my_reports') {
+    const adminApp = initAdmin();
+    if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
+    const mod = require('../server-lib/moderation');
+    const db = adminApp.firestore();
+    try {
+      if (action === 'moderation_my_reports') return sendSuccess(res, { reports: await mod.myReports(db, user.uid) });
+      if (action === 'moderation_statement') {
+        const out = await mod.getStatementForUser(db, user.uid, body.id);
+        if (!out.ok) return sendError(res, 404, 'NOT_FOUND', 'Not found');
+        return sendSuccess(res, out);
+      }
+      try {
+        const { checkActionRateLimit } = require('../server-lib/rate-limit');
+        const rate = await checkActionRateLimit(user.uid, 'privacy_write');
+        if (rate && rate.ok === false) return sendError(res, 429, 'RATE_LIMITED', 'Too many requests');
+      } catch (e) {}
+      const out = await mod.fileAppeal(adminApp, user.uid, body.statementId, body.text);
+      if (!out.ok) return sendError(res, out.error === 'NOT_FOUND' ? 404 : 400, out.error, 'Appeal not accepted');
+      return sendSuccess(res, out);
+    } catch (e) {
+      console.warn('[media-config]', action, e?.message || e);
+      return sendError(res, 500, 'MODERATION_ERROR', 'Could not load that right now');
+    }
+  }
+
   if (action === 'request_export' || action === 'export_status' || action === 'export_account_data') {
     const adminApp = initAdmin();
     if (!adminApp) return sendError(res, 503, 'AUTH_NOT_CONFIGURED', 'Admin not configured');
@@ -1660,6 +1687,9 @@ async function handlePost(req, res) {
       'export_status',
       'request_account_deletion',
       'cancel_account_deletion',
+      'moderation_statement',
+      'moderation_appeal',
+      'moderation_my_reports',
       'privacy_state',
       'consent_log',
       'privacy_prefs',

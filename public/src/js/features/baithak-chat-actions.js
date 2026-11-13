@@ -346,6 +346,22 @@
       });
     }
 
+    if (typeof openReport === 'function' && !(typeof isSelfChatRow === 'function' && isSelfChatRow(chat))) {
+      const mehfil = !!(chat.mehfil || chat.type === 'mehfil' || chat.isMehfil);
+      actions.push({
+        label: t(isGroup ? (mehfil ? 'moderation.report_room' : 'moderation.report_group') : 'moderation.report_profile'),
+        icon: 'triangle-alert',
+        danger: true,
+        fn: () =>
+          openReport(isGroup ? { uid: chat.ownerUid || chat.createdBy || '', name: chat.name } : { uid: peerOf(chat), name: chat.name }, {
+            targetType: isGroup ? (mehfil ? 'mehfil_room' : 'chat') : 'profile',
+            targetId: isGroup ? id : peerOf(chat),
+            chatId: id,
+            surface: 'baithak',
+          }),
+      });
+    }
+
     actions.push({
       label: tt('baithak_clear_chat', 'Clear chat'),
       icon: 'eraser',

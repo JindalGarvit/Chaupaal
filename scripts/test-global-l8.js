@@ -203,16 +203,15 @@ function browser(opts) {
     const teen = { uid: 'tA', dob: dobYearsAgo(15) };
     const teen2 = { uid: 'tB', dob: dobYearsAgo(16) };
     const adult = { uid: 'aA', dob: dobYearsAgo(30) };
-    assert(C.ageGate(teen, 'peepal') === 'teen' && C.ageGate(adult, 'peepal') === 'ok', 'Peepal gate: teen blocked, adult ok');
+    assert(C.ageGate(teen, 'peepal') === 'ok' && C.ageGate(teen, 'stranger_matching') === 'teen' && C.ageGate(adult, 'stranger_matching') === 'ok', 'Peepal open to teens (L9); stranger matching stays 18+');
     const B = browser({ region: { country: 'US' }, peepalActive: true });
     B.ctx.userProfile = teen;
     B.ctx.currentUser = { uid: 'tA' };
     B.run('public/src/js/core/privacy-ui.js');
     B.ctx.ChaupaalPrivacyUI.applyTeenSurfaces();
-    assert(B.el('peepalTab').hidden === true && B.elements.__clicked === 'duniyaTab' && B.el('html').classList.contains('cp-teen-mode'), 'Peepal tab hidden for teens and the app moves off it');
-    B.ctx.userProfile = adult;
-    B.ctx.ChaupaalPrivacyUI.applyTeenSurfaces();
-    assert(B.el('peepalTab').hidden === false, 'adults keep Peepal');
+    assert(B.el('peepalTab').hidden === false && !B.elements.__clicked && B.el('html').classList.contains('cp-teen-mode'), 'Peepal tab stays for teens; Teen mode class set');
+    assert(!C.teenContentOk({ question: 'Best casino near me?' }) && !C.teenContentOk({ question: 'x', moderation: { ageRestricted: true } }) && C.teenContentOk({ question: 'Best books for exams?' }), 'teen Peepal feed: stricter filter + moderation age-restrictions');
+    assert(/ChaupaalPrivacy\.discoveryOk\(q\)/.test(read('public/src/js/features/categories.js')), 'Peepal feed applies the teen filter');
 
     const G = browser({ region: { country: 'US' } });
     G.ctx.userProfile = teen;
@@ -591,7 +590,7 @@ function browser(opts) {
       const n = (html.match(/data-legal-draft/g) || []).length;
       assert(n === 2 && html.includes('Draft — requires legal review'), `${k}: review banner + footer`);
     });
-    assert(L.KINDS.join() === 'terms,privacy,guidelines,teens,processors', 'Terms, Privacy, Guidelines, Children & Teens, Service providers');
+    assert(['terms', 'privacy', 'guidelines', 'teens', 'processors'].every((k) => L.KINDS.includes(k)), 'Terms, Privacy, Guidelines, Children & Teens, Service providers');
     const all = L.KINDS.map((k) => L.keysFor(k).map((x) => EN[x]).join(' ')).join(' ');
     assert(/Grievance Officer \(India\): \[name\]/.test(all) && /no cash value/.test(all) && /legal bases|legal basis/i.test(all) && /International transfers/.test(all) && /retention|How long we keep/i.test(all), 'covers grievance officer placeholder, chips, legal bases, transfers, retention');
     assert(/translat/i.test(EN['legal.privacy_ai_2']) && /never stored/.test(EN['legal.privacy_ai_3']) && /30 days/.test(EN['legal.privacy_ai_4']), 'AI + translation processing documented (L7 TODO picked up)');

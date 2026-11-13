@@ -56,20 +56,60 @@ function isRestrictedVisibility(v) {
   return s === 'private' || s.includes('friend');
 }
 
-function renderOgHtml({ origin, title, description, image, url, cacheControl }) {
+/** Global L9: the 16 UI languages — html lang, og:locale, hreflang alternates. */
+const OG_LANGS = [
+  ['en', 'en', 'en_US'], ['hi', 'hi', 'hi_IN'], ['bn', 'bn', 'bn_BD'], ['ta', 'ta', 'ta_IN'], ['te', 'te', 'te_IN'], ['mr', 'mr', 'mr_IN'],
+  ['ur', 'ur', 'ur_PK'], ['ar', 'ar', 'ar_AR'], ['es', 'es', 'es_ES'], ['fr', 'fr', 'fr_FR'], ['pt', 'pt-BR', 'pt_BR'], ['de', 'de', 'de_DE'],
+  ['id', 'id', 'id_ID'], ['ja', 'ja', 'ja_JP'], ['ko', 'ko', 'ko_KR'], ['zh', 'zh-Hans', 'zh_CN'],
+];
+
+/** ?lang= first, then Accept-Language, then English. */
+function ogLang(req) {
+  const q = (req && req.query) || {};
+  const tags = [q.lang].concat(String((req && req.headers && req.headers['accept-language']) || '').split(',').map((s) => s.split(';')[0]));
+  for (const raw of tags) {
+    const base = String(raw || '').trim().toLowerCase().split(/[-_]/)[0];
+    if (OG_LANGS.some((l) => l[0] === base)) return base;
+  }
+  return 'en';
+}
+
+function withLang(url, lang) {
+  const u = String(url || '');
+  if (lang === 'en') return u.replace(/([?&])lang=[^&]*&?/, '$1').replace(/[?&]$/, '');
+  return u + (u.includes('?') ? '&' : '?') + 'lang=' + lang;
+}
+
+function ogText(lang, key, fallback, params) {
+  try {
+    const v = require('./i18n-server').serverT(lang, key, params || {});
+    return v && v !== key ? v : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function renderOgHtml({ origin, title, description, image, url, cacheControl, lang }) {
+  const L = OG_LANGS.find((l) => l[0] === lang) || OG_LANGS[0];
   const t = escapeHtml(title || 'Chaupaal');
-  const d = escapeHtml(description || 'Gather under the same light');
+  const d = escapeHtml(description || ogText(L[0], 'common.og_default_desc', 'Gather under the same light'));
   const img = escapeHtml(absUrl(origin, image || DEFAULT_IMAGE_PATH));
-  const u = escapeHtml(url || origin);
-  const canonical = escapeHtml(url || `${origin}/`);
+  const base = url || `${origin}/`;
+  const u = escapeHtml(withLang(base, L[0]));
+  const canonical = escapeHtml(base);
+  const dir = L[0] === 'ar' || L[0] === 'ur' ? ' dir="rtl"' : '';
+  const alternates = OG_LANGS.map((l) => `<link rel="alternate" hreflang="${l[1]}" href="${escapeHtml(withLang(base, l[0]))}">`).join('\n');
+  const ogAlt = OG_LANGS.filter((l) => l[0] !== L[0]).map((l) => `<meta property="og:locale:alternate" content="${l[2]}">`).join('\n');
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${L[1]}"${dir}>
 <head>
 <meta charset="UTF-8">
 <title>${t}</title>
 <meta name="description" content="${d}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Chaupaal">
+<meta property="og:locale" content="${L[2]}">
+${ogAlt}
 <meta property="og:title" content="${t}">
 <meta property="og:description" content="${d}">
 <meta property="og:image" content="${img}">
@@ -79,9 +119,11 @@ function renderOgHtml({ origin, title, description, image, url, cacheControl }) 
 <meta name="twitter:description" content="${d}">
 <meta name="twitter:image" content="${img}">
 <link rel="canonical" href="${canonical}">
+${alternates}
+<link rel="alternate" hreflang="x-default" href="${canonical}">
 </head>
 <body>
-<p><a href="${canonical}">Open in Chaupaal</a></p>
+<p><a href="${u}">${escapeHtml(ogText(L[0], 'common.og_open_in_app', 'Open in Chaupaal'))}</a></p>
 </body>
 </html>`;
 }
@@ -314,7 +356,15 @@ async function handleOgGet(req, res) {
     card = genericCard(origin, '/');
   }
 
-  const html = renderOgHtml({ origin, ...card });
+  const lang = ogLang(req);
+  // Generic / invite cards are our copy → the viewer's language; user-written titles stay as written.
+  if (card && card.title === 'Chaupaal') card.description = ogText(lang, 'common.og_default_desc', card.description);
+  if (card && card.title === 'Join me on Chaupaal') {
+    card.title = ogText(lang, 'common.og_invite_title', card.title);
+    card.description = ogText(lang, 'common.og_invite_desc', card.description);
+  }
+  res.setHeader('Vary', 'Accept-Language');
+  const html = renderOgHtml({ origin, ...card, lang });
   return sendHtml(res, html, card.cacheControl || CACHE_PUBLIC, req.method);
 }
 
@@ -323,6 +373,9 @@ module.exports = {
   escapeHtml,
   siteOrigin,
   handleOgGet,
+  renderOgHtml,
+  ogLang,
+  OG_LANGS,
   buildProfileOg,
   buildPostOg,
   buildChallengeOg,

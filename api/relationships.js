@@ -809,7 +809,18 @@ module.exports = async function handler(req, res) {
         reasonCode,
         chatId: body.chatId,
       });
-      return sendSuccess(res, { flagged: true, flagId: flagRef.id, shadowban: ban });
+      // Global L9: the same notice becomes a structured report (priority queue, SLA / India timers, SoR loop).
+      let report = null;
+      try {
+        const { createReport } = require('../server-lib/moderation');
+        report = await createReport(admin, user.uid, { ...body, targetUid, reasonCode }, { flagId: flagRef.id });
+        if (report && !report.ok && report.error !== 'VALIDATION_ERROR') {
+          return sendError(res, 400, report.error, 'Report details missing');
+        }
+      } catch (e) {
+        console.warn('[relationships] report', e?.message || e);
+      }
+      return sendSuccess(res, { flagged: true, flagId: flagRef.id, shadowban: ban, report: report && report.ok ? report : null });
     }
     if (action === 'withdraw_flag') {
       if (!targetUid) return sendError(res, 400, 'VALIDATION_ERROR', 'targetUid required');
