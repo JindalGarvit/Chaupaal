@@ -27,11 +27,11 @@
   };
 
   function isStandalone() {
-    return mm('(display-mode: standalone)') || window.navigator.standalone === true;
+    return mm('(display-mode: standalone)') || window.navigator.standalone === true; // i18n-ignore (CSS media query)
   }
 
   function isCoarsePointer() {
-    return mm('(pointer: coarse)');
+    return mm('(pointer: coarse)'); // i18n-ignore (CSS media query)
   }
 
   function isMobile() {

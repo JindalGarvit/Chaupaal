@@ -16,7 +16,7 @@
 
   const NAMES = {
     en: 'English', hi: 'Hindi', bn: 'Bengali', ta: 'Tamil', te: 'Telugu', mr: 'Marathi', ur: 'Urdu', ar: 'Arabic',
-    es: 'Spanish', fr: 'French', pt: 'Portuguese', de: 'German', id: 'Indonesian', ja: 'Japanese', ko: 'Korean', zh: 'Simplified Chinese',
+    es: 'Spanish', fr: 'French', pt: 'Portuguese', de: 'German', id: 'Indonesian', ja: 'Japanese', ko: 'Korean', zh: 'Simplified Chinese', // i18n-ignore (AI model instruction)
   };
 
   /** Letters expected for each language (Unicode script ranges). Latin languages share one. */
@@ -55,7 +55,7 @@
     const n = name(lang);
     return (
       `\n\nRespond in ${n}. Write every user-facing sentence in ${n}; keep people's names, @handles, numbers, URLs, ` +
-      'brand names (Chaupaal, Dangal, Baithak, Mehfil, Peepal, Akhbaar, Duniya, Khoj, Vriksha) and any JSON keys or codes exactly as given.'
+      'brand names (Chaupaal, Dangal, Baithak, Mehfil, Peepal, Akhbaar, Duniya, Khoj, Vriksha) and any JSON keys or codes exactly as given.' // i18n-ignore (AI model instruction)
     );
   }
 

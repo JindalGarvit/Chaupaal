@@ -34,8 +34,9 @@
     if (!s) return '';
     // Prefer E.164-ish: keep leading +, strip other non-digits
     if (s.startsWith('+')) return '+' + s.slice(1).replace(/\D/g, '');
+    const local = typeof PhoneOtp !== 'undefined' && PhoneOtp.toE164 ? PhoneOtp.toE164(s) : null;
+    if (local) return local;
     const digits = s.replace(/\D/g, '');
-    if (digits.length === 10) return '+91' + digits; // India default for Chaupaal
     if (digits.length >= 11) return '+' + digits;
     return digits ? '+' + digits : '';
   }

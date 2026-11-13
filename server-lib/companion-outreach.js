@@ -22,21 +22,36 @@ const CHECKIN_CEILING_DAYS = 21;
 const FEEDBACK_MIN_DAYS = 28;
 
 /**
- * Major Indian religious / national festivals (month is 1–12).
- * Maintained calendar — add entries as needed; year-agnostic MM-DD match.
+ * Festivals / national days (month 1–12), scoped by region (D1 global-first: regions: null = everyone;
+ * otherwise only users whose region is listed). Copy: notifications.card.festival_<id>_{name,wish}.
+ * Year-agnostic MM-DD; lunar festivals soft-match ±1 day (approximate — maintain yearly).
  */
 const FESTIVAL_CALENDAR = [
-  { id: 'republic_day', month: 1, day: 26, name: 'Republic Day', wish: 'Happy Republic Day — hope today feels steady and proud.' },
-  { id: 'holi', month: 3, day: 14, name: 'Holi', wish: 'Wishing you a colourful Holi — may something small today make you smile.' },
-  { id: 'independence_day', month: 8, day: 15, name: 'Independence Day', wish: 'Happy Independence Day from Chaupaal.' },
-  { id: 'ganesh_chaturthi', month: 8, day: 27, name: 'Ganesh Chaturthi', wish: 'Happy Ganesh Chaturthi — wishing ease and good beginnings.' },
-  { id: 'gandhi_jayanti', month: 10, day: 2, name: 'Gandhi Jayanti', wish: 'Remembering Gandhi Jayanti — a quiet note from Chaupaal.' },
-  { id: 'diwali', month: 10, day: 20, name: 'Diwali', wish: 'Happy Diwali — light, warmth, and an easy evening if you want one.' },
-  { id: 'christmas', month: 12, day: 25, name: 'Christmas', wish: 'Merry Christmas from Chaupaal — wishing you a gentle day.' },
-  { id: 'new_year', month: 1, day: 1, name: 'New Year', wish: 'Happy New Year — glad you\'re here on Chaupaal.' },
+  { id: 'new_year', month: 1, day: 1, regions: null },
+  { id: 'republic_day', month: 1, day: 26, regions: ['IN'] },
+  { id: 'holi', month: 3, day: 14, regions: ['IN', 'NP'] },
+  { id: 'independence_day', month: 8, day: 15, regions: ['IN'] },
+  { id: 'ganesh_chaturthi', month: 8, day: 27, regions: ['IN'] },
+  { id: 'gandhi_jayanti', month: 10, day: 2, regions: ['IN'] },
+  { id: 'diwali', month: 10, day: 20, regions: ['IN', 'NP', 'LK', 'MY', 'SG', 'MU', 'FJ', 'TT', 'GY', 'SR'] },
+  {
+    id: 'christmas',
+    month: 12,
+    day: 25,
+    regions: 'US GB CA AU NZ IE DE FR ES IT PT NL BE AT CH SE NO DK FI PL CZ SK HU RO HR SI GR CY MT LU IS LI BR MX AR CO CL PE PH ZA KE NG GH'.split(' '),
+  },
 ];
+const LUNAR = ['holi', 'diwali', 'ganesh_chaturthi'];
 
-function festivalForDate(date = new Date(), tz = 'Asia/Kolkata') {
+function festivalText(fest, lang) {
+  const { serverT } = require('./i18n-server');
+  return {
+    name: serverT(lang || 'en', `notifications.card.festival_${fest.id}_name`),
+    wish: serverT(lang || 'en', `notifications.card.festival_${fest.id}_wish`),
+  };
+}
+
+function festivalForDate(date = new Date(), tz = 'UTC', country = null) {
   let month;
   let day;
   try {
@@ -51,12 +66,11 @@ function festivalForDate(date = new Date(), tz = 'Asia/Kolkata') {
     month = date.getUTCMonth() + 1;
     day = date.getUTCDate();
   }
-  // Exact match first; also allow ±1 day soft match for lunar festivals (Holi/Diwali approx)
-  const exact = FESTIVAL_CALENDAR.find((f) => f.month === month && f.day === day);
+  const c = String(country || '').toUpperCase();
+  const here = FESTIVAL_CALENDAR.filter((f) => !f.regions || (c && f.regions.indexOf(c) >= 0));
+  const exact = here.find((f) => f.month === month && f.day === day);
   if (exact) return exact;
-  return FESTIVAL_CALENDAR.find(
-    (f) => f.month === month && Math.abs(f.day - day) <= 1 && ['holi', 'diwali', 'ganesh_chaturthi'].includes(f.id)
-  ) || null;
+  return here.find((f) => f.month === month && Math.abs(f.day - day) <= 1 && LUNAR.includes(f.id)) || null;
 }
 
 function daysSince(ts) {
@@ -145,20 +159,23 @@ async function recentUserChatSnippets(db, uid, limit = 8) {
   }
 }
 
-async function createCompanionEvent(db, uid, { type, title, text, subtype }) {
+async function createCompanionEvent(db, uid, { type, title, text, subtype, lang }) {
+  const { serverT } = require('./i18n-server');
+  const L = lang || 'en';
   const doc = {
     type, // companion_festival | companion_occasion | companion_checkin | companion_feedback
     displayMode: 'graphicCard',
+    lang: L,
     payload: {
       title,
       text,
-      subtitle: 'A note from Chaupaal',
-      kicker: 'Chaupaal',
-      cta: subtype === 'feedback' ? 'Share feedback' : 'Open Chaupaal chat',
+      subtitle: serverT(L, 'notifications.card.companion_subtitle'),
+      kicker: 'Chaupaal', // i18n-ignore (brand)
+      cta: serverT(L, subtype === 'feedback' ? 'notifications.card.companion_cta_feedback' : 'notifications.card.companion_cta_chat'),
       action: subtype === 'feedback' ? 'companion_feedback' : 'open_chaupaal_chat',
       // Honest labeling — never disguise as a real person
       fromApp: true,
-      label: 'Chaupaal companion',
+      label: serverT(L, 'notifications.card.companion_label'),
     },
     createdAt: new Date(),
     dismissed: false,
@@ -187,12 +204,15 @@ async function processCompanionOutreach(db, uid, state, stateRef) {
   const allow = await userAllowsCompanion(db, uid);
   if (!allow.ok) return { skipped: allow.reason };
 
-  const tz = state.timezone || 'Asia/Kolkata';
+  const tz = state.timezone || 'UTC';
   const today = localDateKey(tz);
   const stats = state.companionStats || {};
+  const { serverLang, serverT } = require('./i18n-server');
+  const lang = serverLang(allow.profile?.lang || allow.profile?.profile?.lang || 'en');
+  const country = allow.profile?.region?.country || null;
 
-  // ── Festival ──
-  const fest = festivalForDate(new Date(), tz);
+  // ── Festival (only those observed in the user's region) ──
+  const fest = festivalForDate(new Date(), tz, country);
   if (fest) {
     const festKey = `companion_festival_${fest.id}`;
     const typeKeys = state.typeDateKeys || {};
@@ -201,11 +221,13 @@ async function processCompanionOutreach(db, uid, state, stateRef) {
       // Festivals may use non-journal second slot only if daily cap allows —
       // if second slot is journal-only, skip festival quietly when count===1
       if (gate.ok) {
+        const ft = festivalText(fest, lang);
         const created = await createCompanionEvent(db, uid, {
           type: 'companion_festival',
-          title: fest.name,
-          text: `${fest.wish}\n\nThis is a Chaupaal app note — reply anytime in your Chaupaal chat, or ignore with no pressure.`,
+          title: ft.name,
+          text: `${ft.wish}\n\n${serverT(lang, 'notifications.card.companion_app_note')}`,
           subtype: 'festival',
+          lang,
         });
         const next = recordEventSent(state, { type: festKey, now: new Date() });
         next.companionStats = {
@@ -227,9 +249,10 @@ async function processCompanionOutreach(db, uid, state, stateRef) {
       const name = allow.profile?.name || allow.profile?.profile?.displayName || '';
       const created = await createCompanionEvent(db, uid, {
         type: 'companion_occasion',
-        title: 'Happy birthday',
-        text: `${name ? `${name}, h` : 'H'}appy birthday from Chaupaal.\n\nThis is an app feature using the birthday you shared in your profile — no need to reply.`,
+        title: serverT(lang, 'notifications.card.birthday_title'),
+        text: serverT(lang, name ? 'notifications.card.birthday_text_named' : 'notifications.card.birthday_text', { name }),
         subtype: 'birthday',
+        lang,
       });
       const next = recordEventSent(state, { type: 'companion_birthday', now: new Date() });
       next.companionStats = {
@@ -249,9 +272,10 @@ async function processCompanionOutreach(db, uid, state, stateRef) {
     if (gate.ok && Math.random() < 0.35) {
       const created = await createCompanionEvent(db, uid, {
         type: 'companion_feedback',
-        title: 'A quick thought?',
-        text: 'What would make Chaupaal more enjoyable for you? One honest line helps — optional, no pressure.\n\n— Chaupaal (app feature)',
+        title: serverT(lang, 'notifications.card.feedback_title'),
+        text: serverT(lang, 'notifications.card.feedback_text'),
         subtype: 'feedback',
+        lang,
       });
       const next = recordEventSent(state, { type: 'companion_feedback', now: new Date() });
       next.companionStats = {
@@ -275,8 +299,8 @@ async function processCompanionOutreach(db, uid, state, stateRef) {
   if (!gate.ok) return { skipped: gate.reason };
 
   const snippets = await recentUserChatSnippets(db, uid);
-  let text =
-    'Just checking in from Chaupaal — hope your day has a calm corner in it. Reply if you like; silence is fine too.';
+  let text = serverT(lang, 'notifications.card.checkin_text');
+  const sign = serverT(lang, 'notifications.card.companion_sign');
 
   if (snippets.length && isAiFeaturesEnabled()) {
     try {
@@ -284,8 +308,8 @@ async function processCompanionOutreach(db, uid, state, stateRef) {
         tier: 'fast',
         feature: 'companion_checkin',
         max_tokens: 180,
-        lang: await require('./i18n-server').langForUser(db, uid),
-        system: `You write short Chaupaal companion check-ins for an Indian social app.
+        lang,
+        system: `You write short Chaupaal companion check-ins for a global social app.
 Rules:
 - You are clearly an app feature named Chaupaal, never a real person pretending otherwise.
 - Never guilt-trip, never pressure a reply, never invent memories the user did not share.
@@ -303,20 +327,21 @@ Rules:
       });
       const raw = String(result.text || result.content?.[0]?.text || '').trim();
       if (raw && raw.length > 20 && raw.length < 600) {
-        text = raw + '\n\n— Chaupaal (app feature · reply optional)';
+        text = raw + '\n\n' + sign;
       }
     } catch (e) {
       console.warn('[companion] AI check-in', e?.message || e);
     }
   } else {
-    text += '\n\n— Chaupaal (app feature · reply optional)';
+    text += '\n\n' + sign;
   }
 
   const created = await createCompanionEvent(db, uid, {
     type: 'companion_checkin',
-    title: 'A note from Chaupaal',
+    title: serverT(lang, 'notifications.card.companion_subtitle'),
     text,
     subtype: 'checkin',
+    lang,
   });
   const next = recordEventSent(state, { type: 'companion_checkin', now: new Date() });
   next.companionStats = {
@@ -347,6 +372,7 @@ async function maybeCompanionPremiumUpsellPlaceholder(/* db, uid, state */) {
 module.exports = {
   processCompanionOutreach,
   festivalForDate,
+  festivalText,
   checkInIntervalDays,
   FESTIVAL_CALENDAR,
   maybeCompanionPremiumUpsellPlaceholder,

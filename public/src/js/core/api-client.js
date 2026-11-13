@@ -23,7 +23,7 @@
         message:
           (json && (typeof json.error === 'string' ? json.error : json.error?.message || json.message)) ||
           res.statusText ||
-          'Request failed',
+          'Request failed', // i18n-ignore (developer error message; users see errors.* via errorText)
         details: json,
       },
     };

@@ -100,8 +100,8 @@ async function collectDuniya(db, q, limit) {
         type: 'post',
         category: 'duniya',
         id: doc.id,
-        title: String(p.text || p.caption || 'Duniya post').slice(0, 120),
-        subtitle: p.authorName || 'Duniya',
+        title: String(p.text || p.caption || 'Duniya').slice(0, 120), // i18n-ignore (brand fallback)
+        subtitle: p.authorName || 'Duniya', // i18n-ignore (brand)
         photoURL: p.mediaUrl || p.thumb || null,
         score: 40,
       });
@@ -124,8 +124,8 @@ async function collectPeepal(db, q, limit) {
         type: 'post',
         category: 'peepal',
         id: doc.id,
-        title: String(p.question || p.text || p.title || 'Peepal').slice(0, 120),
-        subtitle: 'Peepal',
+        title: String(p.question || p.text || p.title || 'Peepal').slice(0, 120), // i18n-ignore (brand)
+        subtitle: 'Peepal', // i18n-ignore (brand)
         score: 35,
       });
     });
@@ -146,8 +146,10 @@ async function collectGroups(db, q, limit) {
         type: 'group',
         category: 'groups',
         id: doc.id,
-        title: g.name || g.title || 'Group',
-        subtitle: g.description || 'Public group',
+        title: g.name || g.title || '',
+        titleKey: g.name || g.title ? null : 'common.group',
+        subtitle: g.description || '',
+        subtitleKey: g.description ? null : 'common.search_public_group',
         avatar: g.avatar || '👥',
         score: 60,
       });
@@ -166,8 +168,10 @@ async function collectGroups(db, q, limit) {
           type: 'group',
           category: 'groups',
           id: doc.id,
-          title: g.name || g.title || 'Group',
-          subtitle: 'Group',
+          title: g.name || g.title || '',
+          titleKey: g.name || g.title ? null : 'common.group',
+          subtitle: '',
+          subtitleKey: 'common.group',
           avatar: g.avatar || '👥',
           score: 50,
         });
@@ -180,11 +184,12 @@ async function collectGroups(db, q, limit) {
 async function collectGames(_db, q, limit) {
   // Static registry projection — games live client-side; server returns name matches for omnibox
   const CATALOG = [
-    { id: 'quiz', name: 'Muqabala', subtitle: 'Dangal quiz duel' },
-    { id: 'chess', name: 'Chess', subtitle: 'Board game' },
-    { id: 'ludo', name: 'Ludo', subtitle: 'Board game' },
-    { id: 'scribble', name: 'Scribble', subtitle: 'Draw & guess' },
-    { id: 'ankjod', name: 'Kakuro', subtitle: 'Number puzzle · cross sums', keywords: 'ank jod' },
+    // English names / words are search keys only; the client shows subtitleKey in the reader's language.
+    { id: 'quiz', name: 'Muqabala', subtitle: 'quiz duel', subtitleKey: 'common.search_game_quiz' }, // i18n-ignore (search keywords)
+    { id: 'chess', name: 'Chess', subtitle: 'board game', subtitleKey: 'common.search_game_board' }, // i18n-ignore (search keywords)
+    { id: 'ludo', name: 'Ludo', subtitle: 'board game', subtitleKey: 'common.search_game_board' }, // i18n-ignore (search keywords)
+    { id: 'scribble', name: 'Scribble', subtitle: 'draw guess', subtitleKey: 'common.search_game_scribble' }, // i18n-ignore (search keywords)
+    { id: 'ankjod', name: 'Kakuro', subtitle: 'number puzzle cross sums', subtitleKey: 'common.search_game_kakuro', keywords: 'ank jod' }, // i18n-ignore (search keywords)
   ];
   return CATALOG.filter((g) => `${g.name} ${g.subtitle} ${g.keywords || ''}`.toLowerCase().includes(q))
     .slice(0, limit)
@@ -194,6 +199,7 @@ async function collectGames(_db, q, limit) {
       id: g.id,
       title: g.name,
       subtitle: g.subtitle,
+      subtitleKey: g.subtitleKey,
       score: 70,
     }));
 }

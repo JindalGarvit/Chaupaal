@@ -336,7 +336,7 @@ const LEVEL_STYLE = {
 
 /** Chess bot personas: style only, always labelled as a bot (never a fake human name). */
 const CHESS_PERSONAS = {
-  aggressive: { name: 'Aggressive Bot', style: { aggression: 0.85, bluff: 0.4, speed: 0.7, chattiness: 0.3 } },
+  aggressive: { name: 'Aggressive Bot', style: { aggression: 0.85, bluff: 0.4, speed: 0.7, chattiness: 0.3 } }, // i18n-ignore (bot persona id; the client shows catalog copy)
   solid: { name: 'Solid Bot', style: { aggression: 0.3, bluff: 0.1, speed: 0.5, chattiness: 0.2 } },
   tricky: { name: 'Tricky Bot', style: { aggression: 0.6, bluff: 0.8, speed: 0.6, chattiness: 0.4 } },
   friendly: { name: 'Friendly Bot', style: { aggression: 0.2, bluff: 0.1, speed: 0.4, chattiness: 0.7 } },
@@ -348,10 +348,10 @@ const OHNO_PERSONAS = {
 };
 /** Badminton playstyles — same style numbers as PERSONAS in public/src/js/games/badminton-rally.js. */
 const BADMINTON_PERSONAS = {
-  allround: { name: 'All-rounder Bot', style: { aggression: 0.5, bluff: 0.4, speed: 0.55, chattiness: 0.3 } },
+  allround: { name: 'All-rounder Bot', style: { aggression: 0.5, bluff: 0.4, speed: 0.55, chattiness: 0.3 } }, // i18n-ignore (bot persona id; the client shows catalog copy)
   attacker: { name: 'Attacker Bot', style: { aggression: 0.9, bluff: 0.25, speed: 0.5, chattiness: 0.3 } },
   retriever: { name: 'Retriever Bot', style: { aggression: 0.2, bluff: 0.2, speed: 0.85, chattiness: 0.2 } },
-  net: { name: 'Net player Bot', style: { aggression: 0.6, bluff: 0.6, speed: 0.65, chattiness: 0.3 } },
+  net: { name: 'Net player Bot', style: { aggression: 0.6, bluff: 0.6, speed: 0.65, chattiness: 0.3 } }, // i18n-ignore (bot persona id; the client shows catalog copy)
 };
 
 /**

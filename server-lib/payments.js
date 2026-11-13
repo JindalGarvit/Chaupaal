@@ -72,7 +72,7 @@ async function createPaymentIntent(opts = {}) {
       status: 'coming_soon',
       paymentId: ref.id,
       comingSoon: true,
-      message: 'Payments coming soon — nothing was charged.',
+      message: 'Payments coming soon — nothing was charged.', // i18n-ignore (API message; users see errors.* by code)
     };
   }
 
@@ -97,18 +97,18 @@ async function createPaymentIntent(opts = {}) {
     ok: false,
     status: 'provider_not_wired',
     paymentId: ref.id,
-    message: 'Payment processor not wired yet. Nothing was charged.',
+    message: 'Payment processor not wired yet. Nothing was charged.', // i18n-ignore (API message; users see errors.* by code)
   };
 }
 
 async function confirmPayment(opts = {}) {
   if (!isPaymentsEnabled()) {
-    return { ok: false, status: 'coming_soon', message: 'Payments not live — cannot confirm.' };
+    return { ok: false, status: 'coming_soon', message: 'Payments not live — cannot confirm.' }; // i18n-ignore (API message; users see errors.* by code)
   }
   const paymentId = String(opts.paymentId || '').trim();
   if (!paymentId) return { ok: false, status: 'invalid', message: 'paymentId required' };
   // Future: verify Razorpay signature, mark chaupaalTransactions status=paid
-  return { ok: false, status: 'provider_not_wired', message: 'Confirm not available yet.' };
+  return { ok: false, status: 'provider_not_wired', message: 'Confirm not available yet.' }; // i18n-ignore (API message; users see errors.* by code)
 }
 
 async function getPaymentStatus(opts = {}) {
@@ -130,10 +130,10 @@ async function getPaymentStatus(opts = {}) {
 
 async function refund(opts = {}) {
   if (!isPaymentsEnabled()) {
-    return { ok: false, status: 'coming_soon', message: 'Payments not live — cannot refund.' };
+    return { ok: false, status: 'coming_soon', message: 'Payments not live — cannot refund.' }; // i18n-ignore (API message; users see errors.* by code)
   }
   // Future: Razorpay refund API → update chaupaalTransactions
-  return { ok: false, status: 'provider_not_wired', message: 'Refunds not available yet.' };
+  return { ok: false, status: 'provider_not_wired', message: 'Refunds not available yet.' }; // i18n-ignore (API message; users see errors.* by code)
 }
 
 function sanitizeMeta(meta) {

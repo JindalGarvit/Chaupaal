@@ -3,7 +3,7 @@
 ## What the product does today
 
 - **No accounts under 13**, everywhere (neutral age question, device lock, no data kept).
-- **Teen mode (13–17)**: private profile by default; messages only from friends (other teens only if the teen allows); adults who aren't friends can never message a teen; 18+ chip games hidden; stricter content filters in Peepal, Duniya and Akhbaar discovery; stranger matchmaking (dating / networking intents) hidden; AI features off by default; location sharing off by default; sensitive profile fields never public.
+- **Teen mode (13–17)**: messages only from friends (other teens only if the teen allows); adults who aren't friends can never message a teen; 18+ chip games hidden; stricter content filters in Peepal, Duniya and Akhbaar discovery; stranger matchmaking (dating / networking intents) hidden. Product decision (D1): profile-field display, location sharing (friends-only, time-limited), AI features, activity signals and personalised recommendations follow the teen's own settings, as for adults — **flag for legal review** (UK Age Appropriate Design Code / OSA expect high-privacy defaults for children).
 - **Reporting**: "Child safety" is the first reason in every Report sheet and goes to the top of the queue (1 h target). The reported item is **restricted immediately** (hidden pending review).
 - **No copies**: a child-safety report stores references only (collection / id) — never a snapshot of text or media. Moderators view the item in place.
 

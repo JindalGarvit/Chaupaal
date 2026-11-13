@@ -36,24 +36,41 @@
     return el;
   }
 
-  /** Normalize India mobiles to E.164; accept already-international numbers. */
-  function toE164India(raw) {
+  function regionDialCode() {
+    try {
+      return ChaupaalRegion.getRegionPrefs().callingCode || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * E.164 from what the user typed: "+…" / "00…" numbers as-is; national numbers get the
+   * user's region calling code (trunk 0 dropped). Without a region we can't guess → null.
+   */
+  function toE164(raw, dial) {
     const s = String(raw || '').trim();
     if (!s) return null;
     const digits = s.replace(/\D/g, '');
-    if (digits.length === 10) return '+91' + digits;
-    if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
-    if (digits.length === 11 && digits.startsWith('0')) return '+91' + digits.slice(1);
-    if (s.startsWith('+') && digits.length >= 10 && digits.length <= 15) return '+' + digits;
-    if (digits.length >= 10 && digits.length <= 15 && digits.startsWith('91')) return '+' + digits;
-    return null;
+    if (s.startsWith('+') || s.startsWith('00')) {
+      const intl = s.startsWith('00') ? digits.slice(2) : digits;
+      return intl.length >= 8 && intl.length <= 15 ? '+' + intl : null;
+    }
+    const cc = String(dial || regionDialCode()).replace(/\D/g, '');
+    if (!cc) return null;
+    const nat = digits.replace(/^0+/, '');
+    if (nat.length > 10 && nat.startsWith(cc) && nat.length <= 15) return '+' + nat;
+    if (nat.length < 6 || cc.length + nat.length > 15) return null;
+    return '+' + cc + nat;
   }
+
+  const toE164India = (raw) => toE164(raw, '+91');
 
   function mapPhoneAuthError(err) {
     const code = String(err?.code || '');
     const msg = String(err?.message || '');
     if (code === 'auth/invalid-phone-number' || /invalid.*phone/i.test(msg)) {
-      return { kind: 'invalid_phone', text: t('auth.enter_a_valid_10_digit_indian') };
+      return { kind: 'invalid_phone', text: t('auth.enter_a_valid_mobile') };
     }
     if (code === 'auth/too-many-requests' || /too many/i.test(msg)) {
       return { kind: 'rate_limit', text: t('auth.too_many_attempts_wait_a_few') };
@@ -149,7 +166,7 @@
    * @returns {Promise<{ confirmation: firebase.auth.ConfirmationResult, phone: string }>}
    */
   async function sendOtp({ phoneRaw, containerId, forceVisible }) {
-    const phone = toE164India(phoneRaw);
+    const phone = toE164(phoneRaw);
     if (!phone) {
       const err = Object.assign(new Error('invalid phone'), { code: 'auth/invalid-phone-number' });
       throw err;
@@ -268,6 +285,7 @@
   }
 
   window.PhoneOtp = {
+    toE164,
     toE164India,
     mapPhoneAuthError,
     sendOtp,

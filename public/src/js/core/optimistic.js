@@ -27,7 +27,8 @@
           o.onError(err);
         } catch (e) {}
       } else if (typeof showToast === 'function') {
-        showToast(o.errorToast || (err && err.message) || 'Couldn’t complete — undone');
+        // Users get one clear message; the raw error stays in the console / telemetry.
+        showToast(o.errorToast || (typeof errorText === 'function' ? errorText(err, t('errors.undone')) : t('errors.undone')));
       }
       return false;
     }

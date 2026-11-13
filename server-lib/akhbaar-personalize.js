@@ -31,14 +31,16 @@ function readDob(profile) {
   );
 }
 
-function birthdayPrefill(name) {
-  const n = name || 'friend';
-  const pool = [
-    `Happy birthday, ${n}! 🎂 Hope today feels as warm as your chai.`,
-    `${n} — birthday vibes! Wishing you an easy, joyful day.`,
-    `Hey ${n}, happy birthday! Saving you a slice of the celebration 🎉`,
-    `Birthday greetings, ${n}! May this year be kinder than the last.`,
-  ];
+/** Card copy in the reader's language: T(key, params) → notifications.card.<key>. */
+function cardT(lang) {
+  const { serverT } = require('./i18n-server');
+  return (k, p) => serverT(lang || 'en', 'notifications.card.' + k, p || {});
+}
+
+function birthdayPrefill(name, T) {
+  const tr = T || cardT('en');
+  const n = name || tr('your_friend');
+  const pool = [1, 2, 3, 4].map((i) => tr('bday_prefill_' + i, { name: n }));
   const day = new Date().toISOString().slice(0, 10);
   let h = 0;
   const seed = `${n}|${day}`;
@@ -122,21 +124,22 @@ function keywordOverlap(a, b) {
   return [...new Set(hits)].slice(0, 5);
 }
 
-async function createPersonalEvent(db, uid, { type, title, text, cta, action, friendUid, friendName, meta }) {
+async function createPersonalEvent(db, uid, { type, title, text, cta, action, friendUid, friendName, meta, T }) {
+  const tr = T || cardT('en');
   const doc = {
     type,
     displayMode: 'graphicCard',
     payload: {
       title,
       text,
-      subtitle: 'Personalized for you',
-      kicker: 'Akhbaar',
-      cta: cta || 'Got it',
+      subtitle: tr('akh_subtitle'),
+      kicker: 'Akhbaar', // i18n-ignore (brand)
+      cta: cta || tr('cta_got_it'),
       action: action || 'dismiss',
       friendUid: friendUid || null,
       friendName: friendName || null,
       fromApp: true,
-      label: 'Chaupaal personalization',
+      label: tr('akh_label'),
       ...(meta || {}),
     },
     createdAt: new Date(),
@@ -196,7 +199,7 @@ async function daysSinceLastDm(db, uid, friendUid) {
   return null;
 }
 
-async function maybeDigestCard(db, uid, profile, state, stateRef) {
+async function maybeDigestCard(db, uid, profile, state, stateRef, T) {
   const gate = canSendProactive(state, { type: 'akhbaar_digest' });
   if (!gate.ok) return { skipped: gate.reason };
 
@@ -215,7 +218,7 @@ async function maybeDigestCard(db, uid, profile, state, stateRef) {
         lang: await require('./i18n-server').langForUser(db, uid),
         langJson: true,
         system:
-          'Write one short Akhbaar-style prompt card for an Indian social app. Use ONLY the provided profile fields. No guilt. JSON: {"title":"...","text":"..."}',
+          'Write one short Akhbaar-style prompt card for a global social app. Use ONLY the provided profile fields. No guilt. JSON: {"title":"...","text":"..."}',
         messages: [
           {
             role: 'user',
@@ -235,7 +238,7 @@ async function maybeDigestCard(db, uid, profile, state, stateRef) {
       if (start >= 0) {
         const parsed = JSON.parse(raw.slice(start, end + 1));
         text = String(parsed.text || '').slice(0, 400);
-        var title = String(parsed.title || 'For you today').slice(0, 80);
+        var title = String(parsed.title || T('digest_default_title')).slice(0, 80);
       }
     } catch (e) {
       console.warn('[akhbaar-personalize] digest AI', e?.message || e);
@@ -244,14 +247,14 @@ async function maybeDigestCard(db, uid, profile, state, stateRef) {
 
   if (!text) {
     if (city) {
-      title = `Around ${city}`;
-      text = `What's one thing happening in ${city} that more people should know about?`;
+      title = T('digest_city_title', { city });
+      text = T('digest_city_text', { city });
     } else if (industry || occupation) {
-      title = industry || 'Your world';
-      text = `Anything interesting in ${occupation || industry} lately worth sharing?`;
+      title = industry || T('digest_work_title');
+      text = T('digest_work_text', { work: occupation || industry });
     } else if (hobbies.length) {
-      title = 'Shared spark';
-      text = `You're into ${hobbies[0]} — what's a recent favourite?`;
+      title = T('digest_hobby_title');
+      text = T('digest_hobby_text', { hobby: hobbies[0] });
     } else {
       return { skipped: 'no_profile_signal' };
     }
@@ -259,17 +262,18 @@ async function maybeDigestCard(db, uid, profile, state, stateRef) {
 
   const created = await createPersonalEvent(db, uid, {
     type: 'akhbaar_digest',
-    title: title || 'For you today',
+    title: title || T('digest_default_title'),
     text,
-    cta: 'Open Akhbaar',
+    cta: T('cta_open_akhbaar'),
     action: 'open_akhbaar',
+    T,
   });
   const next = recordEventSent(state, { type: 'akhbaar_digest', now: new Date() });
   await stateRef.set(next, { merge: true });
   return { sent: created.id, kind: 'digest' };
 }
 
-async function maybeFriendBirthday(db, uid, state, stateRef, tz) {
+async function maybeFriendBirthday(db, uid, state, stateRef, tz, T) {
   const friends = await loadCloseFriendProfiles(db, uid);
   for (const friend of friends) {
     if (!allowsAppearInFriendsPrompts(friend)) continue;
@@ -277,16 +281,17 @@ async function maybeFriendBirthday(db, uid, state, stateRef, tz) {
     const type = `akhbaar_bday_${friend.uid}`;
     const gate = canSendProactive(state, { type });
     if (!gate.ok) continue;
-    const name = friend.name || friend.displayName || friend.username || 'your friend';
+    const name = friend.name || friend.displayName || friend.username || T('your_friend');
     const created = await createPersonalEvent(db, uid, {
       type: 'akhbaar_friend_birthday',
-      title: `${name}'s birthday`,
-      text: `Wish ${name} a happy birthday — opens a pre-filled Baithak message.`,
-      cta: 'Wish them',
+      title: T('bday_title', { name }),
+      text: T('bday_text', { name }),
+      cta: T('cta_wish'),
       action: 'wish_friend',
       friendUid: friend.uid,
       friendName: name,
-      meta: { prefill: birthdayPrefill(name) },
+      meta: { prefill: birthdayPrefill(name, T) },
+      T,
     });
     const next = recordEventSent(state, { type, now: new Date() });
     await stateRef.set(next, { merge: true });
@@ -295,7 +300,7 @@ async function maybeFriendBirthday(db, uid, state, stateRef, tz) {
   return { skipped: 'no_birthday' };
 }
 
-async function maybeQuietCloseFriend(db, uid, state, stateRef) {
+async function maybeQuietCloseFriend(db, uid, state, stateRef, T) {
   const friends = await loadCloseFriendProfiles(db, uid);
   for (const friend of friends.slice(0, 12)) {
     if (!allowsAppearInFriendsPrompts(friend)) continue;
@@ -304,15 +309,16 @@ async function maybeQuietCloseFriend(db, uid, state, stateRef) {
     const type = `akhbaar_quiet_${friend.uid}`;
     const gate = canSendProactive(state, { type });
     if (!gate.ok) continue;
-    const name = friend.name || friend.displayName || 'a close friend';
+    const name = friend.name || friend.displayName || T('close_friend');
     const created = await createPersonalEvent(db, uid, {
       type: 'akhbaar_quiet_friend',
-      title: 'Haven’t talked in a while',
-      text: `You and ${name} have been quiet lately. A gentle hello is enough — no pressure.`,
-      cta: 'Say hi',
+      title: T('quiet_title'),
+      text: T('quiet_text', { name }),
+      cta: T('cta_say_hi'),
       action: 'open_friend_dm',
       friendUid: friend.uid,
       friendName: name,
+      T,
     });
     const next = recordEventSent(state, { type, now: new Date() });
     await stateRef.set(next, { merge: true });
@@ -321,7 +327,7 @@ async function maybeQuietCloseFriend(db, uid, state, stateRef) {
   return { skipped: 'no_quiet' };
 }
 
-async function maybeWeatherPrompt(db, uid, profile, state, stateRef) {
+async function maybeWeatherPrompt(db, uid, profile, state, stateRef, T) {
   const city = profile.currentCity || profile.city || '';
   if (!city) return { skipped: 'no_city' };
   const gate = canSendProactive(state, { type: 'akhbaar_weather' });
@@ -331,45 +337,45 @@ async function maybeWeatherPrompt(db, uid, profile, state, stateRef) {
   if (!wx.ok) return { skipped: wx.reason || 'weather_failed' };
   if (!['rain', 'storm', 'clear'].includes(wx.bucket)) return { skipped: 'weather_neutral' };
 
-  let text =
-    wx.bucket === 'rain' || wx.bucket === 'storm'
-      ? `${wx.summary} in ${wx.city || city} — anyone up for chai?`
-      : `Clear skies in ${wx.city || city} — perfect for a short walk. Who’s in?`;
+  const place = wx.city || city;
+  const text = T(wx.bucket === 'clear' ? 'weather_clear_text' : 'weather_rain_text', { city: place });
 
   const created = await createPersonalEvent(db, uid, {
     type: 'akhbaar_weather',
-    title: `${wx.city || city} weather`,
+    title: T('weather_title', { city: place }),
     text,
-    cta: 'Share in Duniya',
+    cta: T('cta_share_duniya'),
     action: 'open_duniya',
     meta: { weatherBucket: wx.bucket, tempC: wx.tempC },
+    T,
   });
   const next = recordEventSent(state, { type: 'akhbaar_weather', now: new Date() });
   await stateRef.set(next, { merge: true });
   return { sent: created.id, kind: 'weather' };
 }
 
-async function maybeLocalEvent(db, uid, profile, state, stateRef, tz) {
+async function maybeLocalEvent(db, uid, profile, state, stateRef, tz, T, ctx) {
   const city = profile.currentCity || profile.city || '';
   const gate = canSendProactive(state, { type: 'akhbaar_local_event' });
   if (!gate.ok) return { skipped: gate.reason };
-  const events = await fetchLocalEvents({ city, tz });
+  const events = await fetchLocalEvents({ city, tz, country: ctx && ctx.country, lang: ctx && ctx.lang });
   if (!events.length) return { skipped: 'no_events' };
   const ev = events[0];
   const created = await createPersonalEvent(db, uid, {
     type: 'akhbaar_local_event',
     title: ev.title,
     text: ev.text,
-    cta: 'Open Akhbaar',
+    cta: T('cta_open_akhbaar'),
     action: 'open_akhbaar',
     meta: { eventId: ev.id, source: ev.source },
+    T,
   });
   const next = recordEventSent(state, { type: 'akhbaar_local_event', now: new Date() });
   await stateRef.set(next, { merge: true });
   return { sent: created.id, kind: 'local_event' };
 }
 
-async function maybeSharedInterests(db, uid, profile, state, stateRef) {
+async function maybeSharedInterests(db, uid, profile, state, stateRef, T) {
   const mine = interestsList(profile);
   if (mine.length < 1) return { skipped: 'no_interests' };
   const gate = canSendProactive(state, { type: 'akhbaar_shared_interest' });
@@ -384,7 +390,7 @@ async function maybeSharedInterests(db, uid, profile, state, stateRef) {
     hits.forEach((t) => {
       topicCounts[t] = (topicCounts[t] || 0) + 1;
       byTopic[t] = byTopic[t] || [];
-      byTopic[t].push(f.name || f.displayName || 'friend');
+      byTopic[t].push(f.name || f.displayName || T('your_friend'));
     });
   });
   const ranked = Object.entries(topicCounts).sort((a, b) => b[1] - a[1]);
@@ -393,18 +399,19 @@ async function maybeSharedInterests(db, uid, profile, state, stateRef) {
   const names = (byTopic[topic] || []).slice(0, 3).join(', ');
   const created = await createPersonalEvent(db, uid, {
     type: 'akhbaar_shared_interest',
-    title: `${count} friends into ${topic}`,
-    text: `${names} share an interest in ${topic}. Start a Baithak group or drop a Peepal note — better as a circle than a 1:1.`,
-    cta: 'Open Baithak',
+    title: T('shared_title', { count, topic }),
+    text: T('shared_text', { names, topic }),
+    cta: T('cta_open_baithak'),
     action: 'open_baithak',
     meta: { topic, count },
+    T,
   });
   const next = recordEventSent(state, { type: 'akhbaar_shared_interest', now: new Date() });
   await stateRef.set(next, { merge: true });
   return { sent: created.id, kind: 'shared_interest' };
 }
 
-async function maybeJobOrCityChange(db, uid, state, stateRef) {
+async function maybeJobOrCityChange(db, uid, state, stateRef, T) {
   // Friends who updated occupation/city recently and allow appearing in prompts
   const friends = await loadCloseFriendProfiles(db, uid);
   const now = Date.now();
@@ -422,16 +429,17 @@ async function maybeJobOrCityChange(db, uid, state, stateRef) {
     const type = `akhbaar_update_${friend.uid}`;
     const gate = canSendProactive(state, { type });
     if (!gate.ok) continue;
-    const name = friend.name || friend.displayName || 'A friend';
-    const detail = [job && `new role vibes (${job})`, city && `now in ${city}`].filter(Boolean).join(' · ');
+    const name = friend.name || friend.displayName || T('a_friend');
+    const detail = [job && T('update_job', { job }), city && T('update_city', { city })].filter(Boolean).join(' · ');
     const created = await createPersonalEvent(db, uid, {
       type: 'akhbaar_friend_update',
-      title: `${name} updated their profile`,
-      text: detail || 'They shared something new on Chaupaal — say hello?',
-      cta: 'Message them',
+      title: T('update_title', { name }),
+      text: detail || T('update_default'),
+      cta: T('cta_message_them'),
       action: 'open_friend_dm',
       friendUid: friend.uid,
       friendName: name,
+      T,
     });
     const next = recordEventSent(state, { type, now: new Date() });
     await stateRef.set(next, { merge: true });
@@ -469,17 +477,20 @@ async function processAkhbaarPersonalization(db, uid, state, stateRef) {
     if (!privacy.aiAllowedForUser(raw) || privacy.personalizationOff(raw)) return { skipped: 'privacy_off' };
   }
 
-  const tz = state.timezone || 'Asia/Kolkata';
+  const tz = state.timezone || 'UTC';
+  const lang = require('./i18n-server').serverLang((raw && (raw.lang || raw.profile?.lang)) || 'en');
+  const T = cardT(lang);
+  const ctx = { lang, country: (raw && raw.region && raw.region.country) || null };
 
   // Priority: friend birthday → friend update → quiet CF → weather → local event → shared interest → digest
   const steps = [
-    () => maybeFriendBirthday(db, uid, state, stateRef, tz),
-    () => maybeJobOrCityChange(db, uid, state, stateRef),
-    () => maybeQuietCloseFriend(db, uid, state, stateRef),
-    () => maybeWeatherPrompt(db, uid, profile, state, stateRef),
-    () => maybeLocalEvent(db, uid, profile, state, stateRef, tz),
-    () => maybeSharedInterests(db, uid, profile, state, stateRef),
-    () => maybeDigestCard(db, uid, profile, state, stateRef),
+    () => maybeFriendBirthday(db, uid, state, stateRef, tz, T),
+    () => maybeJobOrCityChange(db, uid, state, stateRef, T),
+    () => maybeQuietCloseFriend(db, uid, state, stateRef, T),
+    () => maybeWeatherPrompt(db, uid, profile, state, stateRef, T),
+    () => maybeLocalEvent(db, uid, profile, state, stateRef, tz, T, ctx),
+    () => maybeSharedInterests(db, uid, profile, state, stateRef, T),
+    () => maybeDigestCard(db, uid, profile, state, stateRef, T),
   ];
 
   for (const step of steps) {

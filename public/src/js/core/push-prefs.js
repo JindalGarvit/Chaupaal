@@ -56,7 +56,7 @@
 
   function dayKey() {
     try {
-      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+      return new Intl.DateTimeFormat('en-CA').format(new Date());
     } catch (e) {
       return new Date().toISOString().slice(0, 10);
     }

@@ -10,8 +10,8 @@ Scope: DSA systemic-risk style + UK Online Safety Act illegal-content and childr
 | **Duniya public posts & stories** | Illegal content, hate, misinformation, viral harm | Med / Med | Audience controls (public / followers / friends), report → remove / restrict / age-restrict, teen discovery filter, ranking opt-out | Proactive detection not in production |
 | **Chip games (Teen Patti, Poker, Rummy…)** | Gambling-like harm, minors | Med / Med | Virtual chips only — not purchasable, no cash value, no withdrawal; 18+ gate (DOB) hidden in Teen mode | Keep chips non-purchasable in every store build |
 | **Stranger matchmaking (Peepal discovery)** | Adults meeting minors, catfishing | Low–Med / High | 18+ only for stranger matching (TEEN_BLOCKED_FEATURES); verified contact required; report profile | Age assurance beyond self-declaration |
-| **AI features** | Inaccurate / unsafe output, personal data use | Med / Low | AI labelled; deterministic fallbacks; "Use AI features" switch; off by default for teens; crisis replies hardcoded | Output moderation per language |
-| **Location sharing** | Stalking | Low / High | Friends only, time-limited, off by default for teens | — |
+| **AI features** | Inaccurate / unsafe output, personal data use | Med / Low | AI labelled; deterministic fallbacks; "Use AI features" switch (same default for teens — D1 product call); teen-safe system hint on AI replies; crisis replies hardcoded | Output moderation per language; legal review of teen default |
+| **Location sharing** | Stalking | Low / High | Friends only, time-limited, user-initiated (teens included — D1 product call) | Legal review: UK Children's Code expects geolocation off by default for children |
 
 Children's access: the service is likely to be accessed by children 13+ (UK Children's Code / OSA). Teen mode is the default safety layer; see `docs/compliance/child-safety.md` for escalation.
 

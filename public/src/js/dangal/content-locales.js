@@ -32,36 +32,36 @@
 
   const SETS = {
     // ---- every game: rules sheet, FAQ, post-game tips (UI-keyed, translate) ----
-    rules: { strategy: 'translate', games: GAMES, keys: GAMES.map((g) => 'games.' + g + '.rules.'), note: 'Rules declarations (glance + sections + variants)' },
-    faq: { strategy: 'translate', games: GAMES, keys: GAMES.map((g) => 'games.' + g + '.faq.'), note: 'Rules FAQ (≥5 per game)' },
-    tips: { strategy: 'translate', games: GAMES, keys: GAMES.map((g) => 'games.' + g + '.tip.'), note: 'Post-game tip library' },
+    rules: { strategy: 'translate', games: GAMES, keys: GAMES.map((g) => 'games.' + g + '.rules.'), note: 'Rules declarations (glance + sections + variants)' }, // i18n-ignore (developer manifest note)
+    faq: { strategy: 'translate', games: GAMES, keys: GAMES.map((g) => 'games.' + g + '.faq.'), note: 'Rules FAQ (≥5 per game)' }, // i18n-ignore (developer manifest note)
+    tips: { strategy: 'translate', games: GAMES, keys: GAMES.map((g) => 'games.' + g + '.tip.'), note: 'Post-game tip library' }, // i18n-ignore (developer manifest note)
 
     // ---- party word / prompt content ----
-    'imposter.packs': { strategy: 'translate', games: ['imposter'], files: { hi: ['data/locales/hi/imposter-packs.hi.js'] }, guess: true, note: 'Imposter core packs + Undercover partners' },
-    'charades.packs': { strategy: 'translate', games: ['charades'], files: { hi: ['data/locales/hi/charades-packs.hi.js'] }, guess: true, note: 'Charades core packs' },
-    'mostlikely.prompts': { strategy: 'translate', games: ['mostlikely'], files: { hi: ['data/locales/hi/mostlikely-packs.hi.js'] }, keys: ['games.mostlikely.nhie.'], note: 'Most Likely To / Would You Rather / Never Have I Ever core prompts' },
-    'rajamantri.roles': { strategy: 'translate', games: ['rajamantri'], files: { hi: ['data/locales/hi/rajamantri.hi.js'] }, keys: ['games.rajamantri.'], note: 'Raja Mantri Chor Sipahi roles + calls' },
-    'werewolf.narration': { strategy: 'translate', games: ['werewolf'], keys: ['games.werewolf.'], note: 'Werewolf roles + narration' },
-    'scribble.words': { strategy: 'translate', games: ['scribble'], files: {}, min: 600, guess: true, note: 'Scribble core word packs (≥600 words per language)' },
+    'imposter.packs': { strategy: 'translate', games: ['imposter'], files: { hi: ['data/locales/hi/imposter-packs.hi.js'] }, guess: true, note: 'Imposter core packs + Undercover partners' }, // i18n-ignore (developer manifest note)
+    'charades.packs': { strategy: 'translate', games: ['charades'], files: { hi: ['data/locales/hi/charades-packs.hi.js'] }, guess: true, note: 'Charades core packs' }, // i18n-ignore (developer manifest note)
+    'mostlikely.prompts': { strategy: 'translate', games: ['mostlikely'], files: { hi: ['data/locales/hi/mostlikely-packs.hi.js'] }, keys: ['games.mostlikely.nhie.'], note: 'Most Likely To / Would You Rather / Never Have I Ever core prompts' }, // i18n-ignore (developer manifest note)
+    'rajamantri.roles': { strategy: 'translate', games: ['rajamantri'], files: { hi: ['data/locales/hi/rajamantri.hi.js'] }, keys: ['games.rajamantri.'], note: 'Raja Mantri Chor Sipahi roles + calls' }, // i18n-ignore (developer manifest note)
+    'werewolf.narration': { strategy: 'translate', games: ['werewolf'], keys: ['games.werewolf.'], note: 'Werewolf roles + narration' }, // i18n-ignore (developer manifest note)
+    'scribble.words': { strategy: 'translate', games: ['scribble'], files: {}, min: 600, guess: true, note: 'Scribble core word packs (≥600 words per language)' }, // i18n-ignore (developer manifest note)
 
     // ---- templated speech ----
-    'streetcricket.commentary': { strategy: 'translate', games: ['streetcricket'], keys: ['games.streetcricket.comm.'], speech: true, note: 'Cricket commentary templates' },
-    'badminton.umpire': { strategy: 'translate', games: ['badminton'], keys: ['games.badminton.'], speech: true, note: 'Umpire calls' },
-    'tambola.caller': { strategy: 'translate', games: ['tambola'], keys: ['games.tambola.'], speech: true, note: 'Caller phrases (numbers via the L1 number helper)' },
-    'uno.shouts': { strategy: 'translate', games: ['uno'], keys: ['games.uno.'], note: 'Oh No! shouts' },
-    'chess.openings': { strategy: 'translate', games: ['chess'], keys: ['games.chess.opening.'], note: 'Opening names (ECO)' },
-    'coach.explain': { strategy: 'translate', games: ['chess', 'ankjod', 'wordguess', 'ttt'], keys: ['dangal.'], note: 'Coach / hint explanations' },
+    'streetcricket.commentary': { strategy: 'translate', games: ['streetcricket'], keys: ['games.streetcricket.comm.'], speech: true, note: 'Cricket commentary templates' }, // i18n-ignore (developer manifest note)
+    'badminton.umpire': { strategy: 'translate', games: ['badminton'], keys: ['games.badminton.'], speech: true, note: 'Umpire calls' }, // i18n-ignore (developer manifest note)
+    'tambola.caller': { strategy: 'translate', games: ['tambola'], keys: ['games.tambola.'], speech: true, note: 'Caller phrases (numbers via the L1 number helper)' }, // i18n-ignore (developer manifest note)
+    'uno.shouts': { strategy: 'translate', games: ['uno'], keys: ['games.uno.'], note: 'Oh No! shouts' }, // i18n-ignore (developer manifest note)
+    'chess.openings': { strategy: 'translate', games: ['chess'], keys: ['games.chess.opening.'], note: 'Opening names (ECO)' }, // i18n-ignore (developer manifest note)
+    'coach.explain': { strategy: 'translate', games: ['chess', 'ankjod', 'wordguess', 'ttt'], keys: ['dangal.'], note: 'Coach / hint explanations' }, // i18n-ignore (developer manifest note)
 
     // ---- language-specific ----
-    'shabd.lexicon': { strategy: 'language-specific', games: ['wordguess'], langs: ['en', 'hi'], modes: { daily: ['en', 'hi'], archive: ['en', 'hi'] }, note: 'Shabd Five five-letter lexicon (Hindi readers play the English lexicon; other languages: not yet)' },
-    'scribble.regional': { strategy: 'language-specific', games: ['scribble'], langs: ['en'], regional: true, note: 'Regional add-on packs (Bollywood, cricket) — opt-in, never the default' },
-    'imposter.regional': { strategy: 'language-specific', games: ['imposter'], langs: ['en', 'hi'], regional: true, note: 'Regional add-on packs — opt-in by locale or host' },
+    'shabd.lexicon': { strategy: 'language-specific', games: ['wordguess'], langs: ['en', 'hi'], modes: { daily: ['en', 'hi'], archive: ['en', 'hi'] }, note: 'Shabd Five five-letter lexicon (Hindi readers play the English lexicon; other languages: not yet)' }, // i18n-ignore (developer manifest note)
+    'scribble.regional': { strategy: 'language-specific', games: ['scribble'], langs: ['en'], regional: true, note: 'Regional add-on packs (Bollywood, cricket) — opt-in, never the default' }, // i18n-ignore (developer manifest note)
+    'imposter.regional': { strategy: 'language-specific', games: ['imposter'], langs: ['en', 'hi'], regional: true, note: 'Regional add-on packs — opt-in by locale or host' }, // i18n-ignore (developer manifest note)
 
     // ---- canonical subset ----
-    'quiz.bank': { strategy: 'canonical-subset', games: ['quiz'], server: 'server-lib/quiz-locales.js', min: 500, note: 'English bank; language passes translate a ≥500-question core subset incl. the Daily pool' },
+    'quiz.bank': { strategy: 'canonical-subset', games: ['quiz'], server: 'server-lib/quiz-locales.js', min: 500, note: 'English bank; language passes translate a ≥500-question core subset incl. the Daily pool' }, // i18n-ignore (developer manifest note)
 
     // ---- English-only flavour ----
-    'tambola.traditional': { strategy: 'en-only', games: ['tambola'], langs: ['en'], note: 'Traditional Tambola calls (“Two little ducks — 22”)' },
+    'tambola.traditional': { strategy: 'en-only', games: ['tambola'], langs: ['en'], note: 'Traditional Tambola calls (“Two little ducks — 22”)' }, // i18n-ignore (developer manifest note)
   };
 
   const base = (lang) => String(lang == null ? 'en' : lang).toLowerCase().split(/[-_]/)[0] || 'en';

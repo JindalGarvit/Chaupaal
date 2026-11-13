@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
         degraded: true,
         remaining: null,
         limits: LIMITS[action],
-        message: 'Upstash not configured — allowing',
+        message: 'Upstash not configured — allowing', // i18n-ignore (log message)
       });
     }
 

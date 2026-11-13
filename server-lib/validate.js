@@ -31,7 +31,7 @@ function asBoolean(v) {
 
 /** Anthropic Messages-ish payload bounds (cost / abuse control). */
 function validateAnthropicBody(body) {
-  if (!isPlainObject(body)) return { ok: false, message: 'Body must be a JSON object' };
+  if (!isPlainObject(body)) return { ok: false, message: 'Body must be a JSON object' }; // i18n-ignore (API message; users see errors.* by code)
   const model = asString(body.model, { max: 80, min: 1 });
   if (!model) return { ok: false, message: 'model is required (string)' };
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
@@ -42,7 +42,7 @@ function validateAnthropicBody(body) {
   }
   for (const m of body.messages) {
     if (!isPlainObject(m) || !asString(m.role, { max: 20 })) {
-      return { ok: false, message: 'Each message needs a role' };
+      return { ok: false, message: 'Each message needs a role' }; // i18n-ignore (API message; users see errors.* by code)
     }
   }
   const maxTokens = body.max_tokens != null ? asInt(body.max_tokens, { min: 1, max: 8192 }) : 1024;
@@ -50,10 +50,10 @@ function validateAnthropicBody(body) {
   // Rough size cap (~200KB JSON)
   try {
     if (JSON.stringify(body).length > 200_000) {
-      return { ok: false, message: 'Payload too large' };
+      return { ok: false, message: 'Payload too large' }; // i18n-ignore (API message; users see errors.* by code)
     }
   } catch {
-    return { ok: false, message: 'Payload not serializable' };
+    return { ok: false, message: 'Payload not serializable' }; // i18n-ignore (API message; users see errors.* by code)
   }
   return { ok: true, value: { ...body, model, max_tokens: maxTokens } };
 }

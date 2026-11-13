@@ -74,7 +74,7 @@ async function resolveAdultByContact(adminApp, contact) {
   }
   const digits = c.replace(/\D/g, '');
   if (digits.length >= 8) {
-    const variants = [c, '+' + digits, digits.length === 10 ? '+91' + digits : null].filter(Boolean);
+    const variants = [c, '+' + digits];
     for (const v of variants) {
       for (const col of ['phoneIndex', 'phone_index']) {
         const idx = await db.collection(col).doc(v).get().catch(() => null);

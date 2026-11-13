@@ -386,6 +386,8 @@
 
   function isIndiaLocale() {
     try {
+      // The user's region setting wins (Global L0 region model); device hints only when it's missing.
+      if (typeof ChaupaalRegion !== 'undefined' && ChaupaalRegion.getRegion) return ChaupaalRegion.getRegion().country === 'IN';
       const langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || '']).map(String);
       if (langs.some((l) => /-IN$/i.test(l))) return true;
       const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '').toString();

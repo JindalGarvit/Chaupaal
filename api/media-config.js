@@ -144,12 +144,11 @@ async function handleUsernameCheck(req, res, body) {
   }
 }
 
+/** E.164 only — the client adds the user's region calling code to national numbers. */
 function normalizePhoneE164(raw) {
   const s = String(raw || '').trim();
   const digits = s.replace(/\D/g, '');
-  if (digits.length === 10) return '+91' + digits;
-  if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
-  if (s.startsWith('+') && digits.length >= 10) return '+' + digits;
+  if (s.startsWith('+') && digits.length >= 8 && digits.length <= 15) return '+' + digits;
   return null;
 }
 
@@ -172,7 +171,7 @@ async function handleResolveIdentifier(req, res, body) {
     return sendSuccess(res, { notFound: true, degraded: true });
   }
 
-  const phone = normalizePhoneE164(raw);
+  const phone = normalizePhoneE164(body.phone) || normalizePhoneE164(raw);
   try {
     if (phone) {
       const snap = await app.firestore().collection('phoneIndex').doc(phone).get();

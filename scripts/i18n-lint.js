@@ -32,7 +32,12 @@ const GLOSSARY = [
   'Chaupaal', 'Dangal', 'Baithak', 'Mehfil', 'Peepal', 'Akhbaar', 'Duniya', 'Khoj', 'Vriksha', 'Muqabala',
   'Raja Mantri Chor Sipahi', 'Teen Patti', 'Carrom', 'Tambola', 'Kakuro', 'Shabd Five', 'Oh No!', 'Tip Tap',
 ];
-const SKIP_FILES = /(^|[\\/])(data[\\/]|i18n\.js$|i18n-format\.js$|i18n-layout\.js$|.*-core\.js$|.*-engine\.js$|.*-bank\.js$|.*-lexicon\.js$|.*-answers\.js$|samples\.js$)/;
+/**
+ * Allowlist (D1, reviewed file by file): content packs localised through the Dangal content manifest /
+ * language passes (not UI keys), demo samples, the language catalogue's native names, and script-font
+ * family names. Everything else — incl. game cores / engines and data/ files — is scanned.
+ */
+const SKIP_FILES = /(^|[\\/])(data[\\/](akhbaar-bank|charades-packs|imposter-packs|mostlikely-packs|samples)\.js$|games[\\/]data[\\/]shabd-gloss\.js$|core[\\/]i18n\.js$|core[\\/]i18n-layout\.js$)/;
 
 function surfaceOf(rel) {
   const f = rel.replace(/\\/g, '/').toLowerCase();
@@ -343,6 +348,33 @@ function walk(dir, out) {
   return out;
 }
 
+/**
+ * Server-rendered copy (D1): push / email / system-event cards / share pages built in api/ + server-lib/.
+ * Flags English sentences assigned to user-facing fields; render them with serverT(lang, key) instead,
+ * or mark the line `// i18n-ignore (reason)` when it never reaches a person (prompts, ids, logs).
+ */
+const SERVER_FIELD = /\b(title|subtitle|text|cta|reply|body|label|description|wish|name|preview|message)\s*:\s*(['"`])([A-Z][a-z][^'"`]{12,})\2/;
+function scanServer(rel, src) {
+  const out = [];
+  src.split('\n').forEach((line, i) => {
+    if (/i18n-ignore/.test(line) || /^\s*(\/\/|\*)/.test(line)) return;
+    const m = SERVER_FIELD.exec(line);
+    if (m) out.push({ file: rel, line: i + 1, kind: 'server', text: m[3].slice(0, 80) });
+  });
+  return out;
+}
+
+function lintServer() {
+  const hits = [];
+  ['api', 'server-lib'].forEach((dir) => {
+    walk(path.join(ROOT, dir), []).forEach((abs) => {
+      const rel = path.relative(ROOT, abs).replace(/\\/g, '/');
+      hits.push(...scanServer(rel, fs.readFileSync(abs, 'utf8')));
+    });
+  });
+  return hits;
+}
+
 function lint() {
   const hits = [];
   walk(JS_DIR, []).forEach((abs) => {
@@ -351,9 +383,10 @@ function lint() {
     hits.push(...scanJs(rel, fs.readFileSync(abs, 'utf8')));
   });
   hits.push(...scanIndex('public/index.html', fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8')));
+  lintServer().forEach((h) => hits.push({ ...h, surfaceOverride: 'server' }));
   const bySurface = {};
   hits.forEach((h) => {
-    h.surface = surfaceOf(h.file);
+    h.surface = h.surfaceOverride || surfaceOf(h.file);
     bySurface[h.surface] = (bySurface[h.surface] || 0) + 1;
   });
   return { total: hits.length, bySurface, hits };
@@ -407,4 +440,4 @@ if (require.main === module && !process.argv.includes('--surface')) {
   }
 }
 
-module.exports = { lint, lintSurface, isCopy, scanJs, scanIndex, surfaceOf, stripExpressions };
+module.exports = { lint, lintSurface, lintServer, scanServer, isCopy, scanJs, scanIndex, surfaceOf, stripExpressions, SKIP_FILES };

@@ -148,8 +148,8 @@
           <button type="button" class="btn btn--block auth-btn" id="loginPhoneBtn" style="background:var(--cream);color:var(--ink);border:1.5px solid var(--line);margin-bottom:8px;" data-i18n="common.continue_with_phone">Continue with phone</button>
           <div id="authPhonePanel" class="hidden auth-phone-panel" style="margin-bottom:12px;">
             <div class="auth-input-group">
-              <label class="auth-input-label" data-i18n="common.phone_india_91">Phone (India +91)</label>
-              <input class="auth-input" type="tel" id="loginPhone" placeholder="10-digit mobile" autocomplete="tel" inputmode="tel" data-i18n-placeholder="common.10_digit_mobile">
+              <label class="auth-input-label" data-i18n="common.phone_label">Phone</label>
+              <input class="auth-input" type="tel" id="loginPhone" placeholder="Mobile number" autocomplete="tel" inputmode="tel" data-i18n-placeholder="common.mobile_number">
             </div>
             <div id="recaptcha-container" class="auth-recaptcha-host"></div>
             <button type="button" class="btn btn--primary btn--block" id="loginPhoneSendOtp" data-default-label="Send OTP" data-i18n="common.send_otp">Send OTP</button>
@@ -335,7 +335,7 @@
               <div id="regPhonePanel" class="hidden auth-phone-panel">
                 <div class="auth-input-group">
                   <label class="auth-input-label" for="regPhoneOtpInput" data-i18n="common.phone_verify_with_otp">Phone (verify with OTP)</label>
-                  <input class="auth-input" type="tel" id="regPhoneOtpInput" placeholder="10-digit mobile" autocomplete="tel" inputmode="tel" data-i18n-placeholder="common.10_digit_mobile">
+                  <input class="auth-input" type="tel" id="regPhoneOtpInput" placeholder="Mobile number" autocomplete="tel" inputmode="tel" data-i18n-placeholder="common.mobile_number">
                 </div>
                 <div id="recaptcha-container-reg" class="auth-recaptcha-host"></div>
                 <button type="button" class="btn btn--primary btn--block" id="regPhoneSendOtp" data-default-label="Send OTP" data-i18n="common.send_otp">Send OTP</button>
@@ -928,14 +928,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
   <script src="/src/js/config/firebase.js?v=e6a59b69"></script>
   <script src="/src/js/config/app-check.js?v=c74ed63b"></script>
-  <script src="/src/js/core/environment.js?v=0cfc62f2"></script>
+  <script src="/src/js/core/environment.js?v=61a2edf3"></script>
   <!-- i18n first: every script may call t() while it loads -->
-  <script src="/src/i18n/en.js?v=a4c8600a"></script>
+  <script src="/src/i18n/en.js?v=e3ea0e49"></script>
   <script src="/src/i18n/legacy-keys.js?v=56133b74"></script>
   <script src="/src/js/core/i18n.js?v=11239667"></script>
   <script src="/src/js/core/region.js?v=7b645870"></script>
   <script src="/src/js/data/consent-ages.js?v=20b5cac7"></script>
-  <script src="/src/js/core/compliance.js?v=f51c2f2f"></script>
+  <script src="/src/js/core/compliance.js?v=3686b10a"></script>
   <script src="/src/js/core/i18n-format.js?v=e2ae5927"></script>
   <script src="/src/js/core/i18n-layout.js?v=a9bcfbe5"></script>
   <script src="/src/js/core/lang-picker.js?v=f62547a6"></script>
@@ -946,14 +946,14 @@
   <script src="/src/js/config/policy-limits.js?v=249f8afe"></script>
   <script src="/src/js/core/subscription-gate.js?v=1cfb3e61"></script>
   <script src="/src/js/core/chaupaal-money.js?v=c12f3bb7"></script>
-  <script src="/src/js/core/users-public.js?v=09e14022"></script>
+  <script src="/src/js/core/users-public.js?v=7c60d2bd"></script>
   <script src="/src/js/core/referrals.js?v=83137771"></script>
-  <script src="/src/js/core/chaupaal-avatar.js?v=7fb4ec82"></script>
+  <script src="/src/js/core/chaupaal-avatar.js?v=10c77e98"></script>
   <script src="/src/js/core/policy-usage.js?v=7867c7cc"></script>
   <script src="/src/js/core/ai-discovery-meter.js?v=68f0b587"></script>
-  <script src="/src/js/core/api-client.js?v=84f925e2"></script>
+  <script src="/src/js/core/api-client.js?v=4e1bf065"></script>
   <script src="/src/js/core/analytics.js?v=5073adf2"></script>
-  <script src="/src/js/core/signal-spine.js?v=facce1f1"></script>
+  <script src="/src/js/core/signal-spine.js?v=2f4d0288"></script>
   <script src="/src/js/core/runtime-guard.js?v=5273fa8e"></script>
   <script src="/src/js/data/samples.js?v=0abc920f"></script>
   <script src="/src/js/data/akhbaar-bank.js?v=e8c7e2d1"></script>
@@ -963,7 +963,7 @@
   <script src="/src/js/core/drafts.js?v=7e13515d"></script>
   <script src="/src/js/core/soft-delete.js?v=47bf1b9a"></script>
   <script src="/src/js/core/account-privacy.js?v=10356956"></script>
-  <script src="/src/js/core/optimistic.js?v=03f440fa"></script>
+  <script src="/src/js/core/optimistic.js?v=fbf43c24"></script>
   <script src="/src/js/core/comment-ranking.js?v=635f86ba"></script>
   <script src="/src/js/core/comment-msg-cache.js?v=fd3cbb34"></script>
   <script src="/src/js/core/comments.js?v=d320cf6f"></script>
@@ -981,7 +981,7 @@
   <script src="/src/js/core/profile-sections.js?v=4911ebf3"></script>
   <script src="/src/js/core/icebreakers.js?v=c487b364"></script>
   <script src="/src/js/core/profile-prompts.js?v=bdfe5e15"></script>
-  <script src="/src/js/core/chaupaal-activity.js?v=f96f41fc"></script>
+  <script src="/src/js/core/chaupaal-activity.js?v=1b5b3e48"></script>
   <script src="/src/js/core/baithak-wish.js?v=396b9052"></script>
   <script src="/src/js/core/chaupaal-events.js?v=a447de88"></script>
   <script src="/src/js/core/chaupaal-founder.js?v=5601f9ec"></script>
@@ -991,49 +991,49 @@
   <script src="/src/js/core/section-swipe.js?v=ff382588"></script>
   <script src="/src/js/core/section-modes.js?v=d05f2ea9"></script>
   <script src="/src/js/core/first-run.js?v=0753fb38"></script>
-  <script src="/src/js/core/contacts-find.js?v=35f30346"></script>
+  <script src="/src/js/core/contacts-find.js?v=ffb7e9c6"></script>
   <script src="/src/js/core/teen-mode.js?v=636ae5c5"></script>
   <script src="/src/js/core/professional-badge.js?v=10f20988"></script>
   <script src="/src/js/core/linkify.js?v=f4204c42"></script>
   <script src="/src/js/core/profile-highlights.js?v=d79c23be"></script>
   <script src="/src/js/core/profile-shell.js?v=95c78629"></script>
   <script src="/src/js/core/profile-section-mount.js?v=b206ab93"></script>
-  <script src="/src/js/core/push-prefs.js?v=810f4d37"></script>
+  <script src="/src/js/core/push-prefs.js?v=3e29334c"></script>
   <script src="/src/js/core/notification-panel.js?v=220d5f09"></script>
   <script src="/src/js/core/fcm-client.js?v=dc39a6ec"></script>
-  <script src="/src/js/core/micro.js?v=014dea03"></script>
+  <script src="/src/js/core/micro.js?v=ac67b03d"></script>
   <script src="/src/js/core/tab-gestures.js?v=b67319b2"></script>
   <script src="/src/js/core/tab-nudges.js?v=91d8db0d"></script>
   <script src="/src/js/core/sessions.js?v=261e92a6"></script>
   <script src="/src/js/core/safety.js?v=7cde3d91"></script>
   <script src="/src/js/core/notif-prefs.js?v=83c75b14"></script>
-  <script src="/src/js/core/feature-flags.js?v=8727f107"></script>
+  <script src="/src/js/core/feature-flags.js?v=8875493d"></script>
   <script src="/src/js/core/theme-engine.js?v=1a9d9d08"></script>
   <script src="/src/js/core/ambient-sound.js?v=d6b818ff"></script>
   <script src="/src/js/core/overlay-scope.js?v=d87191d4"></script>
   <script src="/src/js/core/a11y.js?v=7598098b"></script>
   <script src="/src/js/core/nav-stack.js?v=e290f245"></script>
   <script src="/src/js/core/half-sheet.js?v=f0391e52"></script>
-  <script src="/src/js/core/journal-checkin.js?v=e1b7bd13"></script>
+  <script src="/src/js/core/journal-checkin.js?v=72d0660e"></script>
   <script src="/src/js/core/media-player.js?v=b895d35f"></script>
   <script src="/src/js/features/location-share.js?v=3691eb3f"></script>
   <script src="/src/js/core/touch.js?v=538ae1cb"></script>
   <script src="/src/js/ai/ai-config.js?v=b15d85db"></script>
   <script src="/src/js/ai/markdown.js?v=32d3b778"></script>
-  <script src="/src/js/ai/ai-lang.js?v=f497bb31"></script>
+  <script src="/src/js/ai/ai-lang.js?v=eb3a5c35"></script>
   <script src="/src/js/ai/call-ai.js?v=d1aff914"></script>
   <script src="/src/js/ai/anthropic.js?v=ee230737"></script>
   <script src="/src/js/core/search-normalize.js?v=65d200b8"></script>
   <script src="/src/js/core/lang-detect.js?v=1c28cc73"></script>
   <script src="/src/js/core/translate.js?v=f7921a37"></script>
   <script src="/src/js/core/legal.js?v=09ede889"></script>
-  <script src="/src/js/core/privacy-ui.js?v=7777cdaa"></script>
+  <script src="/src/js/core/privacy-ui.js?v=9425612b"></script>
   <script src="/src/js/data/safety-resources.js?v=78a7ca30"></script>
   <script src="/src/js/core/report.js?v=f1c79e30"></script>
   <script src="/src/js/core/web-locale.js?v=556d582e"></script>
   <script src="/src/js/data/region-prices.js?v=57de8106"></script>
   <script src="/src/js/core/search-field.js?v=6e8ce6ce"></script>
-  <script src="/src/js/core/search.js?v=a038ad0f"></script>
+  <script src="/src/js/core/search.js?v=2acbe15e"></script>
   <script src="/src/js/core/deeplinks.js?v=ecb52319"></script>
   <script src="/src/js/core/rate-limit-client.js?v=bb25b0bf"></script>
   <script src="/src/js/core/theme.js?v=612dd3bb"></script>
@@ -1041,8 +1041,8 @@
   <script src="/src/js/core/profile-btn.js?v=a206069a"></script>
   <script src="/src/js/core/username.js?v=4e34a786"></script>
   <script src="/src/js/auth/auth-ui.js?v=43ac8d4d"></script>
-  <script src="/src/js/auth/phone-otp.js?v=4e876241"></script>
-  <script src="/src/js/auth/auth-profiles.js?v=1a1681f3"></script>
+  <script src="/src/js/auth/phone-otp.js?v=8f8b04c0"></script>
+  <script src="/src/js/auth/auth-profiles.js?v=b0a2e3e6"></script>
   <script src="/src/js/features/akhbaar.js?v=90d23fc8"></script>
   <script src="/src/js/features/dangal.js?v=814e9324"></script>
   <script src="/src/js/features/dangal-ratings.js?v=2bd8e294"></script>
@@ -1053,7 +1053,7 @@
   <script src="/src/js/features/baithak-search.js?v=1e818664"></script>
   <script src="/src/js/features/self-chat.js?v=4e214080"></script>
   <script src="/src/js/dangal/dangal-assist.js?v=36f35b53"></script>
-  <script src="/src/js/core/chaupaal-intents.js?v=75cc6fc0"></script>
+  <script src="/src/js/core/chaupaal-intents.js?v=0ebf13d2"></script>
   <script src="/src/js/core/chaupaal-intents-manifest.js?v=8444d8bf"></script>
   <script src="/src/js/features/chaupaal-command.js?v=0062b4b5"></script>
   <script src="/src/js/features/chaupaal-chat.js?v=b563f61f"></script>
@@ -1070,7 +1070,7 @@
   <script src="/src/js/core/stories.js?v=cfd2e55a"></script>
   <script src="/src/js/core/archive-hub.js?v=c2cdaea0"></script>
   <script src="/src/js/core/journal-anim.js?v=db4a1d4d"></script>
-  <script src="/src/js/features/baithak.js?v=7be3c585"></script>
+  <script src="/src/js/features/baithak.js?v=505c15c4"></script>
   <script src="/src/js/features/profile-preview.js?v=6a7a8020"></script>
   <script src="/src/js/features/profile.js?v=9df3e0a9"></script>
 
@@ -1079,7 +1079,7 @@
 
 
 
-  <script src="/src/js/features/categories.js?v=6b34a58a"></script>
+  <script src="/src/js/features/categories.js?v=3c2f6374"></script>
   <script src="/src/js/features/category-prefs.js?v=a31a4c0d"></script>
   <script src="/src/js/features/peepal.js?v=91ef6ca9"></script>
   <script src="/src/js/features/onboarding.js?v=dfaf0b84"></script>
@@ -1087,9 +1087,9 @@
   <script src="/src/js/core/pwa-install.js?v=9de66926"></script>
   <script src="/src/js/features/streak.js?v=3b88f820"></script>
   <script src="/src/js/games/game-runtime.js?v=2f18ba7c"></script>
-  <script src="/src/js/games/game-ui.js?v=6beec2b3"></script>
+  <script src="/src/js/games/game-ui.js?v=31bf8f5a"></script>
   <script src="/src/js/dangal/dangal-utils.js?v=2eaf8221"></script>
-  <script src="/src/js/dangal/dangal-graduation.js?v=428e4c65"></script>
+  <script src="/src/js/dangal/dangal-graduation.js?v=b752c1d2"></script>
   <script src="/src/js/dangal/dangal-rating-math.js?v=8c3dbbb0"></script>
   <script src="/src/js/dangal/dangal-live-policy.js?v=acb48cc0"></script>
   <script src="/src/js/dangal/dangal-rules.js?v=38e9be46"></script>
@@ -1145,7 +1145,7 @@
   <script type="text/x-lazy" data-party-lazy src="/src/js/data/locales/hi/charades-packs.hi.js?v=8eeb101e"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/data/locales/hi/mostlikely-packs.hi.js?v=cd78b164"></script>
   <script type="text/x-lazy" data-party-lazy src="/src/js/data/locales/hi/rajamantri.hi.js?v=efac1347"></script>
-  <script src="/src/js/dangal/content-locales.js?v=ecd5d767"></script>
+  <script src="/src/js/dangal/content-locales.js?v=1f480f50"></script>
   <script src="/src/js/games/party-kit.js?v=bd460ecf"></script>
   <script src="/src/js/games/imposter.js?v=fd7f4497"></script>
   <script src="/src/js/games/party-core.js?v=639af1e0"></script>
@@ -1211,6 +1211,6 @@
   <script src="/src/js/core/polish.js?v=9553c677"></script>
   <script src="/src/js/features/fairness.js?v=9d119747"></script>
   <script src="/src/js/features/media-profile.js?v=59dcb421"></script>
-  <script src="/src/js/auth/auth-events.js?v=72db7ed5"></script>
+  <script src="/src/js/auth/auth-events.js?v=0e246671"></script>
 </body>
 </html>

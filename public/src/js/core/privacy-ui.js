@@ -438,11 +438,11 @@
     if (signed) {
       html += toggleRow('togglePersonalizedRecs', 'privacy.recs_label', 'privacy.recs_desc', prefs.personalizedRecs, {
         disabled: prefs.locked.personalizedRecs,
-        noteKey: prefs.locked.personalizedRecs ? (info.consentDependentOff ? 'privacy.locked_parent' : 'privacy.locked_teen') : null,
+        noteKey: prefs.locked.personalizedRecs ? 'privacy.locked_parent' : null,
       });
       html += toggleRow('toggleUseAi', 'privacy.ai_label', 'privacy.ai_desc', prefs.useAi, {
         disabled: prefs.locked.useAi,
-        noteKey: prefs.locked.useAi ? 'privacy.locked_parent' : teen ? 'privacy.ai_teen_default' : null,
+        noteKey: prefs.locked.useAi ? 'privacy.locked_parent' : null,
       });
       if (teen) html += toggleRow('toggleTeenDms', 'privacy.teen_dms_label', 'privacy.teen_dms_desc', prefs.teenNonFriendDms);
       if (P().showDoNotSell()) {

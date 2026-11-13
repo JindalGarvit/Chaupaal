@@ -71,7 +71,7 @@ module.exports = async function handler(req, res) {
     if (action === 'activity') {
       // Privacy-minimized activity mirror for evening-window heuristics.
       // Client posts hour buckets only; never raw Analytics exports.
-      const timezone = String(body.timezone || 'Asia/Kolkata').slice(0, 64);
+      const timezone = String(body.timezone || 'UTC').slice(0, 64);
       const hour = Number(body.hour);
       if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
         return sendError(res, 400, 'VALIDATION_ERROR', 'hour must be 0–23');
@@ -205,7 +205,7 @@ module.exports = async function handler(req, res) {
           messages: [
             {
               role: 'user',
-              content: `User returned after a lull. Timezone: ${state.timezone || 'Asia/Kolkata'}. Write a soft nudge.`,
+              content: `User returned after a lull. Timezone: ${state.timezone || 'UTC'}. Write a soft nudge.`,
             },
           ],
         });

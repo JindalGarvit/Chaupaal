@@ -87,7 +87,7 @@
       host.setAttribute('role', 'status');
       document.querySelector('.device')?.appendChild(host);
     }
-    host.innerHTML = `<span class="mx-undo-msg">${msg}</span><button type="button" class="mx-undo-btn">${typeof t === 'function' ? t('notif_undo') : 'Undo'}</button>`;
+    host.innerHTML = `<span class="mx-undo-msg">${msg}</span><button type="button" class="mx-undo-btn">${tHtml('common.undo')}</button>`;
     host.classList.add('show');
     const hide = () => host.classList.remove('show');
     const timer = setTimeout(hide, duration);

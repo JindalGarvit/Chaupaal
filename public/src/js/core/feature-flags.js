@@ -89,44 +89,44 @@
 
   /** Seed helpers for console / admin — does not write automatically. */
   const FLAG_SEEDS = {
-    search_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Universal search UI' },
-    deeplinks_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Shareable profile/post/chat URLs' },
-    rate_limit_client: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Client calls /api/check-rate before writes' },
+    search_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Universal search UI' }, // i18n-ignore (developer flag description)
+    deeplinks_v1: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Shareable profile/post/chat URLs' }, // i18n-ignore (developer flag description)
+    rate_limit_client: { enabled: true, percent: 100, allowList: [], denyList: [], note: 'Client calls /api/check-rate before writes' }, // i18n-ignore (developer flag description)
     /** Master AI kill-switch — keep enabled:false until launch checklist in CONTENT.md is done. */
     ai_features: {
       enabled: false,
       percent: 0,
       allowList: [],
       denyList: [],
-      note: 'Master AI gate. Server also requires AI_FEATURES_ENABLED=true. Granular: CAT_LIVE_AI_PAUSED, CATEGORY_CRON_PAUSED.',
+      note: 'Master AI gate. Server also requires AI_FEATURES_ENABLED=true. Granular: CAT_LIVE_AI_PAUSED, CATEGORY_CRON_PAUSED.', // i18n-ignore (developer flag description)
     },
     mehfil: {
       enabled: true,
       percent: 100,
       allowList: [],
       denyList: [],
-      note: 'Mehfil A/V rooms. Voice needs AGORA_APP_ID + AGORA_APP_CERTIFICATE. Client defaults on; set enabled:false to kill-switch.',
+      note: 'Mehfil A/V rooms. Voice needs AGORA_APP_ID + AGORA_APP_CERTIFICATE. Client defaults on; set enabled:false to kill-switch.', // i18n-ignore (developer flag description)
     },
     sensory_theme: {
       enabled: false,
       percent: 0,
       allowList: [],
       denyList: [],
-      note: 'Continuous Auto interpolation (time+weather blend). Visual Auto atmosphere always on; this flag only gates continuous vs discrete anchors.',
+      note: 'Continuous Auto interpolation (time+weather blend). Visual Auto atmosphere always on; this flag only gates continuous vs discrete anchors.', // i18n-ignore (developer flag description)
     },
     ambient_sound: {
       enabled: false,
       percent: 0,
       allowList: [],
       denyList: [],
-      note: 'Ambient sound pads for sensory theme. Independent of sensory_theme; off by default for users too.',
+      note: 'Ambient sound pads for sensory theme. Independent of sensory_theme; off by default for users too.', // i18n-ignore (developer flag description)
     },
     gif_live_search: {
       enabled: true,
       percent: 100,
       allowList: [],
       denyList: [],
-      note: 'Live Klipy GIF/sticker/meme/clip search via POST /api/media-config gif_search (+ kind). Needs KLIPY_API_KEY (server-only). Off = local GIF pack + emoji stickers.',
+      note: 'Live Klipy GIF/sticker/meme/clip search via POST /api/media-config gif_search (+ kind). Needs KLIPY_API_KEY (server-only). Off = local GIF pack + emoji stickers.', // i18n-ignore (developer flag description)
     },
   };
 

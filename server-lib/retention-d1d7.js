@@ -2,7 +2,7 @@
  * Growth G5 — honest D1–D7 retention (event-backed or clearly generic).
  *
  * Day-0 anchor: users/{uid}.createdAt (Auth signup / first profile write).
- * Calendar days use Asia/Kolkata (or chaupaalUserState.timezone).
+ * Calendar days use chaupaalUserState.timezone (UTC when unknown).
  *
  * Caps: ≤1 retention push/local day; ≤4 in first 7 days (event-backed
  * "something waiting" may exceed the 4-cap; still 1/day). Guests, Quiet,
@@ -96,7 +96,7 @@ function toMs(ts) {
   return Number.isFinite(t) ? t : null;
 }
 
-function calendarDayIndex(createdAt, tz = 'Asia/Kolkata', now = new Date()) {
+function calendarDayIndex(createdAt, tz = 'UTC', now = new Date()) {
   const ms = toMs(createdAt);
   if (!ms) return -1;
   const signupKey = localDateKey(tz, new Date(ms));
@@ -331,7 +331,7 @@ async function writeRetentionInbox(db, admin, uid, { templateId, dayKey, body, b
 async function processUserRetention(db, admin, uid, state = {}, opts = {}) {
   const dryRun = !!opts.dryRun;
   const now = opts.now || new Date();
-  const tz = state.timezone || 'Asia/Kolkata';
+  const tz = state.timezone || 'UTC';
   const todayKey = localDateKey(tz, now);
 
   let profile = {};

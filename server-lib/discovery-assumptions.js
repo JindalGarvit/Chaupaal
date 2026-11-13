@@ -15,7 +15,7 @@ const ASSUMPTION_VERSION = 1;
 const ASSUMPTION_CATALOGUE = Object.freeze([
   {
     id: 'dating_opposite_gender',
-    name: 'Opposite-gender dating default',
+    name: 'Opposite-gender dating default', // i18n-ignore (admin assumption registry)
     whenApplies:
       'searchIntent is dating/romance/marriage AND seeker shared a binary gender AND query did not specify match gender/orientation',
     whenNot: 'Seeker gender unknown/unshared; intent is not dating/romance/marriage',
@@ -24,49 +24,49 @@ const ASSUMPTION_CATALOGUE = Object.freeze([
   },
   {
     id: 'similar_age_band',
-    name: 'Similar age band',
+    name: 'Similar age band', // i18n-ignore (admin assumption registry)
     whenApplies: 'Age range not stated in query AND seeker age known',
     whenNot: 'Explicit age / any age / wide range in query',
     override: '"any age", "older", "younger", numeric range → hard or soft override',
   },
   {
     id: 'near_city_or_open',
-    name: 'Same/near city preference',
+    name: 'Same/near city preference', // i18n-ignore (admin assumption registry)
     whenApplies: 'Location not stated AND seeker city known',
     whenNot: 'Explicit city/college/anywhere/online-only',
     override: '"any city", "anywhere", "online only", named city → hard filter or loosen',
   },
   {
     id: 'intent_overlap',
-    name: 'Compatible looking-for / intent',
+    name: 'Compatible looking-for / intent', // i18n-ignore (admin assumption registry)
     whenApplies: 'Intent chip or parsed searchIntent is set',
     whenNot: 'Query is purely attribute-specific (college/company only)',
     override: 'Named looking-for text in query becomes hard filter',
   },
   {
     id: 'recently_active',
-    name: 'Prefer recently active',
+    name: 'Prefer recently active', // i18n-ignore (admin assumption registry)
     whenApplies: 'Many candidates after filters',
     whenNot: 'Query implies specific named person/attribute with tiny recall set',
     override: 'N/A — ranking boost only',
   },
   {
     id: 'fof_boost',
-    name: 'Friends-of-friends boost',
+    name: 'Friends-of-friends boost', // i18n-ignore (admin assumption registry)
     whenApplies: 'Always as soft boost when graph edges exist',
     whenNot: 'Never a hard filter unless query implies FoF ("friend of a friend")',
     override: '"only friends of friends" → hard graph filter (future)',
   },
   {
     id: 'profile_type_career',
-    name: 'Career → Professional soft boost',
+    name: 'Career → Professional soft boost', // i18n-ignore (admin assumption registry)
     whenApplies: 'Query sounds career/job/hiring/co-founder',
     whenNot: 'Dating/friendship/social intents',
     override: 'Explicit Personal/Professional preference in query',
   },
   {
     id: 'profile_type_social',
-    name: 'Social/dating → Personal soft boost',
+    name: 'Social/dating → Personal soft boost', // i18n-ignore (admin assumption registry)
     whenApplies: 'Dating/friendship/flatmate/travel social intents',
     whenNot: 'Career-sounding queries',
     override: 'Explicit Professional preference',
@@ -290,7 +290,7 @@ function applySoftAssumptions({ viewer, query, searchIntent, hardFilters, assump
     soft.cityMode = 'prefer_near';
     applied.push('near_city_or_open');
     soft.refineChips = soft.refineChips || [];
-    soft.refineChips.push({ id: 'widen_location', label: 'Widen location' });
+    soft.refineChips.push({ id: 'widen_location', label: 'Widen location' }); // i18n-ignore (admin assumption registry)
   }
 
   if (intent && intent !== 'any') {

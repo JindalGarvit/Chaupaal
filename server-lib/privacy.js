@@ -143,8 +143,6 @@ function normalizePrefPatch(userDoc, patch) {
   if (info.consentDependentOff) {
     next.personalizedRecs = false;
     next.useAi = false;
-  } else if (info.teen) {
-    next.personalizedRecs = false;
   }
   if (!info.teen) delete next.teenNonFriendDms;
   return next;
@@ -199,16 +197,6 @@ async function setBirthdate(adminApp, uid, rawDob, opts) {
     ageCheckedAt: FieldValue.serverTimestamp(),
     dobPrompt: FieldValue.delete(),
   };
-  if (teen) {
-    // Teen defaults: private profile unless they already chose; location sharing off.
-    const vis = u.profileVisibility || (u.profile && u.profile.profileVisibility);
-    if (!vis) {
-      patch.profileVisibility = 'Private';
-      patch['profile.profileVisibility'] = 'Private';
-    }
-    patch.showLocation = false;
-    patch.activitySignalsOptOut = true;
-  }
   const info = Compliance.ageInfo({ ...u, dob }, { country: region.country });
   if (!u.parentalConsent || u.parentalConsent.verified !== true) {
     patch.parentalConsent = { verified: false, required: info.needsParentalConsent };

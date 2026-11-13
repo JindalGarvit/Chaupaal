@@ -156,7 +156,7 @@ async function deliverToFounders(db, admin, digest) {
             cta: 'Open Chaupaal',
             action: 'open_chaupaal_chat',
             fromApp: true,
-            label: 'Feedback digest',
+            label: 'Feedback digest', // i18n-ignore (internal founders digest)
             digestId: digest.periodKey,
           },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),

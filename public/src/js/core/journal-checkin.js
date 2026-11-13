@@ -43,7 +43,6 @@
     const date = d || new Date();
     try {
       const fmt = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Asia/Kolkata',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -115,12 +114,7 @@
     if (!createdAtMs) return '';
     if (typeof formatTime === 'function') return formatTime(createdAtMs);
     try {
-      return new Intl.DateTimeFormat('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      }).format(new Date(createdAtMs));
+      return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(createdAtMs));
     } catch (e) {
       const d = new Date(createdAtMs);
       return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); // i18n-format fallback

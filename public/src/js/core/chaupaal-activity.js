@@ -30,9 +30,9 @@
 
   function timezone() {
     try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     } catch {
-      return 'Asia/Kolkata';
+      return 'UTC';
     }
   }
 

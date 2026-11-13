@@ -6,7 +6,7 @@
 function localDateKey(tz, date = new Date()) {
   try {
     return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz || 'Asia/Kolkata',
+      timeZone: tz || 'UTC',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -19,7 +19,7 @@ function localDateKey(tz, date = new Date()) {
 function localHour(tz, date = new Date()) {
   try {
     const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz || 'Asia/Kolkata',
+      timeZone: tz || 'UTC',
       hour: 'numeric',
       hour12: false,
     }).formatToParts(date);
@@ -39,7 +39,7 @@ function localHour(tz, date = new Date()) {
  */
 function canSendProactive(state, opts = {}) {
   const now = opts.now || new Date();
-  const tz = state?.timezone || 'Asia/Kolkata';
+  const tz = state?.timezone || 'UTC';
   const today = localDateKey(tz, now);
   const type = String(opts.type || 'nudge');
   const isJournal = !!opts.isJournal || type === 'journal' || type === 'goodnight_journal';
@@ -103,7 +103,7 @@ function canSendProactive(state, opts = {}) {
 function recordEventSent(state, { type, isJournal, sessionId, now }) {
   const next = { ...(state || {}) };
   const ts = now || new Date();
-  const tz = next.timezone || 'Asia/Kolkata';
+  const tz = next.timezone || 'UTC';
   const today = localDateKey(tz, ts);
   const eventsToday = Array.isArray(next.eventsToday) ? [...next.eventsToday] : [];
   // Drop old days
@@ -182,7 +182,7 @@ function deriveEveningWindow(hourBuckets) {
 }
 
 function isInEveningWindow(state, now = new Date()) {
-  const tz = state?.timezone || 'Asia/Kolkata';
+  const tz = state?.timezone || 'UTC';
   const hour = localHour(tz, now);
   const win = deriveEveningWindow(state?.hourBuckets);
   return hour >= win.startHour && hour < win.endHour;

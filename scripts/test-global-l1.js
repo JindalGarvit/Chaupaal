@@ -9,7 +9,7 @@ const path = require('path');
 const vm = require('vm');
 const { loadI18n, ROOT } = require('./lib/i18n-runtime');
 const cssLogical = require('./css-logical');
-const { lint } = require('./i18n-lint');
+const { lint, scanJs } = require('./i18n-lint');
 const { coverage } = require('./i18n-coverage');
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -246,8 +246,8 @@ async function run() {
   {
     const res = lint();
     const base = JSON.parse(read('scripts/i18n-lint-baseline.json'));
-    // Extraction arcs (L2+) empty whole surfaces, so only "the lint found something somewhere" is stable.
-    assert(res.total > 0 && Object.keys(res.bySurface).length >= 1, `lint ran: ${res.total} hard-coded strings across ${Object.keys(res.bySurface).length} surfaces`);
+    const probe = scanJs('public/src/js/core/probe.js', "showToast('Something went wrong with the upload');");
+    assert(Array.isArray(res.hits) && probe.length > 0, `lint ran and still detects hard-coded copy (app total now ${res.total})`);
     const worse = Object.entries(res.bySurface).filter(([s, n]) => n > (base.bySurface[s] || 0));
     assert(worse.length === 0, 'no surface above its baseline (ratchet) ' + worse.map((w) => w.join('=')).join(' '));
     assert(res.hits.every((h) => h.file && h.line > 0 && h.text), 'every hit has file:line + text');

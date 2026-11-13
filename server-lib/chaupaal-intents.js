@@ -29,7 +29,7 @@ function buildIntentCatalog() {
     {
       id: 'peepal.search',
       category: 'navigate',
-      label: 'Search Chaupaal',
+      label: 'Search Chaupaal', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'search',
       keywords: ['search', 'look up', 'find someone'],
       phrases: [/search (for|chaupaal)/i],
@@ -61,7 +61,7 @@ function buildIntentCatalog() {
     {
       id: 'duniya.post',
       category: 'create',
-      label: 'Create Duniya post',
+      label: 'Create Duniya post', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'image',
       keywords: ['post', 'photo', 'upload', 'duniya post', 'share photo'],
       phrases: [/post (a |on )?duniya/i, /share (a )?photo/i, /create (a )?post/i],
@@ -71,7 +71,7 @@ function buildIntentCatalog() {
     {
       id: 'duniya.story',
       category: 'create',
-      label: 'Post a Duniya story',
+      label: 'Post a Duniya story', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'circle',
       keywords: ['story', 'stories', 'duniya story'],
       phrases: [/post (a )?story/i, /add (a )?story/i, /new story/i],
@@ -81,7 +81,7 @@ function buildIntentCatalog() {
     {
       id: 'baithak.split',
       category: 'create',
-      label: 'New Split story',
+      label: 'New Split story', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'zap',
       keywords: ['split', 'baithak story', 'status'],
       phrases: [/new split/i, /baithak story/i],
@@ -101,7 +101,7 @@ function buildIntentCatalog() {
     {
       id: 'peepal.form',
       category: 'create',
-      label: 'Peepal form poll',
+      label: 'Peepal form poll', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'list',
       keywords: ['form', 'poll', 'survey'],
       phrases: [/create (a )?(form|poll)/i],
@@ -121,7 +121,7 @@ function buildIntentCatalog() {
     {
       id: 'muqabala.challenge',
       category: 'create',
-      label: 'Muqabala challenge',
+      label: 'Muqabala challenge', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'swords',
       keywords: ['muqabala', 'quiz challenge', 'trivia'],
       phrases: [/muqabala/i, /quiz challenge/i],
@@ -152,7 +152,7 @@ function buildIntentCatalog() {
     {
       id: 'social.message_friend',
       category: 'social',
-      label: 'Message a friend',
+      label: 'Message a friend', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'message',
       keywords: ['message', 'dm', 'text friend', 'chat with'],
       phrases: [/message (a |my )?friend/i, /dm (someone|friend)/i],
@@ -172,7 +172,7 @@ function buildIntentCatalog() {
     {
       id: 'social.invite',
       category: 'social',
-      label: 'Invite friends',
+      label: 'Invite friends', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'share',
       keywords: ['invite', 'share app', 'refer'],
       phrases: [/invite (friends|someone)/i],
@@ -183,7 +183,7 @@ function buildIntentCatalog() {
     {
       id: 'profile.open',
       category: 'profile',
-      label: 'Open your profile',
+      label: 'Open your profile', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'user',
       keywords: ['my profile', 'open profile'],
       phrases: [/open (my )?profile/i],
@@ -213,7 +213,7 @@ function buildIntentCatalog() {
     {
       id: 'profile.journal',
       category: 'profile',
-      label: 'Private journal',
+      label: 'Private journal', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'book',
       keywords: ['journal', 'diary', 'private notes'],
       phrases: [/open (my )?journal/i, /write (in )?journal/i],
@@ -243,7 +243,7 @@ function buildIntentCatalog() {
     {
       id: 'money.account',
       category: 'profile',
-      label: 'Chaupaal Money',
+      label: 'Chaupaal Money', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'wallet',
       keywords: ['money', 'balance', 'pradhan', 'wallet', 'account'],
       phrases: [/chaupaal money/i, /my balance/i],
@@ -264,7 +264,7 @@ function buildIntentCatalog() {
     {
       id: 'tool.search',
       category: 'help',
-      label: 'Search Chaupaal',
+      label: 'Search Chaupaal', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'search',
       keywords: ['search'],
       phrases: [/^search\b/i],
@@ -294,7 +294,7 @@ function buildIntentCatalog() {
     {
       id: 'help.what_can_you_do',
       category: 'help',
-      label: 'What can you do?',
+      label: 'What can you do?', // i18n-ignore (fallback; the client shows its own catalog label by intent id)
       icon: 'help-circle',
       keywords: ['help', 'what can you do', 'commands', 'menu'],
       phrases: [/what can you do/i, /^help$/i, /show (me )?options/i],
@@ -359,7 +359,7 @@ function parseChaupaalIntents(text, catalog = INTENT_CATALOG) {
     else if (best.score >= 28) confidence = 'med';
   }
   if (/^help$|what can you do/i.test(raw)) {
-    return { matches: [{ id: 'help.what_can_you_do', score: 99, label: 'What can you do?', category: 'help', icon: 'help-circle' }], best: { id: 'help.what_can_you_do', score: 99, label: 'What can you do?', category: 'help', icon: 'help-circle' }, confidence: 'high' };
+    return { matches: [{ id: 'help.what_can_you_do', score: 99, label: 'What can you do?', category: 'help', icon: 'help-circle' }], best: { id: 'help.what_can_you_do', score: 99, label: 'What can you do?', category: 'help', icon: 'help-circle' }, confidence: 'high' }; // i18n-ignore (fallback; the client shows its own catalog label by intent id)
   }
   return { matches, best, confidence };
 }

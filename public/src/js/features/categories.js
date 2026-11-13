@@ -790,17 +790,17 @@ document.addEventListener('click',e=>{
 
 // ===================== PEEPAL =====================
 const SAMPLE_PEEPAL=[
-  {id:'p1',isSample:true,user:{name:'Riya Sharma',avatar:'😊',city:'Mumbai',profileType:'personal'},question:t('peepal.if_you_could_only_read_one'),format:'mcq',options:['Sports 🏏','Tech 💻','World 🌍','Business 📈'],responses:[42,38,15,5],totalResponses:100,comments:12,timeAgo:'2h',tag:'Lifestyle',answered:false},
-  {id:'p2',isSample:true,user:{name:'Arjun Mehta',avatar:'🏔️',city:'Delhi',profileType:'personal'},question:t('peepal.do_you_think_ai_generated_news'),format:'binary',options:['Yes, always','No, quality is all that matters'],responses:[68,32],totalResponses:100,comments:28,timeAgo:'4h',tag:'Tech',answered:false},
-  {id:'p3',isSample:true,user:{name:'Priya Nair',avatar:'👩',city:'Bengaluru',profileType:'professional'},question:t('peepal.what_time_do_you_usually_read'),format:'mcq',options:['Morning with chai ☕','During lunch 🍛','Evening commute 🚇','Before bed 🌙'],responses:[55,18,20,7],totalResponses:100,comments:8,timeAgo:'6h',tag:'Habits',answered:false},
-  {id:'p4',isSample:true,user:{name:'Dev Sharma',avatar:'👨',city:'Pune',profileType:'personal'},question:t('peepal.tell_us_what_news_story_has'),format:'open',totalResponses:47,comments:15,timeAgo:'1d',tag:'Personal',answered:false},
+  {id:'p1',isSample:true,user:{name:'Maya Chen',avatar:'😊',city:'Toronto',profileType:'personal'},question:t('peepal.if_you_could_only_read_one'),format:'mcq',options:[t('peepal.sample_opt_sports'),t('peepal.sample_opt_tech'),t('peepal.sample_opt_world'),t('peepal.sample_opt_business')],responses:[42,38,15,5],totalResponses:100,comments:12,timeAgo:'2h',tag:'Lifestyle',answered:false},
+  {id:'p2',isSample:true,user:{name:'Arjun Mehta',avatar:'🏔️',city:'London',profileType:'personal'},question:t('peepal.do_you_think_ai_generated_news'),format:'binary',options:[t('peepal.sample_opt_yes_always'),t('peepal.sample_opt_no_quality')],responses:[68,32],totalResponses:100,comments:28,timeAgo:'4h',tag:'Tech',answered:false},
+  {id:'p3',isSample:true,user:{name:'Sofia Alves',avatar:'👩',city:'São Paulo',profileType:'professional'},question:t('peepal.what_time_do_you_usually_read'),format:'mcq',options:[t('peepal.sample_opt_morning'),t('peepal.sample_opt_lunch'),t('peepal.sample_opt_commute'),t('peepal.sample_opt_bed')],responses:[55,18,20,7],totalResponses:100,comments:8,timeAgo:'6h',tag:'Habits',answered:false},
+  {id:'p4',isSample:true,user:{name:'Dev Sharma',avatar:'👨',city:'Mumbai',profileType:'personal'},question:t('peepal.tell_us_what_news_story_has'),format:'open',totalResponses:47,comments:15,timeAgo:'1d',tag:'Personal',answered:false},
 ];
 
 const SAMPLE_COMMENTS=[
-  {id:'pc1',parentId:null,user:{name:'Riya Sharma',avatar:'😊',profileType:'personal'},text:t('peepal.such_a_thought_provoking_question_i'),time:'1h'},
+  {id:'pc1',parentId:null,user:{name:'Maya Chen',avatar:'😊',profileType:'personal'},text:t('peepal.such_a_thought_provoking_question_i'),time:'1h'},
   {id:'pc2',parentId:'pc1',user:{name:'Dev Sharma',avatar:'👨',profileType:'personal'},text:t('peepal.completely_agree_especially_with_a_good'),time:'45m'},
   {id:'pc3',parentId:'pc1',user:{name:'Asha',avatar:'🌸',profileType:'personal'},text:t('peepal.same_here_morning_chai_akhbaar_is'),time:'30m'},
-  {id:'pc4',parentId:null,user:{name:'Priya Nair',avatar:'👩',profileType:'professional'},text:t('peepal.night_owls_unite_i_always_read'),time:'3h'},
+  {id:'pc4',parentId:null,user:{name:'Sofia Alves',avatar:'👩',profileType:'professional'},text:t('peepal.night_owls_unite_i_always_read'),time:'3h'},
   {id:'pc5',parentId:'pc4',user:{name:'Vikram',avatar:'🧑',profileType:'personal'},text:t('peepal.night_crew_checking_in'),time:'2h'},
 ];
 

@@ -709,7 +709,7 @@ function showYearlyWrap(){
 function journalLocalDayKey(){
   if (typeof JournalCheckIn?.istDateKey === 'function') return JournalCheckIn.istDateKey();
   try{
-    return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    return new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   }catch(e){
     return new Date().toISOString().slice(0,10);
   }

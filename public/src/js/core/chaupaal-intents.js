@@ -191,7 +191,7 @@
         actions: picks.map((m, idx) => ({
           id: m.id,
           intentId: m.id,
-          label: m.label || intents.get(m.id)?.label || m.id,
+          label: intents.get(m.id)?.label || m.label || m.id,
           icon: m.icon || intents.get(m.id)?.icon || 'compass',
           primary: idx === 0,
         })),

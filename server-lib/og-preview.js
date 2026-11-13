@@ -141,48 +141,49 @@ function sendHtml(res, html, cacheControl = CACHE_PUBLIC, method) {
   return res.status(200).send(html);
 }
 
-function genericCard(origin, pathHint) {
+function genericCard(origin, pathHint, lang) {
   return {
-    title: 'Chaupaal',
-    description: 'Gather under the same light — news, discussions, games, and friends.',
+    title: 'Chaupaal', // i18n-ignore (brand)
+    description: ogText(lang || 'en', 'common.og_default_desc', 'Gather under the same light'),
     image: DEFAULT_IMAGE_PATH,
     url: `${origin}${pathHint || '/'}`,
     cacheControl: CACHE_GENERIC,
   };
 }
 
-async function buildProfileOg(db, origin, usernameRaw) {
+async function buildProfileOg(db, origin, usernameRaw, lang) {
+  const L = lang || 'en';
   const uname = String(usernameRaw || '')
     .replace(/^@/, '')
     .toLowerCase()
     .trim()
     .slice(0, 40);
   const path = `/profile/${encodeURIComponent(uname)}`;
-  if (!uname || !db) return genericCard(origin, path);
+  if (!uname || !db) return genericCard(origin, path, L);
 
   let uid = '';
   try {
     const snap = await db.collection('usernames').doc(uname).get();
-    if (!snap.exists) return { ...genericCard(origin, path), title: 'Someone on Chaupaal' };
+    if (!snap.exists) return { ...genericCard(origin, path), title: ogText(L, 'common.og_someone', 'Chaupaal') };
     uid = snap.data()?.uid || '';
   } catch (e) {
-    return genericCard(origin, path);
+    return genericCard(origin, path, L);
   }
-  if (!uid) return { ...genericCard(origin, path), title: 'Someone on Chaupaal' };
+  if (!uid) return { ...genericCard(origin, path), title: ogText(L, 'common.og_someone', 'Chaupaal') };
 
   let pub = {};
   try {
     const pSnap = await db.collection('users_public').doc(uid).get();
     pub = pSnap.exists ? pSnap.data() || {} : {};
   } catch (e) {
-    return { ...genericCard(origin, path), title: 'Someone on Chaupaal' };
+    return { ...genericCard(origin, path), title: ogText(L, 'common.og_someone', 'Chaupaal') };
   }
 
   const vis = pub.profileVisibility || pub.profile?.profileVisibility || 'public';
   if (isRestrictedVisibility(vis)) {
     return {
-      title: 'Someone on Chaupaal',
-      description: 'Join Chaupaal to connect — this profile is limited.',
+      title: ogText(L, 'common.og_someone', 'Chaupaal'),
+      description: ogText(L, 'common.og_profile_limited', 'Chaupaal'),
       image: DEFAULT_IMAGE_PATH,
       url: `${origin}${path}`,
       cacheControl: CACHE_GENERIC,
@@ -192,25 +193,26 @@ async function buildProfileOg(db, origin, usernameRaw) {
   const name = pub.name || pub.profile?.displayName || uname;
   const bio = snippet(pub.bio || pub.profile?.bio || '');
   const type = String(pub.profileType || pub.profile?.profileType || '').toLowerCase();
-  const badge = type === 'professional' ? ' · Professional' : '';
+  const badge = type === 'professional' ? ' · ' + ogText(L, 'common.professional', 'Professional') : '';
   const photo = pub.photoURL || pub.photoThumb || pub.avatar || '';
   const image = /^https:\/\//i.test(String(photo)) ? photo : DEFAULT_IMAGE_PATH;
 
   return {
     title: `${name} (@${uname})${badge}`,
-    description: bio || `See @${uname} on Chaupaal`,
+    description: bio || ogText(L, 'common.og_see_profile', 'Chaupaal', { username: uname }),
     image,
     url: `${origin}${path}`,
     cacheControl: CACHE_PUBLIC,
   };
 }
 
-async function buildPostOg(db, origin, postIdRaw) {
+async function buildPostOg(db, origin, postIdRaw, lang) {
+  const L = lang || 'en';
   const id = String(postIdRaw || '')
     .trim()
     .slice(0, 180);
   const path = `/post/${encodeURIComponent(id)}`;
-  if (!id || !db) return genericCard(origin, path);
+  if (!id || !db) return genericCard(origin, path, L);
 
   let data = null;
   let surface = 'Duniya';
@@ -227,11 +229,11 @@ async function buildPostOg(db, origin, postIdRaw) {
       }
     }
   } catch (e) {
-    return { ...genericCard(origin, path), title: 'A post on Chaupaal' };
+    return { ...genericCard(origin, path), title: ogText(L, 'common.og_a_post', 'Chaupaal') };
   }
 
   if (!data) {
-    return { ...genericCard(origin, path), title: 'A post on Chaupaal' };
+    return { ...genericCard(origin, path), title: ogText(L, 'common.og_a_post', 'Chaupaal') };
   }
 
   const audience = String(data.audience || 'public').toLowerCase();
@@ -241,8 +243,8 @@ async function buildPostOg(db, origin, postIdRaw) {
     (audience && audience !== 'public');
   if (gated) {
     return {
-      title: 'A post on Chaupaal',
-      description: 'Open Chaupaal to view this post.',
+      title: ogText(L, 'common.og_a_post', 'Chaupaal'),
+      description: ogText(L, 'common.og_open_post', 'Chaupaal'),
       image: DEFAULT_IMAGE_PATH,
       url: `${origin}${path}`,
       cacheControl: CACHE_GENERIC,
@@ -250,7 +252,7 @@ async function buildPostOg(db, origin, postIdRaw) {
   }
 
   const caption = snippet(data.caption || data.text || data.question || data.title || '');
-  const author = data.userName || data.name || data.authorName || 'Someone';
+  const author = data.userName || data.name || data.authorName || ogText(L, 'common.someone', 'Someone');
   const media =
     data.mediaUrl ||
     data.thumbUrl ||
@@ -260,20 +262,21 @@ async function buildPostOg(db, origin, postIdRaw) {
   const image = /^https:\/\//i.test(String(media)) ? media : DEFAULT_IMAGE_PATH;
 
   return {
-    title: `${author} on ${surface}`,
-    description: caption || `A ${surface} post on Chaupaal`,
+    title: ogText(L, 'common.og_author_on', author, { author, surface }),
+    description: caption || ogText(L, 'common.og_surface_post', 'Chaupaal', { surface }),
     image,
     url: `${origin}${path}`,
     cacheControl: CACHE_PUBLIC,
   };
 }
 
-function buildChallengeOg(origin, gameId, query) {
+function buildChallengeOg(origin, gameId, query, lang) {
+  const L = lang || 'en';
   const game = String(gameId || query.game || 'quiz')
     .trim()
     .slice(0, 40) || 'quiz';
   const score = query.score != null ? String(query.score).slice(0, 24) : '';
-  const name = snippet(query.name || query.challenge || '', 40) || 'Someone';
+  const name = snippet(query.name || query.challenge || '', 40) || ogText(L, 'common.someone', 'Someone');
   const cat = snippet(query.cat || '', 40);
   const params = new URLSearchParams();
   if (score) params.set('score', score);
@@ -287,24 +290,24 @@ function buildChallengeOg(origin, gameId, query) {
       : game === 'akhbaar'
         ? 'Akhbaar'
         : game;
-  const scoreBit = score ? ` score ${score}` : '';
   const catBit = cat ? ` · ${cat}` : '';
   return {
-    title: `Beat ${name} on ${gameLabel}`,
-    description: `${name} challenged you${scoreBit}${catBit}. Play on Chaupaal.`,
+    title: ogText(L, 'common.og_beat', name, { name, game: gameLabel }),
+    description: ogText(L, score ? 'common.og_challenged_score' : 'common.og_challenged', name, { name, score }) + catBit,
     image: DEFAULT_IMAGE_PATH,
     url: `${origin}${path}`,
     cacheControl: CACHE_PUBLIC,
   };
 }
 
-async function buildStoryOg(db, origin, storyId) {
+async function buildStoryOg(db, origin, storyId, lang) {
+  const L = lang || 'en';
   const id = String(storyId || '').trim().slice(0, 180);
   const path = `/story/${encodeURIComponent(id)}`;
   // Stories are often private/ephemeral — keep generic (honest)
   return {
-    title: 'A story on Chaupaal',
-    description: 'Open Chaupaal to view this story.',
+    title: ogText(L, 'common.og_a_story', 'Chaupaal'),
+    description: ogText(L, 'common.og_open_story', 'Chaupaal'),
     image: DEFAULT_IMAGE_PATH,
     url: `${origin}${path}`,
     cacheControl: CACHE_GENERIC,
@@ -328,41 +331,35 @@ async function handleOgGet(req, res) {
   }
   const db = admin ? admin.firestore() : null;
 
+  const lang = ogLang(req);
   let card;
   if (kind === 'profile' || kind === 'u') {
-    card = await buildProfileOg(db, origin, id);
+    card = await buildProfileOg(db, origin, id, lang);
   } else if (kind === 'post' || kind === 'p') {
-    card = await buildPostOg(db, origin, id);
+    card = await buildPostOg(db, origin, id, lang);
   } else if (kind === 'challenge' || kind === 'beat') {
-    card = buildChallengeOg(origin, id || q.game, q);
+    card = buildChallengeOg(origin, id || q.game, q, lang);
   } else if (kind === 'invite') {
     // Code is username — reuse profile projection (Friends-only → generic)
-    card = await buildProfileOg(db, origin, id);
+    card = await buildProfileOg(db, origin, id, lang);
     if (card && card.title === 'Chaupaal') {
       card = {
-        title: 'Join me on Chaupaal',
-        description: 'A warmer place to chat, play, and catch up. Virtual chips · not real money.',
+        title: ogText(lang, 'common.og_invite_title', 'Chaupaal'),
+        description: ogText(lang, 'common.og_invite_desc', 'Chaupaal'),
         image: DEFAULT_IMAGE_PATH,
         url: `${origin}/invite/${encodeURIComponent(id || '')}`,
         cacheControl: CACHE_GENERIC,
       };
     } else if (card) {
       card.url = `${origin}/invite/${encodeURIComponent(String(id || '').toLowerCase())}`;
-      card.description = (card.description || '') + ' · Invite link';
+      card.description = (card.description || '') + ' · ' + ogText(lang, 'common.og_invite_link', 'Invite');
     }
   } else if (kind === 'story') {
-    card = await buildStoryOg(db, origin, id);
+    card = await buildStoryOg(db, origin, id, lang);
   } else {
-    card = genericCard(origin, '/');
+    card = genericCard(origin, '/', lang);
   }
 
-  const lang = ogLang(req);
-  // Generic / invite cards are our copy → the viewer's language; user-written titles stay as written.
-  if (card && card.title === 'Chaupaal') card.description = ogText(lang, 'common.og_default_desc', card.description);
-  if (card && card.title === 'Join me on Chaupaal') {
-    card.title = ogText(lang, 'common.og_invite_title', card.title);
-    card.description = ogText(lang, 'common.og_invite_desc', card.description);
-  }
   res.setHeader('Vary', 'Accept-Language');
   const html = renderOgHtml({ origin, ...card, lang });
   return sendHtml(res, html, card.cacheControl || CACHE_PUBLIC, req.method);
@@ -379,6 +376,7 @@ module.exports = {
   buildProfileOg,
   buildPostOg,
   buildChallengeOg,
+  buildStoryOg,
   genericCard,
   DEFAULT_IMAGE_PATH,
 };

@@ -243,7 +243,7 @@ function createClassicsAdapters({ err }) {
   // ------------------------------------------------------------ Snakes & Ladders
 
   const snakes = diceAdapter('snakes', SnakesCore, {
-    label: 'Snakes & Ladders',
+    label: 'Snakes & Ladders', // i18n-ignore (game name)
     maxSeats: SnakesCore.MAX_PLAYERS,
     levels: ['normal'],
     turnMs: Policy.policyFor('snakes').turnMs || 15000,

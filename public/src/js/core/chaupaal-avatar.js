@@ -324,7 +324,7 @@
 
   function chaupaalAvatarHtml(profile, { size = 44, className = 'cp-gift-avatar', alt = '', decorative = true } = {}) {
     const svg = buildChaupaalAvatarSvg(profile, { size });
-    const label = alt || `Avatar for ${displayNameFor(profile)}`;
+    const label = alt || t('common.avatar_for', { name: displayNameFor(profile) });
     if (decorative) {
       return `<span class="${esc(className)}" role="img" aria-label="${esc(label)}">${svg}</span>`;
     }
@@ -338,11 +338,7 @@
       if (localStorage.getItem('chaupaal_gift_avatar_noted') === '1') return;
       if (getAvatarDisplay(profile) !== 'gift') return;
       localStorage.setItem('chaupaal_gift_avatar_noted', '1');
-      const msg =
-        typeof t === 'function' && t('gift_avatar_intro') !== 'gift_avatar_intro'
-          ? t('gift_avatar_intro')
-          : 'Chaupaal made this avatar for you — it grows as you add to your profile. Add a photo anytime.';
-      if (typeof showToast === 'function') showToast(msg);
+      if (typeof showToast === 'function') showToast(t('profile.gift_avatar_intro'));
     } catch (e) {}
   }
 

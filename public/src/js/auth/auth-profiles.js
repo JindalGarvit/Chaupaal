@@ -390,7 +390,7 @@
     if (typeof showAuth === 'function') showAuth();
     showAuthScreenSafe('authLoginScreen');
     const id =
-      slot.username || slot.email || (slot.phone ? slot.phone.replace(/^\+91/, '') : '');
+      slot.username || slot.email || (slot.phone || '');
     const idInp = document.getElementById('loginIdentifier');
     if (idInp && id) idInp.value = id;
     if (typeof showToast === 'function') {

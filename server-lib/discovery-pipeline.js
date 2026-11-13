@@ -501,12 +501,12 @@ async function runIntentDiscover(db, admin, user, body, deps) {
 
   const refineChips = [...((plan.softAssumptions && plan.softAssumptions.refineChips) || [])];
   if (plan.appliedAssumptionIds.includes('dating_opposite_gender')) {
-    refineChips.push({ id: 'include_everyone', label: 'Include everyone' });
+    refineChips.push({ id: 'include_everyone', label: 'Include everyone' }); // i18n-ignore (fallback; the client shows discovery.refine.<id>)
   }
   // AI-off vague free text: soft refine hint — never hard-reject (K1)
   const tokenCount = query.split(/\s+/).filter((w) => w.length > 2).length;
   if (!usedLlm && plan.searchIntent === 'any' && tokenCount < 3) {
-    refineChips.push({ id: 'add_detail', label: 'Add interests or city' });
+    refineChips.push({ id: 'add_detail', label: 'Add interests or city' }); // i18n-ignore (fallback; the client shows discovery.refine.<id>)
   }
 
   return {

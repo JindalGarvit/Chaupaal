@@ -29,18 +29,9 @@
   const AGE_LOCK_DAYS = 7;
   const DAY_MS = 86400000;
 
-  const TEEN_RULES = [
-    'peepal_stricter',
-    'adult_games_hidden',
-    'dms_friends_only',
-    'profile_private',
-    'no_personalised_ads',
-    'no_behavioural_tracking',
-    'sensitive_fields_hidden',
-    'location_off',
-    'strict_discovery',
-    'ai_conservative',
-  ];
+  /** What Teen mode changes. AI, activity signals, personalisation, location sharing and profile-field
+   *  display follow the teen's own settings, as for adults. */
+  const TEEN_RULES = ['peepal_stricter', 'adult_games_hidden', 'dms_friends_only', 'strict_discovery'];
 
   function code(c) {
     return String(c || '').trim().toUpperCase().slice(0, 2);
@@ -168,18 +159,19 @@
 
   /**
    * Effective privacy prefs. Stored as users/{uid}.privacy { personalizedRecs, useAi, doNotSell, teenNonFriendDms }.
-   * Teens: personalised recommendations off (no behavioural profiling) and AI off by default (may opt in);
-   * pending parental consent: both locked off.
+   * Same defaults for teens and adults; pending parental consent locks personalisation + AI off.
    */
   function privacyPrefs(u, opts) {
     const o = opts || {};
     const info = ageInfo(u, o);
     const p = (u && u.privacy) || {};
     const consentLock = info.consentDependentOff;
-    const recsLocked = consentLock || info.teen;
+    // Teens get the same defaults as adults (product call, D1); only a legally required pending
+    // parental consent switches consent-dependent processing off.
+    const recsLocked = consentLock;
     return {
       personalizedRecs: recsLocked ? false : p.personalizedRecs !== false,
-      useAi: consentLock ? false : info.teen ? p.useAi === true : p.useAi !== false,
+      useAi: consentLock ? false : p.useAi !== false,
       doNotSell: p.doNotSell === true || o.gpc === true,
       teenNonFriendDms: info.teen && p.teenNonFriendDms === true,
       locked: { personalizedRecs: recsLocked, useAi: consentLock },

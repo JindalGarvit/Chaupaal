@@ -46,10 +46,6 @@
     return false;
   }
 
-  function teenBlocks(type) {
-    return new Set(['impression', 'dwell', 'search', 'result_click', 'media_start', 'media_complete']).has(type);
-  }
-
   function newEventId() {
     if (typeof newIdempotencyKey === 'function') return newIdempotencyKey('sig');
     return `sig_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -94,8 +90,6 @@
     try {
       if (!type || isOptedOut()) return;
       if (!currentUser) return;
-      if (isTeen() && teenBlocks(type)) return;
-
       const o = opts || {};
       if (type === 'impression') {
         const key = `${o.surface || ''}:${o.objId || ''}:${sessionId()}`;
@@ -183,7 +177,6 @@
   /** Observe feed cards for sampled impressions + dwell. */
   function observeFeedImpressions(root, { surface, idAttr = 'data-id', objType = 'post' } = {}) {
     if (!root || typeof IntersectionObserver === 'undefined' || isOptedOut()) return () => {};
-    if (isTeen()) return () => {};
     const dwellStart = new Map();
     const io = new IntersectionObserver(
       (entries) => {

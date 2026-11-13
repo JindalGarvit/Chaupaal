@@ -997,6 +997,13 @@ function wireAuthEvents() {
       btn.dataset.iconHydrated = '1';
     }
   });
+  /** National phone numbers only make sense with the user's region code, so E.164 is built here. */
+  function resolveIdentifierBody(raw) {
+    const phoneLike = /^\+?[\d\s\-().]{6,}$/.test(raw);
+    const phone = phoneLike && typeof PhoneOtp !== 'undefined' && PhoneOtp.toE164 ? PhoneOtp.toE164(raw) : null;
+    return phone ? { action: 'resolve_identifier', identifier: raw, phone } : { action: 'resolve_identifier', identifier: raw };
+  }
+
   document.getElementById('forgotPasswordBtn')?.addEventListener('click', async () => {
     const raw = document.getElementById('loginIdentifier')?.value.trim();
     const errEl = document.getElementById('loginError');
@@ -1009,7 +1016,7 @@ function wireAuthEvents() {
       try {
         const envelope = await apiFetch('/api/media-config', {
           method: 'POST',
-          body: { action: 'resolve_identifier', identifier: raw },
+          body: resolveIdentifierBody(raw),
         });
         email = envelope?.data?.email || '';
       } catch (e) {}
@@ -1030,16 +1037,6 @@ function wireAuthEvents() {
   let regPhoneVerified = '';
   const LOGIN_OTP_HOST = 'recaptcha-container';
   const REG_OTP_HOST = 'recaptcha-container-reg';
-
-  function toE164India(raw) {
-    if (typeof PhoneOtp !== 'undefined' && PhoneOtp.toE164India) return PhoneOtp.toE164India(raw);
-    const s = String(raw || '').trim();
-    const digits = s.replace(/\D/g, '');
-    if (digits.length === 10) return '+91' + digits;
-    if (digits.length === 12 && digits.startsWith('91')) return '+' + digits;
-    if (s.startsWith('+') && digits.length >= 10) return '+' + digits;
-    return null;
-  }
 
   function setOtpStatus(elId, text, ok) {
     const el = document.getElementById(elId);
@@ -1396,7 +1393,7 @@ function wireAuthEvents() {
         if (typeof apiFetch !== 'function') throw Object.assign(new Error('resolve_unavailable'), { code: 'resolve' });
         const envelope = await apiFetch('/api/media-config', {
           method: 'POST',
-          body: { action: 'resolve_identifier', identifier },
+          body: resolveIdentifierBody(identifier),
         });
         email = envelope?.data?.email || '';
         if (!email || envelope?.data?.notFound) {
@@ -1846,8 +1843,6 @@ function wireAuthEvents() {
                 ? ChaupaalCompliance.ageInfo({ dob: regData.dob }, { country: ChaupaalRegion?.getRegion?.().country }).needsParentalConsent
                 : !!regData.teenMode,
           },
-          // Teen defaults (Global L8): private profile, no location on the public card, no behavioural signals.
-          ...(regData.teenMode ? { profileVisibility: 'Private', showLocation: false, activitySignalsOptOut: true } : {}),
           photoURL,
           photoThumb: photoThumb || null,
           profileType,

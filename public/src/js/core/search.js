@@ -605,6 +605,14 @@
     }
   }
 
+  /** Server results may carry catalog keys (titleKey / subtitleKey) instead of English (D1). */
+  function subOf(r) {
+    return r.subtitleKey ? t(r.subtitleKey) : r.subtitle;
+  }
+  function titleOf(r) {
+    return r.titleKey ? t(r.titleKey) : r.title;
+  }
+
   function renderResultRow(r) {
     if (r.category === 'users' || r.type === 'user' || r.category === 'log' || r.category === 'personal' || r.category === 'professional') {
       const cat = r.category === 'personal' || r.category === 'professional' ? r.category : 'log';
@@ -613,7 +621,7 @@
           <div class="us-result-avatar">${typeof renderUserAvatarHtml==='function'?renderUserAvatarHtml(r,{decorative:true}):(r.photoURL?`<img src="${escapeSearchHtml(r.photoURL)}" alt="">`:'👤')}</div>
           <div class="us-result-meta">
             <div class="us-result-title">${typeof formatDisplayNameHtml === 'function' ? formatDisplayNameHtml(r.name || r.username, r) : escapeSearchHtml(r.name || r.username)}</div>
-            <div class="us-result-sub">@${escapeSearchHtml(r.username || 'user')}${r.subtitle ? ' · ' + escapeSearchHtml(r.subtitle) : ''}${r.profileType === 'professional' ? ' · Pro' : ''}</div>
+            <div class="us-result-sub">@${escapeSearchHtml(r.username || t('common.user'))}${subOf(r) ? ' · ' + escapeSearchHtml(subOf(r)) : ''}${r.profileType === 'professional' ? ' · ' + escapeSearchHtml(t('common.pro_badge')) : ''}</div>
           </div>
         </button>`;
     }
@@ -625,8 +633,8 @@
         <button type="button" class="us-result" data-cat="groups" data-id="${escapeSearchHtml(r.id)}">
           <div class="us-result-avatar">${av}</div>
           <div class="us-result-meta">
-            <div class="us-result-title">${escapeSearchHtml(r.title || r.name)}</div>
-            <div class="us-result-sub">${escapeSearchHtml(r.subtitle || '')}</div>
+            <div class="us-result-title">${escapeSearchHtml(titleOf(r) || r.name)}</div>
+            <div class="us-result-sub">${escapeSearchHtml(subOf(r) || '')}</div>
           </div>
         </button>`;
     }
@@ -636,7 +644,7 @@
           <div class="us-result-avatar">🎮</div>
           <div class="us-result-meta">
             <div class="us-result-title">${escapeSearchHtml(r.title || r.name || '')}</div>
-            <div class="us-result-sub">${escapeSearchHtml(r.subtitle || 'Dangal')}</div>
+            <div class="us-result-sub">${escapeSearchHtml(subOf(r) || 'Dangal')}</div>
           </div>
         </button>`;
     }
@@ -650,7 +658,7 @@
           <div class="us-result-avatar">${r.photoURL ? `<img src="${escapeSearchHtml(r.photoURL)}" alt="">` : cat === 'peepal' ? '🌳' : '🌍'}</div>
           <div class="us-result-meta">
             <div class="us-result-title">${escapeSearchHtml(r.title || '')}</div>
-            <div class="us-result-sub">${escapeSearchHtml(r.subtitle || '')}</div>
+            <div class="us-result-sub">${escapeSearchHtml(subOf(r) || '')}</div>
           </div>
         </button>
         <div class="us-post-engage" data-nav-ignore="1">

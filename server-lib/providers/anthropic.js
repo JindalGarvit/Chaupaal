@@ -9,12 +9,14 @@ const WEB_SEARCH_TOOL = {
   type: 'web_search_20250305',
   name: 'web_search',
   max_uses: 2,
-  user_location: {
-    type: 'approximate',
-    country: 'IN',
-    timezone: 'Asia/Kolkata',
-  },
 };
+
+/** Global-first (D1): no default country; a caller may pass the user's region for local results. */
+function webSearchTool(req) {
+  const country = String((req && req.country) || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) return WEB_SEARCH_TOOL;
+  return { ...WEB_SEARCH_TOOL, user_location: { type: 'approximate', country, ...(req.timezone ? { timezone: String(req.timezone).slice(0, 64) } : {}) } };
+}
 
 /**
  * @param {{ model: string, messages: array, system?: string, max_tokens?: number, enableWebSearch?: boolean }} req
@@ -34,7 +36,7 @@ async function complete(req) {
     messages: req.messages,
   };
   if (req.system) payload.system = req.system;
-  if (req.enableWebSearch) payload.tools = [WEB_SEARCH_TOOL];
+  if (req.enableWebSearch) payload.tools = [webSearchTool(req)];
 
   const upstream = await fetch(ANTHROPIC_URL, {
     method: 'POST',
@@ -71,4 +73,5 @@ module.exports = {
   complete,
   extractText,
   WEB_SEARCH_TOOL,
+  webSearchTool,
 };

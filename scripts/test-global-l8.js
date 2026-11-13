@@ -193,7 +193,7 @@ function browser(opts) {
     await admin.db.collection('users').doc('t1').set({ username: 't1', region: { country: 'DE' } });
     const t1 = await privacy.setBirthdate(admin, 't1', dobYearsAgo(15), {});
     const t1doc = (await admin.db.collection('users').doc('t1').get()).data();
-    assert(t1.ok && t1doc.teenMode === true && t1doc.profileVisibility === 'Private' && t1doc.showLocation === false && t1doc.parentalConsent.required === true, 'teen DOB → Teen mode, private profile, location off, DE 15 needs a parent');
+    assert(t1.ok && t1doc.teenMode === true && t1doc.profileVisibility === undefined && t1doc.showLocation === undefined && t1doc.parentalConsent.required === true, 'teen DOB → Teen mode, own visibility/location choices kept, DE 15 needs a parent');
     assert((await privacy.setBirthdate(admin, 't1', dobYearsAgo(30), {})).error === 'DOB_ALREADY_SET', 'a stored DOB cannot be typed away');
   }
 
@@ -231,17 +231,21 @@ function browser(opts) {
     assert(C.canMessage(teen, adult, { friend: true }).ok && C.canMessage(adult, adult, {}).ok, 'friends always; adults unchanged');
 
     const P = privacy.privacyStateFrom({ ...teen, region: { country: 'US' } });
-    assert(P.age.teen && P.teenRules.length === 10 && !P.prefs.personalizedRecs && !P.prefs.useAi, 'teen defaults: no personalised recs, AI off, 10 rules listed');
+    assert(P.age.teen && P.teenRules.length === C.TEEN_RULES.length && P.teenRules.length === 4 && P.prefs.personalizedRecs && P.prefs.useAi, 'teen (US 15, above consent age): personalised recs + AI on, 4 Teen mode rules listed');
+    const P2 = privacy.privacyStateFrom({ ...teen, dob: dobYearsAgo(14), region: { country: 'DE' } });
+    assert(!P2.prefs.personalizedRecs && !P2.prefs.useAi && P2.prefs.locked.useAi, 'below the country consent age (DE 14): locked until a parent approves');
     assert(C.TEEN_RULES.every((r) => EN['privacy.teen_rule_' + r]), 'every Teen mode rule has Settings copy');
 
     const U = browser({ region: { country: 'US' } });
     U.ctx.db = null;
     U.run('public/src/js/core/users-public.js');
     const proj = U.ctx.UsersPublic.buildPublicProjection('tA', { ...teen, name: 'Tee', age: 15, gender: 'Female', city: 'Pune', profile: { currentCity: 'Pune', age: 15, gender: 'Female', bio: 'hi' } });
-    assert(proj.teenMode === true && proj.age == null && proj.gender == null && proj.city == null && !(proj.profile && (proj.profile.age || proj.profile.gender || proj.profile.currentCity)) && !proj.dob, 'teen public card: marker only, no age / gender / city / DOB');
+    assert(proj.teenMode === true && !proj.dob, 'teen public card: Teen mode marker, never the DOB');
+    const projHidden = U.ctx.UsersPublic.buildPublicProjection('tB', { ...teen, name: 'Tee', age: 15, city: 'Pune', showAge: false, showLocation: false, profile: { currentCity: 'Pune', age: 15 } });
+    assert(projHidden.age == null && projHidden.city == null && !(projHidden.profile && (projHidden.profile.age || projHidden.profile.currentCity)), 'teen personal details follow the same show* permissions as adults');
     const adultProj = U.ctx.UsersPublic.buildPublicProjection('aA', { ...adult, name: 'Ad', age: 30, city: 'Pune' });
     assert(!adultProj.teenMode && adultProj.age === 30, 'adult card unchanged');
-    assert(/profileVisibility: 'Private', showLocation: false, activitySignalsOptOut: true/.test(read('public/src/js/auth/auth-events.js')), 'teen signup → private profile, location off, no behavioural signals');
+    assert(!/profileVisibility: 'Private', showLocation: false, activitySignalsOptOut: true/.test(read('public/src/js/auth/auth-events.js')), 'teen signup keeps normal defaults (no forced private / location off / signals off)');
 
     assert(!C.teenContentOk({ caption: 'Big poker night casino 🎰' }) && !C.teenContentOk({ nsfw: true }) && !C.teenContentOk({ category: 'dating' }) && C.teenContentOk({ caption: 'Sunday cricket in the park' }), 'stricter discovery filter (flags, lexicon, categories)');
     assert(/ChaupaalPrivacy\.discoveryOk/.test(read('public/src/js/features/duniya.js')) && /ChaupaalPrivacy\.discoveryOk/.test(read('public/src/js/features/categories.js')), 'filter wired into Duniya feed + Akhbaar news');
@@ -533,21 +537,21 @@ function browser(opts) {
     };
     const on = order({ uid: 'v' });
     const off = order({ uid: 'v', privacy: { personalizedRecs: false } });
-    assert(!RR.isOptedOutUser({ uid: 'v' }) && RR.isOptedOutUser({ privacy: { personalizedRecs: false } }) && RR.isOptedOutUser({ dob: dobYearsAgo(15) }), 'isOptedOutUser: switch off / Teen mode → non-personalised');
+    assert(!RR.isOptedOutUser({ uid: 'v' }) && RR.isOptedOutUser({ privacy: { personalizedRecs: false } }) && RR.isOptedOutUser({ dob: dobYearsAgo(15) }), 'isOptedOutUser: switch off / below consent age (default 16) → non-personalised');
     assert(on.indexOf('wordguess') < off.indexOf('wordguess') && off[0] === 'ludo', `ranking switches (on: ${on.join(',')} · off: ${off.join(',')})`);
     const pr = read('api/peepal-reactions.js');
     assert(/isOptedOutUser\(viewer\)/.test(pr) && /model: optedOut \? null : model/.test(pr), 'rank_content uses the same switch');
     const admin = createFakeAdmin();
     await admin.db.collection('users').doc('tt').set({ dob: dobYearsAgo(15) });
     const st = await privacy.setPrivacyPrefs(admin.db, admin.firestore.FieldValue, 'tt', { personalizedRecs: true });
-    assert(st.prefs.personalizedRecs === false, 'a teen cannot switch behavioural personalisation on (server lock)');
+    assert(st.prefs.personalizedRecs === false, 'below consent age: personalisation stays locked server-side until a parent approves');
   }
 
   // ═══════════════ Use AI features ═══════════════
   console.log('\nUse AI features');
   {
     const us = { region: { country: 'US' } };
-    assert(!privacy.aiAllowedForUser({ privacy: { useAi: false } }) && privacy.aiAllowedForUser({}) && !privacy.aiAllowedForUser({ ...us, dob: dobYearsAgo(15) }) && privacy.aiAllowedForUser({ ...us, dob: dobYearsAgo(15), privacy: { useAi: true } }), 'switch off / teen default off (teen may opt in)');
+    assert(!privacy.aiAllowedForUser({ privacy: { useAi: false } }) && privacy.aiAllowedForUser({}) && privacy.aiAllowedForUser({ ...us, dob: dobYearsAgo(15) }) && !privacy.aiAllowedForUser({ ...us, dob: dobYearsAgo(15), privacy: { useAi: false } }), 'switch off works; teens above consent age keep AI on by default');
     assert(!privacy.aiAllowedForUser({ dob: dobYearsAgo(15), privacy: { useAi: true } }), 'unknown region (default 16): a 15-year-old stays locked until a parent approves');
     const { createDangalAI } = require('../server-lib/dangal-ai');
     let calls = 0;

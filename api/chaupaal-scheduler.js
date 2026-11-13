@@ -71,18 +71,26 @@ async function createEvent(db, uid, doc) {
  * infra (Vercel Pro) to support it. Until then the cron time IS the send time,
  * so no window check is needed.
  */
+/** Card copy in the user's language (system events are per viewer). */
+async function cardT(db, uid) {
+  const { serverT, langForUser } = require('../server-lib/i18n-server');
+  const lang = await langForUser(db, uid);
+  return { lang, T: (k, p) => serverT(lang, 'notifications.card.' + k, p || {}) };
+}
+
 async function processJournal(db, uid, state, stateRef) {
-  if (await hasJournalToday(db, uid, state.timezone || 'Asia/Kolkata')) {
+  if (await hasJournalToday(db, uid, state.timezone || 'UTC')) {
     return { skipped: 'already_journaled' };
   }
   const gate = canSendProactive(state, { type: 'goodnight_journal', isJournal: true });
   if (!gate.ok) return { skipped: gate.reason };
 
+  const { T } = await cardT(db, uid);
   const payload = {
-    title: 'Goodnight Chaupaal',
-    subtitle: 'A quiet moment for your day',
-    text: 'How was your day? One warm note for your private journal — only you will see it.',
-    cta: 'Open journal',
+    title: T('journal_title'),
+    subtitle: T('journal_subtitle'),
+    text: T('journal_text'),
+    cta: T('journal_cta'),
     action: 'open_journal',
   };
   const doc = {
@@ -111,7 +119,7 @@ async function processRecommendation(db, uid, state, stateRef) {
   // Soft: prefer Saturdays locally once a week is already gated by lastRecommendationAt
   try {
     const wd = new Intl.DateTimeFormat('en-US', {
-      timeZone: state.timezone || 'Asia/Kolkata',
+      timeZone: state.timezone || 'UTC',
       weekday: 'short',
     }).format(new Date());
     if (wd !== 'Sat' && state.lastRecommendationAt) {
@@ -121,10 +129,11 @@ async function processRecommendation(db, uid, state, stateRef) {
     /* continue */
   }
 
+  const { T } = await cardT(db, uid);
   let items = [
-    { kind: 'game', title: 'Kakuro', reason: 'A calm puzzle when you want focus' },
-    { kind: 'content', title: "Today's Akhbaar", reason: 'A short read to stay curious' },
-    { kind: 'people', title: 'Peepal discovery', reason: 'Someone nearby who shares an interest' },
+    { kind: 'game', title: 'Kakuro', reason: T('rec_game_reason') }, // i18n-ignore (game name)
+    { kind: 'content', title: T('rec_content_title'), reason: T('rec_content_reason') },
+    { kind: 'people', title: T('rec_people_title'), reason: T('rec_people_reason') },
   ];
 
   if (isAiFeaturesEnabled()) {
@@ -145,7 +154,7 @@ async function processRecommendation(db, uid, state, stateRef) {
         messages: [
           {
             role: 'user',
-            content: `Interests: ${interests.join(', ') || 'general Indian culture, games, news'}. Suggest 3 things.`,
+            content: `Interests: ${interests.join(', ') || 'general culture, games, news'}. Suggest 3 things.`,
           },
         ],
       });
@@ -157,7 +166,7 @@ async function processRecommendation(db, uid, state, stateRef) {
         if (Array.isArray(parsed.items) && parsed.items.length) {
           items = parsed.items.slice(0, 3).map((it) => ({
             kind: String(it.kind || 'content'),
-            title: String(it.title || 'Something to try').slice(0, 80),
+            title: String(it.title || T('rec_fallback_title')).slice(0, 80),
             reason: String(it.reason || '').slice(0, 140),
           }));
         }
@@ -171,8 +180,8 @@ async function processRecommendation(db, uid, state, stateRef) {
     type: 'weekly_recommendation',
     displayMode: 'graphicCard',
     payload: {
-      title: 'This week on Chaupaal',
-      subtitle: 'A few soft suggestions',
+      title: T('rec_title'),
+      subtitle: T('rec_subtitle'),
       items,
     },
     createdAt: new Date(),

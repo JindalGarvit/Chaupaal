@@ -97,7 +97,7 @@
       .toLowerCase()
       .trim();
     if (v === 'private') return 'private';
-    if (v === 'friends only' || v === 'friends' || v === 'friends-only') return 'friends only';
+    if (v === 'friends only' || v === 'friends' || v === 'friends-only') return 'friends only'; // i18n-ignore (stored visibility value)
     return 'public';
   }
 
@@ -328,33 +328,10 @@
       }
     }
 
+    // Teens' details follow the same visibility + show* permissions as everyone's (D1 product call).
     applyShowFlags(proj, u);
-    if (teen) {
-      TEEN_HIDDEN_FIELDS.forEach((k) => {
-        delete proj[k];
-        if (proj.profile) delete proj.profile[k];
-      });
-    }
     return proj;
   }
-
-  /** Never on a teen's world-readable card, whatever their visibility (Global L8 "sensitive fields hidden"). */
-  const TEEN_HIDDEN_FIELDS = [
-    'age',
-    'gender',
-    'city',
-    'currentCity',
-    'lookingFor',
-    'matchIntent',
-    'intents',
-    'relationshipStatus',
-    'occupation',
-    'annualIncome',
-    'religion',
-    'website',
-    'instagram',
-    'profileLinks',
-  ];
 
   async function syncPublicProfile(uid, raw) {
     if (!db || !uid) return null;

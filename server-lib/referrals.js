@@ -143,16 +143,16 @@ async function claimReferral(db, admin, inviteeUid, body) {
     return {
       ok: false,
       reason: 'not_new_account',
-      message: 'Referrals only attribute on new signups.',
+      message: 'Referrals only attribute on new signups.', // i18n-ignore (API message; users see errors.* by code)
     };
   }
 
   const inviterUid = await resolveInviterUid(db, code);
   if (!inviterUid) {
-    return { ok: false, reason: 'invalid_code', message: 'Invite link not found.' };
+    return { ok: false, reason: 'invalid_code', message: 'Invite link not found.' }; // i18n-ignore (API message; users see errors.* by code)
   }
   if (inviterUid === inviteeUid) {
-    return { ok: false, reason: 'self_referral', message: 'You cannot invite yourself.' };
+    return { ok: false, reason: 'self_referral', message: 'You cannot invite yourself.' }; // i18n-ignore (API message; users see errors.* by code)
   }
 
   // Same verified email/phone as inviter → block
@@ -163,10 +163,10 @@ async function claimReferral(db, admin, inviteeUid, body) {
     const myEmail = String(authUser.email || '').toLowerCase();
     const myPhone = String(authUser.phoneNumber || '');
     if (invEmail && myEmail && invEmail === myEmail) {
-      return { ok: false, reason: 'same_contact', message: 'Same account contact.' };
+      return { ok: false, reason: 'same_contact', message: 'Same account contact.' }; // i18n-ignore (API message; users see errors.* by code)
     }
     if (invPhone && myPhone && invPhone === myPhone) {
-      return { ok: false, reason: 'same_contact', message: 'Same account contact.' };
+      return { ok: false, reason: 'same_contact', message: 'Same account contact.' }; // i18n-ignore (API message; users see errors.* by code)
     }
   } catch (e) {
     /* inviter may lack auth — still allow uid-based */

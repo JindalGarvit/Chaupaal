@@ -191,11 +191,6 @@ async function loadConsent(db, uid) {
 }
 
 /** Teen: no search/dwell/mehfil media affinity; keep social/game safety-relevant. */
-function allowedForTeen(type) {
-  const blocked = new Set(['search', 'result_click', 'dwell', 'media_start', 'media_complete', 'impression']);
-  return !blocked.has(type);
-}
-
 function bumpRollup(rollup, ev) {
   const r = rollup || {
     v: SCHEMA_V,
@@ -262,10 +257,6 @@ async function ingestSignalBatch(db, FieldValue, uid, events, { consent } = {}) 
       }
       const ev = normalizeEvent(raw, uid);
       if (!ev) {
-        skipped += 1;
-        continue;
-      }
-      if (c.teen && !allowedForTeen(ev.type)) {
         skipped += 1;
         continue;
       }
